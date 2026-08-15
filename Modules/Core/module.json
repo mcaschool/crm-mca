@@ -1,0 +1,11 @@
+{
+    "name": "Core",
+    "alias": "core",
+    "description": "Clases base, contexto multi-institucion, i18n de contenido y cifrado de secretos.",
+    "keywords": ["core", "tenancy", "i18n", "secrets"],
+    "priority": 100,
+    "providers": [
+        "Modules\\Core\\Providers\\CoreServiceProvider"
+    ],
+    "files": []
+}

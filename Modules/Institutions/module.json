@@ -1,0 +1,11 @@
+{
+    "name": "Institutions",
+    "alias": "institutions",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Institutions\\Providers\\InstitutionsServiceProvider"
+    ],
+    "files": []
+}

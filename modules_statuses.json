@@ -1,0 +1,12 @@
+{
+    "Core": true,
+    "Institutions": true,
+    "Identity": true,
+    "Integrations": true,
+    "Catalog": true,
+    "Crm": true,
+    "Chat": true,
+    "Ai": true,
+    "Notifications": true,
+    "Audit": true
+}

@@ -1,0 +1,17 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+        - Modules
+
+    # Nivel 6: tipos de retorno/parametros exigidos, sin la rigidez de niveles
+    # superiores que choca con la magia de Eloquent. Se puede subir por modulo
+    # a medida que el dominio se estabiliza.
+    level: 6
+
+    excludePaths:
+        - Modules/*/config/*
+        - Modules/*/database/migrations/*
+        - Modules/*/tests/*
