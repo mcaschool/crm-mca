@@ -21,13 +21,12 @@ use Modules\Institutions\Models\Institution;
  * Supuesto documentado (Bloque 0): el modelo vive en App\Models\User porque es
  * donde la autenticacion de Laravel lo espera por convencion (config/auth.php,
  * UserFactory). El modulo Identity gobierna su LOGICA de dominio (roles, policies,
- * pantallas), que llega en el Bloque 1. Aqui solo esta el modelo enriquecido.
+ * pantallas). Aqui esta el modelo enriquecido.
  *
  * User NO usa BelongsToInstitution: la autenticacion ocurre por email (unico
  * global) ANTES de que exista contexto de institucion. El aislamiento de los
- * listados de usuarios en el panel se hara con un scope explicito por institucion.
- */
-/**
+ * listados de usuarios en el panel se hace con un scope explicito por institucion.
+ *
  * @property int|null $institution_id
  * @property string $name
  * @property string $email
@@ -78,5 +77,22 @@ class User extends Authenticatable
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    /**
+     * ¿Puede entrar al panel? Debe estar activo. (El gating fino por rol lo
+     * hacen las Policies de cada accion.)
+     */
+    public function canAccessPanel(): bool
+    {
+        return $this->isActive();
+    }
+
+    /**
+     * ¿Puede gestionar usuarios del panel? Solo Administrador o super-admin.
+     */
+    public function canManageUsers(): bool
+    {
+        return $this->isSuperAdmin() || $this->role === UserRole::Admin;
     }
 }

@@ -38,6 +38,16 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Dominio del panel administrativo (D7)
+    |--------------------------------------------------------------------------
+    | El panel va en su propio subdominio, separado de la API del widget. En
+    | produccion se fija PANEL_DOMAIN (p. ej. crm.mcaschool.us). Vacio = sin
+    | restriccion de dominio (desarrollo local y pruebas).
+    */
+    'panel_domain' => env('PANEL_DOMAIN'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Leads (D3, D4)
     |--------------------------------------------------------------------------
     */

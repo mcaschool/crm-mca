@@ -29,9 +29,11 @@ final class ResolveInstitutionFromUser
             // Super-admin con institucion activa elegida en sesion (gancho D1).
             $active = $request->session()->get('active_institution_id');
 
-            $institutionId = ($user->is_super_admin && $active !== null)
-                ? (int) $active
-                : (int) $user->institution_id;
+            if ($user->is_super_admin && $active !== null) {
+                $institutionId = (int) $active;
+            } else {
+                $institutionId = $user->institution_id !== null ? (int) $user->institution_id : null;
+            }
 
             $this->context->set($institutionId);
         }
