@@ -80,6 +80,9 @@ it('un Admin normal NO puede otorgar super-admin', function () {
 });
 
 it('un super-admin SI puede otorgar super-admin', function () {
+    // Otorgar super-admin es superficie multi-institucion: requiere el flag activo.
+    config(['crm.multi_institution' => true]);
+
     $inst = Institution::factory()->create();
     adminIn($inst, super: true);
 

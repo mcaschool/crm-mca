@@ -6,10 +6,18 @@ use App\Models\User;
 use Modules\Institutions\Models\Institution;
 
 /**
- * Aislamiento multi-institucion de la superficie NUEVA del Bloque 1: gestion de
- * usuarios del panel y cambiador de institucion. Se ejercita por HTTP para pasar
- * por el middleware de contexto real.
+ * Aislamiento multi-institucion de la superficie del panel (gestion de usuarios
+ * y cambiador de institucion). Se ejercita por HTTP para pasar por el middleware
+ * de contexto real.
+ *
+ * Regresion del MOTOR multi-tenant dormante: se corre con el flag ACTIVO, para
+ * confirmar que el aislamiento sigue intacto si algun dia se habilita el modo
+ * multi-institucion. En modo normal (flag false) estas superficies estan ocultas.
  */
+beforeEach(function () {
+    config(['crm.multi_institution' => true]);
+});
+
 function institutionWithUser(string $userName): array
 {
     $institution = Institution::factory()->create();

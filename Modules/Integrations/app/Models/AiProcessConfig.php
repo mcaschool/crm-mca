@@ -14,6 +14,13 @@ use Modules\Integrations\Database\Factories\AiProcessConfigFactory;
  * Asignacion proveedor+modelo por PROCESO (conversar, clasificar, resumir,
  * redactar correo). Permite usar IA de mayor calidad solo donde hace falta.
  * bot_id nullable = configuracion por defecto de la institucion.
+ *
+ * @property int $institution_id
+ * @property int|null $bot_id
+ * @property string $process
+ * @property int $integration_id
+ * @property string $model
+ * @property string $status
  */
 class AiProcessConfig extends Model
 {

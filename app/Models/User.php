@@ -95,4 +95,13 @@ class User extends Authenticatable
     {
         return $this->isSuperAdmin() || $this->role === UserRole::Admin;
     }
+
+    /**
+     * ¿Puede gestionar integraciones y credenciales? Solo Administrador o super.
+     * Marketing y Admisiones no tienen acceso al almacen de secretos.
+     */
+    public function canManageIntegrations(): bool
+    {
+        return $this->isSuperAdmin() || $this->role === UserRole::Admin;
+    }
 }

@@ -17,6 +17,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Modo multi-institucion (flag maestro)
+    |--------------------------------------------------------------------------
+    | Modelo de producto: UNA institucion por instalacion. Cada cliente es una
+    | copia separada del software en su propio servidor. El MOTOR multi-tenant
+    | (institution_id, InstitutionScope, BelongsToInstitution, TenantAwareJob/
+    | Command, suite de aislamiento) se conserva INTACTO y DORMANTE tras este flag.
+    |
+    | false (normal): se ocultan las superficies multi-institucion del panel
+    |   (cambiador de institucion activa, gestion del atributo super-admin). La
+    |   institucion activa se resuelve sola a la unica de la instalacion.
+    | true: reaparecen esas superficies y el sistema se comporta multi-tenant.
+    |
+    | Si algun dia se activa, se hara una auditoria de aislamiento completa.
+    */
+    'multi_institution' => (bool) env('CRM_MULTI_INSTITUTION', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Internacionalizacion (i18n) — dos idiomas fijos (decision cerrada)
     |--------------------------------------------------------------------------
     | Interfaz: localizacion nativa de Laravel (lang/es, lang/en).
@@ -99,7 +117,7 @@ return [
     | Tipos de integracion admitidos
     |--------------------------------------------------------------------------
     */
-    'integration_types' => ['ai_provider', 'google', 'n8n', 'mailrelay', 'smtp', 'stripe', 'moodle'],
+    'integration_types' => ['ai_provider', 'google', 'n8n', 'mailrelay', 'mailjet', 'smtp', 'stripe', 'moodle'],
 
     'ai_providers' => ['openai', 'gemini', 'anthropic', 'deepseek', 'qwen', 'kimi'],
 ];

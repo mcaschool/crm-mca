@@ -79,8 +79,11 @@ class Form extends Component
                 : ['required', Password::defaults()],
         ]);
 
-        // Barandilla: solo un super-admin puede otorgar super-admin.
-        $grantSuper = $validated['is_super_admin'] && auth()->user()->isSuperAdmin();
+        // Barandilla: otorgar super-admin es una superficie multi-institucion.
+        // Solo con el flag activo Y siendo super-admin quien lo concede.
+        $grantSuper = $validated['is_super_admin']
+            && auth()->user()->isSuperAdmin()
+            && config('crm.multi_institution');
 
         $target->name = $validated['name'];
         $target->email = $validated['email'];
@@ -108,7 +111,8 @@ class Form extends Component
     {
         return view('identity::livewire.users.form', [
             'roles' => UserRole::cases(),
-            'canGrantSuperAdmin' => (bool) auth()->user()?->isSuperAdmin(),
+            // El checkbox de super-admin solo existe en modo multi-institucion.
+            'canGrantSuperAdmin' => config('crm.multi_institution') && (bool) auth()->user()?->isSuperAdmin(),
             'editing' => $this->userId !== null,
         ]);
     }

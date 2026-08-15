@@ -16,6 +16,15 @@ use Modules\Integrations\Database\Factories\IntegrationFactory;
  * `config` guarda los secretos CIFRADOS (encrypted:array) y esta oculto de toda
  * serializacion. `config_preview` guarda la version enmascarada, sin cifrar,
  * que es lo unico que el panel muestra. Ver HasEncryptedConfig y las 7 barreras.
+ *
+ * @property int $institution_id
+ * @property string $type
+ * @property string|null $provider
+ * @property string $name
+ * @property string $status
+ * @property \Illuminate\Support\Carbon|null $last_tested_at
+ * @property bool|null $last_test_ok
+ * @property string|null $last_test_message
  */
 class Integration extends Model
 {

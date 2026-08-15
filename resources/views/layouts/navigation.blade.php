@@ -20,12 +20,17 @@
                             {{ __('Usuarios') }}
                         </x-nav-link>
                     @endcan
+                    @can('viewAny', \Modules\Integrations\Models\Integration::class)
+                        <x-nav-link :href="route('integrations.index')" :active="request()->routeIs('integrations.*')">
+                            {{ __('Integraciones') }}
+                        </x-nav-link>
+                    @endcan
                 </div>
             </div>
 
             <!-- Settings Dropdown -->
             <div class="hidden sm:flex sm:items-center sm:ms-6 sm:gap-3">
-                @if (auth()->user()->isSuperAdmin())
+                @if (config('crm.multi_institution') && auth()->user()->isSuperAdmin())
                     @php($__institutions = app(\Modules\Core\Tenancy\CurrentInstitution::class)->runGlobally(fn () => \Modules\Institutions\Models\Institution::orderBy('name')->get(['id', 'name'])))
                     @php($__activeId = app(\Modules\Core\Tenancy\CurrentInstitution::class)->id())
                     <x-dropdown align="right" width="60">
@@ -102,6 +107,11 @@
             @can('viewAny', \App\Models\User::class)
                 <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                     {{ __('Usuarios') }}
+                </x-responsive-nav-link>
+            @endcan
+            @can('viewAny', \Modules\Integrations\Models\Integration::class)
+                <x-responsive-nav-link :href="route('integrations.index')" :active="request()->routeIs('integrations.*')">
+                    {{ __('Integraciones') }}
                 </x-responsive-nav-link>
             @endcan
         </div>

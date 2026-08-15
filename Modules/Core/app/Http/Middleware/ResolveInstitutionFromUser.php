@@ -26,12 +26,15 @@ final class ResolveInstitutionFromUser
         $user = $request->user();
 
         if ($user !== null) {
-            // Super-admin con institucion activa elegida en sesion (gancho D1).
+            // Modo multi-institucion (dormante por defecto): solo entonces el
+            // super-admin puede tener una institucion activa distinta de la suya.
             $active = $request->session()->get('active_institution_id');
 
-            if ($user->is_super_admin && $active !== null) {
+            if (config('crm.multi_institution') && $user->is_super_admin && $active !== null) {
                 $institutionId = (int) $active;
             } else {
+                // Modo normal: la institucion activa es SIEMPRE la del usuario
+                // (que, en una instalacion de una sola institucion, es la unica).
                 $institutionId = $user->institution_id !== null ? (int) $user->institution_id : null;
             }
 

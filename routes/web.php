@@ -7,6 +7,9 @@ use Illuminate\Support\Facades\Route;
 use Modules\Identity\Http\Controllers\InstitutionSwitchController;
 use Modules\Identity\Livewire\Users\Form as UsersForm;
 use Modules\Identity\Livewire\Users\Index as UsersIndex;
+use Modules\Integrations\Livewire\AiProcesses\Manage as AiProcessesManage;
+use Modules\Integrations\Livewire\Integrations\Configure as IntegrationsConfigure;
+use Modules\Integrations\Livewire\Integrations\Index as IntegrationsIndex;
 
 /*
 |--------------------------------------------------------------------------
@@ -40,6 +43,11 @@ $panel->group(function () {
     Route::get('/users', UsersIndex::class)->name('users.index');
     Route::get('/users/create', UsersForm::class)->name('users.create');
     Route::get('/users/{user}/edit', UsersForm::class)->name('users.edit');
+
+    // Integraciones y almacen de credenciales (Livewire, solo Admin por Policy).
+    Route::get('/integrations', IntegrationsIndex::class)->name('integrations.index');
+    Route::get('/integrations/{type}/configure', IntegrationsConfigure::class)->name('integrations.configure');
+    Route::get('/ai-processes', AiProcessesManage::class)->name('integrations.ai-processes');
 
     // Cambiador de institucion activa (solo super-admin; barandilla en el controlador).
     Route::post('/institution/switch', InstitutionSwitchController::class)->name('institution.switch');

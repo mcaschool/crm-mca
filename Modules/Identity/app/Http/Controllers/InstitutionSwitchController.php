@@ -22,6 +22,9 @@ class InstitutionSwitchController extends Controller
 {
     public function __invoke(Request $request): RedirectResponse
     {
+        // Superficie multi-institucion: deshabilitada mientras el flag este en false.
+        abort_unless((bool) config('crm.multi_institution'), 403);
+
         $user = $request->user();
 
         // Barandilla: solo super-admin. Cualquier otro -> 403.

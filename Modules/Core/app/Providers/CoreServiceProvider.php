@@ -6,6 +6,8 @@ namespace Modules\Core\Providers;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\Route;
+use Livewire\Livewire;
 use Modules\Core\Http\Middleware\ResolveInstitutionFromBot;
 use Modules\Core\Http\Middleware\ResolveInstitutionFromUser;
 use Modules\Core\Http\Middleware\SetLocale;
@@ -47,6 +49,14 @@ class CoreServiceProvider extends ModuleServiceProvider
         $router->aliasMiddleware('institution.user', ResolveInstitutionFromUser::class);
         $router->aliasMiddleware('institution.bot', ResolveInstitutionFromBot::class);
         $router->aliasMiddleware('setlocale', SetLocale::class);
+
+        // El endpoint AJAX de Livewire corre en el grupo 'web', FUERA del grupo del
+        // panel, asi que sin esto el contexto de institucion no existe en las
+        // acciones de los componentes y la barandilla las rechaza. Se restablece
+        // aqui, en cada update, a partir del usuario autenticado (no-op si no hay
+        // sesion; el gating fino lo siguen haciendo las Policies de cada componente).
+        Livewire::setUpdateRoute(fn ($handle) => Route::post('/livewire/update', $handle)
+            ->middleware(['web', 'institution.user', 'setlocale']));
     }
 
     /**
