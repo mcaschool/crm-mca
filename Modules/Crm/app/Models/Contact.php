@@ -13,6 +13,17 @@ use Modules\Crm\Database\Factories\ContactFactory;
 /**
  * Contacto (prospecto). Identidad unica por (institution_id, email) — invariante.
  * Captura minima inicial: nombre + correo. Consentimiento RGPD desde el dia 1 (D2).
+ *
+ * @property int $institution_id
+ * @property string $first_name
+ * @property string|null $last_name
+ * @property string $email
+ * @property string|null $phone
+ * @property string|null $country
+ * @property string $preferred_language
+ * @property \Illuminate\Support\Carbon|null $consent_at
+ * @property string|null $consent_source
+ * @property \Illuminate\Support\Carbon|null $unsubscribed_at
  */
 class Contact extends Model
 {
@@ -56,6 +67,27 @@ class Contact extends Model
     public function conversations(): HasMany
     {
         return $this->hasMany(Conversation::class);
+    }
+
+    /**
+     * @return HasMany<Event, $this>
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
+    }
+
+    /**
+     * @return HasMany<ProgramInterest, $this>
+     */
+    public function programInterests(): HasMany
+    {
+        return $this->hasMany(ProgramInterest::class);
+    }
+
+    public function fullName(): string
+    {
+        return trim($this->first_name.' '.(string) $this->last_name);
     }
 
     protected static function newFactory(): ContactFactory

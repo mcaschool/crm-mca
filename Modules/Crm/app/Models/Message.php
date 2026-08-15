@@ -17,6 +17,14 @@ use Modules\Crm\Database\Factories\MessageFactory;
  * completion_tokens, latency_ms, cost_usd. Es la FUENTE para calcular el
  * AI Deflection Rate (anadido confirmado del Bloque 0): un mensaje resuelto sin
  * IA no lleva provider; uno con IA si. El ratio se deriva de ahi.
+ *
+ * @property int $institution_id
+ * @property int $conversation_id
+ * @property string $sender_type
+ * @property string $content
+ * @property string $message_type
+ * @property array<string,mixed>|null $meta
+ * @property \Illuminate\Support\Carbon|null $created_at
  */
 class Message extends Model
 {

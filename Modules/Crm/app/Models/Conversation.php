@@ -16,6 +16,18 @@ use Modules\Crm\Database\Factories\ConversationFactory;
  * `session_id` es un token opaco que vive en el localStorage del navegador.
  * `current_node_id` guarda el nodo actual del arbol para la recuperacion de
  * sesion del widget (anadido confirmado del Bloque 0).
+ *
+ * @property int $institution_id
+ * @property int|null $contact_id
+ * @property int $bot_id
+ * @property string $session_id
+ * @property string $channel
+ * @property string $mode
+ * @property string $language
+ * @property string $status
+ * @property int|null $current_node_id
+ * @property \Illuminate\Support\Carbon|null $started_at
+ * @property \Illuminate\Support\Carbon|null $last_activity_at
  */
 class Conversation extends Model
 {
@@ -60,6 +72,14 @@ class Conversation extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(Message::class);
+    }
+
+    /**
+     * @return HasMany<Event, $this>
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
     }
 
     protected static function newFactory(): ConversationFactory

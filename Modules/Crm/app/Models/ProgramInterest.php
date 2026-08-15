@@ -12,6 +12,13 @@ use Modules\Crm\Database\Factories\ProgramInterestFactory;
 /**
  * Interes de un contacto por un programa. Append-only (solo created_at).
  * Sin UNIQUE: el interes repetido es senal comercial, no duplicado.
+ *
+ * @property int $institution_id
+ * @property int $contact_id
+ * @property int $program_id
+ * @property int $bot_id
+ * @property string $source
+ * @property \Illuminate\Support\Carbon|null $created_at
  */
 class ProgramInterest extends Model
 {
@@ -30,6 +37,22 @@ class ProgramInterest extends Model
         'bot_id',
         'source',
     ];
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Modules\Catalog\Models\Program, $this>
+     */
+    public function program(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(\Modules\Catalog\Models\Program::class);
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<Contact, $this>
+     */
+    public function contact(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Contact::class);
+    }
 
     protected static function newFactory(): ProgramInterestFactory
     {

@@ -15,6 +15,14 @@ use Modules\Crm\Database\Factories\EventFactory;
  *
  * Las "preguntas no resueltas" de Celia se registran como event_type
  * = 'celia.unresolved' (sin tabla propia en el dia 1).
+ *
+ * @property int $institution_id
+ * @property int|null $contact_id
+ * @property int|null $conversation_id
+ * @property int|null $bot_id
+ * @property string $event_type
+ * @property array<string,mixed>|null $event_data
+ * @property \Illuminate\Support\Carbon|null $created_at
  */
 class Event extends Model
 {

@@ -15,6 +15,14 @@
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
+                    @can('viewAny', \Modules\Crm\Models\Lead::class)
+                        <x-nav-link :href="route('crm.leads.index')" :active="request()->routeIs('crm.leads.*')">
+                            {{ __('Leads') }}
+                        </x-nav-link>
+                        <x-nav-link :href="route('crm.contacts.index')" :active="request()->routeIs('crm.contacts.*') || request()->routeIs('crm.conversations.*')">
+                            {{ __('Contactos') }}
+                        </x-nav-link>
+                    @endcan
                     @can('viewAny', \App\Models\User::class)
                         <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                             {{ __('Usuarios') }}
@@ -109,6 +117,14 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+            @can('viewAny', \Modules\Crm\Models\Lead::class)
+                <x-responsive-nav-link :href="route('crm.leads.index')" :active="request()->routeIs('crm.leads.*')">
+                    {{ __('Leads') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('crm.contacts.index')" :active="request()->routeIs('crm.contacts.*')">
+                    {{ __('Contactos') }}
+                </x-responsive-nav-link>
+            @endcan
             @can('viewAny', \App\Models\User::class)
                 <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                     {{ __('Usuarios') }}

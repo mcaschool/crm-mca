@@ -7,6 +7,11 @@ use Illuminate\Support\Facades\Route;
 use Modules\Catalog\Livewire\Categories\Manage as CategoriesManage;
 use Modules\Catalog\Livewire\Programs\Form as ProgramsForm;
 use Modules\Catalog\Livewire\Programs\Index as ProgramsIndex;
+use Modules\Crm\Livewire\Contacts\Index as ContactsIndex;
+use Modules\Crm\Livewire\Contacts\Show as ContactsShow;
+use Modules\Crm\Livewire\Conversations\Show as ConversationsShow;
+use Modules\Crm\Livewire\Leads\Index as LeadsIndex;
+use Modules\Crm\Livewire\Leads\Show as LeadsShow;
 use Modules\Identity\Http\Controllers\InstitutionSwitchController;
 use Modules\Identity\Livewire\Users\Form as UsersForm;
 use Modules\Identity\Livewire\Users\Index as UsersIndex;
@@ -57,6 +62,13 @@ $panel->group(function () {
     Route::get('/catalog/create', ProgramsForm::class)->name('catalog.programs.create');
     Route::get('/catalog/{program}/edit', ProgramsForm::class)->name('catalog.programs.edit');
     Route::get('/catalog/categories', CategoriesManage::class)->name('catalog.categories');
+
+    // CRM Core (Livewire; los tres roles trabajan los prospectos).
+    Route::get('/crm/leads', LeadsIndex::class)->name('crm.leads.index');
+    Route::get('/crm/leads/{lead}', LeadsShow::class)->name('crm.leads.show');
+    Route::get('/crm/contacts', ContactsIndex::class)->name('crm.contacts.index');
+    Route::get('/crm/contacts/{contact}', ContactsShow::class)->name('crm.contacts.show');
+    Route::get('/crm/conversations/{conversation}', ConversationsShow::class)->name('crm.conversations.show');
 
     // Cambiador de institucion activa (solo super-admin; barandilla en el controlador).
     Route::post('/institution/switch', InstitutionSwitchController::class)->name('institution.switch');

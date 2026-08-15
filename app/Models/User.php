@@ -114,4 +114,15 @@ class User extends Authenticatable
             || $this->role === UserRole::Admin
             || $this->role === UserRole::Marketing;
     }
+
+    /**
+     * ¿Puede trabajar el CRM? Los tres roles del panel (Admin, Marketing,
+     * Admisiones) trabajan los prospectos. Las acciones destructivas se reservan
+     * a Admin (canManageUsers).
+     */
+    public function canWorkCrm(): bool
+    {
+        return $this->isSuperAdmin()
+            || in_array($this->role, [UserRole::Admin, UserRole::Marketing, UserRole::Admissions], true);
+    }
 }
