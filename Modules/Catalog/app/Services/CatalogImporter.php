@@ -26,7 +26,7 @@ class CatalogImporter
     /** field => posibles cabeceras normalizadas (minusculas, sin acentos). */
     private const COLUMNS = [
         'code' => ['id'],
-        'name_es' => ['nombre'],
+        'name_es' => ['nombre del programa', 'nombre'],
         'credential_en' => ['microcredencial que otorga', 'microcredencial', 'credencial'],
         'category' => ['area'],
         'duration' => ['duracion'],

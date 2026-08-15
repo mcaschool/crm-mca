@@ -20,8 +20,9 @@ function writeCatalogFixture(): string
     $writer->openToFile($path);
     $writer->getCurrentSheet()->setName('Catálogo');
 
+    // Cabecera real del Excel del cliente (name_es viene de "Nombre del programa").
     $writer->addRow(Row::fromValues([
-        'ID', 'Nombre', 'Microcredencial que otorga', 'Area', 'Duracion', 'Modalidad',
+        'ID', 'Nombre del programa', 'Microcredencial que otorga', 'Area', 'Duracion', 'Modalidad',
         'Descripcion', 'URL', 'Activo', 'Peso', 'Etiquetas', 'Aprendizajes',
     ]));
 
