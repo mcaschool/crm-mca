@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
+use Modules\Catalog\Livewire\Categories\Manage as CategoriesManage;
+use Modules\Catalog\Livewire\Programs\Form as ProgramsForm;
+use Modules\Catalog\Livewire\Programs\Index as ProgramsIndex;
 use Modules\Identity\Http\Controllers\InstitutionSwitchController;
 use Modules\Identity\Livewire\Users\Form as UsersForm;
 use Modules\Identity\Livewire\Users\Index as UsersIndex;
@@ -48,6 +51,12 @@ $panel->group(function () {
     Route::get('/integrations', IntegrationsIndex::class)->name('integrations.index');
     Route::get('/integrations/{type}/configure', IntegrationsConfigure::class)->name('integrations.configure');
     Route::get('/ai-processes', AiProcessesManage::class)->name('integrations.ai-processes');
+
+    // Catalogo de programas (Livewire, Admin y Marketing por Policy; Admisiones no).
+    Route::get('/catalog', ProgramsIndex::class)->name('catalog.programs.index');
+    Route::get('/catalog/create', ProgramsForm::class)->name('catalog.programs.create');
+    Route::get('/catalog/{program}/edit', ProgramsForm::class)->name('catalog.programs.edit');
+    Route::get('/catalog/categories', CategoriesManage::class)->name('catalog.categories');
 
     // Cambiador de institucion activa (solo super-admin; barandilla en el controlador).
     Route::post('/institution/switch', InstitutionSwitchController::class)->name('institution.switch');

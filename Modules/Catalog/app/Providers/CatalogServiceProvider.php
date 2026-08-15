@@ -5,6 +5,14 @@ declare(strict_types=1);
 namespace Modules\Catalog\Providers;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Gate;
+use Livewire\Livewire;
+use Modules\Catalog\Console\ImportCatalogCommand;
+use Modules\Catalog\Livewire\Categories\Manage as CategoriesManage;
+use Modules\Catalog\Livewire\Programs\Form as ProgramsForm;
+use Modules\Catalog\Livewire\Programs\Index as ProgramsIndex;
+use Modules\Catalog\Models\Program;
+use Modules\Catalog\Policies\ProgramPolicy;
 use Nwidart\Modules\Support\ModuleServiceProvider;
 
 class CatalogServiceProvider extends ModuleServiceProvider
@@ -24,7 +32,23 @@ class CatalogServiceProvider extends ModuleServiceProvider
      *
      * @var string[]
      */
-    // protected array $commands = [];
+    protected array $commands = [
+        ImportCatalogCommand::class,
+    ];
+
+    /**
+     * Autorizacion y componentes del panel del modulo.
+     */
+    public function boot(): void
+    {
+        parent::boot();
+
+        Gate::policy(Program::class, ProgramPolicy::class);
+
+        Livewire::component('catalog.programs.index', ProgramsIndex::class);
+        Livewire::component('catalog.programs.form', ProgramsForm::class);
+        Livewire::component('catalog.categories.manage', CategoriesManage::class);
+    }
 
     /**
      * Provider classes to register.

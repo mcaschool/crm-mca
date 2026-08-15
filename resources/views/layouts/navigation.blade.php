@@ -20,6 +20,11 @@
                             {{ __('Usuarios') }}
                         </x-nav-link>
                     @endcan
+                    @can('viewAny', \Modules\Catalog\Models\Program::class)
+                        <x-nav-link :href="route('catalog.programs.index')" :active="request()->routeIs('catalog.*')">
+                            {{ __('Catalogo') }}
+                        </x-nav-link>
+                    @endcan
                     @can('viewAny', \Modules\Integrations\Models\Integration::class)
                         <x-nav-link :href="route('integrations.index')" :active="request()->routeIs('integrations.*')">
                             {{ __('Integraciones') }}
@@ -107,6 +112,11 @@
             @can('viewAny', \App\Models\User::class)
                 <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                     {{ __('Usuarios') }}
+                </x-responsive-nav-link>
+            @endcan
+            @can('viewAny', \Modules\Catalog\Models\Program::class)
+                <x-responsive-nav-link :href="route('catalog.programs.index')" :active="request()->routeIs('catalog.*')">
+                    {{ __('Catalogo') }}
                 </x-responsive-nav-link>
             @endcan
             @can('viewAny', \Modules\Integrations\Models\Integration::class)

@@ -104,4 +104,14 @@ class User extends Authenticatable
     {
         return $this->isSuperAdmin() || $this->role === UserRole::Admin;
     }
+
+    /**
+     * ¿Puede gestionar el catalogo? Administrador o Marketing (Admisiones no).
+     */
+    public function canManageCatalog(): bool
+    {
+        return $this->isSuperAdmin()
+            || $this->role === UserRole::Admin
+            || $this->role === UserRole::Marketing;
+    }
 }

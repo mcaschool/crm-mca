@@ -19,6 +19,25 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  *
  * Campos bilingues por columnas _es/_en. SoftDeletes (D10: no se versiona el
  * catalogo; se borra en blando para no romper FKs historicas de leads/intereses).
+ *
+ * @property int $institution_id
+ * @property string $code
+ * @property string $name_es
+ * @property string|null $name_en
+ * @property string|null $credential_en
+ * @property int|null $category_id
+ * @property string|null $level
+ * @property string|null $goal
+ * @property string|null $profile
+ * @property string|null $duration_es
+ * @property string|null $duration_en
+ * @property string|null $modality_es
+ * @property string|null $modality_en
+ * @property string|null $short_description_es
+ * @property string|null $short_description_en
+ * @property string $url
+ * @property string $status
+ * @property int $display_order
  */
 class Program extends Model
 {

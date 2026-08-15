@@ -13,6 +13,13 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
 
 /**
  * Categoria de programa (= "area"). Nombre bilingue por columnas _es/_en.
+ *
+ * @property int $institution_id
+ * @property string $name_es
+ * @property string|null $name_en
+ * @property string $slug
+ * @property int $display_order
+ * @property string $status
  */
 class ProgramCategory extends Model
 {
