@@ -96,6 +96,26 @@ it('guardar con el secreto vacio CONSERVA la credencial actual', function () {
     expect($integration->secret('api_key'))->toBe(SECRET);
 });
 
+it('no retiene el secreto recien tecleado en el estado ni en el snapshot tras guardar', function () {
+    adminWithContext();
+    $secret = 'sk-en-transito-SECRETO-98765';
+
+    $component = Livewire::test(Configure::class, ['type' => 'ai_provider'])
+        ->set('provider', 'openai')
+        ->set('inputs.api_key', $secret)
+        ->call('save');
+
+    // (a) la propiedad del secreto queda vacia tras persistir.
+    $component->assertSet('inputs.api_key', '');
+
+    // (b) el snapshot que Livewire serializa hacia el navegador no lleva el claro.
+    expect(json_encode($component->getData()))->not->toContain($secret);
+
+    // Y se guardo cifrado (el secreto ya guardado si es recuperable en servidor).
+    $integration = Integration::query()->where('type', 'ai_provider')->first();
+    expect($integration->secret('api_key'))->toBe($secret);
+});
+
 it('ninguna pantalla del panel devuelve el secreto completo', function () {
     adminWithContext();
     Integration::factory()->withSecrets(['api_key' => SECRET])->create([

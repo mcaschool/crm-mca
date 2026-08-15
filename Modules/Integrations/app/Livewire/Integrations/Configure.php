@@ -104,6 +104,15 @@ class Configure extends Component
         $integration->replaceSecrets($this->inputs);
         $integration->save();
 
+        // Secreto en transito: una vez persistido, NO se retiene el valor recien
+        // tecleado en el estado del componente, para que no viaje en el snapshot
+        // que Livewire serializa de vuelta al navegador.
+        foreach ($meta['fields'] as $field) {
+            if ($field['secret']) {
+                $this->inputs[$field['key']] = '';
+            }
+        }
+
         session()->flash('status', __('Integracion guardada.'));
 
         return redirect()->route('integrations.index');
