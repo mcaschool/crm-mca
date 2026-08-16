@@ -61,5 +61,8 @@ class DatabaseSeeder extends Seeder
                 ]
             );
         });
+
+        // Arbol de navegacion guiada BASE (placeholder, administrable).
+        $this->call(\Modules\Chat\Database\Seeders\ChatTreeSeeder::class);
     }
 }

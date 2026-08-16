@@ -44,11 +44,17 @@ class CrmDemoSeeder extends Seeder
         $context->runFor($institution->id, function () use ($institution): void {
             $bot = Bot::query()->first() ?? Bot::factory()->create(['institution_id' => $institution->id]);
 
-            $programs = collect(['DEMO-1' => 'Analitica de Datos', 'DEMO-2' => 'Gestion de Proyectos', 'DEMO-3' => 'Marketing Digital'])
-                ->map(fn (string $name, string $code) => Program::query()->firstOrCreate(
-                    ['code' => $code],
-                    ['name_es' => $name, 'url' => 'https://mcaschool.us/'.strtolower($code), 'status' => 'active', 'level' => 'inicial', 'goal' => 'actualizar'],
-                ))->values();
+            // Preferir programas REALES del catalogo (si ya se importo); solo si no
+            // hay catalogo, crear 3 de respaldo para poder demostrar las relaciones.
+            $programs = Program::query()->where('status', 'active')->orderBy('display_order')->take(3)->get();
+
+            if ($programs->count() < 3) {
+                $programs = collect(['DEMO-1' => 'Analitica de Datos', 'DEMO-2' => 'Gestion de Proyectos', 'DEMO-3' => 'Marketing Digital'])
+                    ->map(fn (string $name, string $code) => Program::query()->firstOrCreate(
+                        ['code' => $code],
+                        ['name_es' => $name, 'url' => 'https://mcaschool.us/'.strtolower($code), 'status' => 'active', 'level' => 'inicial', 'goal' => 'actualizar'],
+                    ))->values();
+            }
 
             $contacts = [
                 ['first_name' => 'Ana', 'last_name' => 'Perez', 'email' => 'ana.perez@example.com', 'country' => 'MX', 'status' => LeadStatus::New, 'interest' => InterestLevel::High],

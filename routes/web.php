@@ -33,6 +33,20 @@ Route::get('/', function () {
     return redirect()->route(auth()->check() ? 'dashboard' : 'login');
 });
 
+/*
+| Landing de DEMO del widget (solo desarrollo): embebe el widget de Celia con la
+| public_key del bot para probarlo end-to-end. En produccion el widget se embebe
+| en la web real de MCA; esta ruta es para verificacion local.
+*/
+Route::get('/widget-demo', function () {
+    $bot = app(\Modules\Core\Tenancy\CurrentInstitution::class)
+        ->runGlobally(fn () => \Modules\Institutions\Models\Bot::query()->where('status', 'active')->first());
+
+    abort_if($bot === null, 404);
+
+    return view('widget-demo', ['botKey' => $bot->public_key]);
+});
+
 $panel = Route::middleware(['auth', 'institution.user', 'setlocale', 'can:access-panel']);
 
 if ($domain = config('crm.panel_domain')) {

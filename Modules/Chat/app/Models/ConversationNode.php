@@ -15,6 +15,16 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * Nodo del arbol conversacional (constructor). Contenido bilingue _es/_en.
  * `key` es el identificador estable que usa el codigo (welcome, main_menu...).
  * `config` guarda parametros del nodo (filtros de program_list, campos de form).
+ *
+ * @property int $institution_id
+ * @property int $bot_id
+ * @property string $key
+ * @property string $type
+ * @property string|null $content_es
+ * @property string|null $content_en
+ * @property array<string,mixed>|null $config
+ * @property int $display_order
+ * @property string $status
  */
 class ConversationNode extends Model
 {

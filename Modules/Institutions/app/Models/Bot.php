@@ -17,7 +17,11 @@ use Modules\Institutions\Database\Factories\BotFactory;
  * servidor deduce la institucion desde ahi (nunca la envia el cliente).
  *
  * @property int $institution_id
+ * @property string $name
+ * @property string $assistant_name
+ * @property string|null $landing_url
  * @property string $public_key
+ * @property string $default_language
  * @property string $status
  */
 class Bot extends Model

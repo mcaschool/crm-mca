@@ -14,6 +14,15 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
 /**
  * Opcion de un nodo (boton). Etiqueta bilingue _es/_en. Lleva institution_id
  * aunque cuelgue del nodo: aislamiento universal.
+ *
+ * @property int $institution_id
+ * @property int $node_id
+ * @property string $label_es
+ * @property string|null $label_en
+ * @property int|null $target_node_id
+ * @property string|null $action
+ * @property string|null $event_type
+ * @property int $display_order
  */
 class ConversationOption extends Model
 {

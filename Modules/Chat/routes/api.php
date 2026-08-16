@@ -2,4 +2,24 @@
 
 declare(strict_types=1);
 
-// Rutas API del modulo Chat. Se definiran en su bloque correspondiente.
+use Illuminate\Support\Facades\Route;
+use Modules\Chat\Http\Controllers\WidgetController;
+
+/*
+| API publica del widget (bajo el prefijo global /api). Stateless, sin cookies.
+| institution.bot deduce el bot desde X-Bot-Key (el cliente nunca envia
+| institution_id). Rate limiting obligatorio (D8); el emparejador lleva un limite
+| mas estricto porque es la accion mas costosa.
+*/
+
+Route::prefix('v1/widget')
+    ->middleware(['institution.bot', 'setlocale', 'throttle:widget'])
+    ->group(function () {
+        Route::post('session', [WidgetController::class, 'session'])->name('widget.session');
+        Route::get('matcher-options', [WidgetController::class, 'matcherOptions'])->name('widget.matcher-options');
+        Route::post('lead', [WidgetController::class, 'lead'])->name('widget.lead');
+        Route::post('navigate', [WidgetController::class, 'navigate'])->name('widget.navigate');
+        Route::post('match', [WidgetController::class, 'match'])
+            ->middleware('throttle:widget-message')
+            ->name('widget.match');
+    });

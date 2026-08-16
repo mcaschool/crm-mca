@@ -120,4 +120,33 @@ return [
     'integration_types' => ['ai_provider', 'google', 'n8n', 'mailrelay', 'mailjet', 'smtp', 'stripe', 'moodle'],
 
     'ai_providers' => ['openai', 'gemini', 'anthropic', 'deepseek', 'qwen', 'kimi'],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Emparejador (Opcion B — 5 preguntas, determinista, sin IA)
+    |--------------------------------------------------------------------------
+    | area y meta se derivan del catalogo real (categorias y goals). Aqui van las
+    | opciones fijas y el mapeo seniority+educacion -> nivel (logica confirmada).
+    | La motivacion NO filtra: se guarda como senal en el CRM.
+    */
+    'matcher' => [
+        'seniority' => ['estudiante', 'inicio', 'desarrollo', 'mando_medio', 'directivo', 'empresario'],
+        'educacion' => ['secundaria', 'tecnico', 'universitario_incompleto', 'universitario_completo', 'posgrado'],
+        'motivacion' => ['mejorar_empleo', 'ascender', 'reconversion', 'emprender', 'crecimiento_personal'],
+
+        // seniority -> nivel base.
+        'seniority_level' => [
+            'estudiante' => 'inicial',
+            'inicio' => 'inicial',
+            'desarrollo' => 'intermedio',
+            'mando_medio' => 'intermedio',
+            'directivo' => 'avanzado',
+            'empresario' => 'avanzado',
+        ],
+
+        // Educaciones que NO bajan el nivel. El resto lo afina un escalon a la baja.
+        'educacion_alta' => ['universitario_completo', 'posgrado'],
+
+        'levels_order' => ['inicial', 'intermedio', 'avanzado'],
+    ],
 ];
