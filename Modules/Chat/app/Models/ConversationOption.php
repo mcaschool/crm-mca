@@ -22,6 +22,7 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * @property int|null $target_node_id
  * @property string|null $action
  * @property string|null $event_type
+ * @property string|null $url
  * @property int $display_order
  */
 class ConversationOption extends Model
@@ -44,6 +45,7 @@ class ConversationOption extends Model
         'target_node_id',
         'action',
         'event_type',
+        'url',
         'display_order',
     ];
 

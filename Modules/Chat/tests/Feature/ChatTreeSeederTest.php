@@ -18,42 +18,46 @@ function seedTree(): int
     return $institution->id;
 }
 
-it('siembra el arbol real del JSON: nodos, opciones, targets, acciones y eventos', function () {
+it('siembra el arbol bilingue del JSON: nodos, opciones, targets, acciones, urls y eventos', function () {
     $institutionId = seedTree();
 
     app(CurrentInstitution::class)->runFor($institutionId, function () {
-        // Nodo raiz tras la captura.
-        $main = ConversationNode::query()->where('key', 'main')->first();
+        // Inicio del arbol tras la captura.
+        $main = ConversationNode::query()->where('key', 'NODE_MAIN')->first();
         expect($main)->not->toBeNull();
         expect($main->type)->toBe('menu');
         expect($main->options()->count())->toBe(8);
 
         // Saludo previo a la captura.
-        expect(ConversationNode::query()->where('key', 'welcome')->where('type', 'message')->exists())->toBeTrue();
+        expect(ConversationNode::query()->where('key', 'NODE_WELCOME')->where('type', 'message')->exists())->toBeTrue();
 
-        // Enlace externo con URL resuelta desde el bloque urls.
-        $ver = ConversationNode::query()->where('key', 'ver_programas')->first();
-        expect($ver->type)->toBe('external_link');
-        expect($ver->config['url'])->toBe('https://mcaschool.education/es/microcredenciales');
+        // Opcion de enlace externo con URL resuelta desde el bloque urls.
+        $ver = ConversationOption::query()->where('action', 'external_link')->where('event_type', 'viewed_catalog')->first();
+        expect($ver)->not->toBeNull();
+        expect($ver->url)->toBe('https://mcaschool.education/es/microcredenciales/');
 
-        // Opcion del menu con evento CRM y target correcto.
+        // Enlace a inscripciones con la URL correcta.
+        $ins = ConversationOption::query()->where('action', 'external_link')
+            ->where('url', 'https://mcaschool.education/es/microcredenciales/inscripciones/')->first();
+        expect($ins)->not->toBeNull();
+
+        // Opcion con evento CRM y target correcto.
         $cert = ConversationOption::query()->where('event_type', 'viewed_certification')->first();
-        expect($cert)->not->toBeNull();
-        expect(ConversationNode::query()->find($cert->target_node_id)->key)->toBe('certificacion');
+        expect(ConversationNode::query()->find($cert->target_node_id)->key)->toBe('NODE_CERTIFICACION');
 
-        // Accion del emparejador (sin target).
+        // Acciones del emparejador y de Celia.
         expect(ConversationOption::query()->where('action', 'start_matcher')->count())->toBeGreaterThan(0);
         expect(ConversationOption::query()->where('action', 'start_celia')->count())->toBe(1);
 
-        // Footer expandido (un nodo mensaje con 3 botones incluida "Ayudame a elegir").
-        $def = ConversationNode::query()->where('key', 'que_es_def')->first();
-        expect($def->options()->count())->toBe(3);
+        // event_type a nivel de nodo, guardado en config.
+        $def = ConversationNode::query()->where('key', 'NODE_QUE_ES_DEF')->first();
+        expect($def->config['event_type'])->toBe('viewed_microcredential_definition');
 
-        // Bilingue: las etiquetas llevan ingles; el contenido largo es solo espanol.
+        // BILINGUE: contenido y etiquetas en ambos idiomas.
+        expect($def->content_es)->not->toBeNull();
+        expect($def->content_en)->not->toBeNull();
         $mainOption = $main->options()->orderBy('display_order')->first();
         expect($mainOption->label_en)->not->toBeNull();
-        expect($def->content_es)->not->toBeNull();
-        expect($def->content_en)->toBeNull();
     });
 });
 
@@ -64,7 +68,6 @@ it('el seeder es idempotente: re-sembrar no duplica', function () {
         ConversationNode::query()->count(), ConversationOption::query()->count(),
     ]);
 
-    // Segunda pasada (misma institucion/bot).
     (new ChatTreeSeeder)->run();
 
     [$nodes2, $options2] = app(CurrentInstitution::class)->runFor($institutionId, fn () => [

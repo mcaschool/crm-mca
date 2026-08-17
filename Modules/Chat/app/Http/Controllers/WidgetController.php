@@ -14,6 +14,7 @@ use Modules\Chat\Models\ConversationOption;
 use Modules\Chat\Services\GuidedNavigationService;
 use Modules\Chat\Services\MatcherService;
 use Modules\Crm\Enums\EventType;
+use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Conversation;
 use Modules\Crm\Services\ContactService;
 use Modules\Crm\Services\ConversationService;
@@ -27,6 +28,12 @@ use Modules\Institutions\Models\Bot;
  */
 class WidgetController extends Controller
 {
+    /** Saludo previo a la captura (lo muestra el widget con su propio formulario). */
+    private const WELCOME_KEY = 'NODE_WELCOME';
+
+    /** Inicio del arbol guiado, tras la captura. */
+    private const MAIN_KEY = 'NODE_MAIN';
+
     public function __construct(
         private readonly ConversationService $conversations,
         private readonly ContactService $contacts,
@@ -57,7 +64,7 @@ class WidgetController extends Controller
             'session_id' => $conversation->session_id,
             'bot' => ['assistant_name' => $bot->assistant_name, 'default_language' => $bot->default_language],
             'contact_captured' => $conversation->contact_id !== null,
-            'node' => $node !== null ? $this->guided->renderNode($node, $locale) : null,
+            'node' => $node !== null ? $this->guided->renderNode($node, $locale, $this->contactName($conversation)) : null,
         ]);
     }
 
@@ -92,9 +99,9 @@ class WidgetController extends Controller
             'bot_id' => $bot->getKey(),
         ]);
 
-        // Tras la captura, el arbol arranca en 'main' (sin duplicar la captura,
+        // Tras la captura, el arbol arranca en NODE_MAIN (sin duplicar la captura,
         // que la maneja el widget). NODE_WELCOME es solo el saludo previo.
-        $main = $this->guided->findNode($bot->getKey(), 'main');
+        $main = $this->guided->findNode($bot->getKey(), self::MAIN_KEY);
         if ($main !== null) {
             $conversation->current_node_id = $main->getKey();
             $conversation->save();
@@ -118,7 +125,7 @@ class WidgetController extends Controller
         $option = ConversationOption::query()->findOrFail($data['option_id']);
         $node = ConversationNode::query()->where('bot_id', $bot->getKey())->findOrFail($option->node_id);
 
-        $result = $this->guided->choose($conversation, $option, app()->getLocale());
+        $result = $this->guided->choose($conversation, $option, app()->getLocale(), $this->contactName($conversation));
 
         return response()->json($result);
     }
@@ -140,7 +147,7 @@ class WidgetController extends Controller
 
         $conversation = $this->conversation($data['session_id']);
         $contact = $conversation->contact_id !== null
-            ? \Modules\Crm\Models\Contact::query()->find($conversation->contact_id)
+            ? Contact::query()->find($conversation->contact_id)
             : null;
 
         $result = $this->matcher->match($bot, $contact, $conversation, $request->input('answers', []));
@@ -207,7 +214,17 @@ class WidgetController extends Controller
             }
         }
 
-        return $this->guided->findNode($botId, 'welcome');
+        return $this->guided->findNode($botId, self::WELCOME_KEY);
+    }
+
+    /** Nombre del contacto de la conversacion (para personalizar [Nombre]/[Name]). */
+    private function contactName(Conversation $conversation): ?string
+    {
+        if ($conversation->contact_id === null) {
+            return null;
+        }
+
+        return optional(Contact::query()->find($conversation->contact_id))->first_name;
     }
 
     /** Honeypot (D8): un campo oculto que solo un bot rellenaria. */

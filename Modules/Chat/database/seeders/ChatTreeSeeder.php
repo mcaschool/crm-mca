@@ -13,10 +13,16 @@ use Modules\Institutions\Models\Institution;
 use RuntimeException;
 
 /**
- * Siembra el arbol de navegacion guiada REAL desde database/data/navigation_tree.json
- * (transcripcion del documento del cliente). Idempotente por (bot, key): re-sembrar
- * actualiza el contenido y reemplaza las opciones, sin duplicar. Bilingue: el
- * contenido largo va en espanol (en=null -> fallback); las etiquetas son bilingues.
+ * Siembra el arbol de navegacion guiada REAL y BILINGUE (es/en) desde
+ * database/data/navigation_tree.json (fuente unica: navigation_tree_celia.json del
+ * cliente). Idempotente por (bot, key): re-sembrar actualiza y reemplaza opciones,
+ * sin duplicar.
+ *
+ * Esquema del JSON: nodes[] con key/type/display_order/content{es,en} (+ event_type
+ * opcional a nivel de nodo, que se registra al verlo -> se guarda en config). options[]
+ * con label{es,en} y UNO de target|action; action en {start_matcher,start_celia,
+ * external_link}; url (solo si action=external_link) resuelto desde 'urls'; event_type
+ * opcional. La captura la maneja el widget; el arbol guiado arranca en NODE_MAIN.
  */
 class ChatTreeSeeder extends Seeder
 {
@@ -39,7 +45,6 @@ class ChatTreeSeeder extends Seeder
             }
 
             $urls = $data['urls'] ?? [];
-            $footers = $data['footers'] ?? [];
 
             // Pasada 1: nodos (upsert por key).
             $nodesByKey = [];
@@ -48,8 +53,9 @@ class ChatTreeSeeder extends Seeder
                 $node->type = $n['type'];
                 $node->content_es = $n['content']['es'] ?? null;
                 $node->content_en = $n['content']['en'] ?? null;
-                $node->config = isset($n['url']) ? ['url' => $urls[$n['url']] ?? null] : null;
-                $node->display_order = (int) ($n['order'] ?? 0);
+                // event_type a nivel de nodo (se registra al navegar a el).
+                $node->config = isset($n['event_type']) ? ['event_type' => $n['event_type']] : null;
+                $node->display_order = (int) ($n['display_order'] ?? 0);
                 $node->status = 'active';
                 $node->save();
                 $nodesByKey[$n['key']] = $node;
@@ -60,22 +66,22 @@ class ChatTreeSeeder extends Seeder
                 $node = $nodesByKey[$n['key']];
                 $node->options()->delete();
 
-                $options = $n['options'] ?? [];
-                if (is_string($options)) {
-                    $options = $footers[$options] ?? [];
-                }
-
-                $order = 1;
-                foreach ($options as $o) {
+                foreach ($n['options'] ?? [] as $i => $o) {
                     $targetKey = $o['target'] ?? null;
+                    $url = null;
+                    if (($o['action'] ?? null) === 'external_link' && isset($o['url'])) {
+                        $url = $urls[$o['url']] ?? $o['url'];
+                    }
+
                     ConversationOption::query()->create([
                         'node_id' => $node->getKey(),
-                        'label_es' => $o['label']['es'],
+                        'label_es' => $o['label']['es'] ?? '',
                         'label_en' => $o['label']['en'] ?? null,
                         'target_node_id' => $targetKey !== null ? optional($nodesByKey[$targetKey] ?? null)->getKey() : null,
                         'action' => $o['action'] ?? null,
                         'event_type' => $o['event_type'] ?? null,
-                        'display_order' => $order++,
+                        'url' => $url,
+                        'display_order' => (int) ($o['display_order'] ?? ($i + 1)),
                     ]);
                 }
             }
@@ -83,7 +89,7 @@ class ChatTreeSeeder extends Seeder
     }
 
     /**
-     * @return array{urls?: array<string,string>, nodes: array<int,array<string,mixed>>, footers?: array<string,array<int,array<string,mixed>>>}
+     * @return array{urls?: array<string,string>, nodes: array<int,array<string,mixed>>}
      */
     private function loadTree(): array
     {
@@ -92,7 +98,7 @@ class ChatTreeSeeder extends Seeder
             throw new RuntimeException("No se encontro el arbol: {$path}");
         }
 
-        /** @var array{urls?: array<string,string>, nodes: array<int,array<string,mixed>>, footers?: array<string,array<int,array<string,mixed>>>} $data */
+        /** @var array{urls?: array<string,string>, nodes: array<int,array<string,mixed>>} $data */
         $data = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
 
         return $data;

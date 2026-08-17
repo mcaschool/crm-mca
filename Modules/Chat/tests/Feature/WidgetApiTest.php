@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Models\ProgramCategory;
-use Modules\Chat\Models\ConversationNode;
+use Modules\Chat\Database\Seeders\ChatTreeSeeder;
 use Modules\Chat\Models\ConversationOption;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Crm\Models\Contact;
@@ -18,24 +18,12 @@ function widgetBot(): Bot
 {
     $institution = Institution::factory()->create();
 
-    return app(CurrentInstitution::class)->runFor($institution->id, function () {
-        $bot = Bot::factory()->create(['public_key' => str_repeat('k', 32), 'assistant_name' => 'Celia']);
+    $bot = app(CurrentInstitution::class)->runFor($institution->id, fn () => Bot::factory()->create(['public_key' => str_repeat('k', 32), 'assistant_name' => 'Celia']));
 
-        $welcome = ConversationNode::query()->create([
-            'bot_id' => $bot->id, 'key' => 'welcome', 'type' => 'menu',
-            'content_es' => 'Hola, soy Celia.', 'content_en' => 'Hi, I am Celia.', 'status' => 'active',
-        ]);
-        ConversationOption::query()->create([
-            'node_id' => $welcome->id, 'label_es' => 'Ayudame a elegir', 'label_en' => 'Help me choose',
-            'action' => 'start_matcher', 'event_type' => null, 'display_order' => 1,
-        ]);
-        ConversationOption::query()->create([
-            'node_id' => $welcome->id, 'label_es' => 'Ver programas', 'label_en' => 'View programs',
-            'action' => null, 'event_type' => 'viewed_program', 'display_order' => 2,
-        ]);
+    // Siembra el arbol real bilingue (NODE_WELCOME/NODE_MAIN/...).
+    (new ChatTreeSeeder)->run();
 
-        return $bot;
-    });
+    return $bot;
 }
 
 function widgetHeaders(Bot $bot): array
@@ -51,7 +39,7 @@ it('inicia una sesion, devuelve el nodo de bienvenida y registra widget_opened',
     $res->assertOk()
         ->assertJsonPath('bot.assistant_name', 'Celia')
         ->assertJsonPath('contact_captured', false)
-        ->assertJsonPath('node.key', 'welcome');
+        ->assertJsonPath('node.key', 'NODE_WELCOME');
 
     app(CurrentInstitution::class)->runFor($bot->institution_id, function () {
         expect(Conversation::query()->count())->toBe(1);
@@ -103,14 +91,15 @@ it('navegar por una opcion registra su evento CRM', function () {
     $bot = widgetBot();
     $session = $this->withHeaders(widgetHeaders($bot))->postJson('/api/v1/widget/session', [])->json('session_id');
 
-    $optionId = app(CurrentInstitution::class)->runFor($bot->institution_id, fn () => ConversationOption::query()->where('event_type', 'viewed_program')->value('id'));
+    // Opcion "Certificacion y titulacion" del menu principal (event viewed_certification).
+    $optionId = app(CurrentInstitution::class)->runFor($bot->institution_id, fn () => ConversationOption::query()->where('event_type', 'viewed_certification')->value('id'));
 
     $this->withHeaders(widgetHeaders($bot))->postJson('/api/v1/widget/navigate', [
         'session_id' => $session, 'option_id' => $optionId,
     ])->assertOk();
 
     app(CurrentInstitution::class)->runFor($bot->institution_id, function () {
-        expect(Event::query()->where('event_type', 'viewed_program')->count())->toBe(1);
+        expect(Event::query()->where('event_type', 'viewed_certification')->count())->toBe(1);
     });
 });
 

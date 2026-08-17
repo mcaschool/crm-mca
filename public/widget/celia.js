@@ -132,11 +132,6 @@
     clear();
     if (!node) { return; }
     if (node.content) { body.appendChild(el('<div class="msg">' + esc(node.content) + '</div>')); }
-    if (node.type === 'external_link' && node.config && node.config.url) {
-      var link = el('<a class="btn" target="_blank" rel="noopener"></a>');
-      link.textContent = state.lang === 'es' ? 'Abrir en la web ↗' : 'Open website ↗';
-      link.href = node.config.url; body.appendChild(link);
-    }
     (node.options || []).forEach(function (opt) {
       var b = el('<button class="btn"></button>');
       b.textContent = opt.label;
@@ -146,10 +141,13 @@
   }
 
   function onOption(opt) {
+    // Enlace externo: se abre en pestana nueva sin dejar el chat.
+    if (opt.action === 'external_link' && opt.url) { window.open(opt.url, '_blank', 'noopener'); }
     typing();
     api('/navigate', 'POST', { session_id: state.sessionId, option_id: opt.id }).then(function (r) {
       if (r.action === 'start_matcher') { return startMatcher(); }
       if (r.action === 'start_celia') { return startCelia(); }
+      if (r.action === 'external_link') { return loadWelcome(); }
       renderNode(r.node);
     });
   }
