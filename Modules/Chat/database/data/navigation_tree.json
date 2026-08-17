@@ -1,0 +1,177 @@
+{
+    "_readme": "Arbol de navegacion guiada REAL (Celia / Microcredenciales), transcrito del documento Arbol_Navegacion_Guiada_Microcredenciales.md. Estructura: nodes[] con key/type/order/content{es,en}; options[] con label{es,en} y UNO de target|action; action en {start_matcher,start_celia,external_link}; event_type opcional. Las URLs externas se resuelven desde 'urls'. El contenido largo esta en espanol (en=null -> fallback a es), como el catalogo; las etiquetas de botones son bilingues. NODE_WELCOME es el saludo mostrado junto a la captura del widget; tras capturar, el arbol arranca en 'main'.",
+    "urls": {
+        "catalog": "https://mcaschool.education/es/microcredenciales",
+        "inscripciones": "https://mcaschool.education/es/inscripciones"
+    },
+    "nodes": [
+        {
+            "key": "welcome",
+            "type": "message",
+            "order": 0,
+            "content": {
+                "es": "¡Hola! Bienvenido a MCA School.\n\nEste espacio esta dedicado exclusivamente a nuestras Microcredenciales. Puedo acompanarte a conocer como funcionan, revisar los programas y resolver tus dudas sobre certificacion, metodologia o matricula.\n\nSi tu consulta es sobre otros programas de MCA School, encontraras el chat general en mcaschool.education.",
+                "en": "Hi! Welcome to MCA School.\n\nThis space is dedicated exclusively to our Microcredentials. I can help you understand how they work, review the programs and answer your questions about certification, methodology or enrollment.\n\nIf your question is about other MCA School programs, you'll find the general chat at mcaschool.education."
+            },
+            "options": []
+        },
+        {
+            "key": "main",
+            "type": "menu",
+            "order": 1,
+            "content": {
+                "es": "Gracias. ¿Que te gustaria conocer sobre nuestras Microcredenciales?",
+                "en": "Thank you. What would you like to know about our Microcredentials?"
+            },
+            "options": [
+                { "label": { "es": "¿Que es una Microcredencial?", "en": "What is a Microcredential?" }, "target": "que_es" },
+                { "label": { "es": "Metodologia y experiencia de estudio", "en": "Methodology & study experience" }, "target": "metodologia" },
+                { "label": { "es": "Certificacion y titulacion", "en": "Certification & credentials" }, "target": "certificacion", "event_type": "viewed_certification" },
+                { "label": { "es": "Inscripcion, requisitos y pago", "en": "Enrollment, requirements & payment" }, "target": "inscripcion" },
+                { "label": { "es": "Proyeccion profesional", "en": "Professional impact" }, "target": "proyeccion" },
+                { "label": { "es": "Ver los programas disponibles", "en": "View available programs" }, "target": "ver_programas", "event_type": "viewed_catalog" },
+                { "label": { "es": "Ayudame a elegir una Microcredencial", "en": "Help me choose a Microcredential" }, "action": "start_matcher" },
+                { "label": { "es": "Hablar con Celia", "en": "Talk to Celia" }, "action": "start_celia", "event_type": "started_celia" }
+            ]
+        },
+        {
+            "key": "ver_programas",
+            "type": "external_link",
+            "order": 2,
+            "url": "catalog",
+            "content": { "es": "Explora todos nuestros programas de Microcredenciales en la web:", "en": "Explore all our Microcredential programs on the website:" },
+            "options": [ { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" } ]
+        },
+        {
+            "key": "ir_inscripciones",
+            "type": "external_link",
+            "order": 3,
+            "url": "inscripciones",
+            "content": { "es": "Puedes formalizar tu inscripcion y ver precios y cupones aqui:", "en": "You can complete your enrollment and see prices and coupons here:" },
+            "options": [ { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" } ]
+        },
+
+        {
+            "key": "que_es",
+            "type": "menu",
+            "order": 10,
+            "content": { "es": "Te cuento lo esencial. ¿Que te gustaria saber primero?", "en": "Here are the essentials. What would you like to know first?" },
+            "options": [
+                { "label": { "es": "Que es y en que se diferencia de un curso", "en": "What it is and how it differs from a course" }, "target": "que_es_def", "event_type": "viewed_microcredential_definition" },
+                { "label": { "es": "A quien estan dirigidas", "en": "Who they are for" }, "target": "que_es_dirigida" },
+                { "label": { "es": "Que ventajas tienen frente a programas largos", "en": "Advantages over long programs" }, "target": "que_es_ventajas" },
+                { "label": { "es": "¿Sirven si ya tengo experiencia?", "en": "Are they useful if I already have experience?" }, "target": "que_es_experiencia" },
+                { "label": { "es": "¿Puedo cursar varias areas?", "en": "Can I take several areas?" }, "target": "que_es_varias" },
+                { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" }
+            ]
+        },
+        { "key": "que_es_def", "type": "message", "order": 11, "content": { "es": "Una microcredencial es una unidad academica estructurada que certifica una competencia especifica en un periodo corto y definido: 6 semanas. A diferencia de un curso tradicional, no se limita a transmitir contenidos, sino que responde a objetivos formativos concretos, con documentacion academica formal. Su enfoque es desarrollar habilidades aplicables y verificables dentro de un marco institucional.", "en": null }, "options": "footer_que_es" },
+        { "key": "que_es_dirigida", "type": "message", "order": 12, "content": { "es": "Estan dirigidas a profesionales, ejecutivos, emprendedores y docentes que quieren fortalecer areas concretas de su perfil, actualizar conocimientos o desarrollar nuevas competencias sin comprometer largos periodos de estudio. Son ideales para avanzar de forma estrategica en tu desarrollo profesional.", "en": null }, "options": "footer_que_es" },
+        { "key": "que_es_ventajas", "type": "message", "order": 13, "content": { "es": "Ofrecen claridad, eficiencia y enfoque. Mientras un programa extenso abarca muchas dimensiones, la microcredencial concentra el aprendizaje en una competencia especifica, con resultados visibles en menos tiempo. Es una formacion flexible, progresiva y alineada con objetivos profesionales concretos.", "en": null }, "options": "footer_que_es" },
+        { "key": "que_es_experiencia", "type": "message", "order": 14, "content": { "es": "Si, y de hecho son especialmente valiosas si ya tienes experiencia: permiten actualizar criterios, fortalecer habilidades estrategicas y profundizar en areas clave sin empezar desde cero. Funcionan como herramientas de refinamiento y especializacion dentro de una trayectoria ya consolidada.", "en": null }, "options": "footer_que_es" },
+        { "key": "que_es_varias", "type": "message", "order": 15, "content": { "es": "Si. Las microcredenciales estan disenadas para combinarse entre si. Puedes armar una ruta personalizada cursando varias areas —liderazgo, negocios, finanzas o marketing— segun tus objetivos de crecimiento. Si quieres, puedo ayudarte a elegir por donde empezar.", "en": null }, "options": "footer_que_es" },
+
+        {
+            "key": "metodologia",
+            "type": "menu",
+            "order": 20,
+            "content": { "es": "Nuestro modelo esta pensado para profesionales activos. ¿Que te interesa?", "en": "Our model is designed for working professionals. What interests you?" },
+            "options": [
+                { "label": { "es": "Duracion y dedicacion semanal", "en": "Duration & weekly dedication" }, "target": "met_duracion", "event_type": "viewed_duration" },
+                { "label": { "es": "¿Es 100% online? ¿A mi ritmo?", "en": "Is it 100% online? At my own pace?" }, "target": "met_online" },
+                { "label": { "es": "Como se aprende (metodologia)", "en": "How you learn (methodology)" }, "target": "met_como" },
+                { "label": { "es": "¿Hay evaluaciones o practica?", "en": "Are there assessments or practice?" }, "target": "met_eval" },
+                { "label": { "es": "Como accedo a la plataforma", "en": "How to access the platform" }, "target": "met_acceso" },
+                { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" }
+            ]
+        },
+        { "key": "met_duracion", "type": "message", "order": 21, "content": { "es": "Cada microcredencial equivale a 6 semanas de carga academica. Pero como estudias a tu propio ritmo, puedes completarla en un mes, en menos o en algo mas, segun tu dedicacion. No hay horarios rigidos: distribuyes el estudio como mejor te funcione, de forma compatible con tus responsabilidades laborales o personales.", "en": null }, "options": "footer_metodologia" },
+        { "key": "met_online", "type": "message", "order": 22, "content": { "es": "Si, es completamente online y avanzas a tu propio ritmo dentro del periodo establecido. No hay horarios rigidos obligatorios: tienes autonomia, manteniendo la organizacion academica necesaria para completar el programa.", "en": null }, "options": "footer_metodologia" },
+        { "key": "met_como", "type": "message", "order": 23, "content": { "es": "La metodologia es estructurada y progresiva, con objetivos definidos por modulo. Se apoya en varios recursos: video clases, casos de estudio, trabajo autonomo guiado, material complementario y foros academicos. El enfoque prioriza la comprension, la aplicacion practica y la consolidacion de cada competencia.", "en": null }, "options": "footer_metodologia" },
+        { "key": "met_eval", "type": "message", "order": 24, "content": { "es": "Si. Cada microcredencial incluye actividades academicas disenadas para evidenciar el logro de los objetivos: permiten verificar que la competencia se comprendio y se aplico adecuadamente. Tambien hay foros de aclaracion de dudas como canal constante de retroalimentacion.", "en": null }, "options": "footer_metodologia" },
+        { "key": "met_acceso", "type": "message", "order": 25, "content": { "es": "Una vez formalizada la inscripcion, recibes acceso a la plataforma institucional, con los contenidos, materiales y actividades organizados de forma clara y secuencial para acompanar tu progreso durante las 6 semanas.", "en": null }, "options": "footer_metodologia" },
+
+        {
+            "key": "certificacion",
+            "type": "menu",
+            "order": 30,
+            "content": { "es": "Esto es lo que obtienes y como se respalda. ¿Que quieres saber?", "en": "This is what you get and how it is backed. What would you like to know?" },
+            "options": [
+                { "label": { "es": "Que documentacion recibo", "en": "What documentation I receive" }, "target": "cert_doc" },
+                { "label": { "es": "Certificado y diploma: ¿son distintos?", "en": "Certificate and diploma: are they different?" }, "target": "cert_tipos" },
+                { "label": { "es": "¿Tienen verificacion digital?", "en": "Do they have digital verification?" }, "target": "cert_verif" },
+                { "label": { "es": "¿Respaldo academico institucional?", "en": "Institutional academic backing?" }, "target": "cert_respaldo" },
+                { "label": { "es": "¿Sirve para mi CV y rutas superiores?", "en": "Useful for my CV and further paths?" }, "target": "cert_cv" },
+                { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" }
+            ]
+        },
+        { "key": "cert_doc", "type": "message", "order": 31, "content": { "es": "Al finalizar satisfactoriamente el programa recibes documentacion academica oficial que acredita la formacion cursada y la competencia desarrollada durante las 6 semanas.", "en": null }, "options": "footer_certificacion" },
+        { "key": "cert_tipos", "type": "message", "order": 32, "content": { "es": "Son dos documentos complementarios: un diploma academico del programa cursado, y un certificado de la microcredencial, que acredita la competencia especifica desarrollada. Ambos pueden integrarse directamente desde nuestra plataforma educativa a LinkedIn.", "en": null }, "options": "footer_certificacion" },
+        { "key": "cert_verif", "type": "message", "order": 33, "content": { "es": "Si. La documentacion incorpora mecanismos de verificacion digital que permiten validar su autenticidad, lo que refuerza la confianza y la trazabilidad academica.", "en": null }, "options": "footer_certificacion" },
+        { "key": "cert_respaldo", "type": "message", "order": 34, "content": { "es": "Si. Las microcredenciales forman parte de la estructura academica institucional de MCA School, disenadas bajo criterios formativos definidos, con duracion, objetivos y documentacion formalmente establecidos.", "en": null }, "options": "footer_certificacion" },
+        { "key": "cert_cv", "type": "message", "order": 35, "content": { "es": "Si. Puedes incorporar la microcredencial en tu perfil profesional, curriculum o LinkedIn como evidencia de actualizacion —el diploma y el certificado se integran de forma directa. Ademas, estan concebidas como unidades que pueden articularse dentro de rutas academicas progresivas, hacia certificaciones ejecutivas u otros programas del ecosistema de MCA School.", "en": null }, "options": "footer_certificacion" },
+
+        {
+            "key": "inscripcion",
+            "type": "menu",
+            "order": 40,
+            "content": { "es": "El proceso es accesible y directo. ¿Que necesitas saber?", "en": "The process is simple and accessible. What do you need to know?" },
+            "options": [
+                { "label": { "es": "Requisitos para inscribirme", "en": "Requirements to enroll" }, "target": "ins_req" },
+                { "label": { "es": "¿Necesito estudios universitarios?", "en": "Do I need a university degree?" }, "target": "ins_univ" },
+                { "label": { "es": "Como es el proceso de inscripcion", "en": "How the enrollment process works" }, "target": "ins_proceso", "event_type": "viewed_price" },
+                { "label": { "es": "¿Hay cupones o descuentos?", "en": "Are there coupons or discounts?" }, "target": "ins_cupones" },
+                { "label": { "es": "¿Que recibo al matricularme?", "en": "What I receive when I enroll" }, "target": "ins_recibo" },
+                { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" }
+            ]
+        },
+        { "key": "ins_req", "type": "message", "order": 41, "content": { "es": "El proceso esta pensado para ser accesible: no se exigen estudios universitarios previos obligatorios. Basta con completar el formulario de inscripcion y formalizar el proceso administrativo correspondiente para obtener acceso al programa.", "en": null }, "options": "footer_inscripcion" },
+        { "key": "ins_univ", "type": "message", "order": 42, "content": { "es": "No es obligatorio. Las microcredenciales estan orientadas a la formacion profesional y continua; lo esencial es tu interes en desarrollar competencias especificas dentro del area que elijas.", "en": null }, "options": "footer_inscripcion" },
+        { "key": "ins_proceso", "type": "message", "order": 43, "content": { "es": "Es sencillo y completamente online:\n1. Eliges la microcredencial que quieres cursar.\n2. Vas al area de inscripciones, completas unos datos minimos y realizas el pago.\n3. Al recibir tu pago, el sistema te matricula automaticamente y te envia tus credenciales de acceso, la bienvenida y un video con el tour de tu espacio de aprendizaje.\n4. Durante tus estudios recibes guia por correo y tienes soporte academico y tecnico.\n\nEl precio y las opciones de pago de cada programa estan en su ficha y en la pagina de inscripcion.", "en": null }, "options": "footer_inscripcion" },
+        { "key": "ins_cupones", "type": "message", "order": 44, "content": { "es": "Si. En la pagina de inscripcion, justo donde realizas el pago, hay un espacio para introducir un codigo de cupon. Suele haber un codigo promocional en el banner superior de la pagina, o disponible en la misma pagina de inscripcion, antes del campo del codigo. Te recomiendo revisarlo antes de pagar.", "en": null }, "options": "footer_inscripcion" },
+        { "key": "ins_recibo", "type": "message", "order": 45, "content": { "es": "Al confirmarse tu pago, el sistema te matricula y recibes: tus credenciales de acceso, un mensaje de bienvenida al programa, y un video tutorial con el tour virtual de tu espacio de aprendizaje. Durante todos tus estudios recibes guia por correo con indicaciones precisas, y cuentas con dos canales directos de soporte —academico y tecnico— para acompanarte.", "en": null }, "options": "footer_inscripcion" },
+
+        {
+            "key": "proyeccion",
+            "type": "menu",
+            "order": 50,
+            "content": { "es": "Para que te sirve, en concreto. ¿Que te interesa?", "en": "What it does for you, specifically. What interests you?" },
+            "options": [
+                { "label": { "es": "Como fortalece mi posicionamiento", "en": "How it strengthens my positioning" }, "target": "pro_posicion" },
+                { "label": { "es": "Que competencias desarrollo", "en": "What competencies I develop" }, "target": "pro_competencias" },
+                { "label": { "es": "¿Puedo aplicar lo aprendido de inmediato?", "en": "Can I apply what I learn immediately?" }, "target": "pro_aplicar" },
+                { "label": { "es": "¿Me ayuda a diferenciarme?", "en": "Does it help me stand out?" }, "target": "pro_diferencia" },
+                { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" }
+            ]
+        },
+        { "key": "pro_posicion", "type": "message", "order": 51, "content": { "es": "Fortalece tu posicionamiento porque demuestra actualizacion, especializacion y compromiso con el aprendizaje continuo. En un entorno competitivo, acreditar competencias especificas proyecta un perfil mas solido y estrategico, alineado con las exigencias actuales del mercado.", "en": null }, "options": "footer_proyeccion" },
+        { "key": "pro_competencias", "type": "message", "order": 52, "content": { "es": "Desarrollas competencias concretas en areas clave como liderazgo, gestion empresarial, analisis financiero, comunicacion estrategica o marketing. No son conocimientos generales, sino habilidades aplicables que impactan tu capacidad de decidir, liderar procesos y mejorar resultados.", "en": null }, "options": "footer_proyeccion" },
+        { "key": "pro_aplicar", "type": "message", "order": 53, "content": { "es": "Si. El diseno prioriza la aplicabilidad: los contenidos se orientan a situaciones y contextos profesionales reales, para que lleves lo aprendido a tu entorno laboral desde el primer momento.", "en": null }, "options": "footer_proyeccion" },
+        { "key": "pro_diferencia", "type": "message", "order": 54, "content": { "es": "Si. En un mercado donde muchos perfiles comparten titulos similares, la actualizacion especifica marca la diferencia: evidencia especializacion en areas estrategicas y una actitud proactiva frente a tu desarrollo profesional.", "en": null }, "options": "footer_proyeccion" }
+    ],
+    "footers": {
+        "footer_que_es": [
+            { "label": { "es": "Otra pregunta", "en": "Another question" }, "target": "que_es" },
+            { "label": { "es": "Ayudame a elegir", "en": "Help me choose" }, "action": "start_matcher" },
+            { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" }
+        ],
+        "footer_metodologia": [
+            { "label": { "es": "Otra pregunta", "en": "Another question" }, "target": "metodologia" },
+            { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" }
+        ],
+        "footer_certificacion": [
+            { "label": { "es": "Otra pregunta", "en": "Another question" }, "target": "certificacion" },
+            { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" }
+        ],
+        "footer_inscripcion": [
+            { "label": { "es": "Otra pregunta", "en": "Another question" }, "target": "inscripcion" },
+            { "label": { "es": "Ir a inscripciones", "en": "Go to enrollment" }, "target": "ir_inscripciones" },
+            { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" }
+        ],
+        "footer_proyeccion": [
+            { "label": { "es": "Otra pregunta", "en": "Another question" }, "target": "proyeccion" },
+            { "label": { "es": "Ayudame a elegir", "en": "Help me choose" }, "action": "start_matcher" },
+            { "label": { "es": "Menu principal", "en": "Main menu" }, "target": "main" }
+        ]
+    }
+}

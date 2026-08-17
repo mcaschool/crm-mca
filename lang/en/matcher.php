@@ -28,6 +28,14 @@ return [
         'emprender' => 'Start a business',
         'crecimiento_personal' => 'Personal growth',
     ],
+    // Friendly labels for goals (the real value is still the goal column).
+    'meta' => [
+        'actualizar' => 'Stay current',
+        'ascenso' => 'Get promoted',
+        'direccion' => 'Reach leadership',
+        'emprender' => 'Start a business',
+        'especializar' => 'Specialize',
+    ],
     'questions' => [
         'motivacion' => 'What motivates you to study now?',
         'meta' => 'What is your main goal?',

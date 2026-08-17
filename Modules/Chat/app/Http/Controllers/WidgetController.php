@@ -92,6 +92,14 @@ class WidgetController extends Controller
             'bot_id' => $bot->getKey(),
         ]);
 
+        // Tras la captura, el arbol arranca en 'main' (sin duplicar la captura,
+        // que la maneja el widget). NODE_WELCOME es solo el saludo previo.
+        $main = $this->guided->findNode($bot->getKey(), 'main');
+        if ($main !== null) {
+            $conversation->current_node_id = $main->getKey();
+            $conversation->save();
+        }
+
         return response()->json(['ok' => true, 'contact_captured' => true]);
     }
 
@@ -159,9 +167,16 @@ class WidgetController extends Controller
 
         $metas = Program::query()->where('status', 'active')->whereNotNull('goal')
             ->distinct()->orderBy('goal')->pluck('goal')
-            ->map(fn (string $g) => ['value' => $g, 'label' => $g])->all();
+            ->map(fn (string $g) => ['value' => $g, 'label' => trans()->has('matcher.meta.'.$g) ? __('matcher.meta.'.$g) : $g])->all();
 
         return response()->json([
+            'questions' => [
+                'motivacion' => __('matcher.questions.motivacion'),
+                'meta' => __('matcher.questions.meta'),
+                'area' => __('matcher.questions.area'),
+                'seniority' => __('matcher.questions.seniority'),
+                'educacion' => __('matcher.questions.educacion'),
+            ],
             'area' => $areas,
             'meta' => $metas,
             'seniority' => $this->options('seniority'),

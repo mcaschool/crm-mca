@@ -28,6 +28,14 @@ return [
         'emprender' => 'Emprender un negocio',
         'crecimiento_personal' => 'Crecimiento personal',
     ],
+    // Etiquetas amigables de las metas (el valor real sigue siendo la columna goal).
+    'meta' => [
+        'actualizar' => 'Actualizarme',
+        'ascenso' => 'Ascender',
+        'direccion' => 'Llegar a la direccion',
+        'emprender' => 'Emprender',
+        'especializar' => 'Especializarme',
+    ],
     'questions' => [
         'motivacion' => '¿Que te motiva a estudiar ahora?',
         'meta' => '¿Cual es tu meta principal?',
