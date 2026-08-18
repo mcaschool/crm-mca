@@ -106,7 +106,7 @@
                     </div>
                     <div class="field" style="flex:1;min-width:200px;margin-bottom:0">
                         <label>Proveedor (integración)</label>
-                        <select wire:model="integrationId">
+                        <select wire:model.live="integrationId">
                             <option value="">— Elegir —</option>
                             @foreach ($integrations as $int)
                                 <option value="{{ $int->id }}">{{ $int->name }} ({{ $int->provider }})</option>
@@ -118,7 +118,7 @@
                     </div>
                     <div class="field" style="flex:1;min-width:160px;margin-bottom:0">
                         <label>Modelo</label>
-                        <input type="text" wire:model="model" maxlength="100" placeholder="Ej. qwen3.7-plus">
+                        <input type="text" wire:model.blur="model" maxlength="100" placeholder="Ej. qwen3.7-plus">
                     </div>
                 </div>
             </div>
