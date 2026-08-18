@@ -8,11 +8,15 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Modules\Crm\Console\PurgeRetentionCommand;
+use Modules\Crm\Console\ResetDemoCommand;
 use Modules\Crm\Livewire\Contacts\Index as ContactsIndex;
 use Modules\Crm\Livewire\Contacts\Show as ContactsShow;
 use Modules\Crm\Livewire\Conversations\Show as ConversationsShow;
+use Modules\Crm\Livewire\Dashboard;
+use Modules\Crm\Livewire\Leads\Create as LeadsCreate;
 use Modules\Crm\Livewire\Leads\Index as LeadsIndex;
 use Modules\Crm\Livewire\Leads\Show as LeadsShow;
+use Modules\Crm\Livewire\NewLeadNotifier;
 use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Lead;
 use Modules\Crm\Policies\ContactPolicy;
@@ -38,6 +42,7 @@ class CrmServiceProvider extends ModuleServiceProvider
      */
     protected array $commands = [
         PurgeRetentionCommand::class,
+        ResetDemoCommand::class,
     ];
 
     /**
@@ -53,8 +58,11 @@ class CrmServiceProvider extends ModuleServiceProvider
         Livewire::component('crm.contacts.index', ContactsIndex::class);
         Livewire::component('crm.contacts.show', ContactsShow::class);
         Livewire::component('crm.leads.index', LeadsIndex::class);
+        Livewire::component('crm.leads.create', LeadsCreate::class);
         Livewire::component('crm.leads.show', LeadsShow::class);
         Livewire::component('crm.conversations.show', ConversationsShow::class);
+        Livewire::component('crm.dashboard', Dashboard::class);
+        Livewire::component('crm.new-lead-notifier', NewLeadNotifier::class);
     }
 
     /**

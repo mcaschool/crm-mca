@@ -7,6 +7,7 @@ namespace Modules\Integrations\Livewire\Integrations;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Modules\Audit\Services\AuditService;
 use Modules\Integrations\Models\Integration;
 use Modules\Integrations\Services\ConnectionTester;
 use Modules\Integrations\Support\IntegrationCatalog;
@@ -26,7 +27,7 @@ class Index extends Component
         $this->authorize('viewAny', Integration::class);
     }
 
-    public function test(int $integrationId, ConnectionTester $tester): void
+    public function test(int $integrationId, ConnectionTester $tester, AuditService $audit): void
     {
         $integration = Integration::query()->findOrFail($integrationId);
         $this->authorize('test', $integration);
@@ -39,16 +40,21 @@ class Index extends Component
             'last_test_message' => $result->message,
         ])->save();
 
+        // Auditoria: solo el resultado (ok/pendiente), nunca el secreto probado.
+        $audit->log('integration.tested', $integration, ['ok' => $result->pending ? null : $result->ok]);
+
         session()->flash('status', $integration->name.': '.$result->message);
     }
 
-    public function toggle(int $integrationId): void
+    public function toggle(int $integrationId, AuditService $audit): void
     {
         $integration = Integration::query()->findOrFail($integrationId);
         $this->authorize('update', $integration);
 
         $integration->status = $integration->status === 'active' ? 'inactive' : 'active';
         $integration->save();
+
+        $audit->log($integration->status === 'active' ? 'integration.activated' : 'integration.deactivated', $integration);
     }
 
     public function render(): View

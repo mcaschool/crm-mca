@@ -20,6 +20,7 @@ use Modules\Integrations\Database\Factories\AiProcessConfigFactory;
  * @property string $process
  * @property int $integration_id
  * @property string $model
+ * @property array<string,mixed>|null $params
  * @property string $status
  */
 class AiProcessConfig extends Model

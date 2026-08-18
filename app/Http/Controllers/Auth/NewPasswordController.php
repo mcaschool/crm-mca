@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Modules\Audit\Services\AuditService;
 
 class NewPasswordController extends Controller
 {
@@ -31,7 +32,7 @@ class NewPasswordController extends Controller
      *
      * @throws ValidationException
      */
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, AuditService $audit): RedirectResponse
     {
         $request->validate([
             'token' => ['required'],
@@ -53,6 +54,11 @@ class NewPasswordController extends Controller
                 event(new PasswordReset($user));
             }
         );
+
+        // Auditoria: se registra el HECHO del restablecimiento (nunca la contraseña).
+        if ($status === Password::PASSWORD_RESET) {
+            $audit->logAuth('auth.password_reset', $request->string('email')->toString());
+        }
 
         // If the password was successfully reset, we will redirect the user back to
         // the application's home authenticated view. If there is an error we can

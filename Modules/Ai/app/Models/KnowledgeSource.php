@@ -13,6 +13,21 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
 /**
  * Fuente de conocimiento de Celia (retrieval Forma A: cuerpo pequeno y estable
  * que se entrega compacto al modelo). Contenido bilingue por columnas _es/_en.
+ *
+ * @property int $institution_id
+ * @property int $bot_id
+ * @property string $name
+ * @property string $code
+ * @property string|null $source_file
+ * @property string $type
+ * @property string|null $category
+ * @property int|null $program_id
+ * @property string|null $url
+ * @property string|null $content_es
+ * @property string|null $content_en
+ * @property int $priority
+ * @property string $status
+ * @property \Illuminate\Support\Carbon|null $last_synced_at
  */
 class KnowledgeSource extends Model
 {
@@ -31,6 +46,7 @@ class KnowledgeSource extends Model
         'bot_id',
         'name',
         'code',
+        'source_file',
         'type',
         'category',
         'program_id',

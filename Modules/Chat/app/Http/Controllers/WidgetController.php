@@ -7,6 +7,7 @@ namespace Modules\Chat\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Modules\Ai\Services\CeliaService;
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Models\ProgramCategory;
 use Modules\Chat\Models\ConversationNode;
@@ -40,6 +41,7 @@ class WidgetController extends Controller
         private readonly EventService $events,
         private readonly GuidedNavigationService $guided,
         private readonly MatcherService $matcher,
+        private readonly CeliaService $celia,
     ) {}
 
     /** Inicia o recupera una conversacion (recuperacion de sesion por session_id). */
@@ -62,7 +64,11 @@ class WidgetController extends Controller
 
         return response()->json([
             'session_id' => $conversation->session_id,
-            'bot' => ['assistant_name' => $bot->assistant_name, 'default_language' => $bot->default_language],
+            'bot' => [
+                'assistant_name' => $bot->assistant_name,
+                'avatar_url' => $bot->avatarUrl(),
+                'default_language' => $bot->default_language,
+            ],
             'contact_captured' => $conversation->contact_id !== null,
             'node' => $node !== null ? $this->guided->renderNode($node, $locale, $this->contactName($conversation)) : null,
         ]);
@@ -163,6 +169,37 @@ class WidgetController extends Controller
         ]);
     }
 
+    /** Activa el modo Celia (IA): saludo con memoria del contexto. Sin tokens. */
+    public function celiaStart(Request $request): JsonResponse
+    {
+        $this->bot($request);
+        $data = $request->validate(['session_id' => ['required', 'string']]);
+
+        $conversation = $this->conversation($data['session_id']);
+        $contact = $this->contact($conversation);
+
+        return response()->json($this->celia->greet($conversation, $contact, app()->getLocale()));
+    }
+
+    /** Mensaje del prospecto en modo Celia: enrutamiento en dos pasos + registro. */
+    public function celia(Request $request): JsonResponse
+    {
+        $this->assertNotBot($request);
+        $this->bot($request);
+
+        $data = $request->validate([
+            'session_id' => ['required', 'string'],
+            'message' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $conversation = $this->conversation($data['session_id']);
+        $contact = $this->contact($conversation);
+
+        return response()->json(
+            $this->celia->handle($conversation, $contact, $data['message'], app()->getLocale()),
+        );
+    }
+
     /** Opciones de las 5 preguntas (area/meta del catalogo real; resto de config). */
     public function matcherOptions(Request $request): JsonResponse
     {
@@ -220,11 +257,17 @@ class WidgetController extends Controller
     /** Nombre del contacto de la conversacion (para personalizar [Nombre]/[Name]). */
     private function contactName(Conversation $conversation): ?string
     {
+        return $this->contact($conversation)?->first_name;
+    }
+
+    /** Contacto de la conversacion (o null si aun no se capturo el lead). */
+    private function contact(Conversation $conversation): ?Contact
+    {
         if ($conversation->contact_id === null) {
             return null;
         }
 
-        return optional(Contact::query()->find($conversation->contact_id))->first_name;
+        return Contact::query()->find($conversation->contact_id);
     }
 
     /** Honeypot (D8): un campo oculto que solo un bot rellenaria. */

@@ -22,7 +22,7 @@ enum LeadStatus: string
         return match ($this) {
             self::New => 'Nuevo',
             self::Contacted => 'Contactado',
-            self::Qualified => 'Calificado',
+            self::Qualified => 'En seguimiento',
             self::Enrolled => 'Matriculado',
             self::Discarded => 'Descartado',
         };
@@ -32,6 +32,18 @@ enum LeadStatus: string
     public function isTerminal(): bool
     {
         return $this === self::Enrolled;
+    }
+
+    /** Clase del badge (colores exactos del prototipo). */
+    public function badgeClass(): string
+    {
+        return match ($this) {
+            self::New => 'st-nuevo',
+            self::Contacted => 'st-cont',
+            self::Qualified => 'st-seg',
+            self::Enrolled => 'st-matr',
+            self::Discarded => 'st-desc',
+        };
     }
 
     /** @return array<int,string> */

@@ -40,13 +40,12 @@ it('los tres roles del CRM acceden a los leads', function () {
 });
 
 it('cambiar el estado de un lead desde el panel persiste', function () {
-    $user = crmUser('marketing');
+    $user = crmUser('admissions');
     $this->actingAs($user);
     $lead = makeLead($user->institution_id);
 
     Livewire::test(Show::class, ['lead' => $lead])
-        ->set('status', 'qualified')
-        ->call('changeStatus');
+        ->call('changeStatus', 'qualified');
 
     expect($lead->fresh()->status)->toBe(LeadStatus::Qualified);
 });
@@ -58,8 +57,7 @@ it("no permite cambiar un lead 'enrolled' (terminal) desde el panel", function (
     app(CurrentInstitution::class)->runFor($user->institution_id, fn () => $lead->update(['status' => 'enrolled']));
 
     Livewire::test(Show::class, ['lead' => $lead->fresh()])
-        ->set('status', 'contacted')
-        ->call('changeStatus')
+        ->call('changeStatus', 'contacted')
         ->assertHasErrors('status');
 
     expect($lead->fresh()->status)->toBe(LeadStatus::Enrolled);

@@ -1,47 +1,47 @@
-<div class="py-12">
-    <div class="max-w-3xl mx-auto sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-lg font-semibold text-gray-900">{{ __('Conversacion') }} #{{ $conversation->id }}</h2>
-            @if ($conversation->contact)
-                <a href="{{ route('crm.contacts.show', $conversation->contact) }}" class="text-sm text-indigo-600 hover:underline">{{ __('Ficha del contacto') }}</a>
-            @endif
-        </div>
+<div>
+    <x-ui.styles />
+    <div class="mca-panel" style="padding:22px 26px 34px">
+        @if ($conversation->contact)
+            <a href="{{ route('crm.contacts.show', $conversation->contact) }}" class="btn btn-ghost btn-sm" style="margin-bottom:14px">
+                <x-ui.icon name="chevron-left" class="ic" style="width:15px;height:15px" /> {{ __('Ficha del contacto') }}
+            </a>
+        @endif
 
-        <div class="text-xs text-gray-500 mb-4">
-            {{ __('Modo') }}: {{ $conversation->mode }} · {{ __('Idioma') }}: {{ $conversation->language }} ·
-            {{ __('Estado') }}: {{ $conversation->status }} · {{ __('Solo lectura') }}
-        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;max-width:820px">
+            <div class="mca-muted" style="font-size:12.5px">
+                {{ __('Conversación') }} #{{ $conversation->id }} · {{ __('Modo') }}: {{ $conversation->mode }} · {{ __('Idioma') }}: {{ $conversation->language }} ·
+                {{ __('Estado') }}: {{ $conversation->status }} · {{ __('Solo lectura') }}
+            </div>
 
-        {{-- Hilo de mensajes --}}
-        <div class="bg-white shadow-sm sm:rounded-lg p-6 mb-4">
-            <h3 class="font-semibold text-gray-800 mb-3">{{ __('Mensajes') }}</h3>
-            @forelse ($conversation->messages as $message)
-                <div class="mb-3" wire:key="msg-{{ $message->id }}">
-                    <div @class([
-                        'inline-block px-3 py-2 rounded-lg text-sm max-w-lg',
-                        'bg-indigo-50 text-indigo-900' => $message->sender_type === 'user',
-                        'bg-gray-100 text-gray-800' => $message->sender_type !== 'user',
-                    ])>
-                        <div class="text-xs text-gray-400 mb-1">{{ $message->sender_type }} · {{ $message->created_at?->diffForHumans() }}</div>
-                        {{ $message->content }}
+            <div class="card card-p fade">
+                <h3 style="font-size:14.5px;font-weight:600;margin:0 0 14px">{{ __('Mensajes') }}</h3>
+                @forelse ($conversation->messages as $message)
+                    @php $isUser = $message->sender_type === 'user'; @endphp
+                    <div style="margin-bottom:12px;{{ $isUser ? 'text-align:right' : '' }}" wire:key="msg-{{ $message->id }}">
+                        <div style="display:inline-block;max-width:80%;text-align:left;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.5;
+                            {{ $isUser
+                                ? 'background:#FFFCF0;border:1px solid #F6EECB;color:var(--ink);border-bottom-right-radius:4px'
+                                : 'background:var(--mca-blue-soft);color:var(--ink);border-bottom-left-radius:4px' }}">
+                            <div style="font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:3px">{{ $message->sender_type }} · {{ $message->created_at?->diffForHumans() }}</div>
+                            {{ $message->content }}
+                        </div>
                     </div>
-                </div>
-            @empty
-                <p class="text-sm text-gray-500">{{ __('Sin mensajes (se llenaran con el widget del Bloque 5).') }}</p>
-            @endforelse
-        </div>
+                @empty
+                    <p class="mca-muted" style="font-size:13.5px;margin:0">{{ __('Sin mensajes.') }}</p>
+                @endforelse
+            </div>
 
-        {{-- Linea de tiempo de eventos --}}
-        <div class="bg-white shadow-sm sm:rounded-lg p-6">
-            <h3 class="font-semibold text-gray-800 mb-3">{{ __('Linea de tiempo de eventos') }}</h3>
-            @forelse ($conversation->events as $event)
-                <div class="text-xs py-1 text-gray-600" wire:key="conv-ev-{{ $event->id }}">
-                    <span class="font-mono">{{ $event->event_type }}</span>
-                    <span class="text-gray-400">· {{ $event->created_at?->diffForHumans() }}</span>
-                </div>
-            @empty
-                <p class="text-sm text-gray-500">{{ __('Sin eventos.') }}</p>
-            @endforelse
+            <div class="card card-p fade">
+                <h3 style="font-size:14.5px;font-weight:600;margin:0 0 10px">{{ __('Línea de tiempo de eventos') }}</h3>
+                @forelse ($conversation->events as $event)
+                    <div style="font-size:12.5px;padding:4px 0;color:var(--muted)" wire:key="conv-ev-{{ $event->id }}">
+                        <span style="font-family:ui-monospace,monospace;color:var(--ink)">{{ $event->event_type }}</span>
+                        · {{ $event->created_at?->diffForHumans() }}
+                    </div>
+                @empty
+                    <p class="mca-muted" style="font-size:13.5px;margin:0">{{ __('Sin eventos.') }}</p>
+                @endforelse
+            </div>
         </div>
     </div>
 </div>

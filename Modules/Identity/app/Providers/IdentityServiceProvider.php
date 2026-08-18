@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
+use Modules\Identity\Livewire\Profile\MiPerfil;
 use Modules\Identity\Livewire\Users\Form as UsersForm;
 use Modules\Identity\Livewire\Users\Index as UsersIndex;
 use Modules\Identity\Policies\UserPolicy;
@@ -41,6 +42,7 @@ class IdentityServiceProvider extends ModuleServiceProvider
         // Componentes Livewire del modulo (namespace propio, no App\Livewire).
         Livewire::component('identity.users.index', UsersIndex::class);
         Livewire::component('identity.users.form', UsersForm::class);
+        Livewire::component('identity.profile.mi-perfil', MiPerfil::class);
     }
 
     /**

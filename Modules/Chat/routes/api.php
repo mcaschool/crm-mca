@@ -22,4 +22,11 @@ Route::prefix('v1/widget')
         Route::post('match', [WidgetController::class, 'match'])
             ->middleware('throttle:widget-message')
             ->name('widget.match');
+
+        // Modo Celia (IA): activacion con memoria y conversacion. El mensaje puede
+        // gastar tokens, por eso lleva el limite mas estricto (como el emparejador).
+        Route::post('celia/start', [WidgetController::class, 'celiaStart'])->name('widget.celia.start');
+        Route::post('celia', [WidgetController::class, 'celia'])
+            ->middleware('throttle:widget-message')
+            ->name('widget.celia');
     });

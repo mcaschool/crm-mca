@@ -38,6 +38,12 @@ class UserFactory extends Factory
             'preferred_language' => 'es',
             'status' => 'active',
             'remember_token' => Str::random(10),
+            // 2FA es OBLIGATORIO en el panel: por defecto el usuario de fábrica ya lo
+            // tiene activo, para que las pruebas HTTP del panel no choquen con el
+            // middleware. Las pruebas de login usan ->withoutTwoFactor().
+            'two_factor_secret' => 'JBSWY3DPEHPK3PXP',
+            'two_factor_recovery_codes' => ['AAAAA-BBBBB', 'CCCCC-DDDDD'],
+            'two_factor_confirmed_at' => now(),
         ];
     }
 
@@ -48,6 +54,16 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+        ]);
+    }
+
+    /** Usuario SIN segundo factor (para probar el login por contraseña / el enrolamiento). */
+    public function withoutTwoFactor(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'two_factor_secret' => null,
+            'two_factor_recovery_codes' => null,
+            'two_factor_confirmed_at' => null,
         ]);
     }
 }

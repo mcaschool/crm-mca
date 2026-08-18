@@ -6,6 +6,7 @@ namespace Modules\Crm\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
 use Modules\Crm\Database\Factories\EventFactory;
 
@@ -48,6 +49,14 @@ class Event extends Model
         return [
             'event_data' => 'array',
         ];
+    }
+
+    /**
+     * @return BelongsTo<Contact, $this>
+     */
+    public function contact(): BelongsTo
+    {
+        return $this->belongsTo(Contact::class);
     }
 
     protected static function newFactory(): EventFactory

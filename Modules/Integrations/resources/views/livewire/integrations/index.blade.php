@@ -1,31 +1,32 @@
-<div class="py-12">
-    <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-lg font-semibold text-gray-900">{{ __('Integraciones') }}</h2>
-            <a href="{{ route('integrations.ai-processes') }}"
-               class="text-sm text-indigo-600 hover:underline">{{ __('Procesos de IA') }}</a>
+<div>
+    <x-ui.styles />
+    <div class="mca-panel" style="padding:22px 26px 34px">
+        <div class="mca-toolbar">
+            <div class="sp"></div>
+            <a href="{{ route('integrations.ai-processes') }}" class="btn btn-ghost btn-sm">{{ __('Procesos de IA') }}</a>
         </div>
 
         @if (session('status'))
-            <div class="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded p-3">{{ session('status') }}</div>
+            <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
         @endif
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="mca-grid">
             @foreach ($cards as $card)
                 @php($integration = $card['integration'])
-                <div class="bg-white shadow-sm rounded-lg p-5 flex flex-col" wire:key="int-{{ $card['type'] }}">
-                    <div class="flex items-center justify-between">
-                        <h3 class="font-semibold text-gray-900">{{ $card['label'] }}</h3>
-                        @php($state = $integration === null ? 'desconectado' : ($integration->status === 'active' ? 'conectado' : 'inactivo'))
-                        <span @class([
-                            'text-xs px-2 py-1 rounded',
-                            'bg-green-100 text-green-800' => $state === 'conectado',
-                            'bg-gray-200 text-gray-600' => $state === 'desconectado',
-                            'bg-yellow-100 text-yellow-800' => $state === 'inactivo',
-                        ])>{{ __($state) }}</span>
+                @php($state = $integration === null ? 'desconectado' : ($integration->status === 'active' ? 'conectado' : 'inactivo'))
+                <div class="card card-p fade" style="display:flex;flex-direction:column" wire:key="int-{{ $card['type'] }}">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                        <h3 style="font-size:15px;font-weight:700;color:var(--ink);margin:0">{{ $card['label'] }}</h3>
+                        @if ($state === 'conectado')
+                            <span class="badge badge-on">{{ __('conectado') }}</span>
+                        @elseif ($state === 'inactivo')
+                            <span class="badge" style="background:var(--mca-warn-soft);color:var(--mca-warn)">{{ __('inactivo') }}</span>
+                        @else
+                            <span class="badge badge-off">{{ __('desconectado') }}</span>
+                        @endif
                     </div>
 
-                    <div class="mt-2 text-sm text-gray-500 grow">
+                    <div style="margin-top:8px;font-size:13px;color:var(--muted);flex:1">
                         @if ($integration === null)
                             {{ __('Sin configurar.') }}
                         @else
@@ -33,36 +34,29 @@
                                 <div>{{ __('Proveedor') }}: {{ $integration->provider }}</div>
                             @endif
                             <div>
-                                {{ __('Ultima prueba') }}:
+                                {{ __('Última prueba') }}:
                                 @if ($integration->last_tested_at)
                                     {{ $integration->last_tested_at->diffForHumans() }}
                                     @if ($integration->last_test_ok === true)
-                                        <span class="text-green-600">✓</span>
+                                        <span style="color:var(--mca-ok)">✓</span>
                                     @elseif ($integration->last_test_ok === false)
-                                        <span class="text-red-600">✕</span>
+                                        <span style="color:#b3261e">✕</span>
                                     @endif
                                 @else
                                     {{ __('nunca') }}
                                 @endif
                             </div>
                             @if ($integration->last_test_message)
-                                <div class="text-xs mt-1 text-gray-400">{{ $integration->last_test_message }}</div>
+                                <div style="font-size:12px;margin-top:4px;color:var(--ink-3, #8A99B2)">{{ $integration->last_test_message }}</div>
                             @endif
                         @endif
                     </div>
 
-                    <div class="mt-4 flex flex-wrap gap-2">
-                        <a href="{{ route('integrations.configure', $card['type']) }}"
-                           class="text-xs px-3 py-1.5 bg-gray-800 text-white rounded hover:bg-gray-700">{{ __('Configurar') }}</a>
-
+                    <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px">
+                        <a href="{{ route('integrations.configure', $card['type']) }}" class="btn btn-primary btn-sm">{{ __('Configurar') }}</a>
                         @if ($integration !== null)
-                            <button type="button" wire:click="test({{ $integration->id }})"
-                                    wire:loading.attr="disabled"
-                                    class="text-xs px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
-                                {{ __('Probar conexion') }}
-                            </button>
-                            <button type="button" wire:click="toggle({{ $integration->id }})"
-                                    class="text-xs px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50">
+                            <button type="button" wire:click="test({{ $integration->id }})" wire:loading.attr="disabled" class="btn btn-ghost btn-sm">{{ __('Probar conexión') }}</button>
+                            <button type="button" wire:click="toggle({{ $integration->id }})" class="btn btn-soft btn-sm">
                                 {{ $integration->status === 'active' ? __('Desactivar') : __('Activar') }}
                             </button>
                         @endif

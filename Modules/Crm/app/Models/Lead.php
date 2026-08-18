@@ -29,7 +29,10 @@ use Modules\Institutions\Models\Bot;
  * @property string|null $source
  * @property LeadStatus $status
  * @property InterestLevel $interest_level
+ * @property int|null $assigned_to_user_id
+ * @property string|null $assigned_to_department
  * @property string|null $notes
+ * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  */
 class Lead extends Model
@@ -51,6 +54,8 @@ class Lead extends Model
         'source',
         'status',
         'interest_level',
+        'assigned_to_user_id',
+        'assigned_to_department',
         'notes',
     ];
 
@@ -90,6 +95,22 @@ class Lead extends Model
     public function bot(): BelongsTo
     {
         return $this->belongsTo(Bot::class);
+    }
+
+    /**
+     * @return BelongsTo<\App\Models\User, $this>
+     */
+    public function assignedUser(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'assigned_to_user_id');
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<LeadNote, $this>
+     */
+    public function leadNotes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LeadNote::class)->latest();
     }
 
     protected static function newFactory(): LeadFactory

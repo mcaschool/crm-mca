@@ -22,6 +22,8 @@ use Modules\Crm\Models\Lead;
  */
 class LeadService
 {
+    public function __construct(private readonly EventService $events) {}
+
     /**
      * Registra intencion comercial aplicando la granularidad D4.
      *
@@ -80,6 +82,55 @@ class LeadService
     {
         $lead->interest_level = $level;
         $lead->save();
+
+        return $lead;
+    }
+
+    /**
+     * Transfiere el seguimiento del lead a un asesor humano (usuario), a un
+     * departamento, o de vuelta a la IA. Deja rastro con un evento
+     * `lead_transferred` (todo comportamiento deja rastro). No expone datos
+     * personales: guarda solo la etiqueta legible del destino.
+     *
+     * Semantica segun el esquema (assigned_to_user_id + assigned_to_department):
+     *  - humano  -> fija user_id, limpia department
+     *  - depto   -> fija department, limpia user_id
+     *  - IA      -> limpia ambos (el lead vuelve a manos de la IA, sin dueno humano)
+     */
+    public function transfer(Lead $lead, string $target, string $label, ?string $byName = null, ?string $byDept = null): Lead
+    {
+        [$kind, $ref] = array_pad(explode(':', $target, 2), 2, '');
+
+        switch ($kind) {
+            case 'user':
+                $lead->assigned_to_user_id = (int) $ref;
+                $lead->assigned_to_department = null;
+                break;
+            case 'dept':
+                $lead->assigned_to_user_id = null;
+                $lead->assigned_to_department = $ref;
+                break;
+            case 'ia':
+                $lead->assigned_to_user_id = null;
+                $lead->assigned_to_department = null;
+                break;
+            default:
+                throw new InvalidArgumentException("Destino de transferencia no valido: {$target}.");
+        }
+
+        $lead->save();
+
+        $this->events->record('lead_transferred', [
+            'contact_id' => $lead->contact_id,
+            'conversation_id' => null,
+            'bot_id' => $lead->bot_id,
+            'data' => array_filter([
+                'to' => $label,
+                'kind' => $kind,
+                'by_name' => $byName,
+                'by_dept' => $byDept,
+            ], fn ($v) => $v !== null),
+        ]);
 
         return $lead;
     }

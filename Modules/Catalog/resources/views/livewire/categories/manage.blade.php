@@ -1,55 +1,50 @@
-<div class="py-12">
-    <div class="max-w-3xl mx-auto sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-lg font-semibold text-gray-900">{{ __('Categorias del catalogo') }}</h2>
-            <a href="{{ route('catalog.programs.index') }}" class="text-sm text-indigo-600 hover:underline">{{ __('Volver al catalogo') }}</a>
-        </div>
+<div>
+    <x-ui.styles />
+    <div class="mca-panel" style="padding:22px 26px 34px">
+        <a href="{{ route('catalog.programs.index') }}" class="btn btn-ghost btn-sm" style="margin-bottom:14px">
+            <x-ui.icon name="chevron-left" class="ic" style="width:15px;height:15px" /> {{ __('Volver al catálogo') }}
+        </a>
 
         @if (session('status'))
-            <div class="mb-4 text-sm text-green-700">{{ session('status') }}</div>
+            <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
         @endif
 
-        <div class="bg-white shadow-sm sm:rounded-lg p-6">
-            <form wire:submit="save" class="space-y-4">
-                <table class="min-w-full text-sm">
+        <div class="card card-p fade" style="max-width:720px">
+            <form wire:submit="save">
+                <table>
                     <thead>
-                        <tr class="text-left text-xs text-gray-500 uppercase">
-                            <th class="py-2">{{ __('Nombre (ES)') }}</th>
-                            <th class="py-2">{{ __('Nombre (EN)') }}</th>
+                        <tr>
+                            <th>{{ __('Nombre (ES)') }}</th>
+                            <th>{{ __('Nombre (EN)') }}</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach ($categories as $category)
+                        @forelse ($categories as $category)
                             <tr wire:key="cat-{{ $category->id }}">
-                                <td class="py-1 pe-3">
-                                    <x-text-input type="text" class="block w-full" wire:model="rows.{{ $category->id }}.name_es" />
-                                </td>
-                                <td class="py-1">
-                                    <x-text-input type="text" class="block w-full" wire:model="rows.{{ $category->id }}.name_en"
-                                                  placeholder="{{ __('completar en ingles') }}" />
-                                </td>
+                                <td><input type="text" wire:model="rows.{{ $category->id }}.name_es" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:13.5px;font-family:inherit;color:var(--ink)"></td>
+                                <td><input type="text" wire:model="rows.{{ $category->id }}.name_en" placeholder="{{ __('completar en inglés') }}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:13.5px;font-family:inherit;color:var(--ink)"></td>
                             </tr>
-                        @endforeach
+                        @empty
+                            <tr><td colspan="2" class="t-empty">{{ __('Aún no hay categorías.') }}</td></tr>
+                        @endforelse
                     </tbody>
                 </table>
 
                 @if ($categories->isNotEmpty())
-                    <x-primary-button>{{ __('Guardar cambios') }}</x-primary-button>
-                @else
-                    <p class="text-sm text-gray-500">{{ __('Aun no hay categorias.') }}</p>
+                    <div style="margin-top:16px"><button type="submit" class="btn btn-primary btn-sm">{{ __('Guardar cambios') }}</button></div>
                 @endif
             </form>
 
-            <hr class="my-6">
-
-            <form wire:submit="addCategory" class="flex items-end gap-3">
-                <div class="grow">
-                    <x-input-label for="newNameEs" :value="__('Nueva categoria (ES)')" />
-                    <x-text-input id="newNameEs" type="text" class="mt-1 block w-full" wire:model="newNameEs" />
-                    <x-input-error :messages="$errors->get('newNameEs')" class="mt-2" />
-                </div>
-                <x-primary-button>{{ __('Agregar') }}</x-primary-button>
-            </form>
+            <div class="mca-section">
+                <form wire:submit="addCategory" style="display:flex;align-items:flex-end;gap:12px">
+                    <div class="field" style="flex:1;margin-bottom:0">
+                        <label>{{ __('Nueva categoría (ES)') }}</label>
+                        <input type="text" wire:model="newNameEs">
+                        @error('newNameEs') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                    <button type="submit" class="btn btn-primary">{{ __('Agregar') }}</button>
+                </form>
+            </div>
         </div>
     </div>
 </div>

@@ -1,70 +1,79 @@
-<div class="py-12">
-    <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-lg font-semibold text-gray-900">{{ $contact->first_name }} {{ $contact->last_name }}</h2>
-            <a href="{{ route('crm.contacts.index') }}" class="text-sm text-indigo-600 hover:underline">{{ __('Volver a contactos') }}</a>
-        </div>
+<div>
+    <x-ui.styles />
+    <div class="mca-panel" style="padding:22px 26px 34px">
+        <a href="{{ route('crm.contacts.index') }}" class="btn btn-ghost btn-sm" style="margin-bottom:14px">
+            <x-ui.icon name="chevron-left" class="ic" style="width:15px;height:15px" /> {{ __('Volver a contactos') }}
+        </a>
 
-        <div class="bg-white shadow-sm sm:rounded-lg p-6 mb-4">
-            <dl class="grid grid-cols-2 gap-3 text-sm">
-                <div><dt class="text-gray-400 text-xs">{{ __('Correo') }}</dt><dd>{{ $contact->email }}</dd></div>
-                <div><dt class="text-gray-400 text-xs">{{ __('Telefono') }}</dt><dd>{{ $contact->phone ?: '—' }}</dd></div>
-                <div><dt class="text-gray-400 text-xs">{{ __('Pais') }}</dt><dd>{{ $contact->country ?: '—' }}</dd></div>
-                <div><dt class="text-gray-400 text-xs">{{ __('Idioma') }}</dt><dd>{{ $contact->preferred_language }}</dd></div>
-                <div><dt class="text-gray-400 text-xs">{{ __('Consentimiento') }}</dt><dd>{{ $contact->consent_at ? $contact->consent_at->toDateString().' ('.$contact->consent_source.')' : __('sin registrar') }}</dd></div>
-            </dl>
-        </div>
-
-        {{-- Leads --}}
-        <div class="bg-white shadow-sm sm:rounded-lg p-6 mb-4">
-            <h3 class="font-semibold text-gray-800 mb-3">{{ __('Leads') }}</h3>
-            @forelse ($contact->leads as $lead)
-                <div class="flex items-center justify-between text-sm py-2 border-b border-gray-100" wire:key="c-lead-{{ $lead->id }}">
-                    <div>{{ optional($lead->program)->name_es ?: $lead->product_type }} — {{ $lead->status->label() }} ({{ $lead->interest_level->label() }})</div>
-                    <a href="{{ route('crm.leads.show', $lead) }}" class="text-indigo-600 hover:underline">{{ __('Abrir') }}</a>
+        <div style="display:flex;flex-direction:column;gap:16px;max-width:900px">
+            <div class="card card-p fade">
+                <div style="display:flex;align-items:center;gap:13px;margin-bottom:16px">
+                    <span class="mca-av"><x-ui.icon name="user" /></span>
+                    <div style="font-size:18px;font-weight:700;color:var(--ink)">{{ trim($contact->first_name.' '.$contact->last_name) ?: '—' }}</div>
                 </div>
-            @empty
-                <p class="text-sm text-gray-500">{{ __('Sin leads.') }}</p>
-            @endforelse
-        </div>
-
-        {{-- Intereses por programa --}}
-        <div class="bg-white shadow-sm sm:rounded-lg p-6 mb-4">
-            <h3 class="font-semibold text-gray-800 mb-3">{{ __('Intereses por programa') }}</h3>
-            @forelse ($contact->programInterests as $interest)
-                <div class="text-sm py-1" wire:key="c-int-{{ $interest->id }}">
-                    {{ optional($interest->program)->name_es ?: ('#'.$interest->program_id) }}
-                    <span class="text-xs text-gray-400">({{ $interest->source }} · {{ $interest->created_at?->diffForHumans() }})</span>
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
+                    @foreach ([
+                        [__('Correo'), $contact->email],
+                        [__('Teléfono'), $contact->phone ?: '—'],
+                        [__('País'), $contact->country ?: '—'],
+                        [__('Idioma'), $contact->preferred_language],
+                        [__('Consentimiento'), $contact->consent_at ? $contact->consent_at->toDateString().' ('.$contact->consent_source.')' : __('sin registrar')],
+                    ] as [$k, $v])
+                        <div>
+                            <div style="font-size:11.5px;color:var(--muted);font-weight:600">{{ $k }}</div>
+                            <div style="font-size:14px;color:var(--ink);margin-top:2px">{{ $v }}</div>
+                        </div>
+                    @endforeach
                 </div>
-            @empty
-                <p class="text-sm text-gray-500">{{ __('Sin intereses registrados.') }}</p>
-            @endforelse
-        </div>
+            </div>
 
-        {{-- Conversaciones --}}
-        <div class="bg-white shadow-sm sm:rounded-lg p-6 mb-4">
-            <h3 class="font-semibold text-gray-800 mb-3">{{ __('Conversaciones') }}</h3>
-            @forelse ($contact->conversations as $conversation)
-                <div class="flex items-center justify-between text-sm py-2 border-b border-gray-100" wire:key="c-conv-{{ $conversation->id }}">
-                    <div>{{ $conversation->mode }} · {{ $conversation->language }} · {{ $conversation->last_activity_at?->diffForHumans() }}</div>
-                    <a href="{{ route('crm.conversations.show', $conversation) }}" class="text-indigo-600 hover:underline">{{ __('Ver') }}</a>
-                </div>
-            @empty
-                <p class="text-sm text-gray-500">{{ __('Sin conversaciones.') }}</p>
-            @endforelse
-        </div>
+            <div class="card card-p fade">
+                <h3 style="font-size:14.5px;font-weight:600;margin:0 0 10px">{{ __('Leads') }}</h3>
+                @forelse ($contact->leads as $lead)
+                    <div style="display:flex;align-items:center;justify-content:space-between;font-size:13.5px;padding:9px 0;border-bottom:1px solid var(--line)" wire:key="c-lead-{{ $lead->id }}">
+                        <div>{{ optional($lead->program)->name_es ?: $lead->product_type }} — <span class="mca-muted">{{ $lead->status->label() }} · {{ $lead->interest_level->label() }}</span></div>
+                        <a href="{{ route('crm.leads.show', $lead) }}" style="color:var(--mca);font-weight:600">{{ __('Abrir') }}</a>
+                    </div>
+                @empty
+                    <p class="mca-muted" style="font-size:13.5px;margin:0">{{ __('Sin leads.') }}</p>
+                @endforelse
+            </div>
 
-        {{-- Eventos (rastro) --}}
-        <div class="bg-white shadow-sm sm:rounded-lg p-6">
-            <h3 class="font-semibold text-gray-800 mb-3">{{ __('Historial de eventos') }}</h3>
-            @forelse ($contact->events as $event)
-                <div class="text-xs py-1 text-gray-600" wire:key="c-ev-{{ $event->id }}">
-                    <span class="font-mono">{{ $event->event_type }}</span>
-                    <span class="text-gray-400">· {{ $event->created_at?->diffForHumans() }}</span>
-                </div>
-            @empty
-                <p class="text-sm text-gray-500">{{ __('Sin eventos.') }}</p>
-            @endforelse
+            <div class="card card-p fade">
+                <h3 style="font-size:14.5px;font-weight:600;margin:0 0 10px">{{ __('Intereses por programa') }}</h3>
+                @forelse ($contact->programInterests as $interest)
+                    <div style="font-size:13.5px;padding:5px 0" wire:key="c-int-{{ $interest->id }}">
+                        {{ optional($interest->program)->name_es ?: ('#'.$interest->program_id) }}
+                        <span class="mca-muted" style="font-size:12px">({{ $interest->source }} · {{ $interest->created_at?->diffForHumans() }})</span>
+                    </div>
+                @empty
+                    <p class="mca-muted" style="font-size:13.5px;margin:0">{{ __('Sin intereses registrados.') }}</p>
+                @endforelse
+            </div>
+
+            <div class="card card-p fade">
+                <h3 style="font-size:14.5px;font-weight:600;margin:0 0 10px">{{ __('Conversaciones') }}</h3>
+                @forelse ($contact->conversations as $conversation)
+                    <div style="display:flex;align-items:center;justify-content:space-between;font-size:13.5px;padding:9px 0;border-bottom:1px solid var(--line)" wire:key="c-conv-{{ $conversation->id }}">
+                        <div class="mca-muted">{{ $conversation->mode }} · {{ $conversation->language }} · {{ $conversation->last_activity_at?->diffForHumans() }}</div>
+                        <a href="{{ route('crm.conversations.show', $conversation) }}" style="color:var(--mca);font-weight:600">{{ __('Ver') }}</a>
+                    </div>
+                @empty
+                    <p class="mca-muted" style="font-size:13.5px;margin:0">{{ __('Sin conversaciones.') }}</p>
+                @endforelse
+            </div>
+
+            <div class="card card-p fade">
+                <h3 style="font-size:14.5px;font-weight:600;margin:0 0 10px">{{ __('Historial de eventos') }}</h3>
+                @forelse ($contact->events as $event)
+                    <div style="font-size:12.5px;padding:4px 0;color:var(--muted)" wire:key="c-ev-{{ $event->id }}">
+                        <span style="font-family:ui-monospace,monospace;color:var(--ink)">{{ $event->event_type }}</span>
+                        · {{ $event->created_at?->diffForHumans() }}
+                    </div>
+                @empty
+                    <p class="mca-muted" style="font-size:13.5px;margin:0">{{ __('Sin eventos.') }}</p>
+                @endforelse
+            </div>
         </div>
     </div>
 </div>

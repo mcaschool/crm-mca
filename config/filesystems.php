@@ -49,6 +49,15 @@ return [
             'report' => false,
         ],
 
+        // Base de conocimiento de Celia: archivos .md que administra el cliente en
+        // el servidor (no publicos). El panel "Sincronizar" reprocesa esta carpeta.
+        'knowledge' => [
+            'driver' => 'local',
+            'root' => storage_path('app/knowledge'),
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Modules\Audit\Models;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Audit\Database\Factories\AuditLogFactory;
 use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
 
@@ -39,6 +41,17 @@ class AuditLog extends Model
         return [
             'changes' => 'array',
         ];
+    }
+
+    /**
+     * Actor del evento (null en eventos de invitado, p. ej. login fallido antes de
+     * autenticarse; en esos casos el correo intentado vive en `changes`).
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     protected static function newFactory(): AuditLogFactory

@@ -8,6 +8,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Modules\Audit\Services\AuditService;
 use Modules\Integrations\Models\Integration;
 use Modules\Integrations\Support\IntegrationCatalog;
 
@@ -62,7 +63,7 @@ class Configure extends Component
         }
     }
 
-    public function save(): mixed
+    public function save(AuditService $audit): mixed
     {
         $meta = IntegrationCatalog::for($this->type);
         abort_if($meta === null, 404);
@@ -99,10 +100,23 @@ class Configure extends Component
         $integration->name = $this->name;
         $integration->provider = $meta['providers'] !== [] ? $this->provider : null;
 
+        // ¿Se rota alguna credencial? = al editar, algun campo SECRETO llega con valor.
+        // Solo se registra el HECHO (que campos), jamas el valor del secreto.
+        $rotatedFields = [];
+        foreach ($meta['fields'] as $field) {
+            if ($field['secret'] && trim((string) ($this->inputs[$field['key']] ?? '')) !== '') {
+                $rotatedFields[] = $field['key'];
+            }
+        }
+
         // replaceSecrets: los vacios se ignoran (conservan el actual). Guarda tanto
         // secretos como metadatos dentro de config (todo cifrado en reposo).
         $integration->replaceSecrets($this->inputs);
         $integration->save();
+
+        // Auditoria: creacion/edicion + rotacion de credenciales (sin valores en claro).
+        $changes = $rotatedFields !== [] && ! $creating ? ['credentials_rotated' => $rotatedFields] : [];
+        $audit->log($creating ? 'integration.created' : 'integration.updated', $integration, $changes);
 
         // Secreto en transito: una vez persistido, NO se retiene el valor recien
         // tecleado en el estado del componente, para que no viaje en el snapshot

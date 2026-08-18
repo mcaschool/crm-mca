@@ -3,9 +3,10 @@
   "bot_slug": "celia-microcredenciales",
   "language_default": "es",
   "urls": {
-    "catalog": "https://mcaschool.education/es/microcredenciales/",
+    "catalog": "https://mcaschool.education/es/microcredenciales/oferta-academica/",
     "inscripciones": "https://mcaschool.education/es/microcredenciales/inscripciones/",
-    "_nota": "Confirmar la URL del catalogo (listado de programas). La de inscripciones es la que indico el cliente."
+    "incompany_form": "https://mcaschool.education/es/microcredenciales/solicitud-de-formacion-corporativa",
+    "_nota": "URLs del propio sitio de MCA (se abren en la misma pestana en el widget)."
   },
   "nodes": [
     {
@@ -46,9 +47,26 @@
         { "label": { "es": "Certificación y titulación", "en": "Certification and credentials" }, "target": "NODE_CERTIFICACION", "event_type": "viewed_certification", "display_order": 3 },
         { "label": { "es": "Inscripción y requisitos", "en": "Enrollment and requirements" }, "target": "NODE_INSCRIPCION", "display_order": 4 },
         { "label": { "es": "Proyección profesional", "en": "Professional growth" }, "target": "NODE_PROYECCION", "display_order": 5 },
-        { "label": { "es": "Ver los programas disponibles", "en": "See the available programs" }, "action": "external_link", "url": "catalog", "event_type": "viewed_catalog", "display_order": 6 },
-        { "label": { "es": "Ayúdame a elegir una Microcredencial", "en": "Help me choose a Microcredential" }, "action": "start_matcher", "event_type": "used_matcher", "display_order": 7 },
-        { "label": { "es": "Hablar con Celia", "en": "Chat with Celia" }, "action": "start_celia", "event_type": "started_celia", "display_order": 8 }
+        { "label": { "es": "Formación para equipos y empresas", "en": "Training for teams & companies" }, "target": "NODE_INCOMPANY", "event_type": "corporate_interest", "display_order": 6 },
+        { "label": { "es": "Ver los programas disponibles", "en": "See the available programs" }, "action": "external_link", "url": "catalog", "event_type": "viewed_catalog", "display_order": 7 },
+        { "label": { "es": "Ayúdame a elegir una Microcredencial", "en": "Help me choose a Microcredential" }, "action": "start_matcher", "event_type": "used_matcher", "display_order": 8 },
+        { "label": { "es": "Hablar con Celia", "en": "Chat with Celia" }, "action": "start_celia", "event_type": "started_celia", "display_order": 9 }
+      ]
+    },
+
+    {
+      "key": "NODE_INCOMPANY",
+      "type": "menu",
+      "display_order": 15,
+      "config": { "event_type": "corporate_interest" },
+      "content": {
+        "es": "¿Buscas capacitar a tu equipo o empresa? Contamos con formación corporativa (InCompany) a la medida. Escríbenos a academics@mcaschool.education o completa el formulario de formación corporativa.",
+        "en": "Looking to train your team or company? We offer tailored corporate (InCompany) training. Write to us at academics@mcaschool.education or fill out the corporate training form."
+      },
+      "options": [
+        { "label": { "es": "Escribir a academics@mcaschool.education", "en": "Email academics@mcaschool.education" }, "action": "external_link", "url": "mailto:academics@mcaschool.education", "event_type": "corporate_contact", "display_order": 1 },
+        { "label": { "es": "Formulario de formación corporativa", "en": "Corporate training form" }, "action": "external_link", "url": "incompany_form", "event_type": "corporate_form", "display_order": 2 },
+        { "label": { "es": "← Volver", "en": "← Back" }, "target": "NODE_MAIN", "display_order": 3 }
       ]
     },
 

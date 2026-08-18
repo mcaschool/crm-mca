@@ -26,7 +26,13 @@ it('siembra el arbol bilingue del JSON: nodos, opciones, targets, acciones, urls
         $main = ConversationNode::query()->where('key', 'NODE_MAIN')->first();
         expect($main)->not->toBeNull();
         expect($main->type)->toBe('menu');
-        expect($main->options()->count())->toBe(8);
+        expect($main->options()->count())->toBe(9);
+
+        // Tema corporativo (InCompany): opcion en el menu + nodo con correo y formulario.
+        $incompany = ConversationNode::query()->where('key', 'NODE_INCOMPANY')->first();
+        expect($incompany)->not->toBeNull();
+        expect(ConversationOption::query()->where('url', 'mailto:academics@mcaschool.education')->exists())->toBeTrue();
+        expect(ConversationOption::query()->where('url', 'https://mcaschool.education/es/microcredenciales/solicitud-de-formacion-corporativa')->exists())->toBeTrue();
 
         // Saludo previo a la captura.
         expect(ConversationNode::query()->where('key', 'NODE_WELCOME')->where('type', 'message')->exists())->toBeTrue();
@@ -34,7 +40,7 @@ it('siembra el arbol bilingue del JSON: nodos, opciones, targets, acciones, urls
         // Opcion de enlace externo con URL resuelta desde el bloque urls.
         $ver = ConversationOption::query()->where('action', 'external_link')->where('event_type', 'viewed_catalog')->first();
         expect($ver)->not->toBeNull();
-        expect($ver->url)->toBe('https://mcaschool.education/es/microcredenciales/');
+        expect($ver->url)->toBe('https://mcaschool.education/es/microcredenciales/oferta-academica/');
 
         // Enlace a inscripciones con la URL correcta.
         $ins = ConversationOption::query()->where('action', 'external_link')

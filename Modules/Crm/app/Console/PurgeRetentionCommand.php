@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Crm\Console;
 
 use Illuminate\Console\Command;
+use Modules\Audit\Services\AuditService;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Crm\Models\Message;
 use Modules\Institutions\Models\Institution;
@@ -14,7 +15,9 @@ use Modules\Institutions\Models\Institution;
  * (config crm.retention.messages_months, por defecto 24). SOLO toca messages;
  * nunca contactos ni leads ni eventos. Con --dry-run informa sin borrar.
  *
- * La programacion en cron es operativa del despliegue (no se define aqui).
+ * Cada ejecucion real se AUDITA por institucion (accion retention.purged con el
+ * conteo purgado y el umbral; nunca los valores borrados). La programacion en cron
+ * se documenta en el checklist de despliegue (docs/DEPLOYMENT-SECURITY-CHECKLIST.md).
  */
 class PurgeRetentionCommand extends Command
 {
@@ -22,7 +25,7 @@ class PurgeRetentionCommand extends Command
 
     protected $description = 'Elimina los mensajes de conversacion mas antiguos que el umbral de retencion (solo messages).';
 
-    public function handle(CurrentInstitution $context): int
+    public function handle(CurrentInstitution $context, AuditService $audit): int
     {
         $months = (int) config('crm.retention.messages_months', 24);
         $cutoff = now()->subMonths($months);
@@ -40,12 +43,27 @@ class PurgeRetentionCommand extends Command
 
         $total = 0;
         foreach ($ids as $institutionId) {
-            $count = $context->runFor($institutionId, function () use ($cutoff, $dryRun): int {
+            $count = $context->runFor($institutionId, function () use ($cutoff, $dryRun, $months, $audit, $institutionId): int {
                 $query = Message::query()->where('created_at', '<', $cutoff);
                 $count = $query->count();
 
                 if (! $dryRun && $count > 0) {
                     $query->delete();
+                }
+
+                // Auditoria de la EJECUCION real (nunca en dry-run): que se purgo y
+                // cuanto, jamas los valores borrados. institution_id lo sella el
+                // contexto activo (runFor) del scope global de AuditLog.
+                if (! $dryRun) {
+                    $institution = Institution::query()->find($institutionId);
+                    if ($institution !== null) {
+                        $audit->log('retention.purged', $institution, [
+                            'entity' => 'messages',
+                            'deleted' => $count,
+                            'older_than_months' => $months,
+                            'cutoff' => $cutoff->toDateString(),
+                        ]);
+                    }
                 }
 
                 return $count;
