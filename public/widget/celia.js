@@ -10,10 +10,22 @@
  * decisiones de flujo se conservan intactas. Bilingue es/en. Iconos Lucide.
  */
 (function () {
-  var script = document.currentScript;
+  // document.currentScript es null cuando el widget se carga de forma dinamica
+  // (p. ej. document.createElement('script') en el "footer scripts" de WordPress).
+  // En ese caso se localiza el <script> por su marcador data-bot-key.
+  var script = document.currentScript
+    || document.querySelector('script[data-bot-key][src*="celia"]')
+    || (function () { var s = document.querySelectorAll('script[data-bot-key]'); return s[s.length - 1]; })();
+  if (!script) { return; } // sin script identificable no se arranca (evita romper la web)
   var BOT_KEY = script.getAttribute('data-bot-key');
   var API = (script.getAttribute('data-api-base') || '').replace(/\/$/, '') + '/api/v1/widget';
   var HERO = script.getAttribute('data-hero-image') || ''; // foto institucional opcional
+  // Separacion del lanzador desde el borde inferior (px). Configurable por atributo
+  // para no chocar con botones flotantes de la web (p. ej. "subir arriba"). Se aplica
+  // DENTRO del shadow-root al lanzador; por defecto 24. Se acota a un rango sano.
+  var OFFSET_BOTTOM = parseInt(script.getAttribute('data-offset-bottom'), 10);
+  if (isNaN(OFFSET_BOTTOM) || OFFSET_BOTTOM < 0) { OFFSET_BOTTOM = 24; }
+  if (OFFSET_BOTTOM > 400) { OFFSET_BOTTOM = 400; }
   var LS_KEY = 'celia_session_' + BOT_KEY;
 
   var state = {
@@ -274,6 +286,11 @@
   var teaser = root.querySelector('.cw-teaser');
   var launcher = root.querySelector('.launcher');
   var panel = root.querySelector('.panel');
+
+  // Separacion inferior configurable del lanzador (dentro del shadow-root). Solo
+  // afecta al lanzador cerrado; la ventana abierta conserva su posicion (el lanzador
+  // se oculta mientras el chat esta abierto), asi que no se rompe.
+  dock.style.bottom = OFFSET_BOTTOM + 'px';
   launcher.setAttribute('aria-label', t('launcher'));
   launcher.innerHTML =
     '<span class="l-ico">' + icon('messageCircle') + '</span>' +

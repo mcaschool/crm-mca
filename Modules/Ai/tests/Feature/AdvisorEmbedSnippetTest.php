@@ -35,7 +35,24 @@ it('el Admin ve el snippet de incrustación con la public_key real y el dominio 
         ->assertSee('Incrustar widget')
         ->assertSee('PUBKEYTEST1234567890ABCDEF')                       // public_key REAL del bot
         ->assertSee('https://crm.mcaschool.education')                  // dominio de producción (config default)
-        ->assertSee('/widget/celia.js');
+        ->assertSee('/widget/celia.js')
+        ->assertSee('data-offset-bottom', false)                        // separación configurable
+        ->assertSee('document.createElement', false);                  // variante JS puro (WordPress)
+});
+
+it('ofrece las dos variantes con la separación inferior configurada', function () {
+    [$admin, $bot] = embedSetup('admin');
+    config(['crm.widget_offset_bottom' => 90]);
+
+    $this->actingAs($admin);
+
+    Livewire::test(Form::class, ['bot' => $bot])
+        ->assertSee('Opción 1')                        // etiqueta <script>
+        ->assertSee('Opción 2')                        // JavaScript puro (WordPress)
+        ->assertSee('data-offset-bottom', false)       // presente en ambas variantes
+        ->assertSee('createElement', false)            // variante JS puro
+        ->assertSee('appendChild', false)
+        ->assertSee('Valor actual');                   // el help muestra el valor configurado
 });
 
 it('el snippet apunta al dominio configurado (env-overridable)', function () {

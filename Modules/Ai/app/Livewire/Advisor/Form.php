@@ -289,9 +289,12 @@ class Form extends Component
             'integrations' => Integration::query()->where('type', 'ai_provider')->orderBy('name')->get(),
             'deleteBlockReason' => $deleteBlockReason,
             'deleteNameMatches' => $bot !== null && trim($this->deleteConfirmName) === (string) $bot->assistant_name,
-            // Snippet de incrustacion: dominio de produccion (config) + public_key REAL del
-            // bot (dinamica). El widget en si no se toca; solo se expone para copiar.
+            // Snippets de incrustacion: dominio de produccion (config) + public_key REAL
+            // del bot (dinamica) + separacion inferior configurable. Dos variantes:
+            // (1) etiqueta <script>, (2) JavaScript puro para campos "footer scripts"
+            // de WordPress/temas (que NO admiten etiquetas <script>).
             'embedSnippet' => $bot !== null ? $this->embedSnippet($bot) : null,
+            'embedSnippetJs' => $bot !== null ? $this->embedSnippetJs($bot) : null,
         ]);
     }
 
@@ -308,10 +311,34 @@ class Form extends Component
     private function embedSnippet(Bot $bot): string
     {
         $base = (string) config('crm.widget_embed_url');
+        $offset = (int) config('crm.widget_offset_bottom', 90);
 
         return '<script src="'.$base.'/widget/celia.js"'."\n"
             .'        data-bot-key="'.$bot->public_key.'"'."\n"
-            .'        data-api-base="'.$base.'"></script>';
+            .'        data-api-base="'.$base.'"'."\n"
+            .'        data-offset-bottom="'.$offset.'"></script>';
+    }
+
+    /**
+     * Variante en JavaScript PURO (sin etiquetas <script>) para campos tipo "Custom
+     * Scripts (Footer)" de WordPress/temas que no admiten <script>. Inserta el widget
+     * con document.createElement; celia.js se localiza por data-bot-key (no depende de
+     * document.currentScript). Mismo dominio, public_key y separacion inferior.
+     */
+    private function embedSnippetJs(Bot $bot): string
+    {
+        $base = (string) config('crm.widget_embed_url');
+        $offset = (int) config('crm.widget_offset_bottom', 90);
+
+        return "(function () {\n"
+            ."  var s = document.createElement('script');\n"
+            ."  s.src = '".$base."/widget/celia.js';\n"
+            ."  s.setAttribute('data-bot-key', '".$bot->public_key."');\n"
+            ."  s.setAttribute('data-api-base', '".$base."');\n"
+            ."  s.setAttribute('data-offset-bottom', '".$offset."');\n"
+            ."  s.async = true;\n"
+            ."  document.body.appendChild(s);\n"
+            .'})();';
     }
 
     private function uniqueSlug(string $name): string

@@ -75,6 +75,11 @@ return [
     */
     'widget_embed_url' => rtrim((string) env('CRM_WIDGET_EMBED_URL', 'https://crm.mcaschool.education'), '/'),
 
+    // Separacion del lanzador del widget desde el borde inferior (px) que se incluye
+    // en el snippet de incrustacion. 90 evita chocar con un boton flotante tipico de
+    // "subir arriba"; el widget acepta cualquier valor via data-offset-bottom.
+    'widget_offset_bottom' => (int) env('CRM_WIDGET_OFFSET_BOTTOM', 90),
+
     /*
     |--------------------------------------------------------------------------
     | Leads (D3, D4)
