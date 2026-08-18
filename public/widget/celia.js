@@ -287,10 +287,15 @@
   var launcher = root.querySelector('.launcher');
   var panel = root.querySelector('.panel');
 
-  // Separacion inferior configurable del lanzador (dentro del shadow-root). Solo
-  // afecta al lanzador cerrado; la ventana abierta conserva su posicion (el lanzador
-  // se oculta mientras el chat esta abierto), asi que no se rompe.
-  dock.style.bottom = OFFSET_BOTTOM + 'px';
+  // Separacion inferior configurable del lanzador (dentro del shadow-root).
+  // Se aplica con translateY sobre .cw-dock (el elemento con position:fixed que ancla
+  // el lanzador en la esquina), NO con 'bottom': asi funciona aunque un ancestro de la
+  // web anfitriona (p. ej. un tema de WordPress con transform/filter) altere el bloque
+  // contenedor del fixed y 'bottom' deje de surtir efecto. La base CSS del dock es
+  // bottom:20px; se sube (OFFSET_BOTTOM - 20) px para quedar a OFFSET_BOTTOM del borde.
+  // La ventana abierta (.panel) es HERMANA del dock, no un hijo: no se ve afectada.
+  var DOCK_BASE_BOTTOM = 20;
+  dock.style.transform = 'translateY(' + (DOCK_BASE_BOTTOM - OFFSET_BOTTOM) + 'px)';
   launcher.setAttribute('aria-label', t('launcher'));
   launcher.innerHTML =
     '<span class="l-ico">' + icon('messageCircle') + '</span>' +

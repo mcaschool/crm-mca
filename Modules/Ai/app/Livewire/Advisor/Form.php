@@ -312,8 +312,9 @@ class Form extends Component
     {
         $base = (string) config('crm.widget_embed_url');
         $offset = (int) config('crm.widget_offset_bottom', 90);
+        $src = $base.'/widget/celia.js?v='.config('crm.widget_asset_version', '1');
 
-        return '<script src="'.$base.'/widget/celia.js"'."\n"
+        return '<script src="'.$src.'"'."\n"
             .'        data-bot-key="'.$bot->public_key.'"'."\n"
             .'        data-api-base="'.$base.'"'."\n"
             .'        data-offset-bottom="'.$offset.'"></script>';
@@ -329,10 +330,11 @@ class Form extends Component
     {
         $base = (string) config('crm.widget_embed_url');
         $offset = (int) config('crm.widget_offset_bottom', 90);
+        $src = $base.'/widget/celia.js?v='.config('crm.widget_asset_version', '1');
 
         return "(function () {\n"
             ."  var s = document.createElement('script');\n"
-            ."  s.src = '".$base."/widget/celia.js';\n"
+            ."  s.src = '".$src."';\n"
             ."  s.setAttribute('data-bot-key', '".$bot->public_key."');\n"
             ."  s.setAttribute('data-api-base', '".$base."');\n"
             ."  s.setAttribute('data-offset-bottom', '".$offset."');\n"
