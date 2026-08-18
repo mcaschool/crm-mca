@@ -182,6 +182,50 @@
             </div>
         @endif
 
+        {{-- Incrustar widget (solo edicion): snippet listo para pegar en la web publica --}}
+        @if ($editing && $embedSnippet)
+            <div class="card card-p fade" style="margin-top:22px"
+                 x-data="{
+                     copied: false,
+                     snippet: @js($embedSnippet),
+                     done() { this.copied = true; setTimeout(() => this.copied = false, 2000) },
+                     copy() {
+                         if (navigator.clipboard && window.isSecureContext) {
+                             navigator.clipboard.writeText(this.snippet).then(() => this.done()).catch(() => this.fallback());
+                         } else {
+                             this.fallback();
+                         }
+                     },
+                     fallback() {
+                         const ta = document.createElement('textarea');
+                         ta.value = this.snippet; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                         document.body.appendChild(ta); ta.focus(); ta.select();
+                         try { document.execCommand('copy'); this.done(); } catch (e) {}
+                         document.body.removeChild(ta);
+                     }
+                 }">
+                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">
+                    <h3><x-ui.icon name="globe" class="ic" style="width:17px;height:17px;vertical-align:-3px" /> Incrustar widget</h3>
+                    <p class="mca-sub" style="margin-bottom:14px">Copia este código y pégalo en la web pública, justo antes de <code>&lt;/body&gt;</code>. Lleva la <b>clave pública</b> de este asesor; no contiene secretos.</p>
+                </div>
+
+                <div style="position:relative">
+                    <pre style="background:var(--mca-blue-deep,#13253D);color:#E7EEF7;border-radius:12px;padding:16px 16px 16px 18px;margin:0;font-size:12.5px;line-height:1.55;overflow-x:auto;white-space:pre;font-family:ui-monospace,SFMono-Regular,Menlo,monospace"><code>{{ $embedSnippet }}</code></pre>
+                    <button type="button" @click="copy()"
+                            class="btn btn-primary btn-sm"
+                            style="position:absolute;top:10px;right:10px"
+                            :class="{ 'btn-ok': copied }">
+                        <span x-show="!copied"><x-ui.icon name="file-text" class="ic" style="width:14px;height:14px" /> Copiar</span>
+                        <span x-show="copied" x-cloak><x-ui.icon name="check" class="ic" style="width:14px;height:14px" /> ¡Copiado!</span>
+                    </button>
+                </div>
+
+                <div class="mca-help" style="margin-top:12px">
+                    Clave pública de <b>{{ $bot->assistant_name }}</b>: <code>{{ $bot->public_key }}</code>. El widget se sirve desde <code>{{ config('crm.widget_embed_url') }}</code>.
+                </div>
+            </div>
+        @endif
+
         {{-- Zona de peligro: eliminar (solo edicion) --}}
         @if ($editing)
             <div class="mca-danger fade" style="margin-top:22px">

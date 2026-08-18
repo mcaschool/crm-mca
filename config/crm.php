@@ -66,6 +66,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | URL base para el snippet de incrustacion del widget
+    |--------------------------------------------------------------------------
+    | Dominio (con https://) desde el que se sirve el widget en produccion. Se usa
+    | para generar el <script> de incrustacion que el Admin copia y pega en la web
+    | publica. Configurable por entorno; por defecto el dominio de produccion de MCA.
+    | NO afecta al widget en si, solo al snippet que se muestra en el panel.
+    */
+    'widget_embed_url' => rtrim((string) env('CRM_WIDGET_EMBED_URL', 'https://crm.mcaschool.education'), '/'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Leads (D3, D4)
     |--------------------------------------------------------------------------
     */

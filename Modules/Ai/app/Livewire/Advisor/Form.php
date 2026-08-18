@@ -289,12 +289,29 @@ class Form extends Component
             'integrations' => Integration::query()->where('type', 'ai_provider')->orderBy('name')->get(),
             'deleteBlockReason' => $deleteBlockReason,
             'deleteNameMatches' => $bot !== null && trim($this->deleteConfirmName) === (string) $bot->assistant_name,
+            // Snippet de incrustacion: dominio de produccion (config) + public_key REAL del
+            // bot (dinamica). El widget en si no se toca; solo se expone para copiar.
+            'embedSnippet' => $bot !== null ? $this->embedSnippet($bot) : null,
         ]);
     }
 
     private function bot(): ?Bot
     {
         return $this->botId === null ? null : Bot::query()->find($this->botId);
+    }
+
+    /**
+     * Genera el <script> de incrustacion del widget para pegar en la web publica.
+     * Dominio desde config (produccion por defecto), public_key REAL del bot. No es
+     * un secreto: la public_key es el token publico que el widget lleva embebido.
+     */
+    private function embedSnippet(Bot $bot): string
+    {
+        $base = (string) config('crm.widget_embed_url');
+
+        return '<script src="'.$base.'/widget/celia.js"'."\n"
+            .'        data-bot-key="'.$bot->public_key.'"'."\n"
+            .'        data-api-base="'.$base.'"></script>';
     }
 
     private function uniqueSlug(string $name): string
