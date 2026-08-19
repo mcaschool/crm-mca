@@ -68,7 +68,7 @@
                         <label>Tipo</label>
                         <div class="mca-seg">
                             <button type="button" wire:click="$set('type','ia')" class="{{ $type === 'ia' ? 'active' : '' }}">
-                                <x-ui.icon name="sparkles" class="ic" style="width:15px;height:15px" /> IA
+                                <x-ui.icon name="bot" class="ic" style="width:15px;height:15px" /> IA
                             </button>
                             <button type="button" wire:click="$set('type','human')" class="{{ $type === 'human' ? 'active' : '' }}">
                                 <x-ui.icon name="user" class="ic" style="width:15px;height:15px" /> Humano

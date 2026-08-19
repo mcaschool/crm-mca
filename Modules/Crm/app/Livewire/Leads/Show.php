@@ -59,6 +59,9 @@ class Show extends Component
                 'fields' => ['phone', 'email', 'country'],
                 'lead_id' => $lead->getKey(),
             ]);
+
+            // Abrir la ficha apaga la senal de "volvio a contactar" de este contacto.
+            $lead->contact->markRecontactSeen();
         }
     }
 

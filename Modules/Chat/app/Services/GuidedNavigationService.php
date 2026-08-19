@@ -68,8 +68,14 @@ class GuidedNavigationService
      */
     public function choose(Conversation $conversation, ConversationOption $option, string $locale, ?string $name = null): array
     {
-        // Evento de la opcion clicada.
-        $this->recordEvent($conversation, $option->event_type, ['option_id' => $option->getKey()]);
+        // Evento de la opcion clicada. Se guarda el DETALLE de lo que se visito
+        // (etiqueta y, si es un enlace, su URL) para que el historial sea util:
+        // "Vio la certificacion: Certificacion y titulacion", "Vio el catalogo: https://...".
+        $this->recordEvent($conversation, $option->event_type, array_filter([
+            'option_id' => $option->getKey(),
+            'label' => $option->translate('label', $conversation->language),
+            'url' => $option->url,
+        ], static fn ($v): bool => $v !== null && $v !== ''));
 
         $target = $option->target_node_id !== null
             ? ConversationNode::query()->find($option->target_node_id)

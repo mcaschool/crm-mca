@@ -52,13 +52,41 @@ class WidgetController extends Controller
         $locale = app()->getLocale();
         $sessionId = (string) $request->input('session_id', '');
 
-        $conversation = $sessionId !== ''
+        $previous = $sessionId !== ''
             ? Conversation::query()->where('session_id', $sessionId)->first()
             : null;
 
+        // Recuperacion de sesion CON VENTANA. Al volver dentro de la ventana
+        // (recargar/minimizar) se reanuda la MISMA conversacion. Al volver despues,
+        // el regreso es una conversacion NUEVA: asi el contador de CONVERSACIONES
+        // crece y, si el contacto ya existia, se marca el re-contacto (senal de
+        // actividad nueva en la lista de Leads).
+        $conversation = $previous !== null && ! $this->sessionExpired($previous) ? $previous : null;
+
         if ($conversation === null) {
-            $conversation = $this->conversations->start(['bot_id' => $bot->getKey(), 'language' => $locale, 'mode' => 'guided']);
-            $this->events->record(EventType::WidgetOpened, ['conversation_id' => $conversation->getKey(), 'bot_id' => $bot->getKey()]);
+            $conversation = $this->conversations->start([
+                'bot_id' => $bot->getKey(),
+                'language' => $locale,
+                'mode' => 'guided',
+                'contact_id' => $previous?->contact_id,
+            ]);
+            $this->events->record(EventType::WidgetOpened, [
+                'contact_id' => $conversation->contact_id,
+                'conversation_id' => $conversation->getKey(),
+                'bot_id' => $bot->getKey(),
+            ]);
+
+            // Regreso de un lead ya conocido: re-contacto. La captura ya ocurrio, asi
+            // que la conversacion nueva arranca en el menu principal (NODE_MAIN), no
+            // en el saludo de captura (NODE_WELCOME).
+            if ($previous !== null && $previous->contact_id !== null) {
+                $main = $this->guided->findNode($bot->getKey(), self::MAIN_KEY);
+                if ($main !== null) {
+                    $conversation->current_node_id = $main->getKey();
+                    $conversation->save();
+                }
+                $this->markRecontacted($conversation);
+            }
         }
 
         $node = $this->currentNode($conversation, $bot->getKey());
@@ -234,6 +262,38 @@ class WidgetController extends Controller
             'seniority' => $this->options('seniority'),
             'educacion' => $this->options('educacion'),
             'motivacion' => $this->options('motivacion'),
+        ]);
+    }
+
+    /**
+     * ¿La conversacion previa quedo inactiva mas que la ventana de reanudacion?
+     * En ese caso el regreso se trata como una conversacion nueva.
+     */
+    private function sessionExpired(Conversation $conversation): bool
+    {
+        $minutes = (int) config('crm.widget.session_resume_minutes', 30);
+        $last = $conversation->last_activity_at ?? $conversation->started_at;
+
+        return $last === null || $last->lt(now()->subMinutes($minutes));
+    }
+
+    /**
+     * Marca el re-contacto de un lead conocido: sella `last_recontacted_at` en el
+     * contacto (enciende la senal en la lista de Leads) y deja rastro como evento.
+     */
+    private function markRecontacted(Conversation $conversation): void
+    {
+        $contact = Contact::query()->find($conversation->contact_id);
+        if ($contact === null) {
+            return;
+        }
+
+        $contact->forceFill(['last_recontacted_at' => now()])->save();
+
+        $this->events->record(EventType::Recontacted, [
+            'contact_id' => $contact->getKey(),
+            'conversation_id' => $conversation->getKey(),
+            'bot_id' => $conversation->bot_id,
         ]);
     }
 

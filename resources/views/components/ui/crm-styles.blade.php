@@ -68,6 +68,11 @@
 .crm-page .match{color:var(--ink)}
 .crm-page .match small{color:var(--muted)}
 .crm-page .emp{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#9A7B12;background:#FFF6DA;border:1px solid #F5E4A8;border-radius:999px;padding:3px 9px}
+/* Senal "volvio a contactar": actividad nueva no vista de un lead conocido. */
+.crm-page .recontact{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#1B7A4B;background:#E7F7EF;border:1px solid #BFE8D2;border-radius:999px;padding:2px 8px;line-height:1.4;white-space:nowrap}
+.crm-page .recontact .dot{width:6px;height:6px;border-radius:50%;background:#22A866;flex:0 0 auto;animation:recontactPulse 1.8s ease-in-out infinite}
+@keyframes recontactPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.7)}}
+@media (prefers-reduced-motion:reduce){.crm-page .recontact .dot{animation:none}}
 .crm-page .dash{color:#C2CEDC}
 .crm-page .date{color:var(--muted);white-space:nowrap}
 .crm-page .empty{padding:22px;color:var(--muted);font-size:13.5px}

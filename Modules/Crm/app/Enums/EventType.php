@@ -21,6 +21,7 @@ enum EventType: string
     case UnresolvedQuestion = 'unresolved_question';
     case LeadCaptured = 'lead_captured';
     case ProgramInterest = 'program_interest';
+    case Recontacted = 'recontacted';
 
     /** @return array<int,string> */
     public static function values(): array

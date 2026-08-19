@@ -122,6 +122,12 @@ return [
     'widget' => [
         'rate_per_min' => (int) env('CRM_WIDGET_RATE_PER_MIN', 30),
         'message_rate_per_min' => (int) env('CRM_WIDGET_MESSAGE_RATE_PER_MIN', 8),
+
+        // Ventana de reanudacion de sesion (minutos). Al volver dentro de la ventana
+        // (recargar/minimizar) se reanuda la MISMA conversacion; al volver despues,
+        // el regreso se trata como una conversacion NUEVA (el contador de
+        // CONVERSACIONES crece y, si el contacto ya existia, se marca el re-contacto).
+        'session_resume_minutes' => (int) env('CRM_WIDGET_SESSION_RESUME_MINUTES', 30),
     ],
 
     /*

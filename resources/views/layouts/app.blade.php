@@ -24,7 +24,7 @@
                 request()->routeIs('dashboard') => [__('Inicio'), 'home'],
                 request()->routeIs('crm.leads.*') => [__('Leads'), 'users'],
                 request()->routeIs('crm.contacts.*'), request()->routeIs('crm.conversations.*') => [__('Contactos'), 'contact'],
-                request()->routeIs('advisors.*'), request()->routeIs('ai.*') => [__('Asesores Inteligentes'), 'sparkles'],
+                request()->routeIs('advisors.*'), request()->routeIs('ai.*') => [__('Asesores Inteligentes'), 'bot'],
                 request()->routeIs('catalog.*') => [__('Catálogo'), 'book-open'],
                 request()->routeIs('users.*') => [__('Usuarios'), 'user-cog'],
                 request()->routeIs('integrations.*') => [__('Integraciones'), 'plug'],

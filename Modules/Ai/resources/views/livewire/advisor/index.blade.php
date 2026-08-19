@@ -30,7 +30,7 @@
                                 @if ($a['type'] === 'human')
                                     <span class="badge badge-human"><x-ui.icon name="user" class="ic" style="width:13px;height:13px" /> Humano</span>
                                 @else
-                                    <span class="badge badge-ai"><x-ui.icon name="sparkles" class="ic" style="width:13px;height:13px" /> IA</span>
+                                    <span class="badge badge-ai"><x-ui.icon name="bot" class="ic" style="width:13px;height:13px" /> IA</span>
                                 @endif
                                 <span class="badge {{ $a['status'] === 'active' ? 'badge-on' : 'badge-off' }}">
                                     {{ $a['status'] === 'active' ? 'Activo' : 'Inactivo' }}

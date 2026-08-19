@@ -24,6 +24,8 @@ use Modules\Crm\Database\Factories\ContactFactory;
  * @property \Illuminate\Support\Carbon|null $consent_at
  * @property string|null $consent_source
  * @property \Illuminate\Support\Carbon|null $unsubscribed_at
+ * @property \Illuminate\Support\Carbon|null $last_recontacted_at
+ * @property \Illuminate\Support\Carbon|null $recontacted_seen_at
  */
 class Contact extends Model
 {
@@ -43,6 +45,8 @@ class Contact extends Model
         'consent_at',
         'consent_source',
         'unsubscribed_at',
+        'last_recontacted_at',
+        'recontacted_seen_at',
     ];
 
     protected function casts(): array
@@ -50,7 +54,28 @@ class Contact extends Model
         return [
             'consent_at' => 'datetime',
             'unsubscribed_at' => 'datetime',
+            'last_recontacted_at' => 'datetime',
+            'recontacted_seen_at' => 'datetime',
         ];
+    }
+
+    /**
+     * ¿El contacto volvio a contactar (nueva conversacion) y nadie ha abierto su
+     * ficha desde entonces? Enciende la senal de actividad nueva en la lista de Leads.
+     */
+    public function hasUnseenRecontact(): bool
+    {
+        return $this->last_recontacted_at !== null
+            && ($this->recontacted_seen_at === null
+                || $this->recontacted_seen_at->lt($this->last_recontacted_at));
+    }
+
+    /** Sella el re-contacto como visto (al abrir la ficha del lead). */
+    public function markRecontactSeen(): void
+    {
+        if ($this->hasUnseenRecontact()) {
+            $this->forceFill(['recontacted_seen_at' => now()])->save();
+        }
     }
 
     /**

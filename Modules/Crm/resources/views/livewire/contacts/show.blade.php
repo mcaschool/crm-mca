@@ -66,9 +66,13 @@
             <div class="card card-p fade">
                 <h3 style="font-size:14.5px;font-weight:600;margin:0 0 10px">{{ __('Historial de eventos') }}</h3>
                 @forelse ($contact->events as $event)
-                    <div style="font-size:12.5px;padding:4px 0;color:var(--muted)" wire:key="c-ev-{{ $event->id }}">
-                        <span style="font-family:ui-monospace,monospace;color:var(--ink)">{{ $event->event_type }}</span>
-                        · {{ $event->created_at?->diffForHumans() }}
+                    @php $detail = $event->detail(); @endphp
+                    <div style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;padding:5px 0;color:var(--muted)" wire:key="c-ev-{{ $event->id }}">
+                        <x-ui.icon name="{{ $event->icon() }}" style="width:14px;height:14px;margin-top:2px;flex:0 0 auto" />
+                        <div>
+                            <span style="color:var(--ink);font-weight:600">{{ $event->label() }}</span>@if ($detail)<span style="color:var(--ink)">: {{ $detail }}</span>@endif
+                            <span> · {{ $event->created_at?->diffForHumans() }}</span>
+                        </div>
                     </div>
                 @empty
                     <p class="mca-muted" style="font-size:13.5px;margin:0">{{ __('Sin eventos.') }}</p>

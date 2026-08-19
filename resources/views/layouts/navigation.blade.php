@@ -59,7 +59,7 @@
         <div class="mca-nav-group">
             <div class="mca-nav-label">CONFIGURACIÓN</div>
             <a href="{{ route('advisors.index') }}" class="mca-nav-item {{ request()->routeIs('advisors.*') || request()->routeIs('ai.*') ? 'on' : '' }}">
-                <x-ui.icon name="sparkles" /> {{ __('Asesores Inteligentes') }}
+                <x-ui.icon name="bot" /> {{ __('Asesores Inteligentes') }}
             </a>
             @can('viewAny', \Modules\Catalog\Models\Program::class)
                 <a href="{{ route('catalog.programs.index') }}" class="mca-nav-item {{ request()->routeIs('catalog.*') ? 'on' : '' }}">

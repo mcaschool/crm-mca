@@ -60,12 +60,17 @@
                                 <div class="who">
                                     <span class="ava">{{ $initials ?: '—' }}</span>
                                     <span class="nm">{{ $fullName }}</span>
+                                    @if ($lead->contact?->hasUnseenRecontact())
+                                        <span class="recontact" title="{{ __('Este contacto volvió a escribir; abre la ficha para verlo.') }}">
+                                            <span class="dot"></span> {{ __('Volvió a contactar') }}
+                                        </span>
+                                    @endif
                                 </div>
                             </td>
                             <td class="mail">{{ $lead->contact->email ?? '—' }}</td>
                             <td>
                                 @if ($lead->bot)
-                                    <span class="src"><x-ui.icon name="sparkles" class="i14" /> {{ $lead->bot->assistant_name }}</span>
+                                    <span class="src"><x-ui.icon name="bot" class="i14" /> {{ $lead->bot->assistant_name }}</span>
                                 @else
                                     <span class="dash">—</span>
                                 @endif

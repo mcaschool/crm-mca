@@ -26,7 +26,7 @@
                 <div>
                     <div class="nm">{{ $fullName }}</div>
                     <div class="sub">
-                        <x-ui.icon name="sparkles" class="i13" /> Captado por {{ $lead->bot->assistant_name ?? '—' }}
+                        <x-ui.icon name="bot" class="i13" /> Captado por {{ $lead->bot->assistant_name ?? '—' }}
                         · <x-ui.icon name="mail" class="i13 gray" /> {{ $c->email ?? '—' }}
                     </div>
                 </div>
@@ -116,24 +116,13 @@
                     <div class="block">
                         <h3><x-ui.icon name="clock" class="i14" /> Eventos</h3>
                         @forelse ($events as $ev)
-                            @php
-                                [$evIcon, $evLabel] = match ($ev->event_type) {
-                                    'corporate_interest' => ['building-2', 'Interés corporativo detectado'],
-                                    'used_matcher' => ['sparkles', 'Usó el emparejador'],
-                                    'viewed_program' => ['graduation-cap', 'Vio un programa'],
-                                    'viewed_certification' => ['graduation-cap', 'Vio la certificación'],
-                                    'started_celia' => ['message-circle', 'Inició conversación con Celia'],
-                                    'clicked_enrollment' => ['download', 'Fue a inscripciones'],
-                                    'widget_opened' => ['message-circle', 'Abrió el widget'],
-                                    'contact_created' => ['user', 'Se registró'],
-                                    'lead_transferred' => ['arrow-right-left', 'Seguimiento transferido'],
-                                    'unresolved_question' => ['sticky-note', 'Pregunta no resuelta'],
-                                    default => ['clock', $ev->event_type],
-                                };
-                            @endphp
+                            @php $evDetail = $ev->detail(); @endphp
                             <div class="ev">
-                                <x-ui.icon name="{{ $evIcon }}" class="i15" />
-                                <div>{{ $evLabel }}<div class="t">{{ $ev->created_at?->translatedFormat('d M Y · H:i') }}</div></div>
+                                <x-ui.icon name="{{ $ev->icon() }}" class="i15" />
+                                <div>
+                                    {{ $ev->label() }}@if ($evDetail)<span style="color:var(--muted);word-break:break-word">: {{ $evDetail }}</span>@endif
+                                    <div class="t">{{ $ev->created_at?->translatedFormat('d M Y · H:i') }}</div>
+                                </div>
                             </div>
                         @empty
                             <div class="conv-empty" style="font-size:12.5px">Sin eventos registrados.</div>

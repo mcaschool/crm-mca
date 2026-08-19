@@ -159,3 +159,57 @@ it('ignora cualquier institution_id enviado por el cliente', function () {
         expect(Conversation::query()->withoutGlobalScopes()->where('institution_id', $otra->id)->count())->toBe(0);
     });
 });
+
+it('al volver TRAS la ventana de reanudacion crea una conversacion NUEVA y marca el re-contacto', function () {
+    config(['crm.widget.session_resume_minutes' => 30]);
+    $bot = widgetBot();
+    $headers = widgetHeaders($bot);
+
+    $session = $this->withHeaders($headers)->postJson('/api/v1/widget/session', [])->json('session_id');
+    $this->withHeaders($headers)->postJson('/api/v1/widget/lead', [
+        'session_id' => $session, 'name' => 'Alvaro Rivera', 'email' => 'alvaro@example.com', 'consent' => true,
+    ])->assertOk();
+
+    // La conversacion previa queda inactiva mas que la ventana.
+    app(CurrentInstitution::class)->runFor($bot->institution_id, function () {
+        Conversation::query()->update(['last_activity_at' => now()->subHours(2)]);
+    });
+
+    // Vuelve con el MISMO session_id (localStorage conservado).
+    $res = $this->withHeaders($headers)->postJson('/api/v1/widget/session', ['session_id' => $session]);
+    $res->assertOk()
+        ->assertJsonPath('contact_captured', true)
+        ->assertJsonPath('node.key', 'NODE_MAIN'); // arranca en el menu, no en la captura
+    expect($res->json('session_id'))->not->toBe($session); // es una conversacion nueva
+
+    app(CurrentInstitution::class)->runFor($bot->institution_id, function () {
+        $contact = Contact::query()->first();
+        expect(Conversation::query()->where('contact_id', $contact->id)->count())->toBe(2);
+        expect($contact->last_recontacted_at)->not->toBeNull();
+        expect($contact->recontacted_seen_at)->toBeNull();
+        expect($contact->hasUnseenRecontact())->toBeTrue();
+        expect(Event::query()->where('event_type', 'recontacted')->count())->toBe(1);
+    });
+});
+
+it('al volver DENTRO de la ventana reanuda la MISMA conversacion, sin re-contacto', function () {
+    config(['crm.widget.session_resume_minutes' => 30]);
+    $bot = widgetBot();
+    $headers = widgetHeaders($bot);
+
+    $session = $this->withHeaders($headers)->postJson('/api/v1/widget/session', [])->json('session_id');
+    $this->withHeaders($headers)->postJson('/api/v1/widget/lead', [
+        'session_id' => $session, 'name' => 'Ana', 'email' => 'ana@example.com', 'consent' => true,
+    ])->assertOk();
+
+    // Regreso inmediato (recargar/minimizar): dentro de la ventana.
+    $res = $this->withHeaders($headers)->postJson('/api/v1/widget/session', ['session_id' => $session]);
+    expect($res->json('session_id'))->toBe($session);
+
+    app(CurrentInstitution::class)->runFor($bot->institution_id, function () {
+        $contact = Contact::query()->first();
+        expect(Conversation::query()->where('contact_id', $contact->id)->count())->toBe(1);
+        expect($contact->last_recontacted_at)->toBeNull();
+        expect(Event::query()->where('event_type', 'recontacted')->count())->toBe(0);
+    });
+});
