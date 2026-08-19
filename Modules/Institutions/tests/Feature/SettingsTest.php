@@ -59,6 +59,35 @@ it('rechaza un archivo que no es imagen', function () {
         ->assertHasErrors('logo');
 });
 
+it('guarda el tamaño del logo (px) dentro del rango y el sidebar lo respeta', function () {
+    [$admin, $inst] = settingsActor('admin');
+
+    Livewire::test(Settings::class)
+        ->set('logoSize', 64)
+        ->call('saveSize')
+        ->assertHasNoErrors();
+
+    expect($inst->fresh()->logo_size)->toBe(64);
+    expect($inst->fresh()->logoSize())->toBe(64);
+});
+
+it('rechaza un tamaño de logo fuera de rango', function () {
+    settingsActor('admin');
+
+    Livewire::test(Settings::class)
+        ->set('logoSize', 500)
+        ->call('saveSize')
+        ->assertHasErrors('logoSize');
+});
+
+it('el tamaño por defecto del logo es 44 y se acota', function () {
+    [$admin, $inst] = settingsActor('admin');
+
+    expect($inst->logoSize())->toBe(44);           // default
+    $inst->update(['logo_size' => 5]);             // fuera de rango bajo
+    expect($inst->fresh()->logoSize())->toBe(24);  // acotado al mínimo
+});
+
 it('Marketing NO accede a Ajustes por URL directa', function () {
     settingsActor('marketing');
 

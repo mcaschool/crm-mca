@@ -163,14 +163,7 @@
                 </div>
         @endswitch
         </div>{{-- /.home-main --}}
-
-        {{-- Carril derecho reservado (solo Inicio): métricas/estadísticas futuras. --}}
-        <aside class="home-rail">
-            <div class="rail-card">
-                <div class="rail-ic"><x-ui.icon name="bar-chart" /></div>
-                <div class="rail-t">Métricas clave</div>
-                <div class="rail-s">Próximamente este carril mostrará indicadores y estadísticas.</div>
-            </div>
-        </aside>
+        {{-- El carril derecho reservado ahora lo aporta el layout común (para todas las
+             páginas), no esta pantalla. --}}
     </div>
 </div>

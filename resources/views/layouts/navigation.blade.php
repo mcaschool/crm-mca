@@ -18,7 +18,7 @@
 <aside class="mca-sidebar" :class="{ open: sidebarOpen }">
     <div class="mca-brand">
         @if ($brandLogo)
-            <img src="{{ $brandLogo }}" alt="{{ $brandInstitution->name }}" class="brand-logo" style="max-height:40px;max-width:150px;object-fit:contain">
+            <img src="{{ $brandLogo }}" alt="{{ $brandInstitution->name }}" class="brand-logo" style="max-height:{{ $brandInstitution->logoSize() }}px;max-width:200px;object-fit:contain">
         @else
             <div class="brand-mark"><x-ui.icon name="shield" /></div>
             <div>

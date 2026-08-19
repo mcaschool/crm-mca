@@ -27,9 +27,14 @@ class Settings extends Component
     /** Imagen del logo en transito (previsualizacion antes de guardar). */
     public mixed $logo = null;
 
+    /** Alto del logo en el sidebar (px). Rango sano en Institution::LOGO_SIZE_*. */
+    public int $logoSize = Institution::LOGO_SIZE_DEFAULT;
+
     public function mount(): void
     {
         abort_unless((bool) auth()->user()?->canManageSettings(), 403);
+
+        $this->logoSize = $this->institution()->logoSize();
     }
 
     /** Validacion en tiempo real al elegir el archivo (feedback inmediato). */
@@ -66,6 +71,22 @@ class Settings extends Component
 
         $this->logo = null;
         session()->flash('status', 'Logo institucional actualizado.');
+    }
+
+    /** Guarda el tamaño (alto en px) del logo, acotado al rango sano. */
+    public function saveSize(): void
+    {
+        abort_unless((bool) auth()->user()?->canManageSettings(), 403);
+
+        $this->validate([
+            'logoSize' => ['required', 'integer', 'min:'.Institution::LOGO_SIZE_MIN, 'max:'.Institution::LOGO_SIZE_MAX],
+        ], [], ['logoSize' => 'tamaño']);
+
+        $institution = $this->institution();
+        $institution->logo_size = $this->logoSize;
+        $institution->save();
+
+        session()->flash('status', 'Tamaño del logo actualizado.');
     }
 
     public function removeLogo(): void

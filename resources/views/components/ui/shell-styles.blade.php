@@ -80,12 +80,19 @@
 .mca-topbar .lang{height:38px;padding:0 13px;border-radius:10px;border:1px solid var(--mca-card-border);background:#fff;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--mca-ink-2)}
 .mca-inst{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 13px;border-radius:10px;border:1px solid var(--mca-card-border);background:#fff;font-size:13px;font-weight:600;color:var(--mca-ink-2);cursor:pointer;font-family:inherit}
 
-/* área de contenido: cada página trae su propio padding/fondo. El respiro derecho
-   lo da un GUTTER fijo (padding-right), no un max-width: así el contenido se estira
-   a lo ancho de forma consistente (y en Inicio el carril queda a ras del gutter,
-   sin hueco extra a su derecha). */
-.mca-content{flex:1;min-width:0;padding-right:20px}
-@media(max-width:640px){.mca-content{padding-right:0}}
+/* área de contenido: MARCO COMÚN de TODAS las páginas internas. Un "canvas" divide
+   el área en el CUERPO (contenido de la página) + un CARRIL derecho reservado y
+   vacío, simétrico a la columna del menú lateral, para métricas futuras. Todas las
+   pantallas lo heredan del layout: el contenido ocupa el ancho MENOS el carril y
+   nunca queda pegado al borde derecho ni estirado a todo lo ancho. */
+.mca-content{flex:1;min-width:0}
+.mca-canvas{display:flex;align-items:flex-start;min-width:0}
+.mca-canvas-body{flex:1 1 auto;min-width:0}
+.mca-rail{flex:0 0 300px;align-self:stretch;padding:22px 22px 34px 4px}
+.mca-rail .rail-ph{position:sticky;top:76px;min-height:220px;border:1px dashed var(--mca-card-border);border-radius:var(--mca-radius);background:rgba(255,255,255,.45)}
+/* Pantallas medianas: el carril se recoge para no ahogar el contenido. */
+@media(max-width:1180px){.mca-rail{display:none}}
+@media(max-width:640px){.mca-canvas{padding-right:0}}
 
 /* hamburguesa + backdrop (solo móvil) */
 .mca-hamburger{display:none;background:none;border:none;color:var(--mca-ink);cursor:pointer;padding:6px;margin-left:-6px}

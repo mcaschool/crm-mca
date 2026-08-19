@@ -50,5 +50,35 @@
                 </div>
             </div>
         </div>
+
+        {{-- Tamaño del logo (alto en px). La previsualización refleja el valor elegido. --}}
+        @if ($logoUrl)
+            <div class="card card-p fade" style="margin-top:16px">
+                <h3 class="mca-h1" style="font-size:16px;margin-bottom:4px">Tamaño del logo</h3>
+                <p class="mca-sub" style="margin-bottom:16px">Alto del logo en el encabezado, entre {{ \Modules\Institutions\Models\Institution::LOGO_SIZE_MIN }} y {{ \Modules\Institutions\Models\Institution::LOGO_SIZE_MAX }} px.</p>
+
+                <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+                    {{-- Previsualización a tamaño real sobre un fondo tipo sidebar --}}
+                    <div style="min-width:180px;padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#EEF2F7,#E7ECF4);display:flex;align-items:center">
+                        <img src="{{ $logoUrl }}" alt="{{ $institution->name }}" style="max-height:{{ $logoSize }}px;max-width:200px;object-fit:contain">
+                    </div>
+
+                    <div style="flex:1;min-width:220px">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <div class="field" style="margin:0;width:110px">
+                                <input type="number" wire:model.live="logoSize" min="{{ \Modules\Institutions\Models\Institution::LOGO_SIZE_MIN }}" max="{{ \Modules\Institutions\Models\Institution::LOGO_SIZE_MAX }}" step="1" aria-label="Alto del logo en píxeles">
+                            </div>
+                            <span class="mca-help">px</span>
+                            <button type="button" class="btn btn-ghost btn-sm" wire:click="$set('logoSize', 32)">Pequeño</button>
+                            <button type="button" class="btn btn-ghost btn-sm" wire:click="$set('logoSize', 44)">Mediano</button>
+                            <button type="button" class="btn btn-ghost btn-sm" wire:click="$set('logoSize', 64)">Grande</button>
+                            <button type="button" wire:click="saveSize" class="btn btn-primary btn-sm"><x-ui.icon name="check" class="ic" style="width:15px;height:15px" /> Guardar tamaño</button>
+                        </div>
+                        @error('logoSize') <div class="mca-err" style="margin-top:8px">{{ $message }}</div> @enderror
+                        <div class="mca-help" style="margin-top:10px">Valor actual: {{ $logoSize }} px. El sidebar mostrará el logo a este alto.</div>
+                    </div>
+                </div>
+            </div>
+        @endif
     </div>
 </div>

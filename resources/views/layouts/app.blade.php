@@ -97,11 +97,20 @@
                 </header>
 
                 <main class="mca-content">
-                    @isset($header)
-                        <div style="padding:22px 24px 0">{{ $header }}</div>
-                    @endisset
+                    {{-- Marco común: cuerpo de la página + carril derecho reservado (vacío,
+                         para métricas futuras). Todas las pantallas lo heredan de aquí. --}}
+                    <div class="mca-canvas">
+                        <div class="mca-canvas-body">
+                            @isset($header)
+                                <div style="padding:22px 24px 0">{{ $header }}</div>
+                            @endisset
 
-                    {{ $slot }}
+                            {{ $slot }}
+                        </div>
+                        <aside class="mca-rail" aria-hidden="true">
+                            <div class="rail-ph"></div>
+                        </aside>
+                    </div>
                 </main>
             </div>
         </div>

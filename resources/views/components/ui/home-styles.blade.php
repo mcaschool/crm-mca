@@ -5,7 +5,7 @@
 --}}
 <style>
 /* Inicio: única pantalla con carril derecho reservado (para métricas futuras). */
-.mca-home{font-family:var(--mca-font);color:var(--mca-ink);padding:22px 26px 34px;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.mca-home{font-family:var(--mca-font);color:var(--mca-ink);padding:22px 26px 34px;display:grid;grid-template-columns:1fr;gap:18px;align-items:start}
 .mca-home *{box-sizing:border-box}
 .mca-home .ic{flex:0 0 auto}
 .mca-home .home-main{display:flex;flex-direction:column;gap:16px;min-width:0}

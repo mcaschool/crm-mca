@@ -1,6 +1,6 @@
-<div class="py-10">
+<div>
     <x-ui.styles />
-    <div class="mca-panel max-w-2xl mx-auto sm:px-6 lg:px-8 px-4">
+    <div class="mca-panel" style="padding:22px 26px 34px">
         <p class="mca-sub" style="margin:0 0 18px">Tus datos son gestionados por un administrador. Aquí solo puedes cambiar tu contraseña y tu foto.</p>
 
         @if (session('status'))
