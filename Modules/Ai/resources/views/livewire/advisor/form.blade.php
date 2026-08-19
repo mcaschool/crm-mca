@@ -1,6 +1,6 @@
-<div class="py-10">
+<div>
     <x-ui.styles />
-    <div class="mca-panel max-w-3xl mx-auto sm:px-6 lg:px-8 px-4">
+    <div class="mca-panel" style="padding:22px 26px 34px">
         <div class="mca-head">
             <div style="display:flex;align-items:center;gap:12px">
                 <a href="{{ route('advisors.index') }}" class="btn btn-ghost btn-sm" title="Volver"><x-ui.icon name="chevron-left" class="ic" style="width:16px;height:16px" /></a>

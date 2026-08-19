@@ -32,6 +32,7 @@ it('el Admin ve el snippet de incrustación con la public_key real y el dominio 
 
     Livewire::test(Form::class, ['bot' => $bot])
         ->assertOk()
+        ->assertDontSee('max-w-3xl')   // layout v4 a lo ancho (no centrado/angosto)
         ->assertSee('Incrustar widget')
         ->assertSee('PUBKEYTEST1234567890ABCDEF')                       // public_key REAL del bot
         ->assertSee('https://crm.mcaschool.education')                  // dominio de producción (config default)

@@ -104,6 +104,12 @@ $panel->group(function () {
     // Auditoria de seguridad (Livewire, SOLO LECTURA, solo Admin por Policy en mount).
     Route::get('/audit', \Modules\Audit\Livewire\Logs\Index::class)->name('audit.index');
 
+    // Conmutador de idioma del panel (persiste la preferencia del usuario).
+    Route::post('/locale', \App\Http\Controllers\LocaleController::class)->name('locale.switch');
+
+    // Ajustes generales del panel (marca/logo institucional). Solo Administrador.
+    Route::get('/ajustes', \Modules\Institutions\Livewire\Settings::class)->name('settings.index');
+
     // Cambiador de institucion activa (solo super-admin; barandilla en el controlador).
     Route::post('/institution/switch', InstitutionSwitchController::class)->name('institution.switch');
 });

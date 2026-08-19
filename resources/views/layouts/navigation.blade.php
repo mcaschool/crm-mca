@@ -10,14 +10,22 @@
     $parts = preg_split('/\s+/', trim((string) $u->name)) ?: [];
     $navInitials = mb_strtoupper(mb_substr($parts[0] ?? '', 0, 1).mb_substr($parts[1] ?? '', 0, 1)) ?: mb_strtoupper(mb_substr((string) $u->name, 0, 1));
     $navAvatar = method_exists($u, 'avatarUrl') ? $u->avatarUrl() : null;
+    // Logo institucional (marca del panel): se usa si se ha subido uno en Ajustes.
+    $__ctx = app(\Modules\Core\Tenancy\CurrentInstitution::class);
+    $brandInstitution = $__ctx->has() ? \Modules\Institutions\Models\Institution::find($__ctx->id()) : null;
+    $brandLogo = $brandInstitution?->logoUrl();
 @endphp
 <aside class="mca-sidebar" :class="{ open: sidebarOpen }">
     <div class="mca-brand">
-        <div class="brand-mark"><x-ui.icon name="shield" /></div>
-        <div>
-            <div class="brand-name">MCA School</div>
-            <div class="brand-sub">PANEL · CRM</div>
-        </div>
+        @if ($brandLogo)
+            <img src="{{ $brandLogo }}" alt="{{ $brandInstitution->name }}" class="brand-logo" style="max-height:40px;max-width:150px;object-fit:contain">
+        @else
+            <div class="brand-mark"><x-ui.icon name="shield" /></div>
+            <div>
+                <div class="brand-name">MCA School</div>
+                <div class="brand-sub">PANEL · CRM</div>
+            </div>
+        @endif
     </div>
 
     <div class="mca-brand-gap"></div>
@@ -73,6 +81,11 @@
                     <x-ui.icon name="shield" /> {{ __('Auditoría') }}
                 </a>
             @endcan
+            @if (auth()->user()?->canManageSettings())
+                <a href="{{ route('settings.index') }}" class="mca-nav-item {{ request()->routeIs('settings.*') ? 'on' : '' }}">
+                    <x-ui.icon name="user-cog" /> {{ __('Ajustes') }}
+                </a>
+            @endif
         </div>
     </nav>
 

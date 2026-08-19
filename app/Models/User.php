@@ -172,6 +172,14 @@ class User extends Authenticatable
     }
 
     /**
+     * ¿Puede gestionar los ajustes del panel (marca/logo institucional)? Solo Admin o super.
+     */
+    public function canManageSettings(): bool
+    {
+        return $this->isSuperAdmin() || $this->role === UserRole::Admin;
+    }
+
+    /**
      * ¿Puede gestionar el catalogo? Administrador o Marketing (Admisiones no).
      */
     public function canManageCatalog(): bool

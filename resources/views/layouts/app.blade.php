@@ -29,6 +29,7 @@
                 request()->routeIs('users.*') => [__('Usuarios'), 'user-cog'],
                 request()->routeIs('integrations.*') => [__('Integraciones'), 'plug'],
                 request()->routeIs('audit.*') => [__('Auditoría'), 'shield'],
+                request()->routeIs('settings.*') => [__('Ajustes'), 'user-cog'],
                 request()->routeIs('profile.*') => [__('Mi perfil'), 'user'],
                 default => [config('app.name', 'Panel'), 'home'],
             };
@@ -74,7 +75,25 @@
 
                     {{-- Aviso in-app de leads nuevos (sondeo ~10s): campana = toggle de sonido + pop-up. --}}
                     <livewire:crm.new-lead-notifier />
-                    <span class="lang">{{ strtoupper(app()->getLocale()) }} <x-ui.icon name="chevron-down" style="width:14px;height:14px" /></span>
+
+                    {{-- Selector de idioma (ES/EN): persiste en users.preferred_language, que SetLocale lee. --}}
+                    <x-dropdown align="right" width="48">
+                        <x-slot name="trigger">
+                            <button type="button" class="lang" style="cursor:pointer;font-family:inherit">{{ strtoupper(app()->getLocale()) }} <x-ui.icon name="chevron-down" style="width:14px;height:14px" /></button>
+                        </x-slot>
+                        <x-slot name="content">
+                            @foreach (['es' => 'Español', 'en' => 'English'] as $__code => $__label)
+                                <form method="POST" action="{{ route('locale.switch') }}">
+                                    @csrf
+                                    <input type="hidden" name="lang" value="{{ $__code }}">
+                                    <button type="submit"
+                                        class="block w-full text-start px-4 py-2 text-sm leading-5 {{ app()->getLocale() === $__code ? 'text-indigo-600 font-semibold' : 'text-gray-700' }} hover:bg-gray-100">
+                                        {{ $__label }}
+                                    </button>
+                                </form>
+                            @endforeach
+                        </x-slot>
+                    </x-dropdown>
                 </header>
 
                 <main class="mca-content">
