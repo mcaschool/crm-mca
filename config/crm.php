@@ -13,6 +13,12 @@ declare(strict_types=1);
 |
 */
 
+// Categoria propia del interes CORPORATIVO / InCompany. No es una de las 5 areas
+// academicas, pero funciona al mismo nivel que ellas como MARCA de lead: cuando se
+// detecta interes corporativo, el lead se etiqueta con esta categoria (columna
+// leads.area) y es filtrable como una area mas.
+$corporateArea = (string) env('CRM_LEAD_CORPORATE_AREA', 'Corporativo');
+
 return [
 
     /*
@@ -100,6 +106,9 @@ return [
         // D4 — se abre un lead nuevo tras N dias de inactividad o cambio de producto.
         'reopen_after_days' => (int) env('CRM_LEAD_REOPEN_DAYS', 30),
 
+        // Categoria propia del interes corporativo (marca de lead, nivel de area).
+        'corporate_area' => $corporateArea,
+
         // REGLA DE CONVERSION contacto -> lead. Un contacto se vuelve lead cuando
         // ocurre CUALQUIERA de estos disparadores (mapea el event_type que lo delata
         // al motivo/source del lead y a su nivel de interes). Si solo hay saludo o
@@ -107,9 +116,9 @@ return [
         // emparejador (used_matcher) NO va aqui: MatcherService ya crea el lead con
         // el detalle completo (area/programa/nivel).
         'triggers' => [
-            'corporate_interest' => ['source' => 'corporate', 'interest_level' => 'high'],
-            'corporate_contact' => ['source' => 'corporate', 'interest_level' => 'high'],
-            'corporate_form' => ['source' => 'corporate', 'interest_level' => 'high'],
+            'corporate_interest' => ['source' => 'corporate', 'interest_level' => 'high', 'area' => $corporateArea],
+            'corporate_contact' => ['source' => 'corporate', 'interest_level' => 'high', 'area' => $corporateArea],
+            'corporate_form' => ['source' => 'corporate', 'interest_level' => 'high', 'area' => $corporateArea],
             'program_interest' => ['source' => 'program', 'interest_level' => 'medium'],
             'viewed_price' => ['source' => 'pricing', 'interest_level' => 'high'],
             'clicked_enrollment' => ['source' => 'pricing', 'interest_level' => 'high'],

@@ -222,6 +222,8 @@ it('una consulta corporativa (InCompany) convierte el contacto en LEAD', functio
         expect($lead)->not->toBeNull();
         expect($lead->source)->toBe('corporate');
         expect($lead->interest_level->value)->toBe('high');
+        expect($lead->area)->toBe((string) config('crm.lead.corporate_area')); // categoria Corporativo
+        expect($lead->isCorporate())->toBeTrue();
         expect(Event::query()->where('event_type', 'corporate_interest')->count())->toBe(1);
     });
 });

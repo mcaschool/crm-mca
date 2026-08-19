@@ -45,7 +45,7 @@ class LeadConversionService
             return null;
         }
 
-        /** @var array<string, array{source: string, interest_level: string}> $triggers */
+        /** @var array<string, array{source: string, interest_level: string, area?: string}> $triggers */
         $triggers = (array) config('crm.lead.triggers', []);
         if (! isset($triggers[$eventType])) {
             return null;
@@ -58,7 +58,9 @@ class LeadConversionService
             'source' => $trigger['source'],
             'interest_level' => $trigger['interest_level'],
             'program_id' => $detail['program_id'] ?? null,
-            'area' => $detail['area'] ?? null,
+            // La categoria del disparador (p. ej. "Corporativo") marca el lead como
+            // una area mas; el detalle explicito de la conversacion tiene prioridad.
+            'area' => $detail['area'] ?? ($trigger['area'] ?? null),
             'goal' => $detail['goal'] ?? null,
         ], static fn ($v): bool => $v !== null && $v !== ''));
 

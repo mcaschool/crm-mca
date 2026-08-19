@@ -82,6 +82,16 @@ class Lead extends Model
     }
 
     /**
+     * ¿Es un lead de la categoria propia CORPORATIVO / InCompany? Marca de primer
+     * nivel (columna `area`), al mismo nivel que las 5 areas academicas.
+     */
+    public function isCorporate(): bool
+    {
+        return $this->area !== null
+            && $this->area === (string) config('crm.lead.corporate_area', 'Corporativo');
+    }
+
+    /**
      * Motivo/disparador legible por el que el contacto se convirtio en lead
      * (regla de conversion). Null si no hay `source`. Bilingue; los codigos no
      * mapeados se humanizan.

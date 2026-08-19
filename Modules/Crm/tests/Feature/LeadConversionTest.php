@@ -25,7 +25,7 @@ function conversionCtx(): array
     });
 }
 
-it('el interes corporativo convierte el contacto en lead (source=corporate)', function () {
+it('el interes corporativo convierte el contacto en lead con la categoria Corporativo', function () {
     [$institution, $bot, $contact] = conversionCtx();
 
     app(CurrentInstitution::class)->runFor($institution->id, function () use ($bot, $contact) {
@@ -34,12 +34,15 @@ it('el interes corporativo convierte el contacto en lead (source=corporate)', fu
         expect($lead)->not->toBeNull();
         expect($lead->source)->toBe('corporate');
         expect($lead->interest_level->value)->toBe('high');
+        // Categoria propia "Corporativo" (marca de primer nivel, columna area).
+        expect($lead->area)->toBe((string) config('crm.lead.corporate_area'));
+        expect($lead->isCorporate())->toBeTrue();
         expect(Lead::query()->where('contact_id', $contact->id)->count())->toBe(1);
         expect(Event::query()->where('event_type', 'lead_created')->count())->toBe(1);
     });
 });
 
-it('el interes en un programa convierte y guarda el programa', function () {
+it('el interes en un programa convierte y guarda el programa (sin categoria corporativa)', function () {
     [$institution, $bot, $contact] = conversionCtx();
 
     app(CurrentInstitution::class)->runFor($institution->id, function () use ($bot, $contact) {
@@ -49,15 +52,17 @@ it('el interes en un programa convierte y guarda el programa', function () {
 
         expect($lead->source)->toBe('program');
         expect($lead->program_id)->toBe($program->id);
+        expect($lead->isCorporate())->toBeFalse();
     });
 });
 
-it('la solicitud de precio/inscripcion convierte (source=pricing)', function () {
+it('la solicitud de precio/inscripcion convierte (source=pricing, no corporativo)', function () {
     [$institution, $bot, $contact] = conversionCtx();
 
     app(CurrentInstitution::class)->runFor($institution->id, function () use ($bot, $contact) {
         $lead = app(LeadConversionService::class)->convert($contact, $bot->id, 'viewed_price');
         expect($lead->source)->toBe('pricing');
+        expect($lead->isCorporate())->toBeFalse();
     });
 });
 

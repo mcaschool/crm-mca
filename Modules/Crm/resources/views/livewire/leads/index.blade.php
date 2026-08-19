@@ -87,14 +87,16 @@
                                 <span class="chip {{ $lead->status->badgeClass() }}">{{ $lead->status->label() }}</span>
                             </td>
                             <td class="match">
-                                @if ($lead->goal || $lead->area)
-                                    {{ $lead->goal ?: '—' }}@if ($lead->area) <small>· {{ $lead->area }}</small>@endif
+                                @if ($lead->goal)
+                                    {{ $lead->goal }}@if ($lead->area) <small>· {{ $lead->area }}</small>@endif
+                                @elseif ($lead->area)
+                                    {{ $lead->area }}
                                 @else
                                     <span class="dash">—</span>
                                 @endif
                             </td>
                             <td>
-                                @if (isset($corporate[(int) $lead->contact_id]))
+                                @if (isset($corporate[(int) $lead->contact_id]) || $lead->isCorporate())
                                     <span class="emp"><x-ui.icon name="building-2" class="i12" /> Empresa</span>
                                 @else
                                     <span class="dash">—</span>

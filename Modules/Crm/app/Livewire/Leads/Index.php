@@ -92,10 +92,12 @@ class Index extends Component
             ->when($this->advisor !== '', fn (Builder $q) => $q->where('bot_id', (int) $this->advisor))
             ->when($this->area !== '', fn (Builder $q) => $q->where('area', $this->area))
             ->when($this->mine === '1', fn (Builder $q) => $q->where('assigned_to_user_id', auth()->id()))
-            ->when($this->corp === '1', fn (Builder $q) => $q->whereIn(
-                'contact_id',
-                Event::query()->where('event_type', 'corporate_interest')->select('contact_id')
-            ))
+            ->when($this->corp === '1', fn (Builder $q) => $q->where(function (Builder $sub): void {
+                // Corporativo por CATEGORIA (marca de primer nivel) o por el evento
+                // de interes corporativo registrado en la conversacion.
+                $sub->where('area', (string) config('crm.lead.corporate_area', 'Corporativo'))
+                    ->orWhereIn('contact_id', Event::query()->where('event_type', 'corporate_interest')->select('contact_id'));
+            }))
             ->orderByDesc('created_at');
     }
 
@@ -165,12 +167,19 @@ class Index extends Component
         /** @var Collection<int, Lead> $items */
         $items = collect($leads->items());
 
+        // "Corporativo" es una categoria propia (no una de las 5 areas academicas)
+        // pero se filtra al mismo nivel que ellas.
+        $areas = array_values(array_unique(array_merge(
+            (array) config('crm.microcredential_areas', []),
+            [(string) config('crm.lead.corporate_area', 'Corporativo')],
+        )));
+
         return view('crm::livewire.leads.index', [
             'leads' => $leads,
             'corporate' => $this->corporateContactMap($items),
             'statuses' => LeadStatus::cases(),
             'advisors' => Bot::query()->orderBy('assistant_name')->get(['id', 'assistant_name']),
-            'areas' => config('crm.microcredential_areas', []),
+            'areas' => $areas,
         ]);
     }
 }
