@@ -47,6 +47,15 @@ class Index extends Component
     #[Url]
     public string $mine = '';
 
+    /**
+     * '1' = solo leads con interes corporativo (desde el KPI del dashboard). Se
+     * llama $corp (no $corporate) para no colisionar con la variable de vista
+     * `$corporate` (mapa de la etiqueta "Empresa"); el parametro de URL sigue
+     * siendo `corporate`.
+     */
+    #[Url(as: 'corporate')]
+    public string $corp = '';
+
     public function mount(): void
     {
         $this->authorize('viewAny', Lead::class);
@@ -55,7 +64,7 @@ class Index extends Component
     public function updated(string $property): void
     {
         // Cualquier cambio de filtro vuelve a la primera pagina.
-        if (in_array($property, ['search', 'status', 'advisor', 'area', 'mine'], true)) {
+        if (in_array($property, ['search', 'status', 'advisor', 'area', 'mine', 'corp'], true)) {
             $this->resetPage();
         }
     }
@@ -83,6 +92,10 @@ class Index extends Component
             ->when($this->advisor !== '', fn (Builder $q) => $q->where('bot_id', (int) $this->advisor))
             ->when($this->area !== '', fn (Builder $q) => $q->where('area', $this->area))
             ->when($this->mine === '1', fn (Builder $q) => $q->where('assigned_to_user_id', auth()->id()))
+            ->when($this->corp === '1', fn (Builder $q) => $q->whereIn(
+                'contact_id',
+                Event::query()->where('event_type', 'corporate_interest')->select('contact_id')
+            ))
             ->orderByDesc('created_at');
     }
 

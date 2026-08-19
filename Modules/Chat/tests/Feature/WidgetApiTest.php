@@ -213,3 +213,29 @@ it('al volver DENTRO de la ventana reanuda la MISMA conversacion, sin re-contact
         expect(Event::query()->where('event_type', 'recontacted')->count())->toBe(0);
     });
 });
+
+it('un clic guiado de interes corporativo convierte el contacto en LEAD', function () {
+    $bot = widgetBot();
+    $headers = widgetHeaders($bot);
+
+    $session = $this->withHeaders($headers)->postJson('/api/v1/widget/session', [])->json('session_id');
+    $this->withHeaders($headers)->postJson('/api/v1/widget/lead', [
+        'session_id' => $session, 'name' => 'Empresa Guiada', 'email' => 'empresa@example.com', 'consent' => true,
+    ])->assertOk();
+
+    $optionId = app(CurrentInstitution::class)->runFor(
+        $bot->institution_id,
+        fn () => ConversationOption::query()->where('event_type', 'corporate_interest')->value('id'),
+    );
+
+    $this->withHeaders($headers)->postJson('/api/v1/widget/navigate', [
+        'session_id' => $session, 'option_id' => $optionId,
+    ])->assertOk();
+
+    app(CurrentInstitution::class)->runFor($bot->institution_id, function () {
+        $contact = Contact::query()->first();
+        $lead = Lead::query()->where('contact_id', $contact->id)->first();
+        expect($lead)->not->toBeNull();
+        expect($lead->source)->toBe('corporate');
+    });
+});

@@ -56,14 +56,14 @@
                     <div class="card kpi"><div class="top"><div class="kic b-warn"><x-ui.icon name="clock" /></div></div><div><div class="num">{{ $counts['referredPending'] }}</div><div class="lab">Pendientes de matricular</div></div></div>
                     <div class="card kpi"><div class="top"><div class="kic b-ok"><x-ui.icon name="graduation-cap" /></div></div><div><div class="num">{{ $counts['enrolledMonth'] }}</div><div class="lab">Matriculados (mes)</div></div></div>
                     <div class="card kpi"><div class="top"><div class="kic b-info"><x-ui.icon name="message-circle" /></div></div><div><div class="num">{{ $counts['conversationsToday'] }}</div><div class="lab">Conversaciones hoy</div></div></div>
-                    <div class="card kpi gold"><div class="top"><div class="kic b-gold"><x-ui.icon name="building-2" /></div></div><div><div class="num">{{ $counts['corporate'] }}</div><div class="lab">Interés corporativo</div></div></div>
+                    <a class="card kpi gold" href="{{ route('crm.leads.index', ['corporate' => 1]) }}" style="text-decoration:none;color:inherit" title="Ver los leads con interés corporativo"><div class="top"><div class="kic b-gold"><x-ui.icon name="building-2" /></div><x-ui.icon name="chevron-right" class="i14" style="color:var(--muted)" /></div><div><div class="num">{{ $counts['corporate'] }}</div><div class="lab">Interés corporativo</div></div></a>
                     @break
                 @case('soporte')
                     <div class="card kpi"><div class="top"><div class="kic b-blue"><x-ui.icon name="inbox" /></div></div><div><div class="num">{{ $counts['referredToMe'] }}</div><div class="lab">Casos referidos</div></div></div>
                     <div class="card kpi"><div class="top"><div class="kic b-warn"><x-ui.icon name="clock" /></div></div><div><div class="num">{{ $counts['referredPending'] }}</div><div class="lab">Pendientes</div></div></div>
                     <div class="card kpi"><div class="top"><div class="kic b-info"><x-ui.icon name="message-circle" /></div></div><div><div class="num">{{ $counts['conversationsToday'] }}</div><div class="lab">Conversaciones hoy</div></div></div>
                     <div class="card kpi"><div class="top"><div class="kic b-ok"><x-ui.icon name="graduation-cap" /></div></div><div><div class="num">{{ $counts['enrolledMonth'] }}</div><div class="lab">Matriculados (mes)</div></div></div>
-                    <div class="card kpi gold"><div class="top"><div class="kic b-gold"><x-ui.icon name="building-2" /></div></div><div><div class="num">{{ $counts['corporate'] }}</div><div class="lab">Interés corporativo</div></div></div>
+                    <a class="card kpi gold" href="{{ route('crm.leads.index', ['corporate' => 1]) }}" style="text-decoration:none;color:inherit" title="Ver los leads con interés corporativo"><div class="top"><div class="kic b-gold"><x-ui.icon name="building-2" /></div><x-ui.icon name="chevron-right" class="i14" style="color:var(--muted)" /></div><div><div class="num">{{ $counts['corporate'] }}</div><div class="lab">Interés corporativo</div></div></a>
                     @break
                 @case('marketing')
                     @php
@@ -75,14 +75,14 @@
                     <div class="card kpi"><div class="top"><div class="kic b-info"><x-ui.icon name="message-circle" /></div>@if ($deltaConv !== null)<span class="trend" @style(['color:var(--mca-warn)' => $deltaConv < 0])><x-ui.icon name="{{ $deltaConv < 0 ? 'chevron-down' : 'chevron-up' }}" /> {{ $deltaConv >= 0 ? '+' : '' }}{{ $deltaConv }}%</span>@endif</div><div><div class="num">{{ $counts['conversationsMonth'] }}</div><div class="lab">Conversaciones</div></div></div>
                     <div class="card kpi"><div class="top"><div class="kic b-ok"><x-ui.icon name="graduation-cap" /></div></div><div><div class="num">{{ $counts['enrolledMonth'] }}</div><div class="lab">Matriculados</div></div></div>
                     <div class="card kpi"><div class="top"><div class="kic b-warn"><x-ui.icon name="percent" /></div></div><div><div class="num">{{ $conversion }}%</div><div class="lab">Conversión</div></div></div>
-                    <div class="card kpi gold"><div class="top"><div class="kic b-gold"><x-ui.icon name="building-2" /></div></div><div><div class="num">{{ $counts['corporate'] }}</div><div class="lab">Interés corporativo</div></div></div>
+                    <a class="card kpi gold" href="{{ route('crm.leads.index', ['corporate' => 1]) }}" style="text-decoration:none;color:inherit" title="Ver los leads con interés corporativo"><div class="top"><div class="kic b-gold"><x-ui.icon name="building-2" /></div><x-ui.icon name="chevron-right" class="i14" style="color:var(--muted)" /></div><div><div class="num">{{ $counts['corporate'] }}</div><div class="lab">Interés corporativo</div></div></a>
                     @break
                 @default {{-- admin / admisiones --}}
                     <div class="card kpi"><div class="top"><div class="kic b-blue"><x-ui.icon name="user-plus" /></div></div><div><div class="num">{{ $counts['new'] }}</div><div class="lab">Nuevos sin contactar</div></div></div>
                     <div class="card kpi"><div class="top"><div class="kic b-warn"><x-ui.icon name="clock" /></div></div><div><div class="num">{{ $counts['followup'] }}</div><div class="lab">En seguimiento</div></div></div>
                     <div class="card kpi"><div class="top"><div class="kic b-info"><x-ui.icon name="message-circle" /></div></div><div><div class="num">{{ $counts['conversationsToday'] }}</div><div class="lab">Conversaciones hoy</div></div></div>
                     <div class="card kpi"><div class="top"><div class="kic b-ok"><x-ui.icon name="graduation-cap" /></div></div><div><div class="num">{{ $counts['enrolledMonth'] }}</div><div class="lab">Matriculados (mes)</div></div></div>
-                    <div class="card kpi gold"><div class="top"><div class="kic b-gold"><x-ui.icon name="building-2" /></div></div><div><div class="num">{{ $counts['corporate'] }}</div><div class="lab">Interés corporativo</div></div></div>
+                    <a class="card kpi gold" href="{{ route('crm.leads.index', ['corporate' => 1]) }}" style="text-decoration:none;color:inherit" title="Ver los leads con interés corporativo"><div class="top"><div class="kic b-gold"><x-ui.icon name="building-2" /></div><x-ui.icon name="chevron-right" class="i14" style="color:var(--muted)" /></div><div><div class="num">{{ $counts['corporate'] }}</div><div class="lab">Interés corporativo</div></div></a>
             @endswitch
         </div>
 

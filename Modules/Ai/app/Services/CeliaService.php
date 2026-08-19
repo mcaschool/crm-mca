@@ -12,6 +12,7 @@ use Modules\Crm\Models\Conversation;
 use Modules\Crm\Models\ProgramInterest;
 use Modules\Crm\Services\ConversationService;
 use Modules\Crm\Services\EventService;
+use Modules\Crm\Services\LeadConversionService;
 use Modules\Crm\Services\MessageService;
 use Modules\Institutions\Models\Bot;
 use Throwable;
@@ -39,6 +40,7 @@ class CeliaService
         private readonly ConversationService $conversations,
         private readonly MessageService $messages,
         private readonly EventService $events,
+        private readonly LeadConversionService $leadConversion,
     ) {}
 
     /**
@@ -112,6 +114,10 @@ class CeliaService
                 'conversation_id' => $conversation->getKey(),
                 'bot_id' => $conversation->bot_id,
             ]);
+
+            // Disparador de conversion: el interes corporativo/InCompany crea lead
+            // SI O SI (antes solo dejaba el evento y el prospecto se perdia).
+            $this->leadConversion->convert($contact, (int) $conversation->bot_id, 'corporate_interest');
         }
 
         $prompt = $this->systemPrompt($locale, $this->knowledge->retrieve((int) $conversation->bot_id, $message, $locale), $corporate);
@@ -310,6 +316,11 @@ class CeliaService
                 'conversation_id' => $conversation->getKey(),
                 'bot_id' => $conversation->bot_id,
                 'data' => ['program_id' => $program->getKey(), 'source' => 'celia'],
+            ]);
+
+            // Disparador de conversion: interes en un programa concreto -> lead.
+            $this->leadConversion->convert($contact, (int) $conversation->bot_id, 'program_interest', [
+                'program_id' => $program->getKey(),
             ]);
         }
     }

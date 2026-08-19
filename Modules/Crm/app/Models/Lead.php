@@ -82,6 +82,25 @@ class Lead extends Model
     }
 
     /**
+     * Motivo/disparador legible por el que el contacto se convirtio en lead
+     * (regla de conversion). Null si no hay `source`. Bilingue; los codigos no
+     * mapeados se humanizan.
+     */
+    public function sourceLabel(?string $locale = null): ?string
+    {
+        if ($this->source === null || $this->source === '') {
+            return null;
+        }
+
+        $key = 'lead_labels.source.'.$this->source;
+        if (trans()->has($key, $locale)) {
+            return (string) trans($key, [], $locale);
+        }
+
+        return \Illuminate\Support\Str::of($this->source)->replace(['_', '-'], ' ')->ucfirst()->toString();
+    }
+
+    /**
      * @return BelongsTo<Program, $this>
      */
     public function program(): BelongsTo

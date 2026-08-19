@@ -6,8 +6,10 @@ namespace Modules\Chat\Services;
 
 use Modules\Chat\Models\ConversationNode;
 use Modules\Chat\Models\ConversationOption;
+use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Conversation;
 use Modules\Crm\Services\EventService;
+use Modules\Crm\Services\LeadConversionService;
 
 /**
  * Motor de navegacion guiada (SIN IA): renderiza los nodos del arbol administrable
@@ -16,7 +18,10 @@ use Modules\Crm\Services\EventService;
  */
 class GuidedNavigationService
 {
-    public function __construct(private readonly EventService $events) {}
+    public function __construct(
+        private readonly EventService $events,
+        private readonly LeadConversionService $leadConversion,
+    ) {}
 
     public function findNode(int $botId, string $key): ?ConversationNode
     {
@@ -115,6 +120,14 @@ class GuidedNavigationService
             'bot_id' => $conversation->bot_id,
             'data' => $data,
         ]);
+
+        // Regla de conversion contacto -> lead: ciertos clics del arbol (precio,
+        // inscripcion, canal corporativo) convierten al contacto en lead. Solo se
+        // carga el contacto cuando el evento es realmente un disparador.
+        if ($conversation->contact_id !== null && $this->leadConversion->isTrigger($eventType)) {
+            $contact = Contact::query()->find($conversation->contact_id);
+            $this->leadConversion->convert($contact, (int) $conversation->bot_id, $eventType);
+        }
     }
 
     private function personalize(?string $content, ?string $name): ?string

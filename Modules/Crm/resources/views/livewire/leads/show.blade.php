@@ -28,6 +28,9 @@
                     <div class="sub">
                         <x-ui.icon name="bot" class="i13" /> Captado por {{ $lead->bot->assistant_name ?? '—' }}
                         · <x-ui.icon name="mail" class="i13 gray" /> {{ $c->email ?? '—' }}
+                        @if ($lead->sourceLabel())
+                            · <x-ui.icon name="activity" class="i13 gray" /> Motivo: {{ $lead->sourceLabel() }}
+                        @endif
                     </div>
                 </div>
 

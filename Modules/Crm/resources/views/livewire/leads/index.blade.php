@@ -40,6 +40,14 @@
                 </button>
             </div>
 
+            @if ($corp === '1')
+                <div style="display:flex;align-items:center;gap:8px;padding:10px 4px 2px;font-size:13px;color:var(--muted)">
+                    <span class="emp"><x-ui.icon name="building-2" class="i12" /> Interés corporativo</span>
+                    Mostrando solo leads con interés corporativo.
+                    <a href="{{ route('crm.leads.index') }}" style="color:var(--blue);font-weight:600;text-decoration:none">Quitar filtro</a>
+                </div>
+            @endif
+
             <table>
                 <thead>
                     <tr>

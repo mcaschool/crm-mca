@@ -6,8 +6,10 @@ use Modules\Ai\Services\AiChatClient;
 use Modules\Ai\Tests\Support\FakeAiChatClient;
 use Modules\Chat\Database\Seeders\ChatTreeSeeder;
 use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Conversation;
 use Modules\Crm\Models\Event;
+use Modules\Crm\Models\Lead;
 use Modules\Crm\Models\Message;
 use Modules\Institutions\Models\Bot;
 use Modules\Institutions\Models\Institution;
@@ -199,5 +201,42 @@ it('si no hay proveedor configurado, deriva con honestidad y registra unresolved
     $res->assertOk()->assertJsonPath('action', 'unavailable');
     app(CurrentInstitution::class)->runFor($bot->institution_id, function () {
         expect(Event::query()->where('event_type', 'unresolved_question')->count())->toBe(1);
+    });
+});
+
+it('una consulta corporativa (InCompany) convierte el contacto en LEAD', function () {
+    // Regla de conversion: el interes corporativo crea lead SI O SI (antes solo
+    // dejaba el evento y el prospecto se quedaba como contacto inaccesible).
+    $bot = celiaBot();
+    bindFakeAi('{"reply": "Con gusto, tenemos formacion InCompany.", "action": "answer"}');
+    $session = celiaSession($bot);
+    $this->withHeaders(celiaHeaders($bot))->postJson('/api/v1/widget/celia/start', ['session_id' => $session]);
+
+    $this->withHeaders(celiaHeaders($bot))->postJson('/api/v1/widget/celia', [
+        'session_id' => $session, 'message' => 'Quiero formacion para mi empresa, capacitar a mi equipo',
+    ])->assertOk();
+
+    app(CurrentInstitution::class)->runFor($bot->institution_id, function () {
+        $contact = Contact::query()->first();
+        $lead = Lead::query()->where('contact_id', $contact->id)->first();
+        expect($lead)->not->toBeNull();
+        expect($lead->source)->toBe('corporate');
+        expect($lead->interest_level->value)->toBe('high');
+        expect(Event::query()->where('event_type', 'corporate_interest')->count())->toBe(1);
+    });
+});
+
+it('una consulta general (sin disparador) deja el contacto como CONTACTO, sin lead', function () {
+    $bot = celiaBot();
+    bindFakeAi('{"reply": "Una microcredencial es una unidad academica corta.", "action": "answer"}');
+    $session = celiaSession($bot);
+    $this->withHeaders(celiaHeaders($bot))->postJson('/api/v1/widget/celia/start', ['session_id' => $session]);
+
+    $this->withHeaders(celiaHeaders($bot))->postJson('/api/v1/widget/celia', [
+        'session_id' => $session, 'message' => 'Hola, en general que es esto y como funciona',
+    ])->assertOk();
+
+    app(CurrentInstitution::class)->runFor($bot->institution_id, function () {
+        expect(Lead::query()->count())->toBe(0);
     });
 });
