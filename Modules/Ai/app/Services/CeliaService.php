@@ -6,7 +6,6 @@ namespace Modules\Ai\Services;
 
 use Illuminate\Support\Str;
 use Modules\Catalog\Models\Program;
-use Modules\Chat\Services\GuidedNavigationService;
 use Modules\Crm\Enums\EventType;
 use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Conversation;
@@ -19,12 +18,14 @@ use Throwable;
 
 /**
  * "Modo Celia": asesora academica INTELIGENTE. Se activa solo cuando el prospecto
- * pide "Hablar con Celia". Reutiliza todo el Bloque 5 (arbol, matcher, eventos) y
- * combina un ENRUTAMIENTO en dos pasos:
- *   Paso 1 (barato, sin IA): filtro por palabras clave -> si el tema lo cubre el
- *     arbol, ofrece esos botones (respuesta predefinida, cero tokens).
- *   Paso 2 (IA): si no se resuelve, conversa con Qwen usando la base de
- *     conocimiento y registra provider/model/tokens/latency en messages.meta.
+ * pide "Hablar con Celia". Reutiliza todo el Bloque 5 (arbol, matcher, eventos).
+ *
+ * Celia RESPONDE: toda consulta pasa a la IA (Qwen), que contesta con la base de
+ * conocimiento autorizada y solo ofrece el menu/emparejador como ULTIMO recurso,
+ * cuando de verdad no tiene el dato. NO se enruta a botones por palabra clave: eso
+ * "eludia" preguntas que el conocimiento si responde. Cada llamada registra
+ * provider/model/tokens/latency en messages.meta (base del AI Deflection Rate).
+ *
  * Las barreras de conducta viven en config (system_prompt), no en el codigo ni en
  * los .md. El cliente de IA es agnostico y en pruebas se sustituye por un doble.
  */
@@ -35,7 +36,6 @@ class CeliaService
         private readonly AiProcessResolver $resolver,
         private readonly KnowledgeRetriever $knowledge,
         private readonly TopicRouter $router,
-        private readonly GuidedNavigationService $guided,
         private readonly ConversationService $conversations,
         private readonly MessageService $messages,
         private readonly EventService $events,
@@ -74,7 +74,7 @@ class CeliaService
         // Siempre se registra lo que dijo el usuario.
         $this->messages->record($conversation, 'user', $message, 'text');
 
-        // Control de costos: los mensajes resueltos por botones NO cuentan.
+        // Control de costos: al alcanzar el limite se deja de llamar a la IA.
         if ($this->aiMessageCount($conversation) >= $this->limit()) {
             $reply = $this->trans('celia.limit_reached', $locale, ['catalog' => $this->catalogUrl($locale)]);
             $this->messages->record($conversation, 'celia', $reply, 'text');
@@ -82,28 +82,10 @@ class CeliaService
             return $this->response($conversation, reply: $reply, action: 'limit', usedAi: false, limitReached: true);
         }
 
-        // Paso 1 — filtro por palabras clave (sin IA): si el arbol cubre el tema,
-        // se ofrecen esos botones y NO se gastan tokens. Las consultas CORPORATIVAS
-        // (InCompany) tienen precedencia y van a IA para conversar/encaminar al canal
-        // corporativo (asi "descuento por volumen" no cae en el menu de inscripcion).
-        $nodeKey = $this->router->isCorporate($message) ? null : $this->router->match($message);
-        if ($nodeKey !== null) {
-            $node = $this->guided->findNode((int) $conversation->bot_id, $nodeKey);
-            if ($node !== null) {
-                $reply = $this->trans('celia.route_to_buttons', $locale);
-                $this->messages->record($conversation, 'celia', $reply, 'buttons');
-
-                return $this->response(
-                    $conversation,
-                    reply: $reply,
-                    action: 'buttons',
-                    usedAi: false,
-                    node: $this->guided->renderNode($node, $locale, $contact?->first_name),
-                );
-            }
-        }
-
-        // Paso 2 — IA.
+        // Celia RESPONDE: toda consulta pasa a la IA, que contesta con el
+        // conocimiento autorizado y solo ofrece el menu/emparejador como ULTIMO
+        // recurso. Ya no se enruta a botones por palabra clave (eludia preguntas
+        // que el conocimiento si responde, p. ej. "cuanto dura" o "metodos de pago").
         return $this->converse($conversation, $contact, $message, $locale);
     }
 

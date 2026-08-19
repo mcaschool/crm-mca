@@ -97,19 +97,22 @@ it('activa el modo Celia y saluda con memoria (nombre) sin gastar IA', function 
     });
 });
 
-it('enruta una pregunta cubierta por el arbol a botones, SIN llamar a la IA', function () {
+it('RESPONDE con el conocimiento una pregunta de tema, sin lanzar el menu', function () {
+    // Regla de negocio: si el conocimiento tiene la respuesta (duracion, metodos de
+    // pago, certificacion...), Celia la RESPONDE con la IA y NO enruta a botones.
     $bot = celiaBot();
-    $fake = bindFakeAi();
+    $fake = bindFakeAi('{"reply": "Cada microcredencial equivale a 6 semanas, online y a tu ritmo.", "action": "answer"}');
     $session = celiaSession($bot);
     $this->withHeaders(celiaHeaders($bot))->postJson('/api/v1/widget/celia/start', ['session_id' => $session]);
 
     $res = $this->withHeaders(celiaHeaders($bot))->postJson('/api/v1/widget/celia', [
-        'session_id' => $session, 'message' => '¿El certificado tiene verificacion?',
+        'session_id' => $session, 'message' => '¿cuanto dura la microcredencial?',
     ]);
 
-    $res->assertOk()->assertJsonPath('action', 'buttons')->assertJsonPath('used_ai', false);
-    expect($res->json('node.key'))->toBe('NODE_CERTIFICACION');
-    expect($fake->callCount())->toBe(0); // deflexion: cero tokens
+    $res->assertOk()->assertJsonPath('action', 'answer')->assertJsonPath('used_ai', true);
+    expect($res->json('node'))->toBeNull(); // no hay menu: es una respuesta
+    expect($res->json('reply'))->toContain('6 semanas');
+    expect($fake->callCount())->toBe(1); // la IA respondio con el conocimiento
 });
 
 it('conversa con IA una pregunta abierta y registra provider/tokens en meta', function () {

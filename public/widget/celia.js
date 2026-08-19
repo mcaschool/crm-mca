@@ -32,7 +32,8 @@
     lang: 'es', sessionId: localStorage.getItem(LS_KEY) || '', captured: false, sessionReady: false,
     assistant: 'Celia', avatarUrl: null, answers: {}, options: null,
     screen: 'welcome', node: null, userName: null, celia: false, identity: 'institution',
-    clog: null, cfoot: null, cin: null, csend: null, lastRole: null, pendingTopic: null
+    clog: null, cfoot: null, cin: null, csend: null, lastRole: null, pendingTopic: null,
+    opened: false
   };
 
   var REDUCE = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -322,11 +323,10 @@
   function el(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
   function smoothScroll(c) { if (!c) { return; } try { c.scrollTo({ top: c.scrollHeight, behavior: REDUCE ? 'auto' : 'smooth' }); } catch (e) { c.scrollTop = c.scrollHeight; } }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  // Enlaces del propio sitio de MCA y correos (mailto) -> misma pestana (_self);
-  // externos -> nueva (_blank).
-  function isMcaUrl(u) { return /mcaschool\.education/i.test(String(u || '')); }
-  function sameTab(u) { u = String(u || ''); return u.indexOf('mailto:') === 0 || isMcaUrl(u); }
-  function linkTarget(u) { return sameTab(u) ? '_self' : '_blank'; }
+  // TODOS los enlaces web abren en pestaña NUEVA (_blank) para no sacar al usuario de
+  // la página del widget ni perder la conversación. mailto: abre el cliente de correo
+  // (no navega la página), así que puede ir en la misma pestaña.
+  function linkTarget(u) { u = String(u || ''); return u.indexOf('mailto:') === 0 ? '_self' : '_blank'; }
   function bubbleHTML(text) {
     return esc(text).replace(/(https?:\/\/[^\s<]+)/g, function (url) {
       var trail = ''; var m = url.match(/[).,;!?]+$/);
@@ -339,6 +339,10 @@
   // --- Apertura / cierre ---
   function open() {
     panel.classList.add('open'); dock.style.display = 'none'; state.teaserDone = true;
+    // La bienvenida se construye SOLO la primera vez. Al reabrir tras minimizar se
+    // conserva la pantalla actual (la conversación NO se pierde).
+    if (state.opened) { return; }
+    state.opened = true;
     loadSession();
     showWelcome();
   }
@@ -442,7 +446,7 @@
     var isUser = who === 'user';
     var turn = el('<div class="turn ' + (isUser ? 'user' : 'celia') + '"></div>');
     var label = el('<div class="who"></div>');
-    label.textContent = isUser ? (state.userName || t('you')) : botName();
+    label.textContent = isUser ? ((state.userName ? String(state.userName).trim().split(/\s+/)[0] : '') || t('you')) : botName();
     var bubble = el('<div class="msg"></div>');
     bubble.innerHTML = bubbleHTML(text);
     turn.appendChild(label);
@@ -521,13 +525,14 @@
   }
 
   function onOption(opt) {
-    // Enlace del propio sitio de MCA o correo (mailto): MISMA pestana. Se registra el
-    // evento (navigate) y luego se navega, para no perder el rastro CRM.
-    if (opt.action === 'external_link' && opt.url && sameTab(opt.url)) {
-      api('/navigate', 'POST', { session_id: state.sessionId, option_id: opt.id }).then(function () { window.location.href = opt.url; });
+    // Enlace externo (ficha, sitio de MCA...): SIEMPRE nueva pestaña, para no sacar al
+    // usuario de la página ni perder la conversación. Se registra el evento (navigate).
+    if (opt.action === 'external_link' && opt.url) {
+      if (opt.url.indexOf('mailto:') === 0) { window.location.href = opt.url; }
+      else { window.open(opt.url, '_blank', 'noopener'); }
+      api('/navigate', 'POST', { session_id: state.sessionId, option_id: opt.id });
       return;
     }
-    if (opt.action === 'external_link' && opt.url) { window.open(opt.url, '_blank', 'noopener'); }
     typing();
     paced(api('/navigate', 'POST', { session_id: state.sessionId, option_id: opt.id })).then(function (r) {
       if (r.action === 'start_matcher') { return startMatcher(); }
@@ -541,12 +546,10 @@
   function startCelia() {
     clearLog();
     state.celia = true; state.identity = 'celia'; setChatIdentity();
+    // Sin adjuntar archivos: este chat no es de soporte.
     state.cfoot.innerHTML =
-      '<div class="inbar"><button class="clip" title="">' + icon('paperclip') + '</button>' +
-      '<input type="text" id="c_in" placeholder="' + esc(t('ask')) + '"><button class="snd" id="c_send">' + icon('send') + '</button></div>';
+      '<div class="inbar"><input type="text" id="c_in" placeholder="' + esc(t('ask')) + '"><button class="snd" id="c_send">' + icon('send') + '</button></div>';
     state.cin = state.cfoot.querySelector('#c_in'); state.csend = state.cfoot.querySelector('#c_send');
-    var clip = state.cfoot.querySelector('.clip');
-    if (clip) { clip.addEventListener('click', function () { if (state.cin) { state.cin.focus(); } }); }
     function doSend() { var m = state.cin.value.trim(); if (!m) { return; } state.cin.value = ''; sendCelia(m); }
     state.csend.addEventListener('click', doSend);
     state.cin.addEventListener('keydown', function (e) { if (e.key === 'Enter') { doSend(); } });
@@ -596,11 +599,13 @@
   }
 
   function celiaChoose(opt) {
-    if (opt.action === 'external_link' && opt.url && sameTab(opt.url)) {
-      api('/navigate', 'POST', { session_id: state.sessionId, option_id: opt.id }).then(function () { window.location.href = opt.url; });
+    // Enlace externo: SIEMPRE nueva pestaña (no perder la conversación de Celia).
+    if (opt.action === 'external_link' && opt.url) {
+      if (opt.url.indexOf('mailto:') === 0) { window.location.href = opt.url; }
+      else { window.open(opt.url, '_blank', 'noopener'); }
+      api('/navigate', 'POST', { session_id: state.sessionId, option_id: opt.id });
       return;
     }
-    if (opt.action === 'external_link' && opt.url) { window.open(opt.url, '_blank', 'noopener'); }
     logTyping();
     paced(api('/navigate', 'POST', { session_id: state.sessionId, option_id: opt.id })).then(function (r) {
       clearTyping();

@@ -7,6 +7,7 @@ namespace Modules\Chat\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Modules\Ai\Services\CeliaService;
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Models\ProgramCategory;
@@ -90,8 +91,15 @@ class WidgetController extends Controller
         $conversation = $this->conversation($data['session_id']);
         $locale = app()->getLocale();
 
+        // El widget captura un solo campo "nombre"; se divide en nombre + apellido(s)
+        // para que Celia y el CRM usen SOLO el primer nombre al dirigirse a la persona.
+        $fullName = trim((string) preg_replace('/\s+/', ' ', $data['name']));
+        $firstName = (string) (Str::of($fullName)->explode(' ')->first() ?: $fullName);
+        $lastName = trim(Str::of($fullName)->after($firstName)->toString());
+
         $contact = $this->contacts->createOrUpdate([
-            'first_name' => $data['name'],
+            'first_name' => $firstName,
+            'last_name' => $lastName !== '' ? $lastName : null,
             'email' => $data['email'],
             'preferred_language' => $locale,
             'consent' => true,
