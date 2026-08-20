@@ -23,12 +23,15 @@ class SenderMailer
     /**
      * Envia un correo por el SMTP del remitente. Puede lanzar excepcion si el SMTP
      * falla (autenticacion/conexion): el llamador decide como manejarlo.
+     *
+     * @param  array<int, array{path: string, name: string, mime: string}>  $files
+     * @param  array<int, array{path: string, cid: string, mime: string}>  $inline
      */
-    public function send(EmailSender $sender, string $to, string $subject, string $bodyHtml): void
+    public function send(EmailSender $sender, string $to, string $subject, string $bodyHtml, array $files = [], array $inline = []): void
     {
         Mail::mailer($this->configureMailer($sender))
             ->to($to)
-            ->send(new OutboundEmail($sender->from_address, $sender->name, $subject, $bodyHtml));
+            ->send(new OutboundEmail($sender->from_address, $sender->name, $subject, $bodyHtml, $files, $inline));
     }
 
     /**

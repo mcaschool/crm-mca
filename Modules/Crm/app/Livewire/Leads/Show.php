@@ -6,9 +6,12 @@ namespace Modules\Crm\Livewire\Leads;
 
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 use Modules\Audit\Services\AuditService;
 use Modules\Crm\Enums\LeadStatus;
 use Modules\Crm\Models\Conversation;
@@ -17,9 +20,12 @@ use Modules\Crm\Models\Lead;
 use Modules\Crm\Models\LeadNote;
 use Modules\Crm\Services\LeadService;
 use Modules\Institutions\Models\Bot;
+use Modules\Notifications\Models\EmailAttachment;
 use Modules\Notifications\Models\EmailMessage;
 use Modules\Notifications\Models\EmailSender;
 use Modules\Notifications\Services\EmailDispatcher;
+use Modules\Notifications\Support\AttachmentValidator;
+use Modules\Notifications\Support\SentEmailRenderer;
 
 /**
  * Ficha de un lead: conversacion completa, datos personales (telefono completo con
@@ -32,6 +38,8 @@ use Modules\Notifications\Services\EmailDispatcher;
 #[Layout('layouts.app')]
 class Show extends Component
 {
+    use WithFileUploads;
+
     // Se guarda el ID (no el modelo) para no serializar el Eloquent en cada
     // round-trip de Livewire; el lead se recarga al usarlo (siempre bajo scope).
     public int $leadId;
@@ -54,7 +62,32 @@ class Show extends Component
 
     public string $emailSubject = '';
 
+    /** HTML del editor (contenteditable). Se SANITIZA en el servidor al enviar. */
     public string $emailBody = '';
+
+    /**
+     * Adjuntos en composición (archivos temporales de Livewire). Se validan en el
+     * SERVIDOR al enviar (tamaño/total/tipo), no solo en el navegador.
+     *
+     * @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>
+     */
+    public array $emailAttachments = [];
+
+    /** Subida puntual de una imagen inline (se procesa y se limpia enseguida). */
+    public mixed $inlineUpload = null;
+
+    /**
+     * Imágenes inline en composición (se embeben por CID al enviar) y sus cid.
+     *
+     * @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>
+     */
+    public array $inlineImages = [];
+
+    /** @var array<int, string> cid de cada imagen inline (mismo índice que inlineImages) */
+    public array $inlineCids = [];
+
+    /** Correo enviado que se está viendo en detalle (id de email_messages) o null. */
+    public ?int $viewingEmailId = null;
 
     public function mount(Lead $lead, AuditService $audit): void
     {
@@ -178,12 +211,54 @@ class Show extends Component
         $this->emailSenderId = (string) (EmailSender::query()->where('status', 'active')->orderBy('name')->value('id') ?? '');
         $this->emailSubject = '';
         $this->emailBody = '';
-        $this->resetErrorBag(['emailSenderId', 'emailSubject', 'emailBody']);
+        $this->emailAttachments = [];
+        $this->inlineImages = [];
+        $this->inlineCids = [];
+        $this->inlineUpload = null;
+        $this->resetErrorBag(['emailSenderId', 'emailSubject', 'emailBody', 'emailAttachments', 'inlineUpload']);
         $this->composeOpen = true;
     }
 
+    /** Quita un adjunto en composición. */
+    public function removeAttachment(int $index): void
+    {
+        unset($this->emailAttachments[$index]);
+        $this->emailAttachments = array_values($this->emailAttachments);
+    }
+
+    /**
+     * Al subir una imagen inline: se VALIDA en el servidor (imagen real + tamaño) y,
+     * si pasa, se inserta en el editor con su marca data-cid (se embeberá por CID al
+     * enviar). El navegador no es la barrera: la validación es server-side.
+     */
+    public function updatedInlineUpload(AttachmentValidator $validator): void
+    {
+        $file = $this->inlineUpload;
+        if (! $file instanceof TemporaryUploadedFile) {
+            return;
+        }
+
+        $error = $validator->imageError($file);
+        if ($error !== null) {
+            $this->addError('inlineUpload', $error);
+            $this->inlineUpload = null;
+
+            return;
+        }
+
+        $cid = 'img'.Str::random(20);
+        $this->inlineImages[] = $file;
+        $this->inlineCids[] = $cid;
+
+        // Inserta la imagen en el editor (preview con URL temporal + marca data-cid).
+        $this->dispatch('insert-inline-image', url: $file->temporaryUrl(), cid: $cid);
+
+        $this->inlineUpload = null;
+        $this->resetErrorBag('inlineUpload');
+    }
+
     /** Envia el correo por el SMTP del remitente ELEGIDO y lo registra en el historial. */
-    public function sendEmail(EmailDispatcher $dispatcher): void
+    public function sendEmail(EmailDispatcher $dispatcher, AttachmentValidator $attachments): void
     {
         $lead = $this->lead()->load('contact');
         abort_unless(auth()->user()?->canSendEmail() ?? false, 403);
@@ -199,12 +274,28 @@ class Show extends Component
                 },
             ],
             'emailSubject' => ['required', 'string', 'max:200'],
-            'emailBody' => ['required', 'string', 'max:20000'],
+            'emailBody' => ['required', 'string', 'max:100000'],
         ], [], [
             'emailSenderId' => 'remitente',
             'emailSubject' => 'asunto',
             'emailBody' => 'cuerpo',
         ]);
+
+        // El cuerpo debe tener contenido real (no solo etiquetas vacías del editor).
+        if (trim(strip_tags($this->emailBody)) === '') {
+            $this->addError('emailBody', 'Escribe el mensaje.');
+
+            return;
+        }
+
+        // Validación de ADJUNTOS en el SERVIDOR (tamaño/total/tipo): no se puede
+        // saltar el límite manipulando el navegador.
+        $attachErrors = $attachments->validate($this->emailAttachments);
+        if ($attachErrors !== []) {
+            $this->addError('emailAttachments', implode(' ', $attachErrors));
+
+            return;
+        }
 
         $contact = $lead->contact;
         if ($contact === null || (string) $contact->email === '') {
@@ -215,11 +306,33 @@ class Show extends Component
 
         $sender = EmailSender::query()->findOrFail((int) $this->emailSenderId);
 
-        $message = $dispatcher->send($sender, $contact, $lead->getKey(), auth()->user(), $this->emailSubject, $this->emailBody);
+        // Descriptores para el envío + el historial (nombre/tipo/tamaño reales).
+        $files = array_map(fn ($file): array => [
+            'path' => (string) $file->getRealPath(),
+            'name' => $file->getClientOriginalName(),
+            'mime' => (string) $file->getMimeType(),
+            'size' => (int) $file->getSize(),
+        ], $this->emailAttachments);
+
+        // Imágenes inline: cid => imagen. El embebedor solo usará las referenciadas
+        // en el cuerpo (las que el usuario dejó en el editor).
+        $inline = [];
+        foreach ($this->inlineImages as $i => $file) {
+            $cid = $this->inlineCids[$i] ?? null;
+            if ($cid !== null) {
+                $inline[$cid] = [
+                    'path' => (string) $file->getRealPath(),
+                    'mime' => (string) $file->getMimeType(),
+                    'size' => (int) $file->getSize(),
+                ];
+            }
+        }
+
+        $message = $dispatcher->send($sender, $contact, $lead->getKey(), auth()->user(), $this->emailSubject, $this->emailBody, $files, $inline);
 
         if ($message->status === 'sent') {
             $this->composeOpen = false;
-            $this->reset(['emailSubject', 'emailBody']);
+            $this->reset(['emailSubject', 'emailBody', 'emailAttachments', 'inlineImages', 'inlineCids', 'inlineUpload']);
             session()->flash('status', 'Correo enviado a '.$contact->email.' como '.$sender->from_address.'.');
         } else {
             // El intento fallido queda en el historial; se avisa sin romper la ficha.
@@ -237,10 +350,43 @@ class Show extends Component
         return EmailMessage::query()
             ->where('contact_id', $lead->contact_id)
             ->with('sentByUser:id,name')
+            ->withCount('files')
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit(20)
             ->get();
+    }
+
+    /** Abre un correo enviado para verlo tal como se envió (solo del contacto actual). */
+    public function openSentEmail(int $id): void
+    {
+        $exists = EmailMessage::query()
+            ->where('id', $id)
+            ->where('contact_id', $this->lead()->contact_id)
+            ->exists();
+
+        $this->viewingEmailId = $exists ? $id : null;
+    }
+
+    public function closeSentEmail(): void
+    {
+        $this->viewingEmailId = null;
+    }
+
+    /** Descarga un adjunto de un correo del contacto actual (gated + con scope). */
+    public function downloadAttachment(int $id): mixed
+    {
+        abort_unless(auth()->user()?->canWorkCrm() ?? false, 403);
+
+        $contactId = $this->lead()->contact_id;
+        $attachment = EmailAttachment::query()
+            ->where('id', $id)
+            ->whereHas('message', fn ($q) => $q->where('contact_id', $contactId))
+            ->firstOrFail();
+
+        abort_if($attachment->path === null || ! \Illuminate\Support\Facades\Storage::disk('local')->exists($attachment->path), 404);
+
+        return \Illuminate\Support\Facades\Storage::disk('local')->download($attachment->path, $attachment->filename);
     }
 
     public function transfer(LeadService $service): void
@@ -344,12 +490,31 @@ class Show extends Component
             ->first();
         $motivacion = is_array($matcherEvent?->event_data) ? ($matcherEvent->event_data['motivacion'] ?? null) : null;
 
+        // Detalle de un correo enviado (para "abrirlo y verlo tal como se envió").
+        $viewingEmail = null;
+        $viewingBody = null;
+        if ($this->viewingEmailId !== null) {
+            $viewingEmail = EmailMessage::query()
+                ->where('id', $this->viewingEmailId)
+                ->where('contact_id', $lead->contact_id)
+                ->with(['sentByUser:id,name', 'files', 'inlineImages'])
+                ->first();
+            if ($viewingEmail !== null) {
+                $viewingBody = app(SentEmailRenderer::class)->displayBody($viewingEmail);
+            }
+        }
+
         return view('crm::livewire.leads.show', [
             'lead' => $lead,
             'messages' => $this->conversationMessages($lead),
             'events' => $this->events($lead),
             'emails' => $this->emailHistory($lead),
+            'viewingEmail' => $viewingEmail,
+            'viewingBody' => $viewingBody,
             'senders' => EmailSender::query()->where('status', 'active')->orderBy('name')->get(),
+            'emailTags' => $lead->contact !== null
+                ? app(\Modules\Notifications\Support\TagResolver::class)->available($lead->contact, $lead)
+                : [],
             'statuses' => LeadStatus::cases(),
             'transferOptions' => $this->transferOptions($lead),
             'motivacion' => is_string($motivacion) ? $motivacion : null,

@@ -182,6 +182,27 @@ return [
     */
     'mail' => [
         'sender_domain' => (string) env('CRM_MAIL_SENDER_DOMAIN', 'mcaschool.education'),
+
+        // Adjuntos del editor de correo. Los limites y tipos se validan SIEMPRE en
+        // el servidor (el navegador es solo una comodidad, no una barrera).
+        'attachments' => [
+            'max_file_bytes' => (int) env('CRM_MAIL_ATTACH_MAX_FILE', 5 * 1024 * 1024),    // 5 MB por archivo
+            'max_total_bytes' => (int) env('CRM_MAIL_ATTACH_MAX_TOTAL', 15 * 1024 * 1024), // 15 MB en total
+            'max_count' => (int) env('CRM_MAIL_ATTACH_MAX_COUNT', 10),
+            // Tipos SEGUROS permitidos (extension + MIME real deben coincidir con esta lista).
+            'allowed_extensions' => ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'ppt', 'pptx'],
+            'allowed_mimes' => [
+                'application/pdf',
+                'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-powerpoint',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                'text/plain', 'text/csv',
+            ],
+        ],
     ],
 
     /*

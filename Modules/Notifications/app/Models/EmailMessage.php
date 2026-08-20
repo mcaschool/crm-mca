@@ -7,6 +7,7 @@ namespace Modules\Notifications\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
 use Modules\Notifications\Database\Factories\EmailMessageFactory;
 
@@ -75,6 +76,34 @@ class EmailMessage extends Model
     public function sentByUser(): BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class, 'sent_by_user_id');
+    }
+
+    /**
+     * @return HasMany<EmailAttachment, $this>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(EmailAttachment::class);
+    }
+
+    /**
+     * Adjuntos normales (no imágenes inline).
+     *
+     * @return HasMany<EmailAttachment, $this>
+     */
+    public function files(): HasMany
+    {
+        return $this->hasMany(EmailAttachment::class)->where('disposition', 'attachment');
+    }
+
+    /**
+     * Imágenes inline (embebidas por cid).
+     *
+     * @return HasMany<EmailAttachment, $this>
+     */
+    public function inlineImages(): HasMany
+    {
+        return $this->hasMany(EmailAttachment::class)->where('disposition', 'inline');
     }
 
     protected static function newFactory(): EmailMessageFactory
