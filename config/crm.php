@@ -174,6 +174,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Correo saliente con remitentes multiples (Fase 1)
+    |--------------------------------------------------------------------------
+    | Todos los remitentes son del MISMO dominio institucional. Cada remitente
+    | (email_senders) guarda sus propias credenciales SMTP cifradas. El dominio
+    | se valida al registrar un remitente.
+    */
+    'mail' => [
+        'sender_domain' => (string) env('CRM_MAIL_SENDER_DOMAIN', 'mcaschool.education'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Areas de microcredencial (filtro del CRM) — CONFIGURABLE
     |--------------------------------------------------------------------------
     | Lista de areas usada por el filtro de leads. No hardcodeada en el codigo:

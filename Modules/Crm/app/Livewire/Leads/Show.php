@@ -17,6 +17,9 @@ use Modules\Crm\Models\Lead;
 use Modules\Crm\Models\LeadNote;
 use Modules\Crm\Services\LeadService;
 use Modules\Institutions\Models\Bot;
+use Modules\Notifications\Models\EmailMessage;
+use Modules\Notifications\Models\EmailSender;
+use Modules\Notifications\Services\EmailDispatcher;
 
 /**
  * Ficha de un lead: conversacion completa, datos personales (telefono completo con
@@ -42,6 +45,16 @@ class Show extends Component
     public string $transferTarget = '';
 
     public bool $statusMenuOpen = false;
+
+    // --- Enviar correo desde la ficha ---
+    public bool $composeOpen = false;
+
+    /** Remitente ELEGIDO manualmente (id de email_senders). El sistema no elige solo. */
+    public string $emailSenderId = '';
+
+    public string $emailSubject = '';
+
+    public string $emailBody = '';
 
     public function mount(Lead $lead, AuditService $audit): void
     {
@@ -155,6 +168,81 @@ class Show extends Component
         session()->flash('status', __('Nota añadida.'));
     }
 
+    /** Abre el compositor de correo (permiso de envio: todos menos Marketing). */
+    public function openCompose(): void
+    {
+        abort_unless(auth()->user()?->canSendEmail() ?? false, 403);
+
+        // Remitente por defecto: el primero activo. El usuario puede cambiarlo; el
+        // sistema NUNCA elige solo (siempre es una seleccion manual explicita).
+        $this->emailSenderId = (string) (EmailSender::query()->where('status', 'active')->orderBy('name')->value('id') ?? '');
+        $this->emailSubject = '';
+        $this->emailBody = '';
+        $this->resetErrorBag(['emailSenderId', 'emailSubject', 'emailBody']);
+        $this->composeOpen = true;
+    }
+
+    /** Envia el correo por el SMTP del remitente ELEGIDO y lo registra en el historial. */
+    public function sendEmail(EmailDispatcher $dispatcher): void
+    {
+        $lead = $this->lead()->load('contact');
+        abort_unless(auth()->user()?->canSendEmail() ?? false, 403);
+
+        $this->validate([
+            'emailSenderId' => [
+                'required',
+                function (string $attr, mixed $value, callable $fail): void {
+                    $ok = EmailSender::query()->where('id', $value)->where('status', 'active')->exists();
+                    if (! $ok) {
+                        $fail('Elige un remitente válido.');
+                    }
+                },
+            ],
+            'emailSubject' => ['required', 'string', 'max:200'],
+            'emailBody' => ['required', 'string', 'max:20000'],
+        ], [], [
+            'emailSenderId' => 'remitente',
+            'emailSubject' => 'asunto',
+            'emailBody' => 'cuerpo',
+        ]);
+
+        $contact = $lead->contact;
+        if ($contact === null || (string) $contact->email === '') {
+            $this->addError('emailSubject', 'Este contacto no tiene correo.');
+
+            return;
+        }
+
+        $sender = EmailSender::query()->findOrFail((int) $this->emailSenderId);
+
+        $message = $dispatcher->send($sender, $contact, $lead->getKey(), auth()->user(), $this->emailSubject, $this->emailBody);
+
+        if ($message->status === 'sent') {
+            $this->composeOpen = false;
+            $this->reset(['emailSubject', 'emailBody']);
+            session()->flash('status', 'Correo enviado a '.$contact->email.' como '.$sender->from_address.'.');
+        } else {
+            // El intento fallido queda en el historial; se avisa sin romper la ficha.
+            $this->addError('emailBody', 'No se pudo enviar (revisa el SMTP del remitente). El intento quedó registrado en el historial.');
+        }
+    }
+
+    /**
+     * Historial de correos enviados a este contacto (mas recientes primero).
+     *
+     * @return Collection<int, EmailMessage>
+     */
+    private function emailHistory(Lead $lead): Collection
+    {
+        return EmailMessage::query()
+            ->where('contact_id', $lead->contact_id)
+            ->with('sentByUser:id,name')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get();
+    }
+
     public function transfer(LeadService $service): void
     {
         $lead = $this->lead();
@@ -260,12 +348,15 @@ class Show extends Component
             'lead' => $lead,
             'messages' => $this->conversationMessages($lead),
             'events' => $this->events($lead),
+            'emails' => $this->emailHistory($lead),
+            'senders' => EmailSender::query()->where('status', 'active')->orderBy('name')->get(),
             'statuses' => LeadStatus::cases(),
             'transferOptions' => $this->transferOptions($lead),
             'motivacion' => is_string($motivacion) ? $motivacion : null,
             'isTerminal' => $lead->status->isTerminal(),
             'phoneDisplay' => $this->formatPhone($lead->contact?->phone),
             'canAct' => auth()->user()?->can('update', $lead) ?? false,
+            'canEmail' => auth()->user()?->canSendEmail() ?? false,
         ]);
     }
 

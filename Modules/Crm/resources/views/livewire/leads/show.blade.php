@@ -58,6 +58,9 @@
                         </div>
                     @endif
 
+                    @if ($canEmail)
+                        <button type="button" class="ghost" wire:click="openCompose"><x-ui.icon name="mail" class="i14" /> Enviar correo</button>
+                    @endif
                     @if ($canAct)
                         <a href="#transfer" class="ghost"><x-ui.icon name="arrow-right-left" class="i14" /> Transferir</a>
                     @else
@@ -101,6 +104,61 @@
                         </div>
                         <div class="field"><x-ui.icon name="globe" class="i15" /><span class="k">País</span><span class="v">{{ $c->country ?: '—' }}</span></div>
                         <div class="locknote"><x-ui.icon name="lock" class="i13" /> Acceso a datos personales registrado en auditoría.</div>
+                    </div>
+
+                    {{-- Correo: enviar + historial --}}
+                    <div class="block" id="email">
+                        <h3><x-ui.icon name="mail" class="i14" /> Correo</h3>
+
+                        @if ($canEmail && ! $composeOpen)
+                            <button type="button" wire:click="openCompose" class="ghost" style="margin-bottom:10px"><x-ui.icon name="mail" class="i14" /> Enviar correo a {{ $first ?: 'este contacto' }}</button>
+                        @endif
+
+                        @if ($composeOpen)
+                            <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:12px">
+                                <label style="font-size:12px;color:var(--muted);font-weight:600">Enviar como</label>
+                                <select wire:model="emailSenderId" aria-label="Enviar como" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13.5px">
+                                    <option value="">— Elige un remitente —</option>
+                                    @foreach ($senders as $s)
+                                        <option value="{{ $s->id }}">{{ $s->name }} · {{ $s->from_address }}</option>
+                                    @endforeach
+                                </select>
+                                @error('emailSenderId') <span class="toast err" style="font-size:12px">{{ $message }}</span> @enderror
+                                @if ($senders->isEmpty())
+                                    <span style="font-size:12px;color:var(--muted)">No hay remitentes registrados. Pídele a un administrador que registre uno en Ajustes → Remitentes de correo.</span>
+                                @endif
+
+                                <input type="text" wire:model="emailSubject" maxlength="200" placeholder="Asunto" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13.5px">
+                                @error('emailSubject') <span class="toast err" style="font-size:12px">{{ $message }}</span> @enderror
+
+                                <textarea wire:model="emailBody" rows="6" maxlength="20000" placeholder="Escribe el mensaje…" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;resize:vertical"></textarea>
+                                @error('emailBody') <span class="toast err" style="font-size:12px">{{ $message }}</span> @enderror
+
+                                <div style="display:flex;gap:8px">
+                                    <button type="button" wire:click="sendEmail" wire:loading.attr="disabled" wire:target="sendEmail" class="ghost" style="font-weight:600">
+                                        <x-ui.icon name="mail" class="i14" /> Enviar
+                                        <span wire:loading wire:target="sendEmail">…</span>
+                                    </button>
+                                    <button type="button" wire:click="$set('composeOpen', false)" class="ghost">Cancelar</button>
+                                </div>
+                            </div>
+                        @endif
+
+                        <div style="font-size:12px;color:var(--muted);font-weight:600;margin:4px 0 6px">Correos enviados</div>
+                        @forelse ($emails as $em)
+                            <div style="border-top:1px solid var(--line);padding:8px 0" wire:key="email-{{ $em->id }}">
+                                <div style="font-size:13px;color:var(--ink);font-weight:600">{{ $em->subject }}
+                                    @if ($em->status !== 'sent')<span style="color:var(--mca-warn,#B4232A);font-weight:600;font-size:11.5px"> · falló</span>@endif
+                                </div>
+                                <div style="font-size:12px;color:var(--muted);margin-top:2px">
+                                    Como <b>{{ $em->from_name ?: $em->from_address }}</b> ({{ $em->from_address }})
+                                    · {{ ($em->sent_at ?? $em->created_at)?->translatedFormat('d M Y · H:i') }}
+                                    · por {{ $em->sentByUser?->name ?? 'Equipo' }}
+                                </div>
+                            </div>
+                        @empty
+                            <div class="conv-empty" style="font-size:12.5px">Aún no se han enviado correos.</div>
+                        @endforelse
                     </div>
 
                     {{-- 2 · Resultado del emparejador --}}

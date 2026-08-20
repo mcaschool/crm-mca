@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace Modules\Notifications\Providers;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Gate;
+use Livewire\Livewire;
+use Modules\Notifications\Livewire\EmailSenders\Manage as EmailSendersManage;
+use Modules\Notifications\Models\EmailSender;
+use Modules\Notifications\Policies\EmailSenderPolicy;
 use Nwidart\Modules\Support\ModuleServiceProvider;
 
 class NotificationsServiceProvider extends ModuleServiceProvider
@@ -18,6 +23,18 @@ class NotificationsServiceProvider extends ModuleServiceProvider
      * The lowercase version of the module name.
      */
     protected string $nameLower = 'notifications';
+
+    /**
+     * Autorizacion y componentes del panel del modulo.
+     */
+    public function boot(): void
+    {
+        parent::boot();
+
+        Gate::policy(EmailSender::class, EmailSenderPolicy::class);
+
+        Livewire::component('notifications.email-senders', EmailSendersManage::class);
+    }
 
     /**
      * Command classes to register.

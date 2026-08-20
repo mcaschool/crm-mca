@@ -201,6 +201,17 @@ class User extends Authenticatable
     }
 
     /**
+     * ¿Puede ENVIAR correo saliente desde la ficha? Todos los que trabajan el CRM
+     * MENOS Marketing (decision de negocio Fase 1): Administrador, Admisiones,
+     * Académico, Finanzas y Soporte SÍ; Marketing NO. Gestionar los remitentes
+     * (Ajustes) sigue siendo solo de Admin (canManageSettings).
+     */
+    public function canSendEmail(): bool
+    {
+        return $this->canWorkCrm() && $this->crmPersona() !== 'marketing';
+    }
+
+    /**
      * Persona del CRM: combina el rol (decision cerrada: 3 roles) con el
      * departamento para las dos variantes operativas basadas en area. Gobierna el
      * dashboard y el gating de acciones de forma consistente en todo el CRM.

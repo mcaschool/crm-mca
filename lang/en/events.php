@@ -29,4 +29,5 @@ return [
     'unresolved_question' => 'Unresolved question',
     'lead_transferred' => 'Follow-up transferred',
     'recontacted' => 'Reached out again',
+    'email_sent' => 'Email sent',
 ];

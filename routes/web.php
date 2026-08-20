@@ -110,6 +110,9 @@ $panel->group(function () {
     // Ajustes generales del panel (marca/logo institucional). Solo Administrador.
     Route::get('/ajustes', \Modules\Institutions\Livewire\Settings::class)->name('settings.index');
 
+    // Remitentes de correo saliente (Ajustes). Solo Administrador (gating en el componente).
+    Route::get('/ajustes/remitentes', \Modules\Notifications\Livewire\EmailSenders\Manage::class)->name('settings.email-senders');
+
     // Cambiador de institucion activa (solo super-admin; barandilla en el controlador).
     Route::post('/institution/switch', InstitutionSwitchController::class)->name('institution.switch');
 });

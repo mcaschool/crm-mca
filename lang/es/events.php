@@ -29,4 +29,5 @@ return [
     'unresolved_question' => 'Pregunta sin resolver',
     'lead_transferred' => 'Seguimiento transferido',
     'recontacted' => 'Volvió a contactar',
+    'email_sent' => 'Correo enviado',
 ];

@@ -83,6 +83,7 @@ class Event extends Model
             'unresolved_question' => 'sticky-note',
             'lead_transferred' => 'arrow-right-left',
             'recontacted' => 'bell',
+            'email_sent' => 'mail',
             default => 'activity',
         };
     }
@@ -130,6 +131,11 @@ class Event extends Model
         // Pregunta sin resolver: la pregunta textual (muy util para seguimiento).
         if (! empty($data['question']) && is_string($data['question'])) {
             return $data['question'];
+        }
+
+        // Correo enviado: el asunto.
+        if (! empty($data['subject']) && is_string($data['subject'])) {
+            return $data['subject'];
         }
 
         return null;
