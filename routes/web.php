@@ -113,6 +113,14 @@ $panel->group(function () {
     // Remitentes de correo saliente (Ajustes). Solo Administrador (gating en el componente).
     Route::get('/ajustes/remitentes', \Modules\Notifications\Livewire\EmailSenders\Manage::class)->name('settings.email-senders');
 
+    // Plantillas de correo COMPARTIDAS (Ajustes). Solo Administrador (gating en el componente).
+    Route::get('/ajustes/plantillas', \Modules\Notifications\Livewire\EmailTemplates\Manage::class)
+        ->defaults('scope', 'shared')->name('settings.email-templates');
+
+    // Plantillas de correo PROPIAS (privadas del usuario). Cualquiera que pueda enviar correo.
+    Route::get('/mis-plantillas', \Modules\Notifications\Livewire\EmailTemplates\Manage::class)
+        ->defaults('scope', 'mine')->name('email-templates.mine');
+
     // Cambiador de institucion activa (solo super-admin; barandilla en el controlador).
     Route::post('/institution/switch', InstitutionSwitchController::class)->name('institution.switch');
 });

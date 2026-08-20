@@ -133,3 +133,32 @@ it('envía con un adjunto válido y lo registra en el historial (nombre/tipo/tam
         expect($msg->attachments()->first()->filename)->toBe('foto.png');
     });
 });
+
+it('conserva la tipografía elegida (font face de la lista) y descarta las no permitidas', function () {
+    $s = new EmailHtmlSanitizer;
+
+    // Fuente permitida: sobrevive para que viaje en el correo.
+    expect($s->sanitize('<font face="Arial">Hola</font>'))->toContain('face="Arial"');
+    expect($s->sanitize('<font face="Times New Roman">Hola</font>'))->toContain('Times New Roman');
+
+    // Fuente no permitida / intento de inyección: se quita el face (queda inerte).
+    $evil = $s->sanitize('<font face="x; background:expression(alert(1))">Hola</font>');
+    expect($evil)->not->toContain('expression')->and($evil)->not->toContain('face=');
+    expect($s->sanitize('<font face="ComicSansMalicioso">Hola</font>'))->not->toContain('ComicSansMalicioso');
+});
+
+it('conserva el tamaño elegido (font size de la escala 1-7) y descarta valores fuera de lista o inyecciones', function () {
+    $s = new EmailHtmlSanitizer;
+
+    // Tamaño válido (escala HTML 1–7): sobrevive para que viaje en el correo.
+    expect($s->sanitize('<font size="2">Pequeño</font>'))->toContain('size="2"');
+    expect($s->sanitize('<font size="7">Título grande</font>'))->toContain('size="7"');
+
+    // Fuera de la escala: se quita el size (queda inerte).
+    expect($s->sanitize('<font size="8">X</font>'))->not->toContain('size=');
+    expect($s->sanitize('<font size="0">X</font>'))->not->toContain('size=');
+
+    // Intento de inyección en el valor: se quita el size, no queda rastro.
+    $evil = $s->sanitize('<font size="3px;background:expression(alert(1))">X</font>');
+    expect($evil)->not->toContain('expression')->and($evil)->not->toContain('size=');
+});

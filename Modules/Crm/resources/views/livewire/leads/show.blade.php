@@ -120,9 +120,9 @@
                                 style="display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:9px 2px;cursor:pointer">
                                 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
                                     <div style="font-size:13px;color:var(--ink);font-weight:600">{{ $em->subject }}
-                                        @if ($em->status !== 'sent')<span style="color:var(--mca-warn,#B4232A);font-weight:600;font-size:11.5px"> · falló</span>@endif
+                                        @if ($em->status !== 'sent')<span style="color:#B23B3B;font-weight:600;font-size:11.5px"> · falló</span>@endif
                                     </div>
-                                    <span style="font-size:11.5px;color:var(--mca,#1E5AA8);font-weight:600;white-space:nowrap">Abrir ›</span>
+                                    <span style="font-size:11.5px;color:var(--blue);font-weight:600;white-space:nowrap">Abrir ›</span>
                                 </div>
                                 <div style="font-size:12px;color:var(--muted);margin-top:2px">
                                     Como <b>{{ $em->from_name ?: $em->from_address }}</b>
@@ -219,8 +219,8 @@
     {{-- Editor de correo A PANTALLA COMPLETA --}}
     @if ($composeOpen)
         @php $att = config('crm.mail.attachments'); @endphp
-        <div style="position:fixed;inset:0;z-index:1000;background:rgba(19,37,61,.45);display:flex" wire:key="mail-overlay">
-            <div style="background:#fff;width:100%;max-width:860px;margin:auto;height:100%;display:flex;flex-direction:column;box-shadow:0 0 60px rgba(0,0,0,.35)">
+        <div style="position:fixed;inset:0;z-index:1000;background:rgba(19,37,61,.45);display:flex;align-items:center;justify-content:center;padding:24px" wire:key="mail-overlay">
+            <div style="background:#fff;width:100%;max-width:990px;max-height:92vh;height:auto;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;box-shadow:0 24px 70px -20px rgba(0,0,0,.5)">
                 {{-- Cabecera --}}
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 22px;border-bottom:1px solid var(--line)">
                     <div style="font-weight:700;font-size:16px;color:var(--ink)"><x-ui.icon name="mail" class="i16" /> Nuevo correo</div>
@@ -243,6 +243,32 @@
                         @endif
                     </div>
 
+                    @if (! $templates->isEmpty())
+                        <div>
+                            <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">Plantilla</label>
+                            <select aria-label="Plantilla" x-on:change="$wire.loadTemplate($event.target.value)"
+                                style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px">
+                                <option value="">— Redactar desde cero —</option>
+                                @php $shared = $templates->whereNull('user_id'); $mine = $templates->whereNotNull('user_id'); @endphp
+                                @if ($shared->isNotEmpty())
+                                    <optgroup label="Compartidas">
+                                        @foreach ($shared as $tpl)
+                                            <option value="{{ $tpl->id }}">{{ $tpl->name }}</option>
+                                        @endforeach
+                                    </optgroup>
+                                @endif
+                                @if ($mine->isNotEmpty())
+                                    <optgroup label="Mías">
+                                        @foreach ($mine as $tpl)
+                                            <option value="{{ $tpl->id }}">{{ $tpl->name }}</option>
+                                        @endforeach
+                                    </optgroup>
+                                @endif
+                            </select>
+                            <div style="font-size:12px;color:var(--muted);margin-top:4px">Carga asunto y cuerpo; puedes ajustarlo antes de enviar. Las etiquetas se rellenan al enviar.</div>
+                        </div>
+                    @endif
+
                     <div style="font-size:13px;color:var(--muted)">Para: <b style="color:var(--ink)">{{ $c->email ?? '—' }}</b></div>
 
                     <input type="text" wire:model="emailSubject" maxlength="200" placeholder="Asunto" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px">
@@ -250,8 +276,9 @@
 
                     {{-- Editor: toolbar + contenteditable. wire:ignore para que Livewire no lo re-pinte. --}}
                     <div wire:ignore
-                        x-data="{ tagsOpen: false, caret(ed){ ed.focus(); const s=window.getSelection(); if(!s.rangeCount || !ed.contains(s.anchorNode)){ const r=document.createRange(); r.selectNodeContents(ed); r.collapse(false); s.removeAllRanges(); s.addRange(r);} }, insertTag(t){ const ed=this.$refs.ed; this.caret(ed); document.execCommand('insertText',false,'['+t+']'); ed.dispatchEvent(new Event('input')); this.tagsOpen=false; }, insertImage(d){ if(!d||!d.url||!d.cid) return; const ed=this.$refs.ed; this.caret(ed); document.execCommand('insertHTML',false,'<img src=\''+d.url+'\' data-cid=\''+d.cid+'\' style=\'max-width:100%;height:auto\'><br>'); ed.dispatchEvent(new Event('input')); } }"
+                        x-data="{ tagsOpen: false, savedRange: null, caret(ed){ ed.focus(); const s=window.getSelection(); if(!s.rangeCount || !ed.contains(s.anchorNode)){ const r=document.createRange(); r.selectNodeContents(ed); r.collapse(false); s.removeAllRanges(); s.addRange(r);} }, saveSel(){ const s=window.getSelection(); if(s.rangeCount && this.$refs.ed.contains(s.anchorNode)) this.savedRange = s.getRangeAt(0).cloneRange(); }, applyFont(f){ if(!f) return; const ed=this.$refs.ed; ed.focus(); if(this.savedRange){ const s=window.getSelection(); s.removeAllRanges(); s.addRange(this.savedRange); } document.execCommand('fontName',false,f); ed.dispatchEvent(new Event('input')); }, applySize(v){ if(!v) return; const ed=this.$refs.ed; ed.focus(); if(this.savedRange){ const s=window.getSelection(); s.removeAllRanges(); s.addRange(this.savedRange); } document.execCommand('fontSize',false,v); ed.dispatchEvent(new Event('input')); }, insertTag(t){ const ed=this.$refs.ed; this.caret(ed); document.execCommand('insertText',false,'['+t+']'); ed.dispatchEvent(new Event('input')); this.tagsOpen=false; }, insertImage(d){ if(!d||!d.url||!d.cid) return; const ed=this.$refs.ed; this.caret(ed); document.execCommand('insertHTML',false,'<img src=\''+d.url+'\' data-cid=\''+d.cid+'\' style=\'max-width:100%;height:auto\'><br>'); ed.dispatchEvent(new Event('input')); } }"
                         x-on:insert-inline-image.window="insertImage($event.detail)"
+                        x-on:load-template.window="$refs.ed.innerHTML = $event.detail.html || ''; $refs.ed.dispatchEvent(new Event('input'))"
                         style="border:1px solid var(--line);border-radius:10px;overflow:hidden">
                         <div style="display:flex;gap:2px;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--soft,#F1F6FC);flex-wrap:wrap;align-items:center">
                             @php
@@ -260,6 +287,28 @@
                             <button type="button" title="Negrita" onmousedown="event.preventDefault()" x-on:click="document.execCommand('bold'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }};font-weight:700">B</button>
                             <button type="button" title="Cursiva" onmousedown="event.preventDefault()" x-on:click="document.execCommand('italic'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }};font-style:italic">I</button>
                             <button type="button" title="Subrayado" onmousedown="event.preventDefault()" x-on:click="document.execCommand('underline'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }};text-decoration:underline">U</button>
+                            <span style="width:1px;background:var(--line);margin:2px 4px"></span>
+                            <select title="Tipografía" aria-label="Tipografía"
+                                x-on:mousedown="saveSel()"
+                                x-on:change="applyFont($event.target.value); $event.target.selectedIndex=0"
+                                style="height:28px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:12.5px;color:var(--ink);padding:0 6px;cursor:pointer">
+                                <option value="">Fuente</option>
+                                <option value="Arial" style="font-family:Arial">Arial</option>
+                                <option value="Georgia" style="font-family:Georgia">Georgia</option>
+                                <option value="Verdana" style="font-family:Verdana">Verdana</option>
+                                <option value="Times New Roman" style="font-family:'Times New Roman'">Times New Roman</option>
+                            </select>
+                            <select title="Tamaño de texto" aria-label="Tamaño de texto"
+                                x-on:mousedown="saveSel()"
+                                x-on:change="applySize($event.target.value); $event.target.selectedIndex=0"
+                                style="height:28px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:12.5px;color:var(--ink);padding:0 6px;cursor:pointer">
+                                <option value="">Tamaño</option>
+                                <option value="2">Pequeño</option>
+                                <option value="3">Normal</option>
+                                <option value="4">Grande</option>
+                                <option value="6">Título</option>
+                                <option value="7">Título grande</option>
+                            </select>
                             <span style="width:1px;background:var(--line);margin:2px 4px"></span>
                             <button type="button" title="Lista con viñetas" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertUnorderedList'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }}">• —</button>
                             <button type="button" title="Lista numerada" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertOrderedList'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }}">1.</button>
@@ -286,6 +335,7 @@
                         </div>
                         <div contenteditable="true" id="mailEditorBody" x-ref="ed" class="mailbody-ed" data-ph="Escribe el mensaje…"
                             x-on:input="$wire.set('emailBody', $refs.ed.innerHTML, false)"
+                            x-on:mouseup="saveSel()" x-on:keyup="saveSel()"
                             x-on:blur="$wire.set('emailBody', $refs.ed.innerHTML, false)"
                             style="min-height:240px;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;color:var(--ink)"></div>
                     </div>
@@ -301,7 +351,9 @@
                         <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">
                             Adjuntos <span style="font-weight:400">· máx {{ round($att['max_file_bytes'] / 1048576) }} MB por archivo, {{ round($att['max_total_bytes'] / 1048576) }} MB en total</span>
                         </label>
-                        <input type="file" wire:model="emailAttachments" multiple accept=".{{ implode(',.', $att['allowed_extensions']) }}" style="font-size:13px">
+                        <label class="ghost" style="cursor:pointer"><x-ui.icon name="upload" class="i14" /> Adjuntar archivos
+                            <input type="file" wire:model="emailAttachments" multiple accept=".{{ implode(',.', $att['allowed_extensions']) }}" style="display:none">
+                        </label>
                         <div wire:loading wire:target="emailAttachments" style="font-size:12.5px;color:var(--muted);margin-top:4px"><span class="mca-spin"></span> Subiendo…</div>
                         @error('emailAttachments') <div class="toast err" style="font-size:12.5px;margin-top:4px">{{ $message }}</div> @enderror
                         @error('emailAttachments.*') <div class="toast err" style="font-size:12.5px;margin-top:4px">{{ $message }}</div> @enderror
@@ -320,9 +372,9 @@
                 </div>
 
                 {{-- Pie --}}
-                <div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--line)">
-                    <button type="button" wire:click="$set('composeOpen', false)" class="btn btn-ghost">Cancelar</button>
-                    <button type="button" wire:click="sendEmail" wire:loading.attr="disabled" wire:target="sendEmail,emailAttachments" class="btn btn-primary">
+                <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;padding:14px 22px;border-top:1px solid var(--line)">
+                    <button type="button" wire:click="$set('composeOpen', false)" class="ghost">Cancelar</button>
+                    <button type="button" wire:click="sendEmail" wire:loading.attr="disabled" wire:target="sendEmail,emailAttachments" class="ghost solid">
                         <x-ui.icon name="mail" class="i14" /> Enviar
                         <span wire:loading wire:target="sendEmail">…</span>
                     </button>
@@ -334,13 +386,13 @@
 
     {{-- Ver un correo ENVIADO tal como se envió --}}
     @if ($viewingEmail)
-        <div style="position:fixed;inset:0;z-index:1000;background:rgba(19,37,61,.45);display:flex" wire:key="sent-overlay-{{ $viewingEmail->id }}">
-            <div style="background:#fff;width:100%;max-width:800px;margin:auto;height:100%;display:flex;flex-direction:column;box-shadow:0 0 60px rgba(0,0,0,.35)">
+        <div style="position:fixed;inset:0;z-index:1000;background:rgba(19,37,61,.45);display:flex;align-items:center;justify-content:center;padding:24px" wire:key="sent-overlay-{{ $viewingEmail->id }}">
+            <div style="background:#fff;width:100%;max-width:800px;max-height:92vh;height:auto;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;box-shadow:0 24px 70px -20px rgba(0,0,0,.5)">
                 {{-- Cabecera --}}
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:16px 22px;border-bottom:1px solid var(--line)">
                     <div>
                         <div style="font-weight:700;font-size:16px;color:var(--ink)">{{ $viewingEmail->subject }}
-                            @if ($viewingEmail->status !== 'sent')<span style="color:var(--mca-warn,#B4232A);font-size:12px;font-weight:600"> · falló</span>@endif
+                            @if ($viewingEmail->status !== 'sent')<span style="color:#B23B3B;font-size:12px;font-weight:600"> · falló</span>@endif
                         </div>
                         <div style="font-size:12.5px;color:var(--muted);margin-top:4px">
                             <b style="color:var(--ink)">{{ $viewingEmail->from_name ?: $viewingEmail->from_address }}</b> &lt;{{ $viewingEmail->from_address }}&gt;
@@ -366,7 +418,7 @@
                                 @foreach ($viewingEmail->files as $file)
                                     <button type="button" wire:click="downloadAttachment({{ $file->id }})" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 11px;background:#fff;cursor:pointer">
                                         <span><x-ui.icon name="file-text" class="i14" /> {{ $file->filename }} <span style="color:var(--muted)">· {{ number_format($file->size / 1024) }} KB</span></span>
-                                        <span style="color:var(--mca,#1E5AA8);font-weight:600;white-space:nowrap"><x-ui.icon name="download" class="i13" /> Descargar</span>
+                                        <span style="color:var(--blue);font-weight:600;white-space:nowrap"><x-ui.icon name="download" class="i13" /> Descargar</span>
                                     </button>
                                 @endforeach
                             </div>
@@ -375,10 +427,10 @@
                 </div>
 
                 <div style="display:flex;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--line)">
-                    <button type="button" wire:click="closeSentEmail" class="btn btn-ghost">Cerrar</button>
+                    <button type="button" wire:click="closeSentEmail" class="ghost">Cerrar</button>
                 </div>
             </div>
         </div>
-        <style>.sent-body img{max-width:100%;height:auto}.sent-body a{color:var(--mca,#1E5AA8)}.sent-body ul,.sent-body ol{padding-left:22px}</style>
+        <style>.sent-body img{max-width:100%;height:auto}.sent-body a{color:var(--blue)}.sent-body ul,.sent-body ol{padding-left:22px}</style>
     @endif
 </div>

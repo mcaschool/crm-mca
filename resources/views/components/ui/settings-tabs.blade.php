@@ -9,6 +9,7 @@
     $tabs = [
         ['label' => 'General', 'route' => 'settings.index'],
         ['label' => 'Remitentes de correo', 'route' => 'settings.email-senders'],
+        ['label' => 'Plantillas de correo', 'route' => 'settings.email-templates'],
     ];
 @endphp
 <div class="mca-head">

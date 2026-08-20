@@ -23,9 +23,11 @@ use Modules\Institutions\Models\Bot;
 use Modules\Notifications\Models\EmailAttachment;
 use Modules\Notifications\Models\EmailMessage;
 use Modules\Notifications\Models\EmailSender;
+use Modules\Notifications\Models\EmailTemplate;
 use Modules\Notifications\Services\EmailDispatcher;
 use Modules\Notifications\Support\AttachmentValidator;
 use Modules\Notifications\Support\SentEmailRenderer;
+use Modules\Notifications\Support\TemplateBodyImages;
 
 /**
  * Ficha de un lead: conversacion completa, datos personales (telefono completo con
@@ -85,6 +87,14 @@ class Show extends Component
 
     /** @var array<int, string> cid de cada imagen inline (mismo índice que inlineImages) */
     public array $inlineCids = [];
+
+    /**
+     * Imágenes inline provenientes de una PLANTILLA cargada (ya persistidas en disco).
+     * Se rehidratan al embebido por CID al enviar, para que viajen dentro del correo.
+     *
+     * @var array<string, array{path: string, mime: string, size: int}> cid => imagen
+     */
+    public array $templateInline = [];
 
     /** Correo enviado que se está viendo en detalle (id de email_messages) o null. */
     public ?int $viewingEmailId = null;
@@ -214,9 +224,45 @@ class Show extends Component
         $this->emailAttachments = [];
         $this->inlineImages = [];
         $this->inlineCids = [];
+        $this->templateInline = [];
         $this->inlineUpload = null;
         $this->resetErrorBag(['emailSenderId', 'emailSubject', 'emailBody', 'emailAttachments', 'inlineUpload']);
         $this->composeOpen = true;
+    }
+
+    /**
+     * Carga una PLANTILLA en el compositor: pone asunto + cuerpo (con sus imágenes) en
+     * el editor para que el asesor lo ajuste. Solo se cargan plantillas que el usuario
+     * puede USAR (compartidas del equipo o propias suyas); las etiquetas dinámicas se
+     * resuelven al enviar, como siempre. Reemplaza el contenido actual del compositor.
+     */
+    public function loadTemplate(string $id, TemplateBodyImages $images): void
+    {
+        abort_unless(auth()->user()?->canSendEmail() ?? false, 403);
+
+        if ($id === '') {
+            return;
+        }
+
+        $template = EmailTemplate::query()
+            ->usableBy((int) auth()->id())
+            ->where('status', 'active')
+            ->find((int) $id);
+
+        if ($template === null) {
+            return; // inexistente, de otro usuario o inactiva: no se carga (sin filtrar)
+        }
+        $this->authorize('view', $template);
+
+        // Cuerpo con las imágenes visibles (data-URI solo para el editor); al enviar se
+        // sanitiza (queda <img data-cid>) y las imágenes se embeben por CID.
+        $display = $images->displayBody($template);
+        $this->emailSubject = (string) $template->subject;
+        $this->emailBody = $display;
+        $this->templateInline = $images->inlineMap($template);
+
+        // Reinyecta el cuerpo en el editor (wire:ignore): Livewire no lo repinta solo.
+        $this->dispatch('load-template', html: $display);
     }
 
     /** Quita un adjunto en composición. */
@@ -328,11 +374,17 @@ class Show extends Component
             }
         }
 
+        // Imágenes que vinieron de una plantilla (ya persistidas): se rehidratan al
+        // embebido por CID. El embebedor solo usa las que sigan referenciadas en el cuerpo.
+        foreach ($this->templateInline as $cid => $img) {
+            $inline[$cid] = $img;
+        }
+
         $message = $dispatcher->send($sender, $contact, $lead->getKey(), auth()->user(), $this->emailSubject, $this->emailBody, $files, $inline);
 
         if ($message->status === 'sent') {
             $this->composeOpen = false;
-            $this->reset(['emailSubject', 'emailBody', 'emailAttachments', 'inlineImages', 'inlineCids', 'inlineUpload']);
+            $this->reset(['emailSubject', 'emailBody', 'emailAttachments', 'inlineImages', 'inlineCids', 'inlineUpload', 'templateInline']);
             session()->flash('status', 'Correo enviado a '.$contact->email.' como '.$sender->from_address.'.');
         } else {
             // El intento fallido queda en el historial; se avisa sin romper la ficha.
@@ -512,6 +564,10 @@ class Show extends Component
             'viewingEmail' => $viewingEmail,
             'viewingBody' => $viewingBody,
             'senders' => EmailSender::query()->where('status', 'active')->orderBy('name')->get(),
+            // Plantillas que este usuario puede USAR al redactar: compartidas + propias.
+            'templates' => auth()->user()?->canSendEmail()
+                ? EmailTemplate::query()->usableBy((int) auth()->id())->where('status', 'active')->orderBy('name')->get()
+                : collect(),
             'emailTags' => $lead->contact !== null
                 ? app(\Modules\Notifications\Support\TagResolver::class)->available($lead->contact, $lead)
                 : [],

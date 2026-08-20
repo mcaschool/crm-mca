@@ -24,7 +24,7 @@ class EmailHtmlSanitizer
     /** Etiquetas de formato permitidas. */
     private const ALLOWED_TAGS = [
         'p', 'br', 'div', 'span', 'strong', 'b', 'em', 'i', 'u', 's', 'strike',
-        'a', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'blockquote', 'hr', 'img',
+        'a', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'blockquote', 'hr', 'img', 'font',
     ];
 
     /** Atributos permitidos por etiqueta (el resto se elimina). */
@@ -33,10 +33,21 @@ class EmailHtmlSanitizer
         // La imagen inline solo conserva su marca `data-cid` (y alt); el src NO se
         // acepta del editor: lo fija el servidor a cid:… al embeber (ver embebedor).
         'img' => ['data-cid', 'alt'],
+        // Tipografía: <font face="..." size="..."> con la fuente/tamaño elegidos
+        // (ambos validados contra su lista blanca antes de conservarlos).
+        'font' => ['face', 'size'],
     ];
 
     /** Atributos que son URL y deben validarse como enlace seguro. */
     private const URL_ATTRS = ['href'];
+
+    /** Fuentes web-safe permitidas para <font face> (se rinden en Gmail/Outlook). */
+    private const ALLOWED_FONTS = [
+        'Arial', 'Georgia', 'Verdana', 'Times New Roman', 'Helvetica', 'Tahoma', 'Courier New', 'Trebuchet MS',
+    ];
+
+    /** Tamaños permitidos para <font size> (escala HTML 1–7; lo que emite fontSize). */
+    private const ALLOWED_SIZES = ['1', '2', '3', '4', '5', '6', '7'];
 
     /** Contenedores peligrosos: se eliminan CON su contenido. */
     private const DANGEROUS_TAGS = [
@@ -127,6 +138,18 @@ class EmailHtmlSanitizer
                 if (in_array($name, self::URL_ATTRS, true) && ! $this->safeHref(trim($attr->nodeValue ?? ''))) {
                     $child->removeAttribute($attr->nodeName);
                 }
+            }
+
+            // Tipografía: solo se admite una fuente de la lista blanca.
+            if ($tag === 'font' && $child->hasAttribute('face')
+                && ! in_array(trim($child->getAttribute('face')), self::ALLOWED_FONTS, true)) {
+                $child->removeAttribute('face');
+            }
+
+            // Tamaño: solo se admite un valor de la escala HTML 1–7.
+            if ($tag === 'font' && $child->hasAttribute('size')
+                && ! in_array(trim($child->getAttribute('size')), self::ALLOWED_SIZES, true)) {
+                $child->removeAttribute('size');
             }
 
             // Los enlaces que sobreviven abren en pestaña nueva y sin fuga de opener.

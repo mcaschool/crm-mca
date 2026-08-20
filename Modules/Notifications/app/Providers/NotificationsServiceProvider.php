@@ -8,8 +8,11 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Modules\Notifications\Livewire\EmailSenders\Manage as EmailSendersManage;
+use Modules\Notifications\Livewire\EmailTemplates\Manage as EmailTemplatesManage;
 use Modules\Notifications\Models\EmailSender;
+use Modules\Notifications\Models\EmailTemplate;
 use Modules\Notifications\Policies\EmailSenderPolicy;
+use Modules\Notifications\Policies\EmailTemplatePolicy;
 use Nwidart\Modules\Support\ModuleServiceProvider;
 
 class NotificationsServiceProvider extends ModuleServiceProvider
@@ -32,8 +35,10 @@ class NotificationsServiceProvider extends ModuleServiceProvider
         parent::boot();
 
         Gate::policy(EmailSender::class, EmailSenderPolicy::class);
+        Gate::policy(EmailTemplate::class, EmailTemplatePolicy::class);
 
         Livewire::component('notifications.email-senders', EmailSendersManage::class);
+        Livewire::component('notifications.email-templates', EmailTemplatesManage::class);
     }
 
     /**

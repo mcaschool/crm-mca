@@ -88,6 +88,31 @@ class TagResolver
     }
 
     /**
+     * Catálogo GENÉRICO de etiquetas (todas, sin depender de un destinatario). Se usa
+     * al REDACTAR una plantilla, donde aún no hay contacto: la etiqueta se resolverá al
+     * enviar. Cada entrada trae una pista legible de qué dato inserta.
+     *
+     * @return array<int, array{tag: string, hint: string}>
+     */
+    public function catalog(): array
+    {
+        $hints = [
+            'Nombre' => 'Nombre del contacto',
+            'Nombre completo' => 'Nombre y apellidos',
+            'Correo' => 'Correo del contacto',
+            'Área' => 'Área de interés',
+            'Programa' => 'Programa de interés',
+        ];
+
+        $out = [];
+        foreach (array_keys(self::TAGS) as $tag) {
+            $out[] = ['tag' => $tag, 'hint' => $hints[$tag]];
+        }
+
+        return $out;
+    }
+
+    /**
      * Reemplaza las etiquetas en HTML (valores ESCAPADOS).
      *
      * @param  array<string, string>  $map

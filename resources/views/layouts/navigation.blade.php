@@ -54,6 +54,11 @@
                     <x-ui.icon name="contact" /> {{ __('Contactos') }}
                 </a>
             @endcan
+            @if (auth()->user()?->canSendEmail())
+                <a href="{{ route('email-templates.mine') }}" class="mca-nav-item {{ request()->routeIs('email-templates.mine') ? 'on' : '' }}">
+                    <x-ui.icon name="mail" /> {{ __('Mis plantillas') }}
+                </a>
+            @endif
         </div>
 
         <div class="mca-nav-group">
