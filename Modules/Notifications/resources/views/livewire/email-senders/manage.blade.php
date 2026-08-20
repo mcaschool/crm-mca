@@ -2,10 +2,12 @@
     <x-ui.styles />
     <div class="mca-panel" style="padding:22px 26px 34px;max-width:900px">
 
-        <div class="mca-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <x-ui.settings-tabs />
+
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
             <div>
-                <h1 class="mca-h1" style="margin:0">Remitentes de correo</h1>
-                <p class="mca-sub" style="margin:4px 0 0">Direcciones desde las que el equipo puede enviar correo. Cada una usa su propio SMTP (credenciales cifradas). Todas del dominio <code>@{{ $domain }}</code>.</p>
+                <h2 class="mca-h1" style="font-size:16px;margin:0">Remitentes de correo</h2>
+                <p class="mca-sub" style="margin:4px 0 0">Direcciones desde las que el equipo puede enviar correo. Cada una usa su propio SMTP (credenciales cifradas). Todas del dominio <code>{{ '@'.$domain }}</code>.</p>
             </div>
             @unless ($showForm)
                 <button type="button" wire:click="newSender" class="btn btn-primary"><x-ui.icon name="plus" /> Nuevo remitente</button>
@@ -29,8 +31,8 @@
                         <div class="mca-help">Aparece como el “De” del correo.</div>
                     </div>
                     <div class="field" style="flex:1;min-width:220px">
-                        <label>Dirección (@{{ $domain }})</label>
-                        <input type="email" wire:model="from_address" maxlength="190" placeholder="finanzas@{{ $domain }}">
+                        <label>Dirección ({{ '@'.$domain }})</label>
+                        <input type="email" wire:model="from_address" maxlength="190" placeholder="{{ 'finanzas@'.$domain }}">
                         @error('from_address') <span class="mca-err">{{ $message }}</span> @enderror
                     </div>
                 </div>
@@ -62,7 +64,7 @@
                 <div style="display:flex;gap:14px;flex-wrap:wrap">
                     <div class="field" style="flex:1;min-width:220px">
                         <label>Usuario SMTP</label>
-                        <input type="text" wire:model="username" maxlength="190" autocomplete="off" placeholder="finanzas@{{ $domain }}">
+                        <input type="text" wire:model="username" maxlength="190" autocomplete="off" placeholder="{{ 'finanzas@'.$domain }}">
                         @error('username') <span class="mca-err">{{ $message }}</span> @enderror
                     </div>
                     <div class="field" style="flex:1;min-width:220px">

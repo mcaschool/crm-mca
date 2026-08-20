@@ -1,12 +1,7 @@
 <div>
     <x-ui.styles />
     <div class="mca-panel" style="padding:22px 26px 34px">
-        <div class="mca-head">
-            <div>
-                <h1 class="mca-h1">Ajustes</h1>
-                <p class="mca-sub">Marca del panel. El logo aparece arriba a la izquierda; si no subes uno, se usa la marca por defecto.</p>
-            </div>
-        </div>
+        <x-ui.settings-tabs />
 
         @if (session('status'))
             <div class="mca-toast ok fade"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>

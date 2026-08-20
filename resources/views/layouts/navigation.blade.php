@@ -82,11 +82,8 @@
                 </a>
             @endcan
             @if (auth()->user()?->canManageSettings())
-                <a href="{{ route('settings.index') }}" class="mca-nav-item {{ request()->routeIs('settings.index') ? 'on' : '' }}">
+                <a href="{{ route('settings.index') }}" class="mca-nav-item {{ request()->routeIs('settings.*') ? 'on' : '' }}">
                     <x-ui.icon name="user-cog" /> {{ __('Ajustes') }}
-                </a>
-                <a href="{{ route('settings.email-senders') }}" class="mca-nav-item {{ request()->routeIs('settings.email-senders') ? 'on' : '' }}">
-                    <x-ui.icon name="mail" /> {{ __('Remitentes de correo') }}
                 </a>
             @endif
         </div>
