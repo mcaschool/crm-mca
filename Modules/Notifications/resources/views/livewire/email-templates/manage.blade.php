@@ -1,6 +1,6 @@
 <div>
     <x-ui.styles />
-    <style>.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed img{max-width:100%;height:auto}[x-cloak]{display:none!important}</style>
+    <style>.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed img{max-width:100%;height:auto}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
     <div class="mca-panel" style="padding:22px 26px 34px;max-width:900px">
 
         @if ($scope === 'shared')

@@ -381,7 +381,7 @@
                 </div>
             </div>
         </div>
-        <style>.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}[x-cloak]{display:none!important}</style>
+        <style>.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
     @endif
 
     {{-- Ver un correo ENVIADO tal como se envió --}}
@@ -431,6 +431,6 @@
                 </div>
             </div>
         </div>
-        <style>.sent-body img{max-width:100%;height:auto}.sent-body a{color:var(--blue)}.sent-body ul,.sent-body ol{padding-left:22px}</style>
+        <style>.sent-body img{max-width:100%;height:auto}.sent-body a{color:var(--blue)}.sent-body ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.sent-body ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.sent-body li{margin:.2em 0}</style>
     @endif
 </div>

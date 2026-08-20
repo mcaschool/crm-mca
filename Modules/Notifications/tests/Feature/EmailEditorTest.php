@@ -134,6 +134,14 @@ it('envía con un adjunto válido y lo registra en el historial (nombre/tipo/tam
     });
 });
 
+it('conserva las listas (ul/ol/li) del editor al sanitizar y enviar', function () {
+    $s = new EmailHtmlSanitizer;
+
+    $out = $s->sanitize('<ul><li>uno</li><li>dos</li></ul><ol><li>a</li></ol>');
+    expect($out)->toContain('<ul>')->toContain('<ol>')
+        ->and(substr_count($out, '<li>'))->toBe(3);
+});
+
 it('conserva la tipografía elegida (font face de la lista) y descarta las no permitidas', function () {
     $s = new EmailHtmlSanitizer;
 
