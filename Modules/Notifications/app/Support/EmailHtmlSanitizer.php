@@ -207,6 +207,23 @@ class EmailHtmlSanitizer
                 $child->removeAttribute('size');
             }
 
+            // Imagen: los atributos width/height se PLASMAN en estilo inline. Así la
+            // dimensión intencional gana sobre el reset global img{height:auto} (Tailwind)
+            // y se ve igual en el editor, la vista previa y el correo (Gmail/Outlook).
+            if ($tag === 'img') {
+                $dims = '';
+                foreach (['width', 'height'] as $dim) {
+                    $v = trim($child->getAttribute($dim));
+                    if (preg_match('/^\d{1,4}%?$/', $v)) {
+                        $dims .= $dim.':'.$v.(str_ends_with($v, '%') ? '' : 'px').';';
+                    }
+                }
+                if ($dims !== '') {
+                    // Las dimensiones van primero: un style inline explícito del diseño las pisa.
+                    $child->setAttribute('style', $dims.$child->getAttribute('style'));
+                }
+            }
+
             // Los enlaces que sobreviven abren en pestaña nueva y sin fuga de opener.
             if ($tag === 'a' && $child->hasAttribute('href')) {
                 $child->setAttribute('target', '_blank');

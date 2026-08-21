@@ -71,6 +71,18 @@ it('conserva imágenes de banner por https y data:image; descarta http y javascr
     expect($js)->not->toContain('javascript:');
 });
 
+it('vuelca width/height de la imagen a estilo inline (para no deformarse con el reset img{height:auto})', function () {
+    $s = new EmailHtmlSanitizer;
+
+    $out = $s->sanitize('<img src="https://cdn.mca/logo.png" width="250" height="80" alt="logo">');
+    expect($out)->toContain('width:250px')->toContain('height:80px');
+
+    // Porcentajes válidos; un estilo explícito del diseño mantiene prioridad (va después).
+    expect($s->sanitize('<img src="https://cdn.mca/x.png" width="100%">'))->toContain('width:100%');
+    // Valor no numérico en el atributo no se vuelca (no rompe el estilo).
+    expect($s->sanitize('<img src="https://cdn.mca/x.png" width="foo">'))->not->toContain('width:foo');
+});
+
 // -------------------- (b) MALICIOSO: se neutraliza --------------------
 
 it('neutraliza script, on* (onclick/onerror), javascript: e iframe aunque vengan del modo código', function () {

@@ -219,7 +219,8 @@
     {{-- Editor de correo A PANTALLA COMPLETA --}}
     @if ($composeOpen)
         @php $att = config('crm.mail.attachments'); @endphp
-        <div style="position:fixed;inset:0;z-index:1000;background:rgba(19,37,61,.45);display:flex;align-items:center;justify-content:center;padding:24px" wire:key="mail-overlay">
+        <div x-data="{ destroy(){ document.body.style.overflow='' } }" x-init="document.body.style.overflow='hidden'"
+            style="position:fixed;inset:0;z-index:1000;background:rgba(19,37,61,.45);display:flex;align-items:center;justify-content:center;padding:24px" wire:key="mail-overlay">
             <div style="background:#fff;width:100%;max-width:990px;max-height:92vh;height:auto;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;box-shadow:0 24px 70px -20px rgba(0,0,0,.5)">
                 {{-- Cabecera --}}
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 22px;border-bottom:1px solid var(--line)">
@@ -292,7 +293,7 @@
                             <select title="Tipografía" aria-label="Tipografía"
                                 x-on:mousedown="saveSel()"
                                 x-on:change="applyFont($event.target.value); $event.target.selectedIndex=0"
-                                style="height:28px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:12.5px;color:var(--ink);padding:0 6px;cursor:pointer">
+                                style="height:28px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:12.5px;color:var(--ink);padding:0 6px;cursor:pointer;width:auto;flex:0 0 auto">
                                 <option value="">Fuente</option>
                                 <option value="Arial" style="font-family:Arial">Arial</option>
                                 <option value="Georgia" style="font-family:Georgia">Georgia</option>
@@ -302,7 +303,7 @@
                             <select title="Tamaño de texto" aria-label="Tamaño de texto"
                                 x-on:mousedown="saveSel()"
                                 x-on:change="applySize($event.target.value); $event.target.selectedIndex=0"
-                                style="height:28px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:12.5px;color:var(--ink);padding:0 6px;cursor:pointer">
+                                style="height:28px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:12.5px;color:var(--ink);padding:0 6px;cursor:pointer;width:auto;flex:0 0 auto">
                                 <option value="">Tamaño</option>
                                 <option value="2">Pequeño</option>
                                 <option value="3">Normal</option>
@@ -345,7 +346,7 @@
                             x-on:input="$wire.set('emailBody', enc($refs.ed.innerHTML), false)"
                             x-on:mouseup="saveSel()" x-on:keyup="saveSel()"
                             x-on:blur="$wire.set('emailBody', enc($refs.ed.innerHTML), false)"
-                            style="min-height:240px;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;color:var(--ink)"></div>
+                            style="min-height:240px;max-height:48vh;overflow:auto;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;color:var(--ink)"></div>
                         {{-- Vista CÓDIGO: HTML editable + vista previa (iframe sandbox, sin scripts) --}}
                         @if ($canCodeMode)
                             <div x-show="mode==='code'" x-cloak style="display:flex;flex-wrap:wrap">
@@ -401,12 +402,13 @@
                 </div>
             </div>
         </div>
-        <style>.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
+        <style>.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed img{max-width:100%}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
     @endif
 
     {{-- Ver un correo ENVIADO tal como se envió --}}
     @if ($viewingEmail)
-        <div style="position:fixed;inset:0;z-index:1000;background:rgba(19,37,61,.45);display:flex;align-items:center;justify-content:center;padding:24px" wire:key="sent-overlay-{{ $viewingEmail->id }}">
+        <div x-data="{ destroy(){ document.body.style.overflow='' } }" x-init="document.body.style.overflow='hidden'"
+            style="position:fixed;inset:0;z-index:1000;background:rgba(19,37,61,.45);display:flex;align-items:center;justify-content:center;padding:24px" wire:key="sent-overlay-{{ $viewingEmail->id }}">
             <div style="background:#fff;width:100%;max-width:800px;max-height:92vh;height:auto;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;box-shadow:0 24px 70px -20px rgba(0,0,0,.5)">
                 {{-- Cabecera --}}
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:16px 22px;border-bottom:1px solid var(--line)">
@@ -451,6 +453,6 @@
                 </div>
             </div>
         </div>
-        <style>.sent-body img{max-width:100%;height:auto}.sent-body a{color:var(--blue)}.sent-body ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.sent-body ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.sent-body li{margin:.2em 0}</style>
+        <style>.sent-body img{max-width:100%}.sent-body a{color:var(--blue)}.sent-body ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.sent-body ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.sent-body li{margin:.2em 0}</style>
     @endif
 </div>
