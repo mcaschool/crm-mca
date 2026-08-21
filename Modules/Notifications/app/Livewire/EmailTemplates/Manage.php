@@ -13,6 +13,7 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
 use Modules\Notifications\Models\EmailTemplate;
 use Modules\Notifications\Support\AttachmentValidator;
+use Modules\Notifications\Support\EmailBodyTransport;
 use Modules\Notifications\Support\EmailHtmlSanitizer;
 use Modules\Notifications\Support\TagResolver;
 use Modules\Notifications\Support\TemplateBodyImages;
@@ -143,6 +144,10 @@ class Manage extends Component
     {
         $creating = $this->editingId === null;
         $template = $creating ? null : EmailTemplate::query()->findOrFail($this->editingId);
+
+        // El editor envía el cuerpo en base64 (evita que el WAF del hosting bloquee el
+        // POST con HTML crudo). Se decodifica aquí; luego pasa por el sanitizador igual.
+        $this->body = app(EmailBodyTransport::class)->decode($this->body);
 
         // Permiso: crear (según ámbito) o editar la plantilla concreta.
         if ($creating) {

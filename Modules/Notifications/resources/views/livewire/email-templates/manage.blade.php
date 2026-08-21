@@ -66,7 +66,7 @@
                             insertTag(t){ const ed=this.$refs.ed; this.caret(ed); document.execCommand('insertText',false,'['+t+']'); ed.dispatchEvent(new Event('input')); this.tagsOpen=false; },
                             insertImage(d){ if(!d||!d.url||!d.cid) return; const ed=this.$refs.ed; this.caret(ed); document.execCommand('insertHTML',false,'<img src=\''+d.url+'\' data-cid=\''+d.cid+'\' style=\'max-width:100%;height:auto\'><br>'); ed.dispatchEvent(new Event('input')); },
                             load(html){ this.$refs.ed.innerHTML = html || ''; this.$refs.ed.dispatchEvent(new Event('input')); this.mode='visual'; },
-                            mode:'visual', toCode(){ this.$refs.code.value=this.$refs.ed.innerHTML; this.mode='code'; this.$nextTick(()=>this.preview()); }, toVisual(){ this.$refs.ed.innerHTML=this.$refs.code.value; this.$refs.ed.dispatchEvent(new Event('input')); this.mode='visual'; }, preview(){ if(this.$refs.pv) this.$refs.pv.srcdoc=this.$refs.code.value; } }"
+                            mode:'visual', toCode(){ this.$refs.code.value=this.$refs.ed.innerHTML; this.mode='code'; this.$nextTick(()=>this.preview()); }, toVisual(){ this.$refs.ed.innerHTML=this.$refs.code.value; this.$refs.ed.dispatchEvent(new Event('input')); this.mode='visual'; }, preview(){ if(this.$refs.pv) this.$refs.pv.srcdoc=this.$refs.code.value; }, enc(s){ return '__B64__'+btoa(unescape(encodeURIComponent(s))); } }"
                         x-on:insert-inline-image.window="insertImage($event.detail)"
                         x-on:template-editor-load.window="load($event.detail.html)"
                         style="border:1px solid var(--line);border-radius:10px;overflow:hidden">
@@ -126,15 +126,15 @@
                         </div>
                         {{-- Vista VISUAL --}}
                         <div contenteditable="true" id="tplEditorBody" x-ref="ed" x-show="mode==='visual'" class="mailbody-ed" data-ph="Escribe el contenido de la plantilla…"
-                            x-on:input="$wire.set('body', $refs.ed.innerHTML, false)"
+                            x-on:input="$wire.set('body', enc($refs.ed.innerHTML), false)"
                             x-on:mouseup="saveSel()" x-on:keyup="saveSel()"
-                            x-on:blur="$wire.set('body', $refs.ed.innerHTML, false)"
+                            x-on:blur="$wire.set('body', enc($refs.ed.innerHTML), false)"
                             style="min-height:200px;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;color:var(--ink)"></div>
                         {{-- Vista CÓDIGO: HTML editable + vista previa (iframe sandbox, sin scripts) --}}
                         @if ($canCodeMode)
                             <div x-show="mode==='code'" x-cloak style="display:flex;flex-wrap:wrap">
                                 <textarea x-ref="code" spellcheck="false" placeholder="Pega o escribe HTML/CSS de diseño (tablas, estilos inline)…"
-                                    x-on:input="$wire.set('body', $refs.code.value, false); preview()"
+                                    x-on:input="$wire.set('body', enc($refs.code.value), false); preview()"
                                     style="flex:1;min-width:280px;min-height:200px;border:0;border-right:1px solid var(--line);padding:12px 14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;outline:none;resize:vertical;color:var(--ink);background:#fbfdff"></textarea>
                                 <div style="flex:1;min-width:280px;display:flex;flex-direction:column">
                                     <div style="font-size:11px;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--line);background:var(--soft,#F1F6FC)">Vista previa</div>

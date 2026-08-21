@@ -309,6 +309,10 @@ class Show extends Component
         $lead = $this->lead()->load('contact');
         abort_unless(auth()->user()?->canSendEmail() ?? false, 403);
 
+        // El editor envía el cuerpo en base64 (evita que el WAF del hosting bloquee el
+        // POST con HTML crudo). Se decodifica aquí; luego pasa por el sanitizador igual.
+        $this->emailBody = app(\Modules\Notifications\Support\EmailBodyTransport::class)->decode($this->emailBody);
+
         $this->validate([
             'emailSenderId' => [
                 'required',
