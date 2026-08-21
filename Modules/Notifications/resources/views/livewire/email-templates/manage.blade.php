@@ -1,6 +1,6 @@
 <div>
     <x-ui.styles />
-    <style>.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed img{max-width:100%}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
+    <style>.mail-tb-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed img{max-width:100%}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
     <div class="mca-panel" style="padding:22px 26px 34px;max-width:900px">
 
         @if ($scope === 'shared')
@@ -70,16 +70,16 @@
                         x-on:insert-inline-image.window="insertImage($event.detail)"
                         x-on:template-editor-load.window="load($event.detail.html)"
                         style="border:1px solid var(--line);border-radius:10px;overflow:hidden">
-                        <div style="display:flex;gap:2px;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--soft,#F1F6FC);flex-wrap:wrap;align-items:center">
-                            @php $tbtn = 'min-width:30px;height:28px;padding:0 8px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:13px;cursor:pointer;color:var(--ink)'; @endphp
-                            <span x-show="mode==='visual'" style="display:contents">
+                        <div style="display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--soft,#F1F6FC);flex-wrap:wrap;align-items:center">
+                            @php $tbtn = 'height:30px;min-width:32px;padding:0 9px;border:1px solid var(--line);background:#fff;border-radius:7px;font-size:13px;cursor:pointer;color:var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:4px'; @endphp
+                            <div x-show="mode==='visual'" class="mail-tb-group">
                             <button type="button" title="Negrita" onmousedown="event.preventDefault()" x-on:click="document.execCommand('bold'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }};font-weight:700">B</button>
                             <button type="button" title="Cursiva" onmousedown="event.preventDefault()" x-on:click="document.execCommand('italic'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }};font-style:italic">I</button>
                             <button type="button" title="Subrayado" onmousedown="event.preventDefault()" x-on:click="document.execCommand('underline'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }};text-decoration:underline">U</button>
-                            <span style="width:1px;background:var(--line);margin:2px 4px"></span>
+                            <span style="width:1px;height:20px;background:var(--line);align-self:center"></span>
                             <select title="Tipografía" aria-label="Tipografía"
                                 x-on:mousedown="saveSel()" x-on:change="applyFont($event.target.value); $event.target.selectedIndex=0"
-                                style="height:28px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:12.5px;color:var(--ink);padding:0 6px;cursor:pointer;width:auto;flex:0 0 auto">
+                                style="height:30px;border:1px solid var(--line);background:#fff;border-radius:7px;font-size:12.5px;color:var(--ink);padding:0 8px;cursor:pointer;width:auto;flex:0 0 auto">
                                 <option value="">Fuente</option>
                                 <option value="Arial" style="font-family:Arial">Arial</option>
                                 <option value="Georgia" style="font-family:Georgia">Georgia</option>
@@ -88,7 +88,7 @@
                             </select>
                             <select title="Tamaño de texto" aria-label="Tamaño de texto"
                                 x-on:mousedown="saveSel()" x-on:change="applySize($event.target.value); $event.target.selectedIndex=0"
-                                style="height:28px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:12.5px;color:var(--ink);padding:0 6px;cursor:pointer;width:auto;flex:0 0 auto">
+                                style="height:30px;border:1px solid var(--line);background:#fff;border-radius:7px;font-size:12.5px;color:var(--ink);padding:0 8px;cursor:pointer;width:auto;flex:0 0 auto">
                                 <option value="">Tamaño</option>
                                 <option value="2">Pequeño</option>
                                 <option value="3">Normal</option>
@@ -96,16 +96,16 @@
                                 <option value="6">Título</option>
                                 <option value="7">Título grande</option>
                             </select>
-                            <span style="width:1px;background:var(--line);margin:2px 4px"></span>
+                            <span style="width:1px;height:20px;background:var(--line);align-self:center"></span>
                             <button type="button" title="Lista con viñetas" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertUnorderedList'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }}">• —</button>
                             <button type="button" title="Lista numerada" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertOrderedList'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }}">1.</button>
                             <button type="button" title="Insertar enlace" onmousedown="event.preventDefault()" x-on:click="let u=prompt('URL (https://…)'); if(u){document.execCommand('createLink',false,u)}; $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }}">🔗</button>
                             <button type="button" title="Quitar formato" onmousedown="event.preventDefault()" x-on:click="document.execCommand('removeFormat'); document.execCommand('unlink'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }}">✕ fmt</button>
-                            <span style="width:1px;background:var(--line);margin:2px 4px"></span>
+                            <span style="width:1px;height:20px;background:var(--line);align-self:center"></span>
                             <button type="button" title="Insertar imagen (viaja dentro del correo)" onmousedown="event.preventDefault()" onclick="document.getElementById('tplInlineImageInput').click()" style="{{ $tbtn }}">🖼️ Imagen</button>
 
                             {{-- Etiquetas dinámicas (genéricas; se resuelven al enviar) --}}
-                            <span style="width:1px;background:var(--line);margin:2px 4px"></span>
+                            <span style="width:1px;height:20px;background:var(--line);align-self:center"></span>
                             <div style="position:relative" x-on:click.outside="tagsOpen=false">
                                 <button type="button" title="Insertar etiqueta" onmousedown="event.preventDefault()" x-on:click="tagsOpen=!tagsOpen" style="{{ $tbtn }};display:inline-flex;align-items:center;gap:4px">🏷️ Etiqueta ▾</button>
                                 <div x-show="tagsOpen" x-cloak style="position:absolute;top:32px;left:0;z-index:5;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 30px -12px rgba(19,37,61,.4);min-width:240px;padding:6px;max-height:240px;overflow:auto">
@@ -117,11 +117,12 @@
                                     @endforeach
                                 </div>
                             </div>
-                            </span>
+                                @if ($canCodeMode)
+                                    <button type="button" title="Editar el código HTML/CSS" x-on:click="toCode()" style="{{ $tbtn }};font-family:ui-monospace,Menlo,Consolas,monospace">&lt;/&gt; Código</button>
+                                @endif
+                            </div>
                             @if ($canCodeMode)
-                                <span x-show="mode==='visual'" style="width:1px;background:var(--line);margin:2px 4px"></span>
-                                <button type="button" title="Editar el código HTML/CSS" x-show="mode==='visual'" x-on:click="toCode()" style="{{ $tbtn }};display:inline-flex;align-items:center;gap:4px;font-family:ui-monospace,Menlo,Consolas,monospace">&lt;/&gt; Código</button>
-                                <button type="button" title="Volver al editor visual" x-show="mode==='code'" x-cloak x-on:click="toVisual()" style="{{ $tbtn }};display:inline-flex;align-items:center;gap:4px">◱ Editor visual</button>
+                                <button type="button" title="Volver al editor visual" x-show="mode==='code'" x-cloak x-on:click="toVisual()" style="{{ $tbtn }}">◱ Editor visual</button>
                             @endif
                         </div>
                         {{-- Vista VISUAL --}}
@@ -129,16 +130,16 @@
                             x-on:input="$wire.set('body', enc($refs.ed.innerHTML), false)"
                             x-on:mouseup="saveSel()" x-on:keyup="saveSel()"
                             x-on:blur="$wire.set('body', enc($refs.ed.innerHTML), false)"
-                            style="min-height:200px;max-height:48vh;overflow:auto;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;color:var(--ink)"></div>
-                        {{-- Vista CÓDIGO: HTML editable + vista previa (iframe sandbox, sin scripts) --}}
+                            style="min-height:200px;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;color:var(--ink)"></div>
+                        {{-- Vista CÓDIGO: HTML editable (ancho completo) + vista previa debajo (iframe sandbox, sin scripts) --}}
                         @if ($canCodeMode)
-                            <div x-show="mode==='code'" x-cloak style="display:flex;flex-wrap:wrap">
+                            <div x-show="mode==='code'" x-cloak style="display:flex;flex-direction:column">
                                 <textarea x-ref="code" spellcheck="false" placeholder="Pega o escribe HTML/CSS de diseño (tablas, estilos inline)…"
                                     x-on:input="$wire.set('body', enc($refs.code.value), false); preview()"
-                                    style="flex:1;min-width:280px;min-height:200px;border:0;border-right:1px solid var(--line);padding:12px 14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;outline:none;resize:vertical;color:var(--ink);background:#fbfdff"></textarea>
-                                <div style="flex:1;min-width:280px;display:flex;flex-direction:column">
+                                    style="width:100%;height:34vh;min-height:200px;box-sizing:border-box;border:0;border-bottom:1px solid var(--line);padding:12px 14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;outline:none;resize:vertical;color:var(--ink);background:#fbfdff"></textarea>
+                                <div style="display:flex;flex-direction:column;height:34vh">
                                     <div style="font-size:11px;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--line);background:var(--soft,#F1F6FC)">Vista previa</div>
-                                    <iframe x-ref="pv" sandbox="" title="Vista previa" style="flex:1;min-height:173px;border:0;width:100%;background:#fff"></iframe>
+                                    <iframe x-ref="pv" sandbox="" title="Vista previa" style="flex:1;width:100%;border:0;background:#fff"></iframe>
                                 </div>
                             </div>
                         @endif
