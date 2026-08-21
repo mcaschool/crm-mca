@@ -46,11 +46,20 @@ class InlineImageEmbedder
             if ($cid !== '' && isset($inline[$cid])) {
                 $img->removeAttribute('data-cid');
                 $img->setAttribute('src', 'cid:'.$cid);
-                $img->setAttribute('style', 'max-width:100%;height:auto');
+                if (! $img->hasAttribute('style')) {
+                    $img->setAttribute('style', 'max-width:100%;height:auto');
+                }
                 $used[$cid] = ['path' => $inline[$cid]['path'], 'cid' => $cid, 'mime' => $inline[$cid]['mime']];
             } else {
-                // Imagen que no es una de las subidas: fuera (nada de externas).
-                $img->parentNode?->removeChild($img);
+                // No es una subida embebida. Se conserva SOLO si trae una imagen externa
+                // segura (https/data:image, ya validada por el sanitizador); cualquier
+                // otra (http, tracking, sin src) se descarta.
+                $src = strtolower(trim($img->getAttribute('src')));
+                if ($src !== '' && (str_starts_with($src, 'https://') || str_starts_with($src, 'data:image/'))) {
+                    $img->removeAttribute('data-cid');
+                } else {
+                    $img->parentNode?->removeChild($img);
+                }
             }
         }
 

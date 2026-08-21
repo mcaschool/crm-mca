@@ -224,6 +224,7 @@ class Manage extends Component
         return view('notifications::livewire.email-templates.manage', [
             'templates' => $this->templates(),
             'tagCatalog' => app(TagResolver::class)->catalog(),
+            'canCodeMode' => auth()->user()?->canUseEmailCodeMode() ?? false,
         ]);
     }
 }

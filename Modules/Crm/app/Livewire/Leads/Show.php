@@ -578,6 +578,7 @@ class Show extends Component
             'phoneDisplay' => $this->formatPhone($lead->contact?->phone),
             'canAct' => auth()->user()?->can('update', $lead) ?? false,
             'canEmail' => auth()->user()?->canSendEmail() ?? false,
+            'canCodeMode' => auth()->user()?->canUseEmailCodeMode() ?? false,
         ]);
     }
 

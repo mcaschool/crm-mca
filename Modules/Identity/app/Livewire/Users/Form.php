@@ -52,6 +52,9 @@ class Form extends Component
 
     public bool $is_super_admin = false;
 
+    /** Permiso por usuario: puede usar el modo código (HTML/CSS) del editor de correo. */
+    public bool $canEmailCode = false;
+
     /** Enlace de invitacion recien generado (se muestra al Admin para reenviar). */
     public ?string $invitationLink = null;
 
@@ -68,6 +71,7 @@ class Form extends Component
             $this->role = $user->role->value;
             $this->status = $user->status;
             $this->is_super_admin = $user->isSuperAdmin();
+            $this->canEmailCode = (bool) $user->can_email_code;
 
             // Acceso a dato sensible: abrir la ficha DESCIFRA el numero de identidad y
             // lo muestra en claro al Admin. Se audita el HECHO del acceso, nunca el valor.
@@ -96,6 +100,7 @@ class Form extends Component
         $originalRole = $editing ? $target->role->value : null;
         $originalDepartment = $editing ? $target->department : null;
         $originalStatus = $editing ? $target->status : null;
+        $originalEmailCode = $editing ? (bool) $target->can_email_code : false;
 
         $rules = [
             'name' => ['required', 'string', 'max:120'],
@@ -104,6 +109,7 @@ class Form extends Component
             'role' => ['required', Rule::in(UserRole::values())],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'is_super_admin' => ['boolean'],
+            'canEmailCode' => ['boolean'],
         ];
         // El correo SOLO se valida/asigna al crear (es inmutable tras el alta).
         if (! $editing) {
@@ -126,6 +132,7 @@ class Form extends Component
         $target->role = UserRole::from($this->role);
         $target->status = $this->status;
         $target->is_super_admin = $grantSuper;
+        $target->can_email_code = $this->canEmailCode;
 
         if (! $editing) {
             $target->email = strtolower(trim($this->email));
@@ -148,6 +155,9 @@ class Form extends Component
             }
             if ($originalStatus !== $this->status) {
                 $audit->log($this->status === 'active' ? 'user.activated' : 'user.deactivated', $target);
+            }
+            if ($originalEmailCode !== $this->canEmailCode) {
+                $audit->log('user.email_code_changed', $target, ['to' => $this->canEmailCode ? 'on' : 'off']);
             }
 
             session()->flash('status', 'Usuario actualizado.');

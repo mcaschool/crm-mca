@@ -122,6 +122,13 @@
                     <input type="checkbox" wire:model="is_super_admin"> Super-admin (ve todas las instituciones)
                 </label>
             @endif
+
+            <label class="chk" style="margin-top:14px;display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink)">
+                <input type="checkbox" wire:model="canEmailCode" style="margin-top:3px">
+                <span>Modo código de correo (HTML/CSS)
+                    <span class="mca-help" style="display:block;margin-top:2px">Permite al usuario alternar el editor a código HTML con vista previa para diseñar correos y plantillas. El Administrador siempre lo tiene.</span>
+                </span>
+            </label>
         </div>
 
         <div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">

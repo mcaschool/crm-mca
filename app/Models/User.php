@@ -40,8 +40,9 @@ use Modules\Institutions\Models\Institution;
  * @property bool $is_super_admin
  * @property string $preferred_language
  * @property string $status
+ * @property bool $can_email_code
  */
-#[Fillable(['institution_id', 'name', 'email', 'national_id', 'department', 'avatar_path', 'password', 'role', 'is_super_admin', 'preferred_language', 'status'])]
+#[Fillable(['institution_id', 'name', 'email', 'national_id', 'department', 'avatar_path', 'password', 'role', 'is_super_admin', 'preferred_language', 'status', 'can_email_code'])]
 #[Hidden(['password', 'remember_token', 'national_id'])]
 class User extends Authenticatable
 {
@@ -73,6 +74,7 @@ class User extends Authenticatable
             'two_factor_confirmed_at' => 'datetime',
             'role' => UserRole::class,
             'is_super_admin' => 'boolean',
+            'can_email_code' => 'boolean',
             'last_login_at' => 'datetime',
         ];
     }
@@ -209,6 +211,21 @@ class User extends Authenticatable
     public function canSendEmail(): bool
     {
         return $this->canWorkCrm() && $this->crmPersona() !== 'marketing';
+    }
+
+    /**
+     * ¿Puede usar el MODO CÓDIGO (HTML/CSS con vista previa) del editor de correo?
+     * No va atado a un rol: el Administrador lo concede usuario por usuario
+     * (users.can_email_code). El Admin (o super) SIEMPRE lo tiene por su rol. Requiere
+     * además poder enviar correo (el modo código vive dentro del editor de correo).
+     */
+    public function canUseEmailCodeMode(): bool
+    {
+        if (! $this->canSendEmail()) {
+            return false;
+        }
+
+        return $this->isSuperAdmin() || $this->role === UserRole::Admin || (bool) $this->can_email_code;
     }
 
     /**
