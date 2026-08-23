@@ -347,7 +347,7 @@
                             x-on:input="$wire.set('emailBody', enc($refs.ed.innerHTML), false)"
                             x-on:mouseup="saveSel()" x-on:keyup="saveSel()"
                             x-on:blur="$wire.set('emailBody', enc($refs.ed.innerHTML), false)"
-                            style="min-height:240px;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;color:var(--ink)"></div>
+                            style="min-height:240px;max-height:50vh;overflow:auto;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;color:var(--ink)"></div>
                         {{-- Vista CÓDIGO: HTML editable (ancho completo) + vista previa debajo (iframe sandbox, sin scripts) --}}
                         @if ($canCodeMode)
                             <div x-show="mode==='code'" x-cloak style="display:flex;flex-direction:column">
