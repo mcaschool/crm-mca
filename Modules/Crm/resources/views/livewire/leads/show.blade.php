@@ -19,6 +19,256 @@
         @error('status') <div class="toast err"><x-ui.icon name="x" class="i16" /> {{ $message }}</div> @enderror
         @error('transferTarget') <div class="toast err"><x-ui.icon name="x" class="i16" /> {{ $message }}</div> @enderror
 
+        @if ($incompany)
+            @php
+                $modalidadLabel = match ($incompany->modalidad) {
+                    'grupo' => 'Grupo',
+                    'persona' => 'Individual',
+                    default => $incompany->modalidad ?: '—',
+                };
+                $ruta = $incompany->programRoute();
+                $incHot = $incompany->hasRequestedContact();
+            @endphp
+            <div class="ic-stack">
+                {{-- CABECERA --}}
+                <div class="ic-head">
+                    <span class="av">{{ $initials }}</span>
+                    <div>
+                        <div class="nm">{{ $fullName }}</div>
+                        <div class="meta">
+                            <span><x-ui.icon name="briefcase" class="i13" /> Captado por <b>{{ $lead->capturedByLabel() }}</b></span>
+                            <span>·</span>
+                            <span><x-ui.icon name="mail" class="i13 gray" /> {{ $c->email ?? '—' }}</span>
+                            @if ($lead->sourceLabel())
+                                <span>·</span>
+                                <span>Motivo: <b>{{ $lead->sourceLabel() }}</b></span>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="sp"></div>
+                    <div class="d-actions">
+                        @if ($isTerminal || ! $canAct)
+                            <span class="statuspick {{ $lead->status->badgeClass() }}" style="cursor:default">
+                                <x-ui.icon name="{{ $isTerminal ? 'check' : 'clock' }}" class="i14" /> {{ $lead->status->label() }}
+                            </span>
+                        @else
+                            <div class="statusmenu">
+                                <button type="button" class="statuspick {{ $lead->status->badgeClass() }}" wire:click="$toggle('statusMenuOpen')">
+                                    <x-ui.icon name="clock" class="i14" /> {{ $lead->status->label() }}
+                                    <x-ui.icon name="chevron-down" class="i14" />
+                                </button>
+                                @if ($statusMenuOpen)
+                                    <div class="menu" wire:click.outside="$set('statusMenuOpen', false)">
+                                        @foreach ($statuses as $s)
+                                            <button type="button" wire:click="changeStatus('{{ $s->value }}')"
+                                                @if ($s->value === $lead->status->value) disabled @endif>
+                                                <span class="chip {{ $s->badgeClass() }}">{{ $s->label() }}</span>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+                        @if ($canEmail)
+                            <button type="button" class="ghost" wire:click="openCompose"><x-ui.icon name="mail" class="i14" /> Enviar correo</button>
+                        @endif
+                        @if ($canAct)
+                            <a href="#transfer" class="ghost"><x-ui.icon name="arrow-right-left" class="i14" /> Transferir</a>
+                        @else
+                            <span class="ro-tag"><x-ui.icon name="eye" class="i12" /> solo lectura</span>
+                        @endif
+                        <button type="button" class="ghost" wire:click="exportOne"><x-ui.icon name="download" class="i14" /> Exportar</button>
+                    </div>
+                </div>
+
+                {{-- BANNER de contexto --}}
+                <div class="ic-banner">
+                    <x-ui.icon name="briefcase" class="i15" />
+                    <span><b>Lead de formulario · Recomendador InCompany.</b> No tuvo conversación de chat; su diagnóstico está en el Perfil InCompany.</span>
+                </div>
+
+                {{-- BLOQUE 1 · Datos personales --}}
+                <div class="ic-card">
+                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="user" class="i15" /></span><h2>Datos personales</h2></div>
+                    <div class="ic-rows">
+                        <div class="ic-row"><span class="lbl"><x-ui.icon name="user" class="i15" /> Nombre</span><span class="val">{{ $fullName }}</span></div>
+                        <div class="ic-row"><span class="lbl"><x-ui.icon name="mail" class="i15" /> Correo</span><span class="val">{{ $c->email ?? '—' }}</span></div>
+                        <div class="ic-row"><span class="lbl"><x-ui.icon name="phone" class="i15" /> WhatsApp</span><span class="val {{ $phoneDisplay ? '' : 'dim' }}">{{ $phoneDisplay ?? '—' }}</span></div>
+                        <div class="ic-row"><span class="lbl"><x-ui.icon name="globe" class="i15" /> País</span><span class="val {{ $c->country ? '' : 'dim' }}">{{ $c->country ?: '—' }}</span></div>
+                    </div>
+                    <div class="ic-audit"><x-ui.icon name="lock" class="i13" /> Acceso a datos personales registrado en auditoría.</div>
+                </div>
+
+                {{-- BLOQUE 2 · Perfil InCompany --}}
+                <div class="ic-card">
+                    <div class="ic-card-h">
+                        <span class="cic"><x-ui.icon name="briefcase" class="i15" /></span>
+                        <h2>Perfil InCompany</h2>
+                        <div class="sp"></div>
+                        <span class="ic-tag-emp">EMPRESA</span>
+                    </div>
+                    <div class="ic-diag">
+                        @if ($incHot)
+                            <span class="dchip hot"><x-ui.icon name="alert-triangle" class="i12" /> Solicitó contacto</span>
+                        @else
+                            <span class="dchip"><x-ui.icon name="sparkles" class="i12" /> Diagnóstico</span>
+                        @endif
+                    </div>
+                    @if ($incompany->diagnostico_at)
+                        <div class="ic-when">Vio su diagnóstico: {{ $incompany->diagnostico_at->translatedFormat('d M Y · H:i') }}</div>
+                    @endif
+                    @if ($incompany->solicita_contacto_at)
+                        <div class="ic-when hot">Pidió contacto: {{ $incompany->solicita_contacto_at->translatedFormat('d M Y · H:i') }}</div>
+                    @endif
+                    <div class="ic-rows" style="padding-top:10px">
+                        <div class="ic-row"><span class="lbl">Empresa</span><span class="val">{{ $incompany->nombre_empresa }}</span></div>
+                        <div class="ic-row"><span class="lbl">Contacto</span><span class="val">{{ $incompany->nombre_contacto }}</span></div>
+                        <div class="ic-row"><span class="lbl">Sector</span><span class="val {{ $incompany->sector ? '' : 'dim' }}">{{ $incompany->sector ?: '—' }}</span></div>
+                        <div class="ic-row"><span class="lbl">Tamaño</span><span class="val {{ $incompany->tamano_empresa ? '' : 'dim' }}">{{ $incompany->tamano_empresa ?: '—' }}</span></div>
+                        <div class="ic-row"><span class="lbl">Modalidad</span><span class="val">{{ $modalidadLabel }} · {{ $incompany->cantidad_personas }} {{ $incompany->cantidad_personas === 1 ? 'persona' : 'personas' }}</span></div>
+                        <div class="ic-row"><span class="lbl">Área a desarrollar</span><span class="val {{ $incompany->area_desarrollo ? '' : 'dim' }}">{{ $incompany->area_desarrollo ?: '—' }}</span></div>
+                    </div>
+                </div>
+
+                {{-- BLOQUE 3 · Ruta formativa propuesta (nombre enlazado al catálogo, sin precio) --}}
+                <div class="ic-card">
+                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="book-open" class="i15" /></span><h2>Ruta formativa propuesta</h2></div>
+                    <div class="ic-ruta">
+                        @forelse ($ruta as $r)
+                            <div class="ic-prog" wire:key="ic-prog-{{ $r['position'] }}">
+                                <span class="n">{{ $r['position'] }}</span>
+                                <div class="info">
+                                    @if ($r['linked'])
+                                        <div class="name">
+                                            @if ($r['program']->url)
+                                                <a href="{{ $r['program']->url }}" target="_blank" rel="noopener">{{ $r['program']->name }} <x-ui.icon name="external-link" class="i12 gray" /></a>
+                                            @else
+                                                {{ $r['program']->name }}
+                                            @endif
+                                        </div>
+                                        <div class="code">{{ $r['program']->code }}</div>
+                                    @else
+                                        <div class="name">{{ $r['code'] }}</div>
+                                        <div class="code">Código recibido</div>
+                                    @endif
+                                </div>
+                                @if ($r['linked'])
+                                    <span class="ok"><x-ui.icon name="check" class="i12" /> En catálogo</span>
+                                @else
+                                    <span class="no"><x-ui.icon name="alert-triangle" class="i12" /> Sin enlazar</span>
+                                @endif
+                            </div>
+                        @empty
+                            <div class="conv-empty" style="font-size:12.5px">Sin programas indicados.</div>
+                        @endforelse
+                    </div>
+                    <div class="ic-note">Los nombres se enlazan al catálogo por su código. Sin precio: para InCompany se negocia por propuesta.</div>
+                </div>
+
+                {{-- Herramientas del comercial (conservadas, en tarjeta v4) --}}
+                {{-- Correo --}}
+                <div class="ic-card" id="email">
+                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="mail" class="i15" /></span><h2>Correo</h2></div>
+                    <div class="ic-body">
+                        @if ($canEmail)
+                            <button type="button" wire:click="openCompose" class="ghost" style="margin-bottom:10px"><x-ui.icon name="mail" class="i14" /> Enviar correo a {{ $first ?: 'este contacto' }}</button>
+                        @endif
+                        <div style="font-size:12px;color:var(--muted);font-weight:600;margin:4px 0 6px">Correos enviados</div>
+                        @forelse ($emails as $em)
+                            <button type="button" wire:click="openSentEmail({{ $em->id }})" wire:key="email-{{ $em->id }}"
+                                style="display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:9px 2px;cursor:pointer">
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                                    <div style="font-size:13px;color:var(--ink);font-weight:600">{{ $em->subject }}
+                                        @if ($em->status !== 'sent')<span style="color:#B23B3B;font-weight:600;font-size:11.5px"> · falló</span>@endif
+                                    </div>
+                                    <span style="font-size:11.5px;color:var(--blue);font-weight:600;white-space:nowrap">Abrir ›</span>
+                                </div>
+                                <div style="font-size:12px;color:var(--muted);margin-top:2px">
+                                    Como <b>{{ $em->from_name ?: $em->from_address }}</b>
+                                    · {{ ($em->sent_at ?? $em->created_at)?->translatedFormat('d M Y · H:i') }}
+                                    · por {{ $em->sentByUser?->name ?? 'Equipo' }}
+                                    @if ($em->files_count) · <x-ui.icon name="download" class="i12" /> {{ $em->files_count }} adjunto(s)@endif
+                                </div>
+                            </button>
+                        @empty
+                            <div class="conv-empty" style="font-size:12.5px">Aún no se han enviado correos.</div>
+                        @endforelse
+                    </div>
+                </div>
+
+                {{-- Eventos --}}
+                <div class="ic-card">
+                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="clock" class="i15" /></span><h2>Eventos</h2></div>
+                    <div class="ic-body">
+                        @forelse ($events as $ev)
+                            @php $evDetail = $ev->detail(); @endphp
+                            <div class="ev">
+                                <x-ui.icon name="{{ $ev->icon() }}" class="i15" />
+                                <div>
+                                    {{ $ev->label() }}@if ($evDetail)<span style="color:var(--muted);word-break:break-word">: {{ $evDetail }}</span>@endif
+                                    <div class="t">{{ $ev->created_at?->translatedFormat('d M Y · H:i') }}</div>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="conv-empty" style="font-size:12.5px">Sin eventos registrados.</div>
+                        @endforelse
+                    </div>
+                </div>
+
+                {{-- Transferir seguimiento --}}
+                <div class="ic-card" id="transfer">
+                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="arrow-right-left" class="i15" /></span><h2>Transferir seguimiento</h2></div>
+                    <div class="ic-body">
+                        <div class="transfer">
+                            <x-ui.icon name="arrow-right-left" class="i14" /> Transferir a
+                            @if ($canAct)
+                                <select wire:model="transferTarget" wire:change="transfer" aria-label="Transferir seguimiento a">
+                                    @foreach ($transferOptions as $value => $optLabel)
+                                        <option value="{{ $value }}">{{ $optLabel }}</option>
+                                    @endforeach
+                                </select>
+                            @else
+                                <span style="margin-left:auto;font-weight:600">{{ $transferOptions[$transferTarget] ?? '—' }}</span>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Notas internas --}}
+                <div class="ic-card">
+                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="sticky-note" class="i15" /></span><h2>Notas internas</h2></div>
+                    <div class="ic-body">
+                        @forelse ($lead->leadNotes as $note)
+                            <div class="note" wire:key="note-{{ $note->id }}">
+                                {{ $note->body }}
+                                <div class="meta">— {{ $note->author_name ?: 'Equipo' }} · {{ $note->created_at?->translatedFormat('d M') }}</div>
+                            </div>
+                        @empty
+                            <div class="conv-empty" style="font-size:12.5px">Aún no hay notas.</div>
+                        @endforelse
+                        @if ($canAct)
+                            <div class="addnote">
+                                <input type="text" wire:model="newNote" wire:keydown.enter="addNote" placeholder="Añadir una nota…" aria-label="Añadir una nota">
+                                <button type="button" wire:click="addNote" aria-label="Guardar nota"><x-ui.icon name="plus" class="i16" /></button>
+                            </div>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- Matrícula · Moodle (dormido) --}}
+                <div class="ic-card">
+                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="graduation-cap" class="i15" /></span><h2>Matrícula · Moodle</h2></div>
+                    <div class="ic-body">
+                        <div class="moodle">
+                            <span class="tag">Se activa con integración Moodle</span>
+                            <div class="mrow"><span class="k">Course ID</span><span class="v">—</span></div>
+                            <div class="mrow"><span class="k">Moodle User</span><span class="v">—</span></div>
+                            <div class="mrow"><span class="k">Culminación</span><span class="v">—</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @else
         <div class="panel">
             {{-- Cabecera --}}
             <div class="d-head">
@@ -306,6 +556,7 @@
                 </div>
             </div>
         </div>
+        @endif
     </div>
 
     {{-- Editor de correo A PANTALLA COMPLETA --}}

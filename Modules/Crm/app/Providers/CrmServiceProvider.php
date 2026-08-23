@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Livewire;
 use Modules\Crm\Console\PurgeRetentionCommand;
+use Modules\Crm\Console\RelinkIncompanyProgramsCommand;
 use Modules\Crm\Console\ResetDemoCommand;
 use Modules\Crm\Livewire\Contacts\Index as ContactsIndex;
 use Modules\Crm\Livewire\Contacts\Show as ContactsShow;
@@ -45,6 +46,7 @@ class CrmServiceProvider extends ModuleServiceProvider
      */
     protected array $commands = [
         PurgeRetentionCommand::class,
+        RelinkIncompanyProgramsCommand::class,
         ResetDemoCommand::class,
     ];
 

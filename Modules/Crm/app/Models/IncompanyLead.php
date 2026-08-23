@@ -140,8 +140,13 @@ class IncompanyLead extends Model
 
     /**
      * Ruta de programas EN ORDEN (1→3), solo los presentes. Cada entrada trae el code
-     * tal como llegó, el programa del catálogo (si enlazó) y una marca `linked`. Los
+     * tal como llegó, el programa del catálogo (si enlaza) y una marca `linked`. Los
      * no enlazados se muestran con su code para poder detectarlos.
+     *
+     * El enlace se RESUELVE EN VIVO: primero el FK guardado en la ingesta y, si está
+     * vacío, una búsqueda por code/course_idnumber sobre el catálogo actual. Así los
+     * leads ingresados por versiones viejas (que guardaron program_id nulo porque solo
+     * comparaban course_idnumber) muestran el NOMBRE igual, sin re-procesarlos.
      *
      * @return array<int, array{position: int, code: string, program: ?Program, linked: bool}>
      */
@@ -154,7 +159,7 @@ class IncompanyLead extends Model
                 continue;
             }
             /** @var Program|null $program */
-            $program = $this->{'programa'.$i};
+            $program = $this->{'programa'.$i} ?? Program::findByCourseIdnumberOrCode($code);
             $out[] = [
                 'position' => $i,
                 'code' => $code,

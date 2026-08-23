@@ -200,20 +200,21 @@ it('la ficha muestra el Perfil InCompany con nombre de programa enlazado, sin pr
 
     $html = Livewire::test(Show::class, ['lead' => $lead])
         ->assertSee('Perfil InCompany')
-        ->assertSee('Empresa')                       // etiqueta corporativa en la tarjeta
+        ->assertSee('EMPRESA')                       // etiqueta corporativa de la tarjeta
+        ->assertSee('Empresa')                       // fila Empresa
         ->assertSee('Diagnóstico')                   // estado del embudo (aún no pidió contacto)
         ->assertSee('ACME Corp')
         ->assertSee('Liderazgo Corporativo')         // NOMBRE del programa enlazado (del catálogo)
+        ->assertSee('En catálogo')                   // indicador de enlace del programa 1
         ->assertSee('CORP-999-NOEXISTE')             // el no enlazado se muestra tal cual
-        ->assertSee('Sin enlazar al catálogo')       // y se marca como tal (degradación)
+        ->assertSee('Sin enlazar')                   // y se marca como tal (degradación)
+        ->assertSee('Ruta formativa propuesta')      // bloque 3 de la maqueta
         ->assertSee('Recomendador InCompany')        // #1 origen correcto (no "Captado por Celia")
-        ->assertSee('No tuvo conversación de chat')  // #4 nota compacta (sin panel de chat vacío)
-        ->assertDontSee('Este lead aún no tiene mensajes registrados') // #4 ya no aparece el vacío grande
-        ->assertDontSee('Precio')                    // NUNCA se muestra precio
-        ->assertDontSee('precio')
+        ->assertSee('No tuvo conversación de chat')  // banner de contexto
+        ->assertDontSee('Este lead aún no tiene mensajes registrados')
         ->html();
 
-    // El nombre del programa aparece; ningún importe (no hay columna de precio en el catálogo).
+    // Sin importes: no hay columna de precio en el catálogo (la nota dice "Sin precio").
     expect($html)->not->toContain('US$');
     expect($html)->not->toContain('RD$');
 });
@@ -236,6 +237,45 @@ it('enlaza el programa cuando n8n envía el CODE del catálogo (MC-###), no solo
         $route = $inc->programRoute();
         expect($route[0]['linked'])->toBeTrue();
         expect($route[0]['program']->name)->toBe('Liderazgo Corporativo');
+    });
+});
+
+it('la ficha resuelve el NOMBRE en vivo aunque el program_id guardado sea NULL (leads viejos)', function () {
+    [$institution, $bot, $program] = incompanyCtx();
+    $leadId = postIncompany(INCOMPANY_TOKEN, validIncompanyPayload([
+        'programa_1' => 'MC-050', 'programa_2' => null, 'programa_3' => null,
+    ]))->json('id');
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () use ($leadId) {
+        $inc = IncompanyLead::query()->where('lead_id', $leadId)->firstOrFail();
+        // Simula un lead ingresado por la versión vieja: el enlace guardado quedó NULL.
+        $inc->programa_1_program_id = null;
+        $inc->save();
+        $inc->refresh();
+
+        $route = $inc->programRoute();
+        expect($route[0]['linked'])->toBeTrue();                        // resuelto EN VIVO por code
+        expect($route[0]['program']->name)->toBe('Liderazgo Corporativo');
+    });
+});
+
+it('el comando crm:relink-incompany-programs rellena el enlace guardado de leads viejos', function () {
+    [$institution, $bot, $program] = incompanyCtx();
+    $leadId = postIncompany(INCOMPANY_TOKEN, validIncompanyPayload([
+        'programa_1' => 'MC-050', 'programa_2' => null, 'programa_3' => null,
+    ]))->json('id');
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () use ($leadId, $program, $institution) {
+        // Deja el enlace guardado en NULL (como los leads previos al fix).
+        $inc = IncompanyLead::query()->where('lead_id', $leadId)->firstOrFail();
+        $inc->programa_1_program_id = null;
+        $inc->save();
+        Lead::query()->whereKey($leadId)->update(['program_id' => null]);
+
+        test()->artisan('crm:relink-incompany-programs', ['--institution' => $institution->id])->assertSuccessful();
+
+        expect(IncompanyLead::query()->where('lead_id', $leadId)->value('programa_1_program_id'))->toBe($program->id);
+        expect(Lead::query()->whereKey($leadId)->value('program_id'))->toBe($program->id);
     });
 });
 

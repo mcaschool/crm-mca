@@ -169,6 +169,60 @@
 .crm-page .statusmenu .menu button:hover{background:#F4F8FD}
 .crm-page .statusmenu .menu button[disabled]{opacity:.45;cursor:not-allowed}
 
+/* ===== Ficha InCompany (maqueta aprobada): tarjetas apiladas + filas tipo tabla ===== */
+.crm-page .ic-stack{max-width:940px;display:flex;flex-direction:column;gap:16px}
+.crm-page .ic-head{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:0 1px 2px rgba(19,37,61,.04),0 6px 18px rgba(19,37,61,.05);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.crm-page .ic-head .av{width:52px;height:52px;border-radius:50%;background:linear-gradient(150deg,#2C7BC4,#1E5AA8);color:#fff;display:grid;place-items:center;font-weight:700;font-size:20px;flex-shrink:0}
+.crm-page .ic-head .nm{font-size:20px;font-weight:700;letter-spacing:-.01em;line-height:1.12}
+.crm-page .ic-head .meta{font-size:12.5px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.crm-page .ic-head .meta b{color:#5A6B84;font-weight:600}
+.crm-page .ic-head .meta .ic{color:var(--blue)}
+.crm-page .ic-head .meta .ic.gray{color:var(--muted)}
+.crm-page .ic-head .sp{flex:1}
+
+.crm-page .ic-banner{background:#FBF7EC;border:1px solid #EAD9A9;border-radius:12px;padding:11px 15px;font-size:12.5px;color:#7a6420;display:flex;align-items:flex-start;gap:9px}
+.crm-page .ic-banner b{color:#5f4e19}
+.crm-page .ic-banner .ic{color:#B7913A;flex:0 0 auto;margin-top:1px}
+
+.crm-page .ic-card{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(19,37,61,.04),0 6px 18px rgba(19,37,61,.05)}
+.crm-page .ic-card-h{display:flex;align-items:center;gap:9px;padding:14px 18px;border-bottom:1px solid #EEF1F6}
+.crm-page .ic-card-h .cic{width:28px;height:28px;border-radius:8px;background:#EAF1FA;color:var(--blue);display:grid;place-items:center;flex-shrink:0}
+.crm-page .ic-card-h .cic .ic{color:var(--blue)}
+.crm-page .ic-card-h h2{font-size:13.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:#5A6B84}
+.crm-page .ic-card-h .sp{flex:1}
+.crm-page .ic-tag-emp{font-size:11px;font-weight:700;letter-spacing:.05em;color:#B08A22;background:#FBF4DE;padding:4px 10px;border-radius:6px}
+
+.crm-page .ic-rows{padding:6px 18px 14px}
+.crm-page .ic-row{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid #EEF1F6;align-items:start}
+.crm-page .ic-row:last-child{border-bottom:none}
+.crm-page .ic-row .lbl{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.crm-page .ic-row .lbl .ic{color:var(--muted)}
+.crm-page .ic-row .val{font-size:14px;font-weight:600;color:var(--ink);min-width:0;overflow-wrap:anywhere}
+.crm-page .ic-row .val.dim{font-weight:500;color:#5A6B84}
+@media(max-width:560px){.crm-page .ic-row{grid-template-columns:1fr;gap:2px}}
+
+.crm-page .ic-audit{margin:0 18px 16px;background:#F7F9FC;border:1px solid #EEF1F6;border-radius:10px;padding:9px 12px;font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.crm-page .ic-audit .ic{color:var(--muted)}
+
+.crm-page .ic-diag{margin:12px 18px 4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.crm-page .ic-diag .dchip{font-size:12px;font-weight:600;color:var(--blue);background:#EAF1FA;padding:5px 11px;border-radius:20px;display:inline-flex;align-items:center;gap:6px}
+.crm-page .ic-diag .dchip.hot{color:#B23B3B;background:#FBEAEA;border:1px solid #E9C4C4;font-weight:800}
+.crm-page .ic-diag .dwhen{font-size:11.5px;color:var(--muted)}
+.crm-page .ic-when{font-size:11.5px;color:var(--muted);margin:0 18px 2px}
+.crm-page .ic-when.hot{color:#B23B3B;font-weight:600}
+
+.crm-page .ic-ruta{padding:6px 18px 8px;display:flex;flex-direction:column;gap:10px}
+.crm-page .ic-prog{display:flex;align-items:center;gap:13px;padding:12px 14px;border:1px solid #EEF1F6;border-radius:12px;background:#FBFCFE}
+.crm-page .ic-prog .n{width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px;flex-shrink:0}
+.crm-page .ic-prog .info{flex:1;min-width:0}
+.crm-page .ic-prog .info .name{font-size:14px;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.crm-page .ic-prog .info .name a{color:var(--ink);text-decoration:none}
+.crm-page .ic-prog .info .code{font-size:11.5px;color:var(--muted);margin-top:1px}
+.crm-page .ic-prog .ok{font-size:11px;font-weight:600;color:#1F9D6B;background:#E5F4EE;padding:4px 9px;border-radius:6px;white-space:nowrap;flex:0 0 auto}
+.crm-page .ic-prog .no{font-size:11px;font-weight:600;color:#B23B3B;background:#FBEAEA;padding:4px 9px;border-radius:6px;white-space:nowrap;flex:0 0 auto;display:inline-flex;align-items:center;gap:4px}
+.crm-page .ic-note{font-size:11.5px;color:var(--muted);padding:2px 18px 16px;font-style:italic}
+.crm-page .ic-body{padding:12px 18px 16px}
+
 @media (prefers-reduced-motion: reduce){
   .crm-page *{transition:none !important;animation:none !important}
 }
