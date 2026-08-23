@@ -8,6 +8,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Modules\Catalog\Console\ImportCatalogCommand;
+use Modules\Catalog\Console\SetCourseIdnumbersCommand;
 use Modules\Catalog\Livewire\Categories\Manage as CategoriesManage;
 use Modules\Catalog\Livewire\Programs\Form as ProgramsForm;
 use Modules\Catalog\Livewire\Programs\Index as ProgramsIndex;
@@ -34,6 +35,7 @@ class CatalogServiceProvider extends ModuleServiceProvider
      */
     protected array $commands = [
         ImportCatalogCommand::class,
+        SetCourseIdnumbersCommand::class,
     ];
 
     /**

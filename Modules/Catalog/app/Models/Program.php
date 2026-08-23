@@ -22,6 +22,7 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  *
  * @property int $institution_id
  * @property string $code
+ * @property string|null $course_idnumber
  * @property string $name_es
  * @property string|null $name_en
  * @property string|null $credential_en
@@ -55,6 +56,7 @@ class Program extends Model
     protected $fillable = [
         'institution_id',
         'code',
+        'course_idnumber',
         'name_es',
         'name_en',
         'credential_en',
@@ -72,6 +74,21 @@ class Program extends Model
         'status',
         'display_order',
     ];
+
+    /**
+     * Busca un programa por su idnumber de Moodle (`course_idnumber`), acotado a la
+     * institución activa por el scope global. Devuelve null si no hay match (idnumber
+     * aún no poblado o desconocido): el llamador debe degradar con elegancia, nunca fallar.
+     */
+    public static function findByCourseIdnumber(string $idnumber): ?self
+    {
+        $idnumber = trim($idnumber);
+        if ($idnumber === '') {
+            return null;
+        }
+
+        return static::query()->where('course_idnumber', $idnumber)->first();
+    }
 
     /**
      * @return BelongsTo<ProgramCategory, $this>

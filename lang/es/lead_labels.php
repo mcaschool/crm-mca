@@ -16,6 +16,7 @@ return [
     'source' => [
         'widget_matcher' => 'Emparejador',
         'corporate' => 'Interés corporativo (InCompany)',
+        'incompany_web' => 'InCompany (web/n8n)',
         'program' => 'Interés en un programa',
         'pricing' => 'Precio / inscripción',
         'manual' => 'Alta manual',

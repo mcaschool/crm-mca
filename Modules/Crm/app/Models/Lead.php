@@ -119,6 +119,17 @@ class Lead extends Model
     }
 
     /**
+     * Perfil InCompany (formación corporativa) asociado, si el lead entró por el
+     * endpoint InCompany. Null en un lead normal.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne<IncompanyLead, $this>
+     */
+    public function incompany(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(IncompanyLead::class, 'lead_id');
+    }
+
+    /**
      * @return BelongsTo<Bot, $this>
      */
     public function bot(): BelongsTo

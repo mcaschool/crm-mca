@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\Crm\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Livewire;
 use Modules\Crm\Console\PurgeRetentionCommand;
 use Modules\Crm\Console\ResetDemoCommand;
@@ -63,6 +66,12 @@ class CrmServiceProvider extends ModuleServiceProvider
         Livewire::component('crm.conversations.show', ConversationsShow::class);
         Livewire::component('crm.dashboard', Dashboard::class);
         Livewire::component('crm.new-lead-notifier', NewLeadNotifier::class);
+
+        // Rate limit del endpoint público InCompany: por IP (anti-inundación de leads
+        // falsos). El exceso responde 429 (throttle:incompany en la ruta).
+        RateLimiter::for('incompany', fn (Request $request) => Limit::perMinute(
+            (int) config('crm.incompany.rate_per_min', 20)
+        )->by($request->ip()));
     }
 
     /**

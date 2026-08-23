@@ -100,8 +100,9 @@ return [
         // D3 — embudo comercial.
         'statuses' => ['new', 'contacted', 'qualified', 'enrolled', 'discarded'],
         'interest_levels' => ['low', 'medium', 'high'],
-        // product_type es extensible; day 1 solo microcredential.
-        'product_types' => ['microcredential'],
+        // product_type es extensible; microcredential (widget) + incompany (formación
+        // corporativa que entra por el endpoint InCompany desde n8n).
+        'product_types' => ['microcredential', 'incompany'],
 
         // D4 — se abre un lead nuevo tras N dias de inactividad o cambio de producto.
         'reopen_after_days' => (int) env('CRM_LEAD_REOPEN_DAYS', 30),
@@ -119,6 +120,8 @@ return [
             'corporate_interest' => ['source' => 'corporate', 'interest_level' => 'high', 'area' => $corporateArea],
             'corporate_contact' => ['source' => 'corporate', 'interest_level' => 'high', 'area' => $corporateArea],
             'corporate_form' => ['source' => 'corporate', 'interest_level' => 'high', 'area' => $corporateArea],
+            // Lead InCompany recibido por el endpoint público desde n8n.
+            'incompany_web' => ['source' => 'incompany_web', 'interest_level' => 'high', 'area' => $corporateArea],
             'program_interest' => ['source' => 'program', 'interest_level' => 'medium'],
             'viewed_price' => ['source' => 'pricing', 'interest_level' => 'high'],
             'clicked_enrollment' => ['source' => 'pricing', 'interest_level' => 'high'],
@@ -152,6 +155,11 @@ return [
         // el regreso se trata como una conversacion NUEVA (el contador de
         // CONVERSACIONES crece y, si el contacto ya existia, se marca el re-contacto).
         'session_resume_minutes' => (int) env('CRM_WIDGET_SESSION_RESUME_MINUTES', 30),
+    ],
+
+    // Endpoint público InCompany (n8n → CRM): rate limit por IP (anti-inundación).
+    'incompany' => [
+        'rate_per_min' => (int) env('CRM_INCOMPANY_RATE_PER_MIN', 20),
     ],
 
     /*

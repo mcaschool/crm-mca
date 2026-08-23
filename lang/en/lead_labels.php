@@ -16,6 +16,7 @@ return [
     'source' => [
         'widget_matcher' => 'Matcher',
         'corporate' => 'Corporate interest (InCompany)',
+        'incompany_web' => 'InCompany (web/n8n)',
         'program' => 'Program interest',
         'pricing' => 'Pricing / enrollment',
         'manual' => 'Manual entry',

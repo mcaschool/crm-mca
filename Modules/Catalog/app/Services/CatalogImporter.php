@@ -26,6 +26,8 @@ class CatalogImporter
     /** field => posibles cabeceras normalizadas (minusculas, sin acentos). */
     private const COLUMNS = [
         'code' => ['id'],
+        // idnumber del curso en Moodle: enlaza el programa con los leads InCompany (n8n).
+        'course_idnumber' => ['idnumber', 'course_idnumber', 'id moodle', 'idnumber moodle', 'id number'],
         'name_es' => ['nombre del programa', 'nombre'],
         'credential_en' => ['microcredencial que otorga', 'microcredencial', 'credencial'],
         'category' => ['area'],
@@ -169,6 +171,12 @@ class CatalogImporter
 
         if ($program->trashed()) {
             $program->restore();
+        }
+
+        // idnumber de Moodle: solo se escribe si viene con valor (no borra el existente).
+        $idnumber = $this->cell($cells, $map, 'course_idnumber');
+        if ($idnumber !== '') {
+            $program->course_idnumber = $idnumber;
         }
 
         $program->name_es = $nameEs;

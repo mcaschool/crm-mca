@@ -57,6 +57,9 @@ final class IntegrationCatalog
                 'fields' => [
                     ['key' => 'webhook_url', 'label' => 'URL del webhook', 'secret' => false, 'required' => true, 'type' => 'text'],
                     ['key' => 'signing_secret', 'label' => 'Secreto de firma (HMAC)', 'secret' => true, 'required' => true, 'type' => 'password'],
+                    // Token Bearer que autentica el endpoint ENTRANTE de leads InCompany
+                    // (n8n → CRM). Se guarda cifrado y enmascarado; se rota reemplazándolo.
+                    ['key' => 'incompany_inbound_token', 'label' => 'Token entrante InCompany (Bearer)', 'secret' => true, 'required' => false, 'type' => 'password'],
                 ],
             ],
             'google' => [

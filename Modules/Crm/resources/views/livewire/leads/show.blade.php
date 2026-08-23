@@ -106,6 +106,61 @@
                         <div class="locknote"><x-ui.icon name="lock" class="i13" /> Acceso a datos personales registrado en auditoría.</div>
                     </div>
 
+                    {{-- Perfil InCompany (formación corporativa recibida desde n8n). Mini-informe
+                         ordenado: empresa, calificación, área a desarrollar y la ruta de hasta 3
+                         programas ENLAZADOS al catálogo (se muestra el NOMBRE, nunca el precio). --}}
+                    @if ($incompany)
+                        @php
+                            $modalidadLabel = match ($incompany->modalidad) {
+                                'grupo' => 'Grupo',
+                                'persona' => 'Individual',
+                                default => $incompany->modalidad ?: '—',
+                            };
+                            $ruta = $incompany->programRoute();
+                        @endphp
+                        <div class="block" style="border:1px solid var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.06)">
+                            <h3 style="color:var(--blue)">
+                                <x-ui.icon name="briefcase" class="i14" /> Perfil InCompany
+                                <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--blue);background:rgba(37,99,235,.10);padding:2px 8px;border-radius:999px">Empresa</span>
+                            </h3>
+
+                            <div class="field"><x-ui.icon name="building" class="i15" /><span class="k">Empresa</span><span class="v" style="font-weight:700">{{ $incompany->nombre_empresa }}</span></div>
+                            <div class="field"><x-ui.icon name="user" class="i15" /><span class="k">Contacto</span><span class="v">{{ $incompany->nombre_contacto }}</span></div>
+
+                            {{-- Calificación --}}
+                            <div class="mrow"><span class="k">Sector</span><span class="v">{{ $incompany->sector ?: '—' }}</span></div>
+                            <div class="mrow"><span class="k">Tamaño</span><span class="v">{{ $incompany->tamano_empresa ?: '—' }}</span></div>
+                            <div class="mrow"><span class="k">Modalidad</span><span class="v">{{ $modalidadLabel }} · {{ $incompany->cantidad_personas }} {{ $incompany->cantidad_personas === 1 ? 'persona' : 'personas' }}</span></div>
+
+                            @if ($incompany->area_desarrollo)
+                                <div class="mrow" style="align-items:flex-start"><span class="k">A desarrollar</span><span class="v">{{ $incompany->area_desarrollo }}</span></div>
+                            @endif
+
+                            {{-- Ruta de programas EN ORDEN, enlazada al catálogo (nombre, sin precio) --}}
+                            <div style="font-size:12px;color:var(--muted);font-weight:600;margin:10px 0 4px">Ruta formativa propuesta</div>
+                            @forelse ($ruta as $r)
+                                <div wire:key="incompany-prog-{{ $r['position'] }}" style="display:flex;gap:8px;align-items:flex-start;border-top:1px solid var(--line);padding:8px 2px">
+                                    <span style="flex:0 0 auto;width:20px;height:20px;border-radius:999px;background:var(--blue);color:#fff;font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ $r['position'] }}</span>
+                                    <div style="min-width:0">
+                                        @if ($r['linked'])
+                                            @if ($r['program']->url)
+                                                <a href="{{ $r['program']->url }}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600;color:var(--ink);text-decoration:none">{{ $r['program']->name }} <x-ui.icon name="external-link" class="i12 gray" /></a>
+                                            @else
+                                                <span style="font-size:13px;font-weight:600;color:var(--ink)">{{ $r['program']->name }}</span>
+                                            @endif
+                                            <div style="font-size:11.5px;color:var(--muted)">{{ $r['program']->code }}</div>
+                                        @else
+                                            <span style="font-size:13px;font-weight:600;color:var(--ink)">{{ $r['code'] }}</span>
+                                            <div style="font-size:11.5px;color:#B23B3B;font-weight:600"><x-ui.icon name="alert-triangle" class="i12" /> Sin enlazar al catálogo</div>
+                                        @endif
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="conv-empty" style="font-size:12.5px">Sin programas indicados.</div>
+                            @endforelse
+                        </div>
+                    @endif
+
                     {{-- Correo: enviar + historial --}}
                     <div class="block" id="email">
                         <h3><x-ui.icon name="mail" class="i14" /> Correo</h3>

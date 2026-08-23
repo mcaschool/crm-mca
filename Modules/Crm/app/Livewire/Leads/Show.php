@@ -536,7 +536,14 @@ class Show extends Component
 
     public function render(): View
     {
-        $lead = $this->lead()->load(['contact', 'program', 'bot', 'leadNotes']);
+        $lead = $this->lead()->load([
+            'contact', 'program', 'bot', 'leadNotes',
+            // Perfil InCompany (si el lead vino de n8n): empresa, calificacion y ruta
+            // de programas ya enlazados al catalogo (para mostrar el NOMBRE, sin precio).
+            'incompany.programa1:id,code,name_es,name_en,url',
+            'incompany.programa2:id,code,name_es,name_en,url',
+            'incompany.programa3:id,code,name_es,name_en,url',
+        ]);
 
         // Motivacion: viaja en el evento del emparejador (no es columna del lead).
         $matcherEvent = Event::query()
@@ -562,6 +569,7 @@ class Show extends Component
 
         return view('crm::livewire.leads.show', [
             'lead' => $lead,
+            'incompany' => $lead->incompany,
             'messages' => $this->conversationMessages($lead),
             'events' => $this->events($lead),
             'emails' => $this->emailHistory($lead),
