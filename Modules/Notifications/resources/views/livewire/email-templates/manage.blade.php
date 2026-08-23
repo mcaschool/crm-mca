@@ -1,6 +1,6 @@
 <div>
     <x-ui.styles />
-    <style>.mail-tb-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed img{max-width:100%}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
+    <style>.tpl-wide-form{transition:margin .15s}@media(min-width:1200px){.tpl-wide-form{margin-left:-48px;margin-right:-48px}}.mail-tb-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed img{max-width:100%}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
     <div class="mca-panel" style="padding:22px 26px 34px;max-width:900px">
 
         @if ($scope === 'shared')
@@ -37,7 +37,7 @@
 
         {{-- Formulario alta/edición --}}
         @if ($showForm)
-            <div class="card card-p fade" style="margin-top:16px">
+            <div class="card card-p fade tpl-wide-form" style="margin-top:16px">
                 <h3 style="margin:0 0 14px;font-size:15px;font-weight:700">{{ $editingId ? 'Editar plantilla' : 'Nueva plantilla' }}</h3>
 
                 <div class="field">

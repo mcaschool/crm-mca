@@ -210,17 +210,28 @@ class EmailHtmlSanitizer
             // Imagen: los atributos width/height se PLASMAN en estilo inline. Así la
             // dimensión intencional gana sobre el reset global img{height:auto} (Tailwind)
             // y se ve igual en el editor, la vista previa y el correo (Gmail/Outlook).
+            //
+            // Se ANEXAN al final para que el tamaño en px del atributo GANE sobre un
+            // width/height en % que traiga el diseño (típico de MJML/Mailchimp): al
+            // quitar su <style>/clases responsivas, un `width:100%` haría que la imagen
+            // llenara el contenedor y se agrandara/deformara; el px del atributo la fija
+            // a su tamaño real y hace que se vea igual en los tres estados.
             if ($tag === 'img') {
-                $dims = '';
+                $style = (string) $child->getAttribute('style');
+                $original = $style;
                 foreach (['width', 'height'] as $dim) {
                     $v = trim($child->getAttribute($dim));
-                    if (preg_match('/^\d{1,4}%?$/', $v)) {
-                        $dims .= $dim.':'.$v.(str_ends_with($v, '%') ? '' : 'px').';';
+                    if (! preg_match('/^\d{1,4}$/', $v)) { // solo px enteros (no %, que sería responsivo)
+                        continue;
                     }
+                    // Quita cualquier `width`/`height` previo del estilo (sin tocar max-*/min-*)
+                    // para que sea IDEMPOTENTE (no se acumula al re-sanear) y añade la px al final.
+                    $style = (string) preg_replace('/(?<![-a-z])'.$dim.'\s*:[^;]*;?/i', '', $style);
+                    $style = rtrim(trim($style), ';');
+                    $style = ($style !== '' ? $style.';' : '').$dim.':'.$v.'px';
                 }
-                if ($dims !== '') {
-                    // Las dimensiones van primero: un style inline explícito del diseño las pisa.
-                    $child->setAttribute('style', $dims.$child->getAttribute('style'));
+                if ($style !== $original) {
+                    $child->setAttribute('style', $style);
                 }
             }
 

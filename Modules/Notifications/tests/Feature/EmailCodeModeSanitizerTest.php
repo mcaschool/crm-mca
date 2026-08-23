@@ -71,14 +71,33 @@ it('conserva imágenes de banner por https y data:image; descarta http y javascr
     expect($js)->not->toContain('javascript:');
 });
 
-it('vuelca width/height de la imagen a estilo inline (para no deformarse con el reset img{height:auto})', function () {
+it('vuelca width/height (px) de la imagen a estilo inline y el px GANA sobre width:% del diseño', function () {
     $s = new EmailHtmlSanitizer;
 
     $out = $s->sanitize('<img src="https://cdn.mca/logo.png" width="250" height="80" alt="logo">');
     expect($out)->toContain('width:250px')->toContain('height:80px');
 
-    // Porcentajes válidos; un estilo explícito del diseño mantiene prioridad (va después).
-    expect($s->sanitize('<img src="https://cdn.mca/x.png" width="100%">'))->toContain('width:100%');
+    // Patrón MJML/Mailchimp: width="150" + style width:100% (responsivo). Al quitar su
+    // <style>/clases, el % agrandaría la imagen; el px del atributo REEMPLAZA al width:%
+    // para fijarla a su tamaño real (se ve igual en editor, preview y correo). Otras
+    // propiedades (height:auto) se conservan.
+    $mjml = $s->sanitize('<img src="https://cdn.mca/l.png" width="150" style="width:100%;height:auto">');
+    expect($mjml)->toContain('width:150px')
+        ->and($mjml)->not->toContain('width:100%')
+        ->and($mjml)->toContain('height: auto');
+
+    // NO toca max-width (se conserva) al fijar el width en px.
+    $mw = $s->sanitize('<img src="https://cdn.mca/l.png" width="150" style="max-width:600px">');
+    expect($mw)->toContain('max-width: 600px')->and($mw)->toContain('width:150px');
+
+    // IDEMPOTENTE: re-sanear no acumula duplicados de width.
+    $twice = $s->sanitize($s->sanitize('<img src="https://cdn.mca/l.png" width="150" style="width:100%">'));
+    expect(substr_count($twice, 'width:150px'))->toBe(1);
+
+    // width en % (responsivo) NO se vuelca a px; el atributo se conserva tal cual.
+    $pct = $s->sanitize('<img src="https://cdn.mca/x.png" width="100%">');
+    expect($pct)->toContain('width="100%"')->and($pct)->not->toContain('width:100%');
+
     // Valor no numérico en el atributo no se vuelca (no rompe el estilo).
     expect($s->sanitize('<img src="https://cdn.mca/x.png" width="foo">'))->not->toContain('width:foo');
 });
