@@ -22,6 +22,8 @@ enum EventType: string
     case LeadCaptured = 'lead_captured';
     case ProgramInterest = 'program_interest';
     case Recontacted = 'recontacted';
+    case IncompanyRutaGenerada = 'incompany_ruta_generada';
+    case IncompanySolicitaContacto = 'incompany_solicita_contacto';
 
     /** @return array<int,string> */
     public static function values(): array

@@ -17,8 +17,9 @@ use Modules\Crm\Services\IncompanyLeadIntake;
  * middleware ResolveInstitutionFromIncompanyToken; aquí solo se VALIDA el JSON estricto, se crea el
  * lead (transaccional) y se registra en auditoría.
  *
- * Respuestas: 201 (creado, con id) · 401 (auth, en el middleware) · 422 (validación) ·
- * 429 (rate limit, en el middleware throttle).
+ * Upsert por email: 201 (lead creado) o 200 (lead existente actualizado), ambos con
+ * {id, status}. Errores: 401 (auth, en el middleware) · 422 (validación) · 429 (rate
+ * limit, en el middleware throttle).
  */
 class IncompanyController
 {
@@ -27,6 +28,7 @@ class IncompanyController
         // Validación ESTRICTA. Se responde 422 JSON explícito (no depende del header
         // Accept) y no se crea nada si algo falla.
         $validator = Validator::make($request->all(), [
+            'evento' => ['required', Rule::in(['ruta_generada', 'solicita_contacto'])],
             'nombre_empresa' => ['required', 'string', 'max:150'],
             'nombre_contacto' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email:rfc', 'max:190'],
@@ -47,11 +49,13 @@ class IncompanyController
             'string' => 'El campo «:attribute» debe ser texto.',
             'integer' => 'El campo «:attribute» debe ser un número entero.',
             'email' => 'El campo «:attribute» debe ser un correo válido.',
-            'in' => 'El valor de «:attribute» no es válido (usa: persona o grupo).',
+            'modalidad.in' => 'El valor de «modalidad» no es válido (usa: persona o grupo).',
+            'evento.in' => 'El valor de «evento» no es válido (usa: ruta_generada o solicita_contacto).',
             'max.string' => 'El campo «:attribute» no puede superar :max caracteres.',
             'max.numeric' => 'El campo «:attribute» no puede ser mayor que :max.',
             'min.numeric' => 'El campo «:attribute» debe ser al menos :min.',
         ], [
+            'evento' => 'evento',
             'nombre_empresa' => 'nombre_empresa',
             'nombre_contacto' => 'nombre_contacto',
             'email' => 'email',
@@ -75,11 +79,14 @@ class IncompanyController
 
         $data = $validator->validated();
 
-        $lead = $intake->create($data);
+        ['lead' => $lead, 'created' => $created] = $intake->upsert($data);
+        $status = $created ? 'created' : 'updated';
 
         // Auditoría: cada lead recibido queda registrado (la IP la captura el servicio
         // de auditoría automáticamente). Nunca se registra el token.
         $audit->log('incompany_lead.received', $lead, [
+            'evento' => $data['evento'],
+            'resultado' => $status,
             'empresa' => $data['nombre_empresa'],
             'origen' => 'incompany_web',
             'programas' => array_values(array_filter([
@@ -89,6 +96,7 @@ class IncompanyController
             ])),
         ]);
 
-        return response()->json(['id' => $lead->getKey(), 'status' => 'created'], 201);
+        // 201 si se creó el lead, 200 si se actualizó uno existente (upsert por email).
+        return response()->json(['id' => $lead->getKey(), 'status' => $status], $created ? 201 : 200);
     }
 }

@@ -51,6 +51,7 @@ function incompanyCtx(): array
 function validIncompanyPayload(array $overrides = []): array
 {
     return array_merge([
+        'evento' => 'ruta_generada',
         'nombre_empresa' => 'ACME Corp',
         'nombre_contacto' => 'Juan Pérez',
         'email' => 'juan@acme.com',
@@ -155,6 +156,10 @@ it('lead válido → 201 con id, lead corporativo, perfil InCompany, programa en
         expect($inc->nombre_empresa)->toBe('ACME Corp');
         expect($inc->modalidad)->toBe('grupo');
         expect($inc->cantidad_personas)->toBe(15);
+        // Evento ruta_generada + email nuevo → stage diagnostico, con su marca de tiempo.
+        expect($inc->stage)->toBe('diagnostico');
+        expect($inc->diagnostico_at)->not->toBeNull();
+        expect($inc->solicita_contacto_at)->toBeNull();
         // Programa 1 enlazado al catálogo; programa 2 guardado como código sin enlazar.
         expect($inc->programa_1_program_id)->toBe($program->id);
         expect($inc->programa_1_code)->toBe('CORP-101');
@@ -196,6 +201,7 @@ it('la ficha muestra el Perfil InCompany con nombre de programa enlazado, sin pr
     $html = Livewire::test(Show::class, ['lead' => $lead])
         ->assertSee('Perfil InCompany')
         ->assertSee('Empresa')                       // etiqueta corporativa en la tarjeta
+        ->assertSee('Diagnóstico')                   // estado del embudo (aún no pidió contacto)
         ->assertSee('ACME Corp')
         ->assertSee('Liderazgo Corporativo')         // NOMBRE del programa enlazado (del catálogo)
         ->assertSee('CORP-999-NOEXISTE')             // el no enlazado se muestra tal cual
@@ -207,4 +213,127 @@ it('la ficha muestra el Perfil InCompany con nombre de programa enlazado, sin pr
     // El nombre del programa aparece; ningún importe (no hay columna de precio en el catálogo).
     expect($html)->not->toContain('US$');
     expect($html)->not->toContain('RD$');
+});
+
+// ---------------------------------------------------------------------------
+// (d) UPSERT por email — un email = un lead, con estado de embudo por evento
+// ---------------------------------------------------------------------------
+
+/** Cuenta leads e InCompany dentro de la institución. */
+function incompanyCounts(int $institutionId): array
+{
+    return app(CurrentInstitution::class)->runFor($institutionId, fn () => [
+        'leads' => Lead::query()->count(),
+        'incompany' => IncompanyLead::query()->count(),
+    ]);
+}
+
+it('(a) ruta_generada con email nuevo → CREA en estado diagnostico (201 created)', function () {
+    [$institution] = incompanyCtx();
+
+    $res = postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['evento' => 'ruta_generada', 'email' => 'nuevo@empresa.com']));
+    $res->assertStatus(201)->assertJson(['status' => 'created']);
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () {
+        expect(IncompanyLead::query()->count())->toBe(1);
+        $inc = IncompanyLead::query()->firstOrFail();
+        expect($inc->stage)->toBe('diagnostico');
+        expect($inc->solicita_contacto_at)->toBeNull();
+    });
+});
+
+it('(b) solicita_contacto con el MISMO email → ACTUALIZA el mismo lead a solicita_contacto, NO crea otro', function () {
+    [$institution] = incompanyCtx();
+
+    // 1º ruta_generada (crea)
+    postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['evento' => 'ruta_generada', 'email' => 'ana@empresa.com']))
+        ->assertStatus(201)->assertJson(['status' => 'created']);
+    $after1 = incompanyCounts($institution->id);
+
+    // 2º solicita_contacto (mismo email → actualiza)
+    $res = postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['evento' => 'solicita_contacto', 'email' => 'ana@empresa.com']));
+    $res->assertStatus(200)->assertJson(['status' => 'updated']);
+    $after2 = incompanyCounts($institution->id);
+
+    // Mismo id, sin duplicar.
+    expect($after2['incompany'])->toBe($after1['incompany']); // 1
+    expect($after2['leads'])->toBe($after1['leads']);         // 1
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () {
+        $inc = IncompanyLead::query()->firstOrFail();
+        expect($inc->stage)->toBe('solicita_contacto');
+        expect($inc->diagnostico_at)->not->toBeNull();        // vino de ruta_generada
+        expect($inc->solicita_contacto_at)->not->toBeNull();  // y ahora pidió contacto
+    });
+});
+
+it('(c) solicita_contacto con email que NUNCA envió ruta → CREA directo en solicita_contacto', function () {
+    [$institution] = incompanyCtx();
+
+    $res = postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['evento' => 'solicita_contacto', 'email' => 'directo@empresa.com']));
+    $res->assertStatus(201)->assertJson(['status' => 'created']);
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () {
+        expect(IncompanyLead::query()->count())->toBe(1);
+        $inc = IncompanyLead::query()->firstOrFail();
+        expect($inc->stage)->toBe('solicita_contacto');
+        expect($inc->solicita_contacto_at)->not->toBeNull();
+        expect($inc->diagnostico_at)->toBeNull();             // nunca hubo diagnóstico
+    });
+});
+
+it('(d) dos ruta_generada del MISMO email → UN solo lead, no dos', function () {
+    [$institution] = incompanyCtx();
+
+    postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['evento' => 'ruta_generada', 'email' => 'dup@empresa.com']))
+        ->assertStatus(201)->assertJson(['status' => 'created']);
+    postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['evento' => 'ruta_generada', 'email' => 'dup@empresa.com']))
+        ->assertStatus(200)->assertJson(['status' => 'updated']);
+
+    $counts = incompanyCounts($institution->id);
+    expect($counts['incompany'])->toBe(1);
+    expect($counts['leads'])->toBe(1);
+});
+
+it('no degrada: ruta_generada que llega DESPUÉS de solicita_contacto mantiene solicita_contacto', function () {
+    [$institution] = incompanyCtx();
+
+    postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['evento' => 'solicita_contacto', 'email' => 'hot@empresa.com']))
+        ->assertStatus(201);
+    postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['evento' => 'ruta_generada', 'email' => 'hot@empresa.com']))
+        ->assertStatus(200);
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () {
+        $inc = IncompanyLead::query()->firstOrFail();
+        expect($inc->stage)->toBe('solicita_contacto'); // NO volvió a diagnostico
+    });
+});
+
+it('la ficha marca «Solicitó contacto» cuando el lead ya pidió contacto (badge caliente)', function () {
+    [$institution, $bot, $program] = incompanyCtx();
+
+    // ruta_generada y luego solicita_contacto sobre el mismo email.
+    $leadId = postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['evento' => 'ruta_generada', 'email' => 'hot2@empresa.com']))->json('id');
+    postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['evento' => 'solicita_contacto', 'email' => 'hot2@empresa.com']));
+
+    $admin = User::factory()->create(['institution_id' => $institution->id, 'role' => 'admin', 'status' => 'active']);
+    app(CurrentInstitution::class)->set($institution->id);
+    test()->actingAs($admin);
+
+    Livewire::test(Show::class, ['lead' => Lead::query()->findOrFail($leadId)])
+        ->assertSee('Solicitó contacto')
+        ->assertSee('Pidió contacto:');   // marca de tiempo del salto
+});
+
+it('evento inválido o ausente → 422 (no crea nada)', function () {
+    [$institution] = incompanyCtx();
+
+    postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['evento' => 'otro_evento']))
+        ->assertStatus(422)->assertJsonPath('errors.evento.0', 'El valor de «evento» no es válido (usa: ruta_generada o solicita_contacto).');
+
+    $bad = validIncompanyPayload();
+    unset($bad['evento']);
+    postIncompany(INCOMPANY_TOKEN, $bad)->assertStatus(422)->assertJsonStructure(['errors' => ['evento']]);
+
+    app(CurrentInstitution::class)->runFor($institution->id, fn () => expect(IncompanyLead::query()->count())->toBe(0));
 });

@@ -124,6 +124,26 @@
                                 <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--blue);background:rgba(37,99,235,.10);padding:2px 8px;border-radius:999px">Empresa</span>
                             </h3>
 
+                            {{-- Estado del embudo InCompany: diagnóstico → solicitó contacto (el más caliente). --}}
+                            @php $incHot = $incompany->hasRequestedContact(); @endphp
+                            <div style="margin:2px 0 10px">
+                                @if ($incHot)
+                                    <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;color:#B23B3B;background:#FBEAEA;border:1px solid #E9C4C4;padding:4px 10px;border-radius:999px">
+                                        <x-ui.icon name="alert-triangle" class="i12" /> Solicitó contacto
+                                    </span>
+                                @else
+                                    <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--muted);background:#EEF1F6;border:1px solid var(--line);padding:4px 10px;border-radius:999px">
+                                        <x-ui.icon name="sparkles" class="i12" /> Diagnóstico
+                                    </span>
+                                @endif
+                                @if ($incompany->diagnostico_at)
+                                    <div style="font-size:11.5px;color:var(--muted);margin-top:6px">Vio su diagnóstico: {{ $incompany->diagnostico_at->translatedFormat('d M Y · H:i') }}</div>
+                                @endif
+                                @if ($incompany->solicita_contacto_at)
+                                    <div style="font-size:11.5px;color:#B23B3B;font-weight:600;margin-top:2px">Pidió contacto: {{ $incompany->solicita_contacto_at->translatedFormat('d M Y · H:i') }}</div>
+                                @endif
+                            </div>
+
                             <div class="field"><x-ui.icon name="building" class="i15" /><span class="k">Empresa</span><span class="v" style="font-weight:700">{{ $incompany->nombre_empresa }}</span></div>
                             <div class="field"><x-ui.icon name="user" class="i15" /><span class="k">Contacto</span><span class="v">{{ $incompany->nombre_contacto }}</span></div>
 

@@ -24,6 +24,8 @@ return [
     'viewed_microcredential_definition' => 'Viewed what a microcredential is',
     'clicked_enrollment' => 'Went to enrollment',
     'corporate_interest' => 'Corporate interest detected',
+    'incompany_ruta_generada' => 'InCompany: viewed diagnosis',
+    'incompany_solicita_contacto' => 'InCompany: requested contact',
     'corporate_contact' => 'Viewed the corporate contact',
     'corporate_form' => 'Opened the corporate form',
     'unresolved_question' => 'Unresolved question',

@@ -80,6 +80,8 @@ class Event extends Model
             'viewed_microcredential_definition' => 'file-text',
             'clicked_enrollment' => 'download',
             'corporate_interest', 'corporate_contact', 'corporate_form' => 'building-2',
+            'incompany_ruta_generada' => 'briefcase',
+            'incompany_solicita_contacto' => 'alert-triangle',
             'unresolved_question' => 'sticky-note',
             'lead_transferred' => 'arrow-right-left',
             'recontacted' => 'bell',

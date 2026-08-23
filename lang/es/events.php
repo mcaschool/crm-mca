@@ -24,6 +24,8 @@ return [
     'viewed_microcredential_definition' => 'Vio qué es una microcredencial',
     'clicked_enrollment' => 'Fue a inscripciones',
     'corporate_interest' => 'Interés corporativo detectado',
+    'incompany_ruta_generada' => 'InCompany: vio su diagnóstico',
+    'incompany_solicita_contacto' => 'InCompany: solicitó contacto',
     'corporate_contact' => 'Vio el contacto corporativo',
     'corporate_form' => 'Abrió el formulario corporativo',
     'unresolved_question' => 'Pregunta sin resolver',

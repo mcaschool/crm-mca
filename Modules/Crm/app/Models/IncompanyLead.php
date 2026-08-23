@@ -31,6 +31,9 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * @property string|null $programa_3_code
  * @property int|null $programa_3_program_id
  * @property string|null $area_desarrollo
+ * @property string $stage
+ * @property \Illuminate\Support\Carbon|null $diagnostico_at
+ * @property \Illuminate\Support\Carbon|null $solicita_contacto_at
  * @property string $origen
  */
 class IncompanyLead extends Model
@@ -55,14 +58,52 @@ class IncompanyLead extends Model
         'programa_3_code',
         'programa_3_program_id',
         'area_desarrollo',
+        'stage',
+        'diagnostico_at',
+        'solicita_contacto_at',
         'origen',
+    ];
+
+    /** Estados del embudo InCompany (orden: cuanto mayor, más caliente). */
+    public const STAGE_DIAGNOSTICO = 'diagnostico';
+
+    public const STAGE_SOLICITA_CONTACTO = 'solicita_contacto';
+
+    /** Rango de cada stage para no degradar nunca en el upsert. */
+    private const STAGE_RANK = [
+        self::STAGE_DIAGNOSTICO => 1,
+        self::STAGE_SOLICITA_CONTACTO => 2,
     ];
 
     protected function casts(): array
     {
         return [
             'cantidad_personas' => 'integer',
+            'diagnostico_at' => 'datetime',
+            'solicita_contacto_at' => 'datetime',
         ];
+    }
+
+    /** Rango numérico de un stage (0 si desconocido); mayor = más avanzado. */
+    public static function stageRank(?string $stage): int
+    {
+        return self::STAGE_RANK[$stage] ?? 0;
+    }
+
+    /** ¿Este lead ya pidió contacto? (el más caliente). */
+    public function hasRequestedContact(): bool
+    {
+        return $this->stage === self::STAGE_SOLICITA_CONTACTO;
+    }
+
+    /** Etiqueta legible del stage para la ficha. */
+    public function stageLabel(): string
+    {
+        return match ($this->stage) {
+            self::STAGE_SOLICITA_CONTACTO => 'Solicitó contacto',
+            self::STAGE_DIAGNOSTICO => 'Diagnóstico',
+            default => $this->stage,
+        };
     }
 
     /**
