@@ -91,6 +91,25 @@ class Program extends Model
     }
 
     /**
+     * Resuelve un programa por el identificador que envía n8n, aceptando AMBOS formatos:
+     * primero el `course_idnumber` de Moodle (ej. "mecp") y, si no casa, el `code` del
+     * catálogo (ej. "MC-011"). El Recomendador InCompany envía el `code`, pero el diseño
+     * contempla también el idnumber; con esto enlaza en cualquiera de los dos casos.
+     * Acotado a la institución activa por el scope global; null si no matchea (degradar,
+     * nunca romper el lead).
+     */
+    public static function findByCourseIdnumberOrCode(string $value): ?self
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        return static::query()->where('course_idnumber', $value)->first()
+            ?? static::query()->where('code', $value)->first();
+    }
+
+    /**
      * @return BelongsTo<ProgramCategory, $this>
      */
     public function category(): BelongsTo

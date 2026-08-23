@@ -147,7 +147,7 @@ class Index extends Component
                 fputcsv($out, [
                     trim(($lead->contact->first_name ?? '').' '.($lead->contact->last_name ?? '')),
                     $lead->contact->email ?? '',
-                    $lead->bot->assistant_name ?? '',
+                    $lead->capturedByLabel(),
                     $lead->status->label(),
                     $lead->goal ?? '',
                     $lead->area ?? '',

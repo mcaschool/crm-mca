@@ -111,6 +111,21 @@ class Lead extends Model
     }
 
     /**
+     * Quién CAPTÓ el lead, según la fuente real (no el bot al que se atribuye por esquema).
+     * Los leads del Recomendador InCompany (source=incompany_web) llegan por formulario/n8n
+     * y NUNCA hablaron con un bot: su origen es el "Recomendador InCompany". El resto se
+     * atribuye al asesor (bot) que de verdad lo captó (p. ej. una conversación con Celia).
+     */
+    public function capturedByLabel(): string
+    {
+        if ($this->source === 'incompany_web' || $this->product_type === 'incompany') {
+            return 'Recomendador InCompany';
+        }
+
+        return $this->bot->assistant_name ?? '—';
+    }
+
+    /**
      * @return BelongsTo<Program, $this>
      */
     public function program(): BelongsTo

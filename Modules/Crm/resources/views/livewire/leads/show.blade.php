@@ -26,7 +26,7 @@
                 <div>
                     <div class="nm">{{ $fullName }}</div>
                     <div class="sub">
-                        <x-ui.icon name="bot" class="i13" /> Captado por {{ $lead->bot->assistant_name ?? '—' }}
+                        <x-ui.icon name="{{ $incompany ? 'briefcase' : 'bot' }}" class="i13" /> Captado por {{ $lead->capturedByLabel() }}
                         · <x-ui.icon name="mail" class="i13 gray" /> {{ $c->email ?? '—' }}
                         @if ($lead->sourceLabel())
                             · <x-ui.icon name="activity" class="i13 gray" /> Motivo: {{ $lead->sourceLabel() }}
@@ -71,28 +71,45 @@
                 </div>
             </div>
 
-            <div class="d-body">
-                {{-- Conversación --}}
-                <div class="conv">
-                    <h3><x-ui.icon name="message-circle" class="i14" /> Conversación</h3>
-                    @forelse ($messages as $msg)
-                        @php
-                            $isUser = $msg->sender_type === 'user';
-                            $label = $isUser ? ($first ?: 'Prospecto') : ($msg->sender_type === 'celia' ? ($lead->bot->assistant_name ?? 'Celia') : 'MCA School');
-                            $html = e($msg->content);
-                            $html = preg_replace('~(https?://[^\s<]+)~u', '<a href="$1" target="_blank" rel="noopener">$1</a>', $html);
-                        @endphp
-                        <div class="m {{ $isUser ? 'me' : 'bot' }}">
-                            <div class="lbl">{{ $label }}</div>
-                            <div class="bub">{!! nl2br($html) !!}</div>
-                        </div>
-                    @empty
-                        <div class="conv-empty">Este lead aún no tiene mensajes registrados.</div>
-                    @endforelse
-                </div>
+            {{-- Sin conversación (leads de formulario, p. ej. InCompany) → una sola columna:
+                 no se muestra el panel grande vacío de chat; la ficha se centra en los datos. --}}
+            <div class="d-body {{ $messages->isEmpty() ? 'no-conv' : '' }}">
+                {{-- Conversación (solo si de verdad hubo mensajes) --}}
+                @if ($messages->isNotEmpty())
+                    <div class="conv">
+                        <h3><x-ui.icon name="message-circle" class="i14" /> Conversación</h3>
+                        @foreach ($messages as $msg)
+                            @php
+                                $isUser = $msg->sender_type === 'user';
+                                $label = $isUser ? ($first ?: 'Prospecto') : ($msg->sender_type === 'celia' ? ($lead->bot->assistant_name ?? 'Celia') : 'MCA School');
+                                $html = e($msg->content);
+                                $html = preg_replace('~(https?://[^\s<]+)~u', '<a href="$1" target="_blank" rel="noopener">$1</a>', $html);
+                            @endphp
+                            <div class="m {{ $isUser ? 'me' : 'bot' }}">
+                                <div class="lbl">{{ $label }}</div>
+                                <div class="bub">{!! nl2br($html) !!}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
 
                 {{-- Barra lateral --}}
                 <div class="side">
+                    @if ($messages->isEmpty())
+                        {{-- Nota compacta en vez del panel de chat vacío. --}}
+                        <div class="block">
+                            <div style="display:flex;align-items:flex-start;gap:9px;color:var(--muted);font-size:12.5px">
+                                <x-ui.icon name="{{ $incompany ? 'briefcase' : 'message-circle' }}" class="i15" style="flex:0 0 auto;margin-top:1px" />
+                                <span>
+                                    @if ($incompany)
+                                        Lead de formulario · <b>Recomendador InCompany</b>. No tuvo conversación de chat; su diagnóstico está en el Perfil InCompany.
+                                    @else
+                                        Este lead no tiene conversación registrada.
+                                    @endif
+                                </span>
+                            </div>
+                        </div>
+                    @endif
                     {{-- 1 · Datos personales --}}
                     <div class="block">
                         <h3><x-ui.icon name="user" class="i14" /> Datos personales</h3>
@@ -118,10 +135,10 @@
                             };
                             $ruta = $incompany->programRoute();
                         @endphp
-                        <div class="block" style="border:1px solid var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.06)">
-                            <h3 style="color:var(--blue)">
+                        <div class="block">
+                            <h3>
                                 <x-ui.icon name="briefcase" class="i14" /> Perfil InCompany
-                                <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--blue);background:rgba(37,99,235,.10);padding:2px 8px;border-radius:999px">Empresa</span>
+                                <span style="margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:normal;color:var(--muted);background:#EEF1F6;border:1px solid var(--line);padding:2px 8px;border-radius:999px">Empresa</span>
                             </h3>
 
                             {{-- Estado del embudo InCompany: diagnóstico → solicitó contacto (el más caliente). --}}

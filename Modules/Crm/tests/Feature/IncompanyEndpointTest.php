@@ -206,6 +206,9 @@ it('la ficha muestra el Perfil InCompany con nombre de programa enlazado, sin pr
         ->assertSee('Liderazgo Corporativo')         // NOMBRE del programa enlazado (del catálogo)
         ->assertSee('CORP-999-NOEXISTE')             // el no enlazado se muestra tal cual
         ->assertSee('Sin enlazar al catálogo')       // y se marca como tal (degradación)
+        ->assertSee('Recomendador InCompany')        // #1 origen correcto (no "Captado por Celia")
+        ->assertSee('No tuvo conversación de chat')  // #4 nota compacta (sin panel de chat vacío)
+        ->assertDontSee('Este lead aún no tiene mensajes registrados') // #4 ya no aparece el vacío grande
         ->assertDontSee('Precio')                    // NUNCA se muestra precio
         ->assertDontSee('precio')
         ->html();
@@ -213,6 +216,27 @@ it('la ficha muestra el Perfil InCompany con nombre de programa enlazado, sin pr
     // El nombre del programa aparece; ningún importe (no hay columna de precio en el catálogo).
     expect($html)->not->toContain('US$');
     expect($html)->not->toContain('RD$');
+});
+
+it('enlaza el programa cuando n8n envía el CODE del catálogo (MC-###), no solo el course_idnumber', function () {
+    [$institution, $bot, $program] = incompanyCtx(); // code MC-050, course_idnumber CORP-101
+
+    // n8n manda el CODE del catálogo (como en producción), no el idnumber de Moodle.
+    $leadId = postIncompany(INCOMPANY_TOKEN, validIncompanyPayload([
+        'programa_1' => 'MC-050',   // el CODE
+        'programa_2' => null,
+        'programa_3' => null,
+    ]))->assertStatus(201)->json('id');
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () use ($leadId, $program) {
+        $inc = IncompanyLead::query()->where('lead_id', $leadId)->firstOrFail();
+        // Enlaza por code → program_id resuelto y NOMBRE disponible.
+        expect($inc->programa_1_program_id)->toBe($program->id);
+        expect($inc->programa_1_code)->toBe('MC-050');
+        $route = $inc->programRoute();
+        expect($route[0]['linked'])->toBeTrue();
+        expect($route[0]['program']->name)->toBe('Liderazgo Corporativo');
+    });
 });
 
 // ---------------------------------------------------------------------------

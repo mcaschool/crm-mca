@@ -77,7 +77,10 @@
                             </td>
                             <td class="mail">{{ $lead->contact->email ?? '—' }}</td>
                             <td>
-                                @if ($lead->bot)
+                                @php $incompanyLead = $lead->source === 'incompany_web' || $lead->product_type === 'incompany'; @endphp
+                                @if ($incompanyLead)
+                                    <span class="src"><x-ui.icon name="briefcase" class="i14" /> {{ $lead->capturedByLabel() }}</span>
+                                @elseif ($lead->bot)
                                     <span class="src"><x-ui.icon name="bot" class="i14" /> {{ $lead->bot->assistant_name }}</span>
                                 @else
                                     <span class="dash">—</span>

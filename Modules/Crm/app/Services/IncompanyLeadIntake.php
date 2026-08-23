@@ -60,7 +60,7 @@ class IncompanyLeadIntake
             $matches = [];
             foreach ([1, 2, 3] as $i) {
                 $code = trim((string) ($data['programa_'.$i] ?? ''));
-                $matches[$i] = $code === '' ? [null, null] : [$code, Program::findByCourseIdnumber($code)?->getKey()];
+                $matches[$i] = $code === '' ? [null, null] : [$code, Program::findByCourseIdnumberOrCode($code)?->getKey()];
             }
 
             // DEDUP por email dentro de la institución (scope global). Un email = un lead.
