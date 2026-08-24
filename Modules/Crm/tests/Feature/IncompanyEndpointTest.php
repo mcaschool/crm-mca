@@ -206,6 +206,8 @@ it('la ficha muestra el Perfil InCompany con nombre de programa enlazado, sin pr
         ->assertSee('ACME Corp')
         ->assertSee('Liderazgo Corporativo')         // NOMBRE del programa enlazado (del catálogo)
         ->assertSee('En catálogo')                   // indicador de enlace del programa 1
+        ->assertSee('CORP-101')                      // course_idnumber REAL de Moodle debajo del nombre
+        ->assertDontSee('MC-050')                    // NO el code interno MC-### del catálogo
         ->assertSee('CORP-999-NOEXISTE')             // el no enlazado se muestra tal cual
         ->assertSee('Sin enlazar')                   // y se marca como tal (degradación)
         ->assertSee('Ruta formativa propuesta')      // bloque 3 de la maqueta

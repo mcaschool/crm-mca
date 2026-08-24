@@ -146,7 +146,7 @@
                                                 {{ $r['program']->name }}
                                             @endif
                                         </div>
-                                        <div class="code">{{ $r['program']->code }}</div>
+                                        <div class="code">{{ $r['program']->course_idnumber ?: $r['code'] }}</div>
                                     @else
                                         <div class="name">{{ $r['code'] }}</div>
                                         <div class="code">Código recibido</div>
@@ -435,7 +435,7 @@
                                             @else
                                                 <span style="font-size:13px;font-weight:600;color:var(--ink)">{{ $r['program']->name }}</span>
                                             @endif
-                                            <div style="font-size:11.5px;color:var(--muted)">{{ $r['program']->code }}</div>
+                                            <div style="font-size:11.5px;color:var(--muted)">{{ $r['program']->course_idnumber ?: $r['code'] }}</div>
                                         @else
                                             <span style="font-size:13px;font-weight:600;color:var(--ink)">{{ $r['code'] }}</span>
                                             <div style="font-size:11.5px;color:#B23B3B;font-weight:600"><x-ui.icon name="alert-triangle" class="i12" /> Sin enlazar al catálogo</div>
