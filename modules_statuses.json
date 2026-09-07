@@ -8,5 +8,6 @@
     "Chat": true,
     "Ai": true,
     "Notifications": true,
-    "Audit": true
+    "Audit": true,
+    "Social": true
 }

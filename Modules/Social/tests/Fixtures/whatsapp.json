@@ -1,0 +1,35 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "WABA_1234567890",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15551230000",
+              "phone_number_id": "demo_wa_phone"
+            },
+            "contacts": [
+              {
+                "profile": { "name": "Valentina Rojas" },
+                "wa_id": "5215559990001"
+              }
+            ],
+            "messages": [
+              {
+                "from": "5215559990001",
+                "id": "wamid.HBgTEST00000001",
+                "timestamp": "1757001000",
+                "type": "text",
+                "text": { "body": "Hola, ¿la microcredencial en finanzas tiene cupo disponible?" }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

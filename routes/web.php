@@ -101,6 +101,15 @@ $panel->group(function () {
     Route::get('/crm/contacts/{contact}', ContactsShow::class)->name('crm.contacts.show');
     Route::get('/crm/conversations/{conversation}', ConversationsShow::class)->name('crm.conversations.show');
 
+    // Bandeja social unificada (Livewire full-page; acceso canWorkCrm, gated en mount).
+    Route::get('/social/bandeja', \Modules\Social\Livewire\Inbox::class)->name('social.inbox');
+
+    // Publicador de contenido (FB Página + Instagram; acceso canPublishSocial, gated en mount).
+    Route::get('/social/publicar', \Modules\Social\Livewire\Publisher::class)->name('social.publisher');
+
+    // Admin de canales sociales (Configuraciones; SOLO Admin, SocialChannelPolicy en mount).
+    Route::get('/social/canales', \Modules\Social\Livewire\Channels::class)->name('social.channels');
+
     // Auditoria de seguridad (Livewire, SOLO LECTURA, solo Admin por Policy en mount).
     Route::get('/audit', \Modules\Audit\Livewire\Logs\Index::class)->name('audit.index');
 

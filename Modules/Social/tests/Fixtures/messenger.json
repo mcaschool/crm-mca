@@ -1,0 +1,20 @@
+{
+  "object": "page",
+  "entry": [
+    {
+      "id": "demo_fb_page",
+      "time": 1757001000000,
+      "messaging": [
+        {
+          "sender": { "id": "psid_8887701" },
+          "recipient": { "id": "demo_fb_page" },
+          "timestamp": 1757001000000,
+          "message": {
+            "mid": "m_MSGR00000001",
+            "text": "Hola! Vi el diploma en liderazgo en Facebook, ¿cuándo inicia el próximo grupo?"
+          }
+        }
+      ]
+    }
+  ]
+}

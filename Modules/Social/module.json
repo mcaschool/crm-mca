@@ -1,0 +1,11 @@
+{
+    "name": "Social",
+    "alias": "social",
+    "description": "Bandeja social unificada (WhatsApp, Instagram, Messenger).",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Social\\Providers\\SocialServiceProvider"
+    ],
+    "files": []
+}

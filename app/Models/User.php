@@ -192,6 +192,17 @@ class User extends Authenticatable
     }
 
     /**
+     * ¿Puede PUBLICAR contenido social (Facebook Página + Instagram)? Tarea de marketing:
+     * Administrador y Marketing (o super-admin). Admisiones NO. Es operativo, no credenciales
+     * (esas siguen siendo solo de Admin en Integraciones).
+     */
+    public function canPublishSocial(): bool
+    {
+        return $this->isSuperAdmin()
+            || in_array($this->role, [UserRole::Admin, UserRole::Marketing], true);
+    }
+
+    /**
      * ¿Puede trabajar el CRM? Los tres roles del panel (Admin, Marketing,
      * Admisiones) trabajan los prospectos. Las acciones destructivas se reservan
      * a Admin (canManageUsers).

@@ -54,6 +54,16 @@
                     <x-ui.icon name="contact" /> {{ __('Contactos') }}
                 </a>
             @endcan
+            @if (auth()->user()?->canWorkCrm())
+                <a href="{{ route('social.inbox') }}" class="mca-nav-item {{ request()->routeIs('social.inbox') ? 'on' : '' }}">
+                    <x-ui.icon name="inbox" /> {{ __('Bandeja social') }}
+                </a>
+            @endif
+            @if (auth()->user()?->canPublishSocial())
+                <a href="{{ route('social.publisher') }}" class="mca-nav-item {{ request()->routeIs('social.publisher') ? 'on' : '' }}">
+                    <x-ui.icon name="image" /> {{ __('Publicador') }}
+                </a>
+            @endif
             @if (auth()->user()?->canSendEmail())
                 <a href="{{ route('email-templates.mine') }}" class="mca-nav-item {{ request()->routeIs('email-templates.mine') ? 'on' : '' }}">
                     <x-ui.icon name="mail" /> {{ __('Mis plantillas') }}
@@ -81,6 +91,11 @@
                     <x-ui.icon name="plug" /> {{ __('Integraciones') }}
                 </a>
             @endcan
+            @if (auth()->user()?->canManageIntegrations())
+                <a href="{{ route('social.channels') }}" class="mca-nav-item {{ request()->routeIs('social.channels') ? 'on' : '' }}">
+                    <x-ui.icon name="message-circle" /> {{ __('Canales sociales') }}
+                </a>
+            @endif
             @can('viewAny', \Modules\Audit\Models\AuditLog::class)
                 <a href="{{ route('audit.index') }}" class="mca-nav-item {{ request()->routeIs('audit.*') ? 'on' : '' }}">
                     <x-ui.icon name="shield" /> {{ __('Auditoría') }}

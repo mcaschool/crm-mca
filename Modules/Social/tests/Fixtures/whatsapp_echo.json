@@ -1,0 +1,30 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "WABA_1234567890",
+      "changes": [
+        {
+          "field": "smb_message_echoes",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15551230000",
+              "phone_number_id": "demo_wa_phone"
+            },
+            "message_echoes": [
+              {
+                "from": "15551230000",
+                "to": "5215559990001",
+                "id": "wamid.ECHO00000001",
+                "timestamp": "1757002000",
+                "type": "text",
+                "text": { "body": "¡Hola Valentina! Sí, aún hay cupo en finanzas. Te comparto la ficha. (respondido desde el teléfono)" }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

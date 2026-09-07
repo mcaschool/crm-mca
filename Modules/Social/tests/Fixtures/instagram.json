@@ -1,0 +1,20 @@
+{
+  "object": "instagram",
+  "entry": [
+    {
+      "id": "demo_ig_user",
+      "time": 1757001000000,
+      "messaging": [
+        {
+          "sender": { "id": "igsid_5552012" },
+          "recipient": { "id": "demo_ig_user" },
+          "timestamp": 1757001000000,
+          "message": {
+            "mid": "m_IG00000001",
+            "text": "Hola, me interesa la microcredencial de marketing digital 😍"
+          }
+        }
+      ]
+    }
+  ]
+}
