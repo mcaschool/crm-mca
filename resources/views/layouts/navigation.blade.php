@@ -54,22 +54,28 @@
                     <x-ui.icon name="contact" /> {{ __('Contactos') }}
                 </a>
             @endcan
-            @if (auth()->user()?->canWorkCrm())
-                <a href="{{ route('social.inbox') }}" class="mca-nav-item {{ request()->routeIs('social.inbox') ? 'on' : '' }}">
-                    <x-ui.icon name="inbox" /> {{ __('Bandeja social') }}
-                </a>
-            @endif
-            @if (auth()->user()?->canPublishSocial())
-                <a href="{{ route('social.publisher') }}" class="mca-nav-item {{ request()->routeIs('social.publisher') ? 'on' : '' }}">
-                    <x-ui.icon name="image" /> {{ __('Publicador') }}
-                </a>
-            @endif
             @if (auth()->user()?->canSendEmail())
                 <a href="{{ route('email-templates.mine') }}" class="mca-nav-item {{ request()->routeIs('email-templates.mine') ? 'on' : '' }}">
                     <x-ui.icon name="mail" /> {{ __('Mis plantillas') }}
                 </a>
             @endif
         </div>
+
+        @if (auth()->user()?->canWorkCrm() || auth()->user()?->canPublishSocial())
+            <div class="mca-nav-group">
+                <div class="mca-nav-label">SOCIAL MEDIA</div>
+                @if (auth()->user()?->canWorkCrm())
+                    <a href="{{ route('social.inbox') }}" class="mca-nav-item {{ request()->routeIs('social.inbox') ? 'on' : '' }}">
+                        <x-ui.icon name="inbox" /> {{ __('Bandeja social') }}
+                    </a>
+                @endif
+                @if (auth()->user()?->canPublishSocial())
+                    <a href="{{ route('social.publisher') }}" class="mca-nav-item {{ request()->routeIs('social.publisher') ? 'on' : '' }}">
+                        <x-ui.icon name="image" /> {{ __('Publicador') }}
+                    </a>
+                @endif
+            </div>
+        @endif
 
         <div class="mca-nav-group">
             <div class="mca-nav-label">CONFIGURACIÓN</div>
