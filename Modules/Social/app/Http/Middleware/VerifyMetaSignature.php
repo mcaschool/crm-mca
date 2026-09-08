@@ -6,7 +6,6 @@ namespace Modules\Social\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -41,32 +40,11 @@ final class VerifyMetaSignature
         };
         $header = (string) $request->header('X-Hub-Signature-256', '');
 
-        // TEMP DEBUG (diagnóstico IG) — QUITAR tras el diagnóstico. Registra que LLEGÓ un POST
-        // (antes de validar), para distinguir "no llega nada" (modo desarrollo) de "llega con
-        // firma inválida" (app secret equivocado). `secret_source` confirma qué secret se usó.
-        // No registra el secreto, solo su origen y si casa la firma.
-        $rawHash = $secret !== '' ? hash_hmac('sha256', $request->getContent(), $secret) : '';
-        $expected = $rawHash !== '' ? 'sha256='.$rawHash : '';
-        $recvHash = str_starts_with($header, 'sha256=') ? substr($header, 7) : $header;
-        Log::info('social.webhook.debug.signature', [
-            'provider' => $provider,
-            'has_secret' => $secret !== '',
-            'secret_source' => $perProvider !== '' ? "secrets.{$provider}" : ($secret !== '' ? 'app_secret(comun)' : 'ninguno'),
-            'has_signature_header' => $header !== '',
-            'signature_matches' => $secret !== '' && $header !== '' && hash_equals($expected, $header),
-            'body_bytes' => strlen($request->getContent()),
-            // TEMP DEBUG (dirigido) — comparar cálculo vs recibido y detectar body/formato.
-            'content_type' => $request->header('Content-Type'),
-            'calc_prefix' => substr($rawHash, 0, 8),
-            'calc_len' => strlen($rawHash),
-            'recv_prefix' => substr($recvHash, 0, 8),
-            'recv_len' => strlen($recvHash),
-            'recv_has_sha256_prefix' => str_starts_with($header, 'sha256='),
-        ]);
-
         if ($secret === '' || $header === '') {
             abort(401, 'Firma ausente.');
         }
+
+        $expected = 'sha256='.hash_hmac('sha256', $request->getContent(), $secret);
 
         if (! hash_equals($expected, $header)) {
             abort(401, 'Firma inválida.');
