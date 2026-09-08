@@ -45,7 +45,9 @@ final class VerifyMetaSignature
         // (antes de validar), para distinguir "no llega nada" (modo desarrollo) de "llega con
         // firma inválida" (app secret equivocado). `secret_source` confirma qué secret se usó.
         // No registra el secreto, solo su origen y si casa la firma.
-        $expected = $secret !== '' ? 'sha256='.hash_hmac('sha256', $request->getContent(), $secret) : '';
+        $rawHash = $secret !== '' ? hash_hmac('sha256', $request->getContent(), $secret) : '';
+        $expected = $rawHash !== '' ? 'sha256='.$rawHash : '';
+        $recvHash = str_starts_with($header, 'sha256=') ? substr($header, 7) : $header;
         Log::info('social.webhook.debug.signature', [
             'provider' => $provider,
             'has_secret' => $secret !== '',
@@ -53,6 +55,13 @@ final class VerifyMetaSignature
             'has_signature_header' => $header !== '',
             'signature_matches' => $secret !== '' && $header !== '' && hash_equals($expected, $header),
             'body_bytes' => strlen($request->getContent()),
+            // TEMP DEBUG (dirigido) — comparar cálculo vs recibido y detectar body/formato.
+            'content_type' => $request->header('Content-Type'),
+            'calc_prefix' => substr($rawHash, 0, 8),
+            'calc_len' => strlen($rawHash),
+            'recv_prefix' => substr($recvHash, 0, 8),
+            'recv_len' => strlen($recvHash),
+            'recv_has_sha256_prefix' => str_starts_with($header, 'sha256='),
         ]);
 
         if ($secret === '' || $header === '') {
