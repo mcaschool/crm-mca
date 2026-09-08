@@ -79,9 +79,9 @@ it('Messenger: arma la petición correcta y marca el mensaje como enviado', func
 });
 
 // ----------------------------------------------------------------------------------
-// Instagram: host graph.facebook.com + nodo = IG User ID del canal (token EAA)
+// Instagram: host graph.facebook.com + nodo = PAGE ID de la Página vinculada (canal Messenger)
 // ----------------------------------------------------------------------------------
-it('Instagram: envía por graph.facebook.com usando el IG User ID del canal y el IGSID', function () {
+it('Instagram: envía por graph.facebook.com usando el Page ID de la Página vinculada', function () {
     [, $user, , $iConv] = outboundCtx();
     Http::fake(['graph.facebook.com/*' => Http::response(['recipient_id' => 'IGSID_1', 'message_id' => 'mid.IG_OUT_1'], 200)]);
 
@@ -90,13 +90,24 @@ it('Instagram: envía por graph.facebook.com usando el IG User ID del canal y el
     expect($message->status)->toBe('sent');
     expect($message->external_message_id)->toBe('mid.IG_OUT_1');
 
+    // El nodo es el Page ID (external_id del canal Messenger = PAGE_1), no el IG User ID.
     Http::assertSent(function ($request) {
-        return $request->url() === 'https://graph.facebook.com/v26.0/IGU_1/messages'
+        return $request->url() === 'https://graph.facebook.com/v26.0/PAGE_1/messages'
             && $request->hasHeader('Authorization', 'Bearer IG_TOKEN')
             && $request['recipient']['id'] === 'IGSID_1'
             && $request['messaging_type'] === 'RESPONSE'
             && $request['message']['text'] === 'Te paso la info por aquí';
     });
+});
+
+it('Instagram: si el canal IG trae page_id explícito en sus credenciales, ese nodo manda', function () {
+    [, $user, , $iConv] = outboundCtx();
+    $iConv->channel->update(['credentials' => array_merge($iConv->channel->credentials, ['page_id' => 'PAGE_OVERRIDE'])]);
+    Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'mid.OV'], 200)]);
+
+    outbound()->send($iConv->fresh(), 'hola', $user);
+
+    Http::assertSent(fn ($r) => $r->url() === 'https://graph.facebook.com/v26.0/PAGE_OVERRIDE/messages');
 });
 
 // ----------------------------------------------------------------------------------

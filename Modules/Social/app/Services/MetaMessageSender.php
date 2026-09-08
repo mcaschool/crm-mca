@@ -17,11 +17,12 @@ use Throwable;
  *  - Messenger: POST https://graph.facebook.com/{version}/me/messages
  *      body {recipient:{id:PSID}, messaging_type:'RESPONSE', message:{text}}  (Page Access Token)
  *  - Instagram (mensajería vía app de Facebook, token EAA de System User/Página):
- *      POST https://graph.facebook.com/{version}/{ig_user_id}/messages
+ *      POST https://graph.facebook.com/{version}/{page_id}/messages
  *      body {recipient:{id:IGSID}, messaging_type:'RESPONSE', message:{text}}
- *      El nodo origen es el IG User ID del canal (external_id). Un token EAA es de Graph API
- *      de Facebook → va contra graph.facebook.com; pegarle a graph.instagram.com (que espera
- *      un token IGAA de IG Login) devuelve 190 "Cannot parse access token".
+ *      El nodo origen es el PAGE ID de la Página de Facebook vinculada (NO el IG User ID:
+ *      ese devuelve code 100 / subcode 33). Se toma de credentials['page_id'] del canal IG o,
+ *      si no está, del external_id del canal 'messenger' de la institución (la misma Página).
+ *      Token EAA → graph.facebook.com (graph.instagram.com espera IGAA → 190 "Cannot parse").
  * El token viaja en el header (Bearer), nunca en la URL; el texto va en el cuerpo. La versión
  * de Graph es configurable (social.graph_version). WhatsApp NO se envía aquí.
  *
@@ -54,7 +55,13 @@ final class MetaMessageSender
             return SendResult::failed('Canal sin token o conversación sin destinatario.');
         }
 
-        [$url, $payload] = $this->buildRequest($provider, $recipient, $text, (string) $channel->external_id);
+        // Instagram: el nodo de envío es el PAGE ID de la Página vinculada, no el IG User ID.
+        $node = $provider === 'instagram' ? $this->instagramPageNode($channel) : '';
+        if ($provider === 'instagram' && $node === '') {
+            return SendResult::failed('No se encontró el Page ID de la Página vinculada (canal Messenger) para enviar por Instagram.');
+        }
+
+        [$url, $payload] = $this->buildRequest($provider, $recipient, $text, $node);
 
         // TEMP DEBUG (diagnóstico envío IG, error 190) — QUITAR tras el diagnóstico. Confirma
         // si el token llega ÍNTEGRO al punto de envío. No expone el token completo.
@@ -99,14 +106,14 @@ final class MetaMessageSender
     /**
      * @return array{0: string, 1: array<string, mixed>}
      */
-    private function buildRequest(string $provider, string $recipient, string $text, string $senderId = ''): array
+    private function buildRequest(string $provider, string $recipient, string $text, string $node = ''): array
     {
         $version = (string) config('social.graph_version', 'v26.0');
 
         if ($provider === 'instagram') {
-            // Token EAA (System User) → Graph API de Facebook, nodo = IG User ID del canal.
+            // Token EAA (System User) → Graph API de Facebook, nodo = PAGE ID de la Página vinculada.
             return [
-                "https://graph.facebook.com/{$version}/{$senderId}/messages",
+                "https://graph.facebook.com/{$version}/{$node}/messages",
                 ['recipient' => ['id' => $recipient], 'messaging_type' => 'RESPONSE', 'message' => ['text' => $text]],
             ];
         }
@@ -116,6 +123,26 @@ final class MetaMessageSender
             "https://graph.facebook.com/{$version}/me/messages",
             ['recipient' => ['id' => $recipient], 'messaging_type' => 'RESPONSE', 'message' => ['text' => $text]],
         ];
+    }
+
+    /**
+     * Page ID de la Página de Facebook vinculada (nodo de envío para Instagram). Prioriza un
+     * page_id explícito en las credenciales del canal IG; si no, usa el external_id del canal
+     * 'messenger' de la institución (la misma Página vinculada).
+     */
+    private function instagramPageNode(SocialChannel $channel): string
+    {
+        $explicit = (string) ($channel->credentials['page_id'] ?? '');
+        if ($explicit !== '') {
+            return $explicit;
+        }
+
+        $messenger = SocialChannel::query()
+            ->where('provider', 'messenger')
+            ->where('is_active', true)
+            ->first();
+
+        return $messenger !== null ? (string) $messenger->external_id : '';
     }
 
     private function isOutsideWindow(int $code, int $subcode, string $message): bool
