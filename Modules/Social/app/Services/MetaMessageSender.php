@@ -16,8 +16,12 @@ use Throwable;
  * confirmados en la doc vigente de Meta:
  *  - Messenger: POST https://graph.facebook.com/{version}/me/messages
  *      body {recipient:{id:PSID}, messaging_type:'RESPONSE', message:{text}}  (Page Access Token)
- *  - Instagram (API con IG Login): POST https://graph.instagram.com/{version}/me/messages
- *      body {recipient:{id:IGSID}, message:{text}}  (Instagram User Access Token)
+ *  - Instagram (mensajería vía app de Facebook, token EAA de System User/Página):
+ *      POST https://graph.facebook.com/{version}/{ig_user_id}/messages
+ *      body {recipient:{id:IGSID}, messaging_type:'RESPONSE', message:{text}}
+ *      El nodo origen es el IG User ID del canal (external_id). Un token EAA es de Graph API
+ *      de Facebook → va contra graph.facebook.com; pegarle a graph.instagram.com (que espera
+ *      un token IGAA de IG Login) devuelve 190 "Cannot parse access token".
  * El token viaja en el header (Bearer), nunca en la URL; el texto va en el cuerpo. La versión
  * de Graph es configurable (social.graph_version). WhatsApp NO se envía aquí.
  *
@@ -50,7 +54,20 @@ final class MetaMessageSender
             return SendResult::failed('Canal sin token o conversación sin destinatario.');
         }
 
-        [$url, $payload] = $this->buildRequest($provider, $recipient, $text);
+        [$url, $payload] = $this->buildRequest($provider, $recipient, $text, (string) $channel->external_id);
+
+        // TEMP DEBUG (diagnóstico envío IG, error 190) — QUITAR tras el diagnóstico. Confirma
+        // si el token llega ÍNTEGRO al punto de envío. No expone el token completo.
+        Log::info('social.send.debug.token', [
+            'provider' => $provider,
+            'token_len' => strlen($token),
+            'token_trimmed_len' => strlen(trim($token)),
+            'token_head' => substr($token, 0, 6),
+            'token_tail' => substr($token, -4),
+            'has_whitespace' => (bool) preg_match('/\s/', $token),
+            'auth_via' => 'header Authorization: Bearer',
+            'url' => $url,
+        ]);
 
         try {
             $response = Http::timeout(self::TIMEOUT_SECONDS)
@@ -82,14 +99,15 @@ final class MetaMessageSender
     /**
      * @return array{0: string, 1: array<string, mixed>}
      */
-    private function buildRequest(string $provider, string $recipient, string $text): array
+    private function buildRequest(string $provider, string $recipient, string $text, string $senderId = ''): array
     {
         $version = (string) config('social.graph_version', 'v26.0');
 
         if ($provider === 'instagram') {
+            // Token EAA (System User) → Graph API de Facebook, nodo = IG User ID del canal.
             return [
-                "https://graph.instagram.com/{$version}/me/messages",
-                ['recipient' => ['id' => $recipient], 'message' => ['text' => $text]],
+                "https://graph.facebook.com/{$version}/{$senderId}/messages",
+                ['recipient' => ['id' => $recipient], 'messaging_type' => 'RESPONSE', 'message' => ['text' => $text]],
             ];
         }
 

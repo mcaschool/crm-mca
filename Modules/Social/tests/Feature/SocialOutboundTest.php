@@ -79,11 +79,11 @@ it('Messenger: arma la petición correcta y marca el mensaje como enviado', func
 });
 
 // ----------------------------------------------------------------------------------
-// Instagram: host graph.instagram.com + IGSID
+// Instagram: host graph.facebook.com + nodo = IG User ID del canal (token EAA)
 // ----------------------------------------------------------------------------------
-it('Instagram: usa graph.instagram.com con el IGSID y el token de IG', function () {
+it('Instagram: envía por graph.facebook.com usando el IG User ID del canal y el IGSID', function () {
     [, $user, , $iConv] = outboundCtx();
-    Http::fake(['graph.instagram.com/*' => Http::response(['recipient_id' => 'IGSID_1', 'message_id' => 'mid.IG_OUT_1'], 200)]);
+    Http::fake(['graph.facebook.com/*' => Http::response(['recipient_id' => 'IGSID_1', 'message_id' => 'mid.IG_OUT_1'], 200)]);
 
     $message = outbound()->send($iConv, 'Te paso la info por aquí', $user);
 
@@ -91,9 +91,10 @@ it('Instagram: usa graph.instagram.com con el IGSID y el token de IG', function 
     expect($message->external_message_id)->toBe('mid.IG_OUT_1');
 
     Http::assertSent(function ($request) {
-        return $request->url() === 'https://graph.instagram.com/v26.0/me/messages'
+        return $request->url() === 'https://graph.facebook.com/v26.0/IGU_1/messages'
             && $request->hasHeader('Authorization', 'Bearer IG_TOKEN')
             && $request['recipient']['id'] === 'IGSID_1'
+            && $request['messaging_type'] === 'RESPONSE'
             && $request['message']['text'] === 'Te paso la info por aquí';
     });
 });
