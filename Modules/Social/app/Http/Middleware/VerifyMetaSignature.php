@@ -18,25 +18,38 @@ use Symfony\Component\HttpFoundation\Response;
  * en tiempo constante con hash_equals. Firma ausente, mal formada o que no casa → 401,
  * sin procesar nada. Sin App Secret configurado → 401 (no se puede verificar → no se confía).
  *
- * El secreto se elige por PROVEEDOR (Bloque 3.1): Instagram Login es una app aparte con su
- * propio App Secret; WhatsApp/Messenger comparten el de la app de Facebook. Se toma
- * social.secrets.{provider} y, si no está, el común social.app_secret.
+ * El secreto se elige por PROVEEDOR (Bloque 3.1): Instagram (IG Login) es una app de Meta
+ * APARTE con su propio App Secret y NO debe validarse con el secreto de Facebook. WhatsApp y
+ * Messenger sí comparten la app de Facebook, así que para ellos el común (social.app_secret)
+ * es un fallback válido. Instagram usa ÚNICAMENTE social.secrets.instagram (sin fallback):
+ * si no está cargado, la firma falla de forma ruidosa (401) en vez de usar el secret erróneo.
  */
 final class VerifyMetaSignature
 {
     public function handle(Request $request, Closure $next): Response
     {
         $provider = (string) $request->route('provider');
-        $secret = (string) (config("social.secrets.{$provider}") ?? config('social.app_secret') ?? '');
+
+        // Secret POR PROVEEDOR. Solo WhatsApp/Messenger (misma app de Facebook) caen al común;
+        // Instagram jamás usa el secret de Facebook.
+        $perProvider = config("social.secrets.{$provider}");
+        $perProvider = is_string($perProvider) ? $perProvider : '';
+        $common = (string) (config('social.app_secret') ?? '');
+        $secret = match ($provider) {
+            'instagram' => $perProvider,
+            default => $perProvider !== '' ? $perProvider : $common,
+        };
         $header = (string) $request->header('X-Hub-Signature-256', '');
 
         // TEMP DEBUG (diagnóstico IG) — QUITAR tras el diagnóstico. Registra que LLEGÓ un POST
         // (antes de validar), para distinguir "no llega nada" (modo desarrollo) de "llega con
-        // firma inválida" (app secret equivocado). No registra el secreto, solo si casa la firma.
+        // firma inválida" (app secret equivocado). `secret_source` confirma qué secret se usó.
+        // No registra el secreto, solo su origen y si casa la firma.
         $expected = $secret !== '' ? 'sha256='.hash_hmac('sha256', $request->getContent(), $secret) : '';
         Log::info('social.webhook.debug.signature', [
             'provider' => $provider,
             'has_secret' => $secret !== '',
+            'secret_source' => $perProvider !== '' ? "secrets.{$provider}" : ($secret !== '' ? 'app_secret(comun)' : 'ninguno'),
             'has_signature_header' => $header !== '',
             'signature_matches' => $secret !== '' && $header !== '' && hash_equals($expected, $header),
             'body_bytes' => strlen($request->getContent()),

@@ -20,7 +20,13 @@ const WH_SECRET = 'test_app_secret';
 const WH_VERIFY = 'test_verify_token';
 
 beforeEach(function () {
-    config(['social.app_secret' => WH_SECRET, 'social.webhook_verify_token' => WH_VERIFY]);
+    // Instagram (IG Login) usa su PROPIO secret y no cae al común de Facebook; en las pruebas
+    // le damos el mismo valor para que la firma por defecto valide igual que WhatsApp/Messenger.
+    config([
+        'social.app_secret' => WH_SECRET,
+        'social.secrets.instagram' => WH_SECRET,
+        'social.webhook_verify_token' => WH_VERIFY,
+    ]);
 });
 
 /** Institución con los 3 canales cuyos external_id coinciden con los fixtures. */
