@@ -35,6 +35,12 @@ final class WebhookController
      */
     public function verify(Request $request, string $provider): Response
     {
+        // TEMP DEBUG (diagnóstico IG) — QUITAR tras el diagnóstico. Registra el handshake.
+        Log::info('social.webhook.debug.handshake', [
+            'provider' => $provider,
+            'query' => $request->query(),
+        ]);
+
         $mode = (string) $request->query('hub_mode', '');
         $token = (string) $request->query('hub_verify_token', '');
         $challenge = (string) $request->query('hub_challenge', '');
@@ -54,6 +60,17 @@ final class WebhookController
     {
         $decoded = json_decode($request->getContent(), true);
         $payload = is_array($decoded) ? $decoded : [];
+
+        // TEMP DEBUG (diagnóstico IG) — QUITAR tras el diagnóstico. Payload CRUDO + identidad
+        // real (object, entry.id, sender/recipient) para resolver qué cuenta/ID llega de Meta.
+        Log::info('social.webhook.debug.event', [
+            'provider' => $provider,
+            'ip' => $request->ip(),
+            'signature' => $request->header('X-Hub-Signature-256'),
+            'object' => $payload['object'] ?? null,
+            'entry_ids' => array_map(static fn ($e) => is_array($e) ? ($e['id'] ?? null) : null, $payload['entry'] ?? []),
+            'raw' => $request->getContent(),
+        ]);
 
         $messages = $this->normalizer->normalize($provider, $payload);
 

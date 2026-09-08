@@ -6,6 +6,7 @@ namespace Modules\Social\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -29,11 +30,21 @@ final class VerifyMetaSignature
         $secret = (string) (config("social.secrets.{$provider}") ?? config('social.app_secret') ?? '');
         $header = (string) $request->header('X-Hub-Signature-256', '');
 
+        // TEMP DEBUG (diagnóstico IG) — QUITAR tras el diagnóstico. Registra que LLEGÓ un POST
+        // (antes de validar), para distinguir "no llega nada" (modo desarrollo) de "llega con
+        // firma inválida" (app secret equivocado). No registra el secreto, solo si casa la firma.
+        $expected = $secret !== '' ? 'sha256='.hash_hmac('sha256', $request->getContent(), $secret) : '';
+        Log::info('social.webhook.debug.signature', [
+            'provider' => $provider,
+            'has_secret' => $secret !== '',
+            'has_signature_header' => $header !== '',
+            'signature_matches' => $secret !== '' && $header !== '' && hash_equals($expected, $header),
+            'body_bytes' => strlen($request->getContent()),
+        ]);
+
         if ($secret === '' || $header === '') {
             abort(401, 'Firma ausente.');
         }
-
-        $expected = 'sha256='.hash_hmac('sha256', $request->getContent(), $secret);
 
         if (! hash_equals($expected, $header)) {
             abort(401, 'Firma inválida.');
