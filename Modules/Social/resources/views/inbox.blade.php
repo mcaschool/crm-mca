@@ -1,4 +1,4 @@
-<div class="social-inbox" wire:key="social-inbox">
+<div class="social-inbox" wire:key="social-inbox" wire:poll.2s>
     <style>
         /* La bandeja es una pantalla tipo app: ocupa el ANCHO COMPLETO del bloque central.
            El layout reserva un carril derecho vacío de 300px en todas las páginas; aquí lo
@@ -119,7 +119,15 @@
                 </span>
             </header>
 
-            <div class="sb-msgs">
+            <div class="sb-msgs" wire:key="msgs-{{ $selected->id }}"
+                 x-data="{ atBottom: true }"
+                 x-init="
+                    const el = $el;
+                    const toBottom = () => { el.scrollTop = el.scrollHeight; };
+                    $nextTick(toBottom);
+                    el.addEventListener('scroll', () => { atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48; });
+                    new MutationObserver(() => { if (atBottom) toBottom(); }).observe(el, { childList: true, subtree: true });
+                 ">
                 @forelse ($messages as $msg)
                     @php $failed = in_array($msg->status, ['failed', 'failed_window'], true); @endphp
                     <div class="sb-bubble {{ $msg->direction === 'outbound' ? 'sb-out' : 'sb-in' }} {{ $failed ? 'sb-out--failed' : '' }}"
@@ -149,10 +157,14 @@
 
             <div class="sb-compose">
                 @if ($canReply)
-                    <div class="sb-compose__row">
-                        <textarea rows="1" wire:model="draft" wire:keydown.enter.prevent="send"
+                    {{-- La caja la gobierna Alpine y va wire:ignore: el poll de 2 s no debe pisar
+                         lo que el usuario está escribiendo. El texto se pasa al enviar. --}}
+                    <div class="sb-compose__row" x-data="{ draft: '' }"
+                         x-on:keydown.enter.prevent="if (draft.trim() !== '') $wire.send(draft).then(ok => { if (ok) draft = '' })">
+                        <textarea rows="1" wire:ignore x-model="draft"
                                   placeholder="{{ __('Escribe una respuesta…') }}"></textarea>
-                        <button type="button" class="sb-send sb-send--on" wire:click="send"
+                        <button type="button" class="sb-send sb-send--on"
+                                x-on:click="if (draft.trim() !== '') $wire.send(draft).then(ok => { if (ok) draft = '' })"
                                 wire:target="send" wire:loading.attr="disabled">
                             <span wire:loading.remove wire:target="send">{{ __('Enviar') }}</span>
                             <span wire:loading wire:target="send">{{ __('Enviando…') }}</span>

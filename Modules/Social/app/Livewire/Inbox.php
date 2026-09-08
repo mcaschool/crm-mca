@@ -30,10 +30,23 @@ class Inbox extends Component
         abort_unless(auth()->user()?->canWorkCrm() ?? false, 403);
     }
 
-    /** Selecciona una conversación (validada contra el scope de institución). */
+    /** Selecciona una conversación (validada contra el scope de institución) y la marca leída. */
     public function select(int $id): void
     {
-        $this->selectedId = SocialConversation::query()->whereKey($id)->exists() ? $id : null;
+        $conversation = SocialConversation::query()->find($id);
+        if ($conversation === null) {
+            $this->selectedId = null;
+
+            return;
+        }
+
+        // Al abrir la conversación se marca como leída (no leídos → 0).
+        if ($conversation->unread_count > 0) {
+            $conversation->unread_count = 0;
+            $conversation->save();
+        }
+
+        $this->selectedId = $conversation->id;
         $this->draft = '';
     }
 
@@ -42,20 +55,23 @@ class Inbox extends Component
      * El scoping por institución lo garantiza la consulta (solo encuentra conversaciones de la
      * institución activa); si no la encuentra, no hace nada.
      */
-    public function send(SocialOutboundService $outbound): void
+    public function send(SocialOutboundService $outbound, string $text = ''): bool
     {
-        $text = trim($this->draft);
+        // El texto llega desde la caja (Alpine, wire:ignore); $this->draft es el respaldo.
+        $text = trim($text !== '' ? $text : $this->draft);
         if ($text === '' || $this->selectedId === null) {
-            return;
+            return false;
         }
 
         $conversation = SocialConversation::query()->find($this->selectedId);
         if ($conversation === null || ! in_array($conversation->provider, SocialOutboundService::SENDABLE, true)) {
-            return;
+            return false;
         }
 
         $outbound->send($conversation, $text, auth()->user());
         $this->draft = '';
+
+        return true;
     }
 
     public function render(): View
@@ -80,6 +96,10 @@ class Inbox extends Component
 
         $canReply = $selected !== null
             && in_array($selected->provider, SocialOutboundService::SENDABLE, true);
+
+        // Badge del menú: total de no leídos de la institución. Se emite en cada ciclo del
+        // poll (2 s) para que el badge del sidebar se refresque en vivo mientras se ve la bandeja.
+        $this->dispatch('social-unread-updated', total: (int) SocialConversation::query()->sum('unread_count'));
 
         return view('social::inbox', [
             'conversations' => $conversations,

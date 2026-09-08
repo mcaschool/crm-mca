@@ -65,8 +65,16 @@
             <div class="mca-nav-group">
                 <div class="mca-nav-label">SOCIAL MEDIA</div>
                 @if (auth()->user()?->canWorkCrm())
-                    <a href="{{ route('social.inbox') }}" class="mca-nav-item {{ request()->routeIs('social.inbox') ? 'on' : '' }}">
+                    {{-- Solo se consulta si hay institución en contexto (algunas vistas que usan
+                         este layout, como el perfil, se sirven fuera del grupo de panel). --}}
+                    @php($socialUnread = app(\Modules\Core\Tenancy\CurrentInstitution::class)->has()
+                        ? (int) \Modules\Social\Models\SocialConversation::query()->sum('unread_count')
+                        : 0)
+                    <a href="{{ route('social.inbox') }}" class="mca-nav-item {{ request()->routeIs('social.inbox') ? 'on' : '' }}"
+                       x-data="{ n: {{ $socialUnread }} }" x-on:social-unread-updated.window="n = $event.detail.total">
                         <x-ui.icon name="inbox" /> {{ __('Bandeja social') }}
+                        <span x-show="n > 0" x-text="n"
+                              style="margin-left:auto;min-width:18px;height:18px;padding:0 6px;border-radius:10px;background:#C9A84C;color:#241a05;font-size:11px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center">{{ $socialUnread ?: '' }}</span>
                     </a>
                 @endif
                 @if (auth()->user()?->canPublishSocial())
