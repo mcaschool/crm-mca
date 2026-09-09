@@ -130,9 +130,14 @@ final class SocialPublishService
     }
 
     /**
-     * Matriz de despacho: (content_type, media_type, red) → método del publicador. Los posts
-     * históricos (content_type 'post') conservan EXACTAMENTE el flujo de siempre; mediaUrl()
-     * resuelve media_public_url con fallback a image_public_url.
+     * Matriz de despacho (content_type, media_type, red) → método del publicador:
+     *  post  + image → FB /photos                       · IG contenedor imagen
+     *  post  + video → FB Video API (resumable+handle)  · IG contenedor REELS (share_to_feed)
+     *  reel  + video → FB /video_reels                  · IG contenedor REELS
+     *  story + image → FB photos+photo_stories          · IG contenedor STORIES (image_url)
+     *  story + video → FB /video_stories                · IG contenedor STORIES (video_url)
+     * El post de IMAGEN histórico conserva EXACTAMENTE su flujo; mediaUrl() resuelve
+     * media_public_url con fallback a image_public_url.
      */
     private function dispatch(string $network, SocialChannel $channel, SocialPost $post): PublishResult
     {
@@ -140,6 +145,11 @@ final class SocialPublishService
         $caption = (string) $post->caption;
 
         return match (true) {
+            // Post de VIDEO: en FB es un video normal de Página (Video API, NO Reels);
+            // en IG el feed de video se publica con contenedor REELS (share_to_feed=true).
+            $post->content_type === 'post' && $post->media_type === 'video' => $network === 'facebook'
+                ? $this->publisher->publishFacebookVideoPost($channel, (string) $post->media_path, $caption)
+                : $this->publisher->publishInstagramReel($channel, $mediaUrl, $caption),
             $post->content_type === 'reel' => $network === 'facebook'
                 ? $this->publisher->publishFacebookReel($channel, $mediaUrl, $caption)
                 : $this->publisher->publishInstagramReel($channel, $mediaUrl, $caption),

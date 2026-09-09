@@ -22,7 +22,7 @@ use Modules\Social\Services\SocialPublishService;
  * SocialPublisherTest (comportamiento intacto).
  */
 beforeEach(function () {
-    config(['social.graph_version' => 'v26.0']);
+    config(['social.graph_version' => 'v26.0', 'social.meta_app_id' => 'APP_1']);
     Sleep::fake();
 });
 
@@ -35,7 +35,9 @@ function mfCtx(): array
     app(CurrentInstitution::class)->set($institution->id);
     $user = User::factory()->create(['institution_id' => $institution->id, 'role' => 'marketing']);
 
-    SocialChannel::factory()->create(['provider' => 'messenger', 'external_id' => 'PAGE_1', 'is_active' => true, 'credentials' => ['token' => 'FB_TOKEN']]);
+    // El canal de Facebook lleva DOS credenciales: Page token (todo) + User token de subida
+    // (SOLO Resumable Upload del Post de video). Distintos a propósito para los asserts.
+    SocialChannel::factory()->create(['provider' => 'messenger', 'external_id' => 'PAGE_1', 'is_active' => true, 'credentials' => ['token' => 'FB_TOKEN', 'video_upload_token' => 'FB_UPLOAD_TOKEN']]);
     SocialChannel::factory()->create(['provider' => 'instagram', 'external_id' => 'IGU_1', 'is_active' => true, 'credentials' => ['token' => 'IG_TOKEN']]);
 
     return [$institution, $user];
@@ -53,6 +55,16 @@ function mfFakeVideoOk(): void
         $url = $request->url();
         if (str_contains($url, 'rupload.facebook.com')) {
             return Http::response(['success' => true], 200);
+        }
+        // Facebook Video API (Post de video): sesión → binario → publicación.
+        if (str_contains($url, 'graph-video.facebook.com')) {
+            return Http::response(['id' => 'FB_VIDEO_POST_1'], 200);
+        }
+        if (str_contains($url, '/uploads')) {
+            return Http::response(['id' => 'upload:SESS_1'], 200);
+        }
+        if (str_contains($url, '/upload:')) {
+            return Http::response(['h' => 'HANDLE_1'], 200);
         }
         if (str_contains($url, '/video_reels') || str_contains($url, '/video_stories')) {
             return ($request['upload_phase'] ?? null) === 'start'
@@ -302,6 +314,8 @@ it('FB Reel: hace start, sube por file_url y publica con finish', function () {
         && $r['video_id'] === 'VID_1'
         && $r['video_state'] === 'PUBLISHED'
         && $r['description'] === 'Mi reel');
+    // El Reel usa /video_reels, nunca la Video API de posts.
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), 'graph-video.facebook.com'));
 });
 
 it('FB Reel: error en la fase start deja el target failed', function () {
@@ -703,13 +717,24 @@ it('FB Reel: si start no devuelve upload_url, falla sin construir la URL de rupl
 // ----------------------------------------------------------------------------------
 // PostVideoService: defensa en profundidad (fuera de Livewire)
 // ----------------------------------------------------------------------------------
-it('PostVideoService rechaza más de 100MB aunque se invoque directamente (sin Livewire)', function () {
+it('PostVideoService acepta hasta 250MB (limite general del CRM)', function () {
     Storage::fake('public');
 
-    $big = UploadedFile::fake()->create('gigante.mp4', 103000, 'video/mp4'); // ~100.6 MB
+    $ok = UploadedFile::fake()->create('grande.mp4', 200000, 'video/mp4'); // ~195 MB
+
+    $stored = app(\Modules\Social\Services\PostVideoService::class)->store($ok);
+
+    expect($stored['mime'])->toBe('video/mp4');
+    Storage::disk('public')->assertExists($stored['path']);
+});
+
+it('PostVideoService rechaza más de 250MB aunque se invoque directamente (sin Livewire)', function () {
+    Storage::fake('public');
+
+    $big = UploadedFile::fake()->create('gigante.mp4', 260000, 'video/mp4'); // ~254 MB
 
     expect(fn () => app(\Modules\Social\Services\PostVideoService::class)->store($big))
-        ->toThrow(RuntimeException::class, 'supera el tamaño máximo');
+        ->toThrow(RuntimeException::class, 'supera el tamaño máximo permitido (250 MB)');
     expect(Storage::disk('public')->allFiles('social-posts'))->toBe([]);
 });
 
@@ -725,6 +750,314 @@ it('PostVideoService limpia el archivo huérfano si el guardado quedó parcial',
 
     expect(fn () => app(\Modules\Social\Services\PostVideoService::class)->store($file))
         ->toThrow(RuntimeException::class, 'no se guardó completo');
+});
+
+// ----------------------------------------------------------------------------------
+// Límites de tamaño por formato y redes (Reel 250MB · Historia con IG 100MB · FB-only 250MB)
+// ----------------------------------------------------------------------------------
+it('Reel entre 100 y 250MB pasa la validación y se publica en ambas redes', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    mfFakeVideoOk();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->call('setContentType', 'reel')
+        ->set('video', UploadedFile::fake()->create('grande.mp4', 200000, 'video/mp4')) // ~195 MB
+        ->call('publish')
+        ->assertHasNoErrors();
+
+    $post = SocialPost::query()->first();
+    expect($post->status)->toBe('published');
+    expect($post->targets)->toHaveCount(2);
+});
+
+it('Reel de más de 250MB se rechaza sin publicar y con mensaje comprensible', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    Http::fake();
+
+    // >250 MB muere en la PUERTA de subida temporal de Livewire (config max:256000):
+    // la propiedad video queda vacía y publish la exige con un mensaje claro (no la
+    // clave técnica de validación).
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->call('setContentType', 'reel')
+        ->set('video', UploadedFile::fake()->create('gigante.mp4', 260000, 'video/mp4')) // ~254 MB
+        ->call('publish')
+        ->assertHasErrors('video')
+        ->assertSee('Selecciona un video MP4 (máximo 250 MB).');
+
+    Http::assertNothingSent();
+    expect(SocialPost::query()->count())->toBe(0);
+});
+
+it('Historia de video con Instagram (solo IG) de más de 100MB se rechaza ANTES de llamar a Meta', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    Http::fake();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->call('setContentType', 'story')
+        ->call('setStoryMedia', 'video')
+        ->set('toFacebook', false)
+        ->set('video', UploadedFile::fake()->create('story.mp4', 150000, 'video/mp4')) // ~146 MB
+        ->call('publish')
+        ->assertHasErrors('video')
+        ->assertSee('Las Historias de Instagram admiten videos de hasta 100 MB.');
+
+    Http::assertNothingSent();
+    expect(SocialPost::query()->count())->toBe(0);
+});
+
+it('Historia de video dual FB+IG de más de 100MB también se rechaza (manda el límite de IG)', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    Http::fake();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->call('setContentType', 'story')
+        ->call('setStoryMedia', 'video')
+        ->set('video', UploadedFile::fake()->create('story.mp4', 150000, 'video/mp4'))
+        ->call('publish')
+        ->assertHasErrors('video');
+
+    Http::assertNothingSent();
+    expect(SocialPost::query()->count())->toBe(0);
+});
+
+it('Historia de video SOLO Facebook usa el límite general (150MB pasa, no aplica el de IG)', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    mfFakeVideoOk();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->call('setContentType', 'story')
+        ->call('setStoryMedia', 'video')
+        ->set('toInstagram', false)
+        ->set('video', UploadedFile::fake()->create('story.mp4', 150000, 'video/mp4')) // ~146 MB
+        ->call('publish')
+        ->assertHasNoErrors();
+
+    $post = SocialPost::query()->first();
+    expect($post->targets)->toHaveCount(1);
+    expect($post->targets->first()->network)->toBe('facebook');
+    expect($post->targets->first()->status)->toBe('published');
+});
+
+it('la UI muestra el límite correcto ANTES de elegir archivo, según formato y redes', function () {
+    [, $user] = mfCtx();
+
+    $c = Livewire::actingAs($user)->test(Publisher::class);
+
+    $c->call('setContentType', 'reel')
+        ->assertSee('MP4 · Máximo 250 MB · 3–90 s · Vertical 9:16 recomendado');
+
+    $c->call('setContentType', 'story')
+        ->call('setStoryMedia', 'video')
+        ->assertSee('MP4 · Máximo 100 MB para Instagram · 3–60 s · Vertical 9:16 recomendado');
+
+    $c->set('toInstagram', false)
+        ->assertSee('MP4 · Máximo 250 MB · 3–60 s · Vertical 9:16 recomendado');
+});
+
+// ----------------------------------------------------------------------------------
+// POST de VIDEO: FB usa la Video API oficial (resumable + handle); IG reutiliza REELS
+// ----------------------------------------------------------------------------------
+it('Post: muestra el selector Imagen/Video', function () {
+    [, $user] = mfCtx();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->assertSee('Contenido')
+        ->assertSee('Imagen')
+        ->assertSee('Video');
+});
+
+it('Post de video en Facebook: Resumable Upload con el USER token y publicación con el PAGE token', function () {
+    mfCtx();
+    Storage::fake('public');
+    Storage::disk('public')->put('social-posts/post-video.mp4', 'contenido-mp4');
+    mfFakeVideoOk();
+
+    $t = mfService()->publish(SocialPost::factory()->postVideo()->create(['caption' => 'Video del taller']), ['facebook'])
+        ->targets->firstWhere('network', 'facebook');
+
+    expect($t->status)->toBe('published');
+    expect($t->external_post_id)->toBe('FB_VIDEO_POST_1');
+
+    // App ID sale de config (SOCIAL_META_APP_ID): jamás se descubre con GET /app.
+    Http::assertNotSent(fn ($r) => str_ends_with($r->url(), '/app'));
+    // Fases 1-2 (Resumable Upload) con el USER token — distinto del Page token.
+    Http::assertSent(fn ($r) => str_contains($r->url(), '/APP_1/uploads')
+        && $r->hasHeader('Authorization', 'Bearer FB_UPLOAD_TOKEN')
+        && $r['file_type'] === 'video/mp4'
+        && $r['file_length'] === strlen('contenido-mp4'));
+    Http::assertSent(fn ($r) => str_contains($r->url(), '/upload:SESS_1')
+        && $r->hasHeader('Authorization', 'OAuth FB_UPLOAD_TOKEN')
+        && $r->hasHeader('file_offset', '0'));
+    // Fase 3 (publicación en la Página) con el PAGE token de siempre.
+    Http::assertSent(fn ($r) => str_contains($r->url(), 'graph-video.facebook.com')
+        && str_contains($r->url(), '/PAGE_1/videos')
+        && $r->hasHeader('Authorization', 'Bearer FB_TOKEN')
+        && $r['fbuploader_video_file_chunk'] === 'HANDLE_1'
+        && $r['description'] === 'Video del taller');
+    // El Page token NUNCA se usa en el resumable upload (sin fallback).
+    Http::assertNotSent(fn ($r) => (str_contains($r->url(), '/uploads') || str_contains($r->url(), '/upload:'))
+        && ($r->hasHeader('Authorization', 'Bearer FB_TOKEN') || $r->hasHeader('Authorization', 'OAuth FB_TOKEN')));
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), '/video_reels'));
+});
+
+it('sin video_upload_token: el Post de video FB falla controlado y Reel/Historia siguen funcionando con el Page token', function () {
+    mfCtx();
+    Storage::fake('public');
+    Storage::disk('public')->put('social-posts/post-video.mp4', 'contenido-mp4');
+    // Canal de Facebook SOLO con Page token (sin autorización de subida).
+    SocialChannel::query()->where('provider', 'messenger')->first()
+        ->update(['credentials' => ['token' => 'FB_TOKEN']]);
+    mfFakeVideoOk();
+
+    // Post de video → fallo controlado, sin fallback y sin llamadas de subida.
+    $t = mfService()->publish(SocialPost::factory()->postVideo()->create(), ['facebook'])
+        ->targets->firstWhere('network', 'facebook');
+
+    expect($t->status)->toBe('failed');
+    expect($t->error_message)->toBe('El canal de Facebook no tiene configurada la autorización necesaria para subir videos.');
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), '/uploads') || str_contains($r->url(), '/upload:'));
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), 'graph-video.facebook.com'));
+
+    // Reel y Historia de video: intactos con SOLO el Page token.
+    $reel = mfService()->publish(SocialPost::factory()->reel()->create(), ['facebook'])
+        ->targets->firstWhere('network', 'facebook');
+    expect($reel->status)->toBe('published');
+
+    $story = mfService()->publish(SocialPost::factory()->storyVideo()->create(), ['facebook'])
+        ->targets->firstWhere('network', 'facebook');
+    expect($story->status)->toBe('published');
+});
+
+it('Post de video en Instagram reutiliza el contenedor REELS con share_to_feed', function () {
+    mfCtx();
+    mfFakeVideoOk();
+
+    $post = SocialPost::factory()->postVideo()->create(['caption' => 'Video del taller']);
+    $post = mfService()->publish($post, ['instagram']);
+
+    expect($post->fresh()->content_type)->toBe('post'); // NO se guarda como reel
+    expect($post->fresh()->media_type)->toBe('video');
+    expect($post->targets->firstWhere('network', 'instagram')->status)->toBe('published');
+
+    Http::assertSent(fn ($r) => str_ends_with($r->url(), '/IGU_1/media')
+        && $r['media_type'] === 'REELS'
+        && $r['share_to_feed'] === true
+        && $r['caption'] === 'Video del taller');
+});
+
+it('Post de video dual puede quedar partial (FB ok, IG falla)', function () {
+    mfCtx();
+    Storage::fake('public');
+    Storage::disk('public')->put('social-posts/post-video.mp4', 'contenido-mp4');
+    Http::fake(function ($request) {
+        $url = $request->url();
+        if (str_contains($url, 'graph-video.facebook.com')) {
+            return Http::response(['id' => 'FB_VIDEO_POST_1'], 200);
+        }
+        if (str_ends_with($url, '/app')) {
+            return Http::response(['id' => 'APP_1'], 200);
+        }
+        if (str_contains($url, '/uploads')) {
+            return Http::response(['id' => 'upload:SESS_1'], 200);
+        }
+        if (str_contains($url, '/upload:')) {
+            return Http::response(['h' => 'HANDLE_1'], 200);
+        }
+
+        // Contenedor IG rechaza.
+        return Http::response(['error' => ['message' => 'The video format is unsupported.', 'code' => 352]], 400);
+    });
+
+    $post = mfService()->publish(SocialPost::factory()->postVideo()->create(), ['facebook', 'instagram']);
+
+    expect($post->status)->toBe('partial');
+    expect($post->targets->firstWhere('network', 'facebook')->status)->toBe('published');
+    expect($post->targets->firstWhere('network', 'instagram')->status)->toBe('failed');
+});
+
+it('desde la pantalla, un Post de video se persiste como post+video y publica en ambas redes', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    mfFakeVideoOk();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->call('setPostMedia', 'video')
+        ->set('video', UploadedFile::fake()->create('taller.mp4', 2048, 'video/mp4'))
+        ->set('caption', 'Video del taller')
+        ->call('publish')
+        ->assertHasNoErrors();
+
+    $post = SocialPost::query()->first();
+    expect($post->content_type)->toBe('post');
+    expect($post->media_type)->toBe('video');
+    expect($post->status)->toBe('published');
+    expect($post->targets)->toHaveCount(2);
+});
+
+// ----------------------------------------------------------------------------------
+// Identificación del video elegido en la UI (nombre original + tamaño + máximo vigente)
+// ----------------------------------------------------------------------------------
+it('la UI identifica el video elegido: nombre original, tamaño real y máximo aplicable', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->call('setContentType', 'reel')
+        ->set('video', UploadedFile::fake()->create('workshop-liderazgo.mp4', 189030, 'video/mp4')) // 184.6 MB
+        ->assertSee('workshop-liderazgo.mp4')
+        ->assertSee('184.6 MB')
+        ->assertSee('Máximo 250 MB');
+});
+
+it('el máximo mostrado cambia de 250 a 100 MB al activar Instagram en Historia de video, validando sin llamar a Meta', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    Http::fake();
+
+    $c = Livewire::actingAs($user)->test(Publisher::class)
+        ->call('setContentType', 'story')
+        ->call('setStoryMedia', 'video')
+        ->set('toInstagram', false)
+        ->set('video', UploadedFile::fake()->create('story.mp4', 150000, 'video/mp4')); // 146.5 MB
+
+    $c->assertSee('story.mp4')
+        ->assertSee('146.5 MB')
+        ->assertSee('Máximo 250 MB')
+        ->assertHasNoErrors();
+
+    // Activar Instagram: el máximo vigente pasa a 100 MB y el archivo ya elegido se
+    // re-valida al instante, sin enviar nada a Meta.
+    $c->set('toInstagram', true)
+        ->assertSee('Máximo 100 MB para Instagram')
+        ->assertHasErrors('video')
+        ->assertSee('Las Historias de Instagram admiten videos de hasta 100 MB.');
+
+    Http::assertNothingSent();
+});
+
+it('cambiar el tipo de medio o de publicación limpia el upload anterior', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+
+    $c = Livewire::actingAs($user)->test(Publisher::class)
+        ->call('setPostMedia', 'video')
+        ->set('video', UploadedFile::fake()->create('v.mp4', 1024, 'video/mp4'));
+
+    // Post Video → Post Imagen: el video se descarta.
+    $c->call('setPostMedia', 'image')->assertSet('video', null);
+
+    // Post Imagen → Reel → Post Video: cada salto limpia el archivo incompatible.
+    $c->set('image', UploadedFile::fake()->image('foto.jpg', 100, 100))
+        ->call('setContentType', 'reel')
+        ->assertSet('image', null)
+        ->set('video', UploadedFile::fake()->create('r.mp4', 1024, 'video/mp4'))
+        ->call('setContentType', 'post')
+        ->assertSet('video', null);
 });
 
 // ----------------------------------------------------------------------------------

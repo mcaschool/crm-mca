@@ -7,6 +7,7 @@ namespace Modules\Social\Services;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use Modules\Social\Models\SocialChannel;
@@ -41,6 +42,12 @@ final class MetaContentPublisher
 
     /** Timeout mayor para la fase de subida de video (Meta descarga el archivo vía file_url). */
     private const UPLOAD_TIMEOUT_SECONDS = 60;
+
+    /**
+     * Timeout de la TRANSFERENCIA del binario a Meta (Resumable Upload del Post de video):
+     * subir hasta 250 MB desde el servidor toma el tiempo que dé el ancho de banda.
+     */
+    private const VIDEO_TRANSFER_TIMEOUT_SECONDS = 300;
 
     /** Esperas (s) entre consultas del status del contenedor IG (imagen): corto (~19s máx). */
     private const CONTAINER_POLL_DELAYS = [1, 2, 3, 5, 8];
@@ -319,6 +326,103 @@ final class MetaContentPublisher
             'video_state' => 'PUBLISHED',
             'description' => $caption,
         ]);
+    }
+
+    /**
+     * VIDEO normal en la Página (Post de video) — Facebook Video API oficial, NO Reels.
+     * La doc separa DOS tokens y aquí se respeta sin fallbacks:
+     *  - Resumable Upload API (fases 1-2): USER token → credentials['video_upload_token'].
+     *  - Publicación en la Página (fase 3): PAGE token → credentials['token'] (el de siempre).
+     * El App ID sale de config social.meta_app_id (SOCIAL_META_APP_ID); jamás se descubre
+     * con llamadas del Page token ni se hardcodea.
+     *  1) POST /{app_id}/uploads             → sesión de subida (USER token)
+     *  2) POST /upload:{session_id}          → binario en STREAMING (OAuth USER token) → {h}
+     *  3) POST graph-video.facebook.com/{v}/{page_id}/videos
+     *          {description, fbuploader_video_file_chunk: h} → {id: video_id}  (PAGE token)
+     * El archivo se lee del disco público por stream: nunca se carga entero en memoria.
+     */
+    public function publishFacebookVideoPost(SocialChannel $channel, string $mediaPath, string $caption): PublishResult
+    {
+        if (($fake = $this->fake('facebook')) !== null) {
+            return $fake;
+        }
+
+        [$token, $pageId, $base] = $this->facebookContext($channel);
+        if ($token === '' || $pageId === '') {
+            return PublishResult::fail('Canal de Facebook sin token o sin page id.');
+        }
+
+        // Token de SUBIDA (User token). SIN fallback al Page token: si falta, este flujo
+        // falla controladamente y Reels/Historias (que solo usan Page token) siguen intactos.
+        $uploadToken = (string) ($channel->credentials['video_upload_token'] ?? '');
+        if ($uploadToken === '') {
+            return PublishResult::fail('El canal de Facebook no tiene configurada la autorización necesaria para subir videos.');
+        }
+
+        $appId = (string) (config('social.meta_app_id') ?? '');
+        if ($appId === '') {
+            return PublishResult::fail('Falta configurar SOCIAL_META_APP_ID para subir videos a Facebook.');
+        }
+
+        $disk = Storage::disk('public');
+        if ($mediaPath === '' || ! $disk->exists($mediaPath)) {
+            return PublishResult::fail('No se encontró el archivo de video en el servidor.');
+        }
+        $absolute = $disk->path($mediaPath);
+        $size = (int) $disk->size($mediaPath);
+
+        $stream = null;
+
+        try {
+            // 1) Sesión de subida (Resumable Upload API, USER token).
+            $session = Http::timeout(self::TIMEOUT_SECONDS)->withToken($uploadToken)->acceptJson()
+                ->post("{$base}/{$appId}/uploads", [
+                    'file_name' => basename($mediaPath),
+                    'file_length' => $size,
+                    'file_type' => 'video/mp4',
+                ]);
+            $sessionId = $session->json('id'); // formato "upload:XXXX"
+            if (! $session->successful() || ! is_string($sessionId) || $sessionId === '') {
+                return PublishResult::fail($this->friendlyError($session, true));
+            }
+
+            // 2) Transferir el binario en streaming (OAuth USER token) → file handle.
+            $stream = fopen($absolute, 'rb');
+            if ($stream === false) {
+                return PublishResult::fail('No se pudo leer el archivo de video del servidor.');
+            }
+            $upload = Http::timeout(self::VIDEO_TRANSFER_TIMEOUT_SECONDS)->acceptJson()
+                ->withHeaders(['Authorization' => 'OAuth '.$uploadToken, 'file_offset' => '0'])
+                ->send('POST', "{$base}/{$sessionId}", ['body' => $stream]);
+            $handle = $upload->json('h');
+            if (! $upload->successful() || ! is_string($handle) || $handle === '') {
+                Log::warning('social.publish.fb.videopost: fallo transfiriendo el binario', ['status' => $upload->status(), 'body' => $upload->json()]);
+
+                return PublishResult::fail('Meta no pudo recibir el video desde el servidor.');
+            }
+
+            // 3) Publicar el video de Página con el handle (PAGE Access Token de siempre).
+            $version = (string) config('social.graph_version', 'v26.0');
+            $publish = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
+                ->post("https://graph-video.facebook.com/{$version}/{$pageId}/videos", [
+                    'description' => $caption,
+                    'fbuploader_video_file_chunk' => $handle,
+                ]);
+            if (! $publish->successful()) {
+                return PublishResult::fail($this->friendlyError($publish, true));
+            }
+            $videoId = $publish->json('id');
+
+            return PublishResult::ok(is_string($videoId) ? $videoId : '');
+        } catch (Throwable $e) {
+            Log::warning('social.publish.fb.videopost: error de red', ['error' => $e->getMessage()]);
+
+            return PublishResult::fail('No se pudo contactar con Facebook (red).');
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
     }
 
     /**

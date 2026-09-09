@@ -83,8 +83,14 @@
                 <button type="button" class="sp-tab {{ $contentType === 'story' ? 'on' : '' }}" wire:click="setContentType('story')">{{ __('Historia') }}</button>
             </div>
 
-            {{-- Historia: elegir entre imagen o video --}}
-            @if ($contentType === 'story')
+            {{-- Post e Historia eligen entre imagen o video (el Reel siempre es video) --}}
+            @if ($contentType === 'post')
+                <span class="sp-nets__label">{{ __('Contenido') }}</span>
+                <div class="sp-tabs">
+                    <button type="button" class="sp-tab {{ $postMedia === 'image' ? 'on' : '' }}" wire:click="setPostMedia('image')">{{ __('Imagen') }}</button>
+                    <button type="button" class="sp-tab {{ $postMedia === 'video' ? 'on' : '' }}" wire:click="setPostMedia('video')">{{ __('Video') }}</button>
+                </div>
+            @elseif ($contentType === 'story')
                 <span class="sp-nets__label">{{ __('Contenido') }}</span>
                 <div class="sp-tabs">
                     <button type="button" class="sp-tab {{ $storyMedia === 'image' ? 'on' : '' }}" wire:click="setStoryMedia('image')">{{ __('Imagen') }}</button>
@@ -92,24 +98,33 @@
                 </div>
             @endif
 
-            @php($isVideo = $contentType === 'reel' || ($contentType === 'story' && $storyMedia === 'video'))
+            @php($isVideo = $contentType === 'reel'
+                || ($contentType === 'post' && $postMedia === 'video')
+                || ($contentType === 'story' && $storyMedia === 'video'))
 
             @if ($isVideo)
                 {{-- Subida de VIDEO (Reel / Historia de video). Requisito: MP4; el resto son
                      recomendaciones (Meta valida duración/FPS/resolución al publicar). --}}
                 <label class="sp-drop">
                     @if ($video)
+                        {{-- Identificación del archivo elegido: nombre ORIGINAL + tamaño real
+                             + máximo aplicable en este momento (cambia con las redes). --}}
                         <x-ui.icon name="check" class="w-8 h-8" />
                         <span class="sp-drop__title">{{ $video->getClientOriginalName() }}</span>
+                        <span class="sp-drop__hint">{{ number_format($video->getSize() / 1048576, 1, '.', '') }} MB · {{ $this->videoMaxLabel() }}</span>
                         <span class="sp-drop__hint">{{ __('Haz clic para cambiar el video') }}</span>
                     @else
                         <x-ui.icon name="image" class="w-8 h-8" />
                         <span class="sp-drop__title">{{ __('Subir video') }}</span>
                         <span class="sp-drop__hint">
                             @if ($contentType === 'reel')
-                                {{ __('MP4 (requisito) · 3–90 s para publicar en ambas redes · vertical 9:16, 1080×1920 y 24–60 FPS recomendados') }}
+                                {{ __('MP4 · Máximo 250 MB · 3–90 s · Vertical 9:16 recomendado') }}
+                            @elseif ($contentType === 'post')
+                                {{ __('MP4 · Máximo 250 MB · Vertical u horizontal') }}
+                            @elseif ($toInstagram)
+                                {{ __('MP4 · Máximo 100 MB para Instagram · 3–60 s · Vertical 9:16 recomendado') }}
                             @else
-                                {{ __('MP4 (requisito) · 3–60 s · vertical 9:16 y 1080×1920 recomendados') }}
+                                {{ __('MP4 · Máximo 250 MB · 3–60 s · Vertical 9:16 recomendado') }}
                             @endif
                         </span>
                     @endif

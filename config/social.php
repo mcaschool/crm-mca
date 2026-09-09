@@ -40,6 +40,14 @@ return [
     'app_secret' => env('SOCIAL_APP_SECRET'),
 
     /*
+    | App ID de la app de Meta (MCA Automation). NO es un secreto, pero vive en env para no
+    | hardcodearlo. Lo usa la Resumable Upload API del Post de VIDEO en Facebook
+    | (POST /{APP_ID}/uploads). La subida usa credentials['video_upload_token'] del canal
+    | (Long-Lived User Token); la publicación final usa el Page Access Token de siempre.
+    */
+    'meta_app_id' => env('SOCIAL_META_APP_ID'),
+
+    /*
     | Salida (Bloque 4): responder desde el CRM hacia Meta (Instagram + Messenger).
     | Versión de Graph API CONFIGURABLE (no hardcodeada). La última publicada por Meta a
     | fecha de este bloque es v26.0 (changelog oficial, jul-2026); se deja en env para

@@ -25,10 +25,12 @@ final class PostVideoService
     private const ACCEPTED_MIMES = ['video/mp4'];
 
     /**
-     * Tope propio del servicio (100 MB), ADEMÁS del de Livewire/Publisher: defensa en
-     * profundidad para cuando este servicio se reutilice desde Jobs u otros flujos.
+     * Tope propio del servicio (250 MB = 250*1024*1024), ADEMÁS del de Livewire/Publisher:
+     * defensa en profundidad para cuando este servicio se reutilice desde Jobs u otros
+     * flujos. Los límites POR RED (p. ej. 100 MB de Instagram Stories) los aplica el
+     * Publicador según las redes seleccionadas; este es el techo general del CRM.
      */
-    private const MAX_BYTES = 104857600;
+    private const MAX_BYTES = 262144000;
 
     /**
      * @return array{path: string, url: string, mime: string, size: int}
@@ -45,7 +47,7 @@ final class PostVideoService
         }
 
         if ((int) $file->getSize() > self::MAX_BYTES) {
-            throw new RuntimeException('El video supera el tamaño máximo permitido (100 MB).');
+            throw new RuntimeException('El video supera el tamaño máximo permitido (250 MB).');
         }
 
         // putFileAs hace copia por streaming: el video nunca se carga entero en memoria.

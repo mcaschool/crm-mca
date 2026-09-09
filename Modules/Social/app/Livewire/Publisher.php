@@ -30,6 +30,9 @@ class Publisher extends Component
     /** Tipo de publicación: post | reel | story. */
     public string $contentType = 'post';
 
+    /** Medio del Post: image | video (solo aplica cuando contentType = post). */
+    public string $postMedia = 'image';
+
     /** Medio de la Historia: image | video (solo aplica cuando contentType = story). */
     public string $storyMedia = 'image';
 
@@ -67,6 +70,18 @@ class Publisher extends Component
         $this->resetValidation();
     }
 
+    /** Cambia el medio del Post (imagen | video) y limpia el archivo elegido. */
+    public function setPostMedia(string $media): void
+    {
+        if (! in_array($media, SocialPost::MEDIA_TYPES, true)) {
+            return;
+        }
+
+        $this->postMedia = $media;
+        $this->reset(['image', 'video', 'result']);
+        $this->resetValidation();
+    }
+
     /** Cambia el medio de la Historia (imagen | video) y limpia el archivo elegido. */
     public function setStoryMedia(string $media): void
     {
@@ -88,14 +103,55 @@ class Publisher extends Component
     public function updatedVideo(): void
     {
         $this->result = null;
-        $this->validateOnly('video', ['video' => ['file', 'mimetypes:video/mp4', 'max:102400']]);
+        $this->validateOnly('video', ['video' => ['file', 'mimetypes:video/mp4', 'max:'.$this->videoMaxKb()]], ['video.max' => $this->videoMaxMessage()]);
     }
 
-    /** ¿El formato seleccionado sube VIDEO? (Reel siempre; Historia según su toggle). */
+    /** El límite de Historia de video depende de las redes: re-validar el archivo ya elegido. */
+    public function updatedToInstagram(): void
+    {
+        if ($this->video !== null && $this->wantsVideo()) {
+            $this->resetValidation('video');
+            $this->validateOnly('video', ['video' => ['file', 'mimetypes:video/mp4', 'max:'.$this->videoMaxKb()]], ['video.max' => $this->videoMaxMessage()]);
+        }
+    }
+
+    /** ¿El formato seleccionado sube VIDEO? (Reel siempre; Post e Historia según su toggle). */
     private function wantsVideo(): bool
     {
         return $this->contentType === 'reel'
+            || ($this->contentType === 'post' && $this->postMedia === 'video')
             || ($this->contentType === 'story' && $this->storyMedia === 'video');
+    }
+
+    /** Etiqueta del máximo vigente, para mostrarla junto al archivo elegido en la vista. */
+    public function videoMaxLabel(): string
+    {
+        return $this->contentType === 'story' && $this->toInstagram
+            ? __('Máximo 100 MB para Instagram')
+            : __('Máximo 250 MB');
+    }
+
+    /**
+     * Límite de subida en KB según formato y redes seleccionadas:
+     *  - Reel (FB, IG o dual): 250 MB (límite general del CRM).
+     *  - Historia de video CON Instagram (solo IG o dual): 100 MB — límite de la API de
+     *    Instagram Stories; se valida ANTES de enviar nada a Meta.
+     *  - Historia de video solo Facebook: 250 MB (límite general).
+     */
+    private function videoMaxKb(): int
+    {
+        if ($this->contentType === 'story' && $this->toInstagram) {
+            return 102400; // 100 MB
+        }
+
+        return 256000; // 250 MB
+    }
+
+    private function videoMaxMessage(): string
+    {
+        return $this->contentType === 'story' && $this->toInstagram
+            ? __('Las Historias de Instagram admiten videos de hasta 100 MB. Reduce el tamaño del archivo o publica únicamente en Facebook.')
+            : __('El video supera el tamaño máximo permitido de 250 MB.');
     }
 
     public function publish(PostImageService $images, PostVideoService $videos, SocialPublishService $service): void
@@ -107,12 +163,18 @@ class Publisher extends Component
         // los valida Meta al publicar (sin ffprobe fiable en hosting compartido) y sus errores
         // se traducen a mensajes claros. Las recomendaciones (9:16, 1080×1920) van en la UI.
         $rules = $wantsVideo
-            ? ['video' => ['required', 'file', 'mimetypes:video/mp4', 'max:102400']]
+            ? ['video' => ['required', 'file', 'mimetypes:video/mp4', 'max:'.$this->videoMaxKb()]]
             : ['image' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:8192']];
         if ($this->contentType !== 'story') {
             $rules['caption'] = ['nullable', 'string', 'max:2200'];
         }
-        $this->validate($rules, [], ['video' => 'video', 'image' => 'imagen']);
+        // 'video.required' también cubre el caso de un archivo rechazado por la puerta de
+        // subida temporal de Livewire (>250 MB): la propiedad queda vacía y este mensaje
+        // sustituye a la clave técnica de validación.
+        $this->validate($rules, [
+            'video.max' => $this->videoMaxMessage(),
+            'video.required' => __('Selecciona un video MP4 (máximo 250 MB).'),
+        ], ['video' => 'video', 'image' => 'imagen']);
 
         $available = $service->availableNetworks();
         $networks = [];

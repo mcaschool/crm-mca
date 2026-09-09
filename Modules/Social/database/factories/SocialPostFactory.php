@@ -27,6 +27,19 @@ class SocialPostFactory extends Factory
         ];
     }
 
+    public function postVideo(): static
+    {
+        return $this->state(fn (): array => [
+            'content_type' => 'post',
+            'media_type' => 'video',
+            'image_path' => null,
+            'image_public_url' => null,
+            'media_path' => 'social-posts/post-video.mp4',
+            'media_public_url' => 'https://cdn.example.test/post-video.mp4',
+            'media_mime' => 'video/mp4',
+        ]);
+    }
+
     public function reel(): static
     {
         return $this->state(fn (): array => [
