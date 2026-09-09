@@ -331,7 +331,6 @@ it('solo publica en las redes que tienen canal en la institución', function () 
 // ----------------------------------------------------------------------------------
 it('desde la pantalla, sube imagen y publica en ambas redes', function () {
     [, $user] = publisherCtx();
-    config(['social.instagram_publish_enabled' => true]); // IG habilitado (App Review aprobado)
     Storage::fake('public');
     fakeAllOk();
 
@@ -346,30 +345,6 @@ it('desde la pantalla, sube imagen y publica en ambas redes', function () {
     expect($post->status)->toBe('published');
     expect($post->targets)->toHaveCount(2);
     Storage::disk('public')->assertExists($post->image_path);
-});
-
-// ----------------------------------------------------------------------------------
-// Instagram deshabilitado temporalmente (permiso pendiente de App Review): solo FB
-// ----------------------------------------------------------------------------------
-it('con IG deshabilitado (default), la pantalla publica SOLO en Facebook aunque haya canal IG', function () {
-    [, $user] = publisherCtx(); // canales FB + IG presentes; flag default = false
-    Storage::fake('public');
-    fakeAllOk();
-
-    Livewire::actingAs($user)->test(Publisher::class)
-        ->set('toInstagram', true) // aunque el toggle llegara en true, la barandilla lo ignora
-        ->set('image', UploadedFile::fake()->image('promo.jpg', 1080, 1080))
-        ->set('caption', 'Solo Facebook por ahora')
-        ->call('publish')
-        ->assertHasNoErrors();
-
-    $post = SocialPost::query()->first();
-    expect($post->targets)->toHaveCount(1);
-    expect($post->targets->first()->network)->toBe('facebook');
-    expect($post->status)->toBe('published');
-
-    // Ninguna llamada al flujo de publicación de Instagram.
-    Http::assertNotSent(fn ($r) => str_contains($r->url(), '/media'));
 });
 
 // ----------------------------------------------------------------------------------
