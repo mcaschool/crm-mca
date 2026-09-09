@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Sleep;
 use Livewire\Livewire;
@@ -885,11 +886,15 @@ it('Post de video en Facebook: Resumable Upload con el USER token y publicación
 
     // App ID sale de config (SOCIAL_META_APP_ID): jamás se descubre con GET /app.
     Http::assertNotSent(fn ($r) => str_ends_with($r->url(), '/app'));
-    // Fases 1-2 (Resumable Upload) con el USER token — distinto del Page token.
+    // FASE 1 con el USER token — y con file_name/file_length/file_type como QUERY
+    // PARAMETERS del POST (cuerpo vacío: NO se envían como JSON), según el contrato
+    // documentado de la Resumable Upload API.
     Http::assertSent(fn ($r) => str_contains($r->url(), '/APP_1/uploads')
         && $r->hasHeader('Authorization', 'Bearer FB_UPLOAD_TOKEN')
-        && $r['file_type'] === 'video/mp4'
-        && $r['file_length'] === strlen('contenido-mp4'));
+        && str_contains($r->url(), 'file_name=post-video.mp4')
+        && str_contains($r->url(), 'file_length='.strlen('contenido-mp4'))
+        && str_contains($r->url(), 'file_type=video')
+        && ! str_contains($r->body(), 'file_name')); // los parámetros van en la QUERY, no en el cuerpo
     Http::assertSent(fn ($r) => str_contains($r->url(), '/upload:SESS_1')
         && $r->hasHeader('Authorization', 'OAuth FB_UPLOAD_TOKEN')
         && $r->hasHeader('file_offset', '0'));
@@ -899,10 +904,54 @@ it('Post de video en Facebook: Resumable Upload con el USER token y publicación
         && $r->hasHeader('Authorization', 'Bearer FB_TOKEN')
         && $r['fbuploader_video_file_chunk'] === 'HANDLE_1'
         && $r['description'] === 'Video del taller');
-    // El Page token NUNCA se usa en el resumable upload (sin fallback).
+    // El Page token NUNCA se usa en el resumable upload (sin fallback)…
     Http::assertNotSent(fn ($r) => (str_contains($r->url(), '/uploads') || str_contains($r->url(), '/upload:'))
         && ($r->hasHeader('Authorization', 'Bearer FB_TOKEN') || $r->hasHeader('Authorization', 'OAuth FB_TOKEN')));
+    // …y el USER token NUNCA publica en la Página (la fase 3 es solo del Page token).
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), 'graph-video.facebook.com')
+        && ($r->hasHeader('Authorization', 'Bearer FB_UPLOAD_TOKEN') || $r->hasHeader('Authorization', 'OAuth FB_UPLOAD_TOKEN')));
     Http::assertNotSent(fn ($r) => str_contains($r->url(), '/video_reels'));
+});
+
+it('fallo en FASE 1 del Post de video FB: diagnóstico seguro por fase, sin tokens en el log', function () {
+    mfCtx();
+    Storage::fake('public');
+    Storage::disk('public')->put('social-posts/post-video.mp4', 'contenido-mp4');
+    Log::spy();
+    Http::fake(function ($request) {
+        if (str_contains($request->url(), '/uploads')) {
+            return Http::response(['error' => [
+                'message' => 'There was a problem uploading your video file. Please try again with another file.',
+                'code' => 6000,
+                'error_subcode' => 1363019,
+            ]], 400);
+        }
+
+        return Http::response([], 200);
+    });
+
+    $t = mfService()->publish(SocialPost::factory()->postVideo()->create(), ['facebook'])
+        ->targets->firstWhere('network', 'facebook');
+
+    expect($t->status)->toBe('failed');
+    expect($t->error_message)->toBe('Meta no pudo procesar la subida del video. Inténtalo de nuevo.');
+    // No pasó de la fase 1: ni transferencia ni publicación.
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), '/upload:'));
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), 'graph-video'));
+
+    Log::shouldHaveReceived('warning')->withArgs(function (string $message, array $context = []): bool {
+        if ($message !== 'social.publish.fb.videopost.phase1_failed') {
+            return false;
+        }
+        $dump = (string) json_encode($context);
+
+        return ($context['code'] ?? null) === 6000
+            && ($context['subcode'] ?? null) === 1363019
+            && ($context['file_size'] ?? null) === strlen('contenido-mp4')
+            && ! str_contains($dump, 'FB_UPLOAD_TOKEN')
+            && ! str_contains($dump, 'FB_TOKEN')
+            && ! str_contains($dump, 'Authorization');
+    })->once();
 });
 
 it('sin video_upload_token: el Post de video FB falla controlado y Reel/Historia siguen funcionando con el Page token', function () {

@@ -374,16 +374,20 @@ final class MetaContentPublisher
         $stream = null;
 
         try {
-            // 1) Sesión de subida (Resumable Upload API, USER token).
+            // 1) Sesión de subida (Resumable Upload API, USER token). El contrato documentado
+            //    lleva file_name/file_length/file_type como QUERY PARAMETERS del POST (enviarlos
+            //    como cuerpo JSON provocaba 400 code 6000/subcode 1363019); la autenticación va
+            //    en el header estándar de Graph (Bearer), nunca en la URL.
             $session = Http::timeout(self::TIMEOUT_SECONDS)->withToken($uploadToken)->acceptJson()
-                ->post("{$base}/{$appId}/uploads", [
+                ->withQueryParameters([
                     'file_name' => basename($mediaPath),
                     'file_length' => $size,
                     'file_type' => 'video/mp4',
-                ]);
+                ])
+                ->post("{$base}/{$appId}/uploads");
             $sessionId = $session->json('id'); // formato "upload:XXXX"
             if (! $session->successful() || ! is_string($sessionId) || $sessionId === '') {
-                return PublishResult::fail($this->friendlyError($session, true));
+                return $this->videoPostFailure('phase1', $session, $size);
             }
 
             // 2) Transferir el binario en streaming (OAuth USER token) → file handle.
@@ -396,9 +400,7 @@ final class MetaContentPublisher
                 ->send('POST', "{$base}/{$sessionId}", ['body' => $stream]);
             $handle = $upload->json('h');
             if (! $upload->successful() || ! is_string($handle) || $handle === '') {
-                Log::warning('social.publish.fb.videopost: fallo transfiriendo el binario', ['status' => $upload->status(), 'body' => $upload->json()]);
-
-                return PublishResult::fail('Meta no pudo recibir el video desde el servidor.');
+                return $this->videoPostFailure('phase2', $upload, $size, 'Meta no pudo recibir el video desde el servidor.');
             }
 
             // 3) Publicar el video de Página con el handle (PAGE Access Token de siempre).
@@ -409,7 +411,7 @@ final class MetaContentPublisher
                     'fbuploader_video_file_chunk' => $handle,
                 ]);
             if (! $publish->successful()) {
-                return PublishResult::fail($this->friendlyError($publish, true));
+                return $this->videoPostFailure('phase3', $publish, $size);
             }
             $videoId = $publish->json('id');
 
@@ -553,6 +555,26 @@ final class MetaContentPublisher
     }
 
     /**
+     * Fallo de una fase del Post de video de FB con diagnóstico SEGURO por fase: status HTTP,
+     * code/subcode/message de Meta, tamaño del archivo y fase. NUNCA se registran tokens,
+     * headers Authorization, la query (podría llevar credenciales en otros contextos) ni el
+     * handle. El mensaje al usuario es el traducido (o uno explícito de la fase).
+     */
+    private function videoPostFailure(string $phase, Response $response, int $fileSize, ?string $overrideMessage = null): PublishResult
+    {
+        Log::warning("social.publish.fb.videopost.{$phase}_failed", [
+            'phase' => $phase,
+            'status' => $response->status(),
+            'code' => $response->json('error.code'),
+            'subcode' => $response->json('error.error_subcode'),
+            'message' => $response->json('error.message'),
+            'file_size' => $fileSize,
+        ]);
+
+        return PublishResult::fail($overrideMessage ?? $this->friendlyVideoMessage($this->error($response)));
+    }
+
+    /**
      * Convierte un error de Meta en un mensaje comprensible para el usuario; el mensaje técnico
      * ORIGINAL queda siempre en el log para diagnóstico (nunca se registran tokens).
      */
@@ -566,16 +588,19 @@ final class MetaContentPublisher
             'message' => $message,
         ]);
 
-        if (! $isVideo) {
-            return $message;
-        }
+        return $isVideo ? $this->friendlyVideoMessage($message) : $message;
+    }
 
+    /** Traducción PURA (sin logs) del mensaje técnico de un error de video de Meta. */
+    private function friendlyVideoMessage(string $message): string
+    {
         $m = mb_strtolower($message);
 
         return match (true) {
             str_contains($m, 'duration') || str_contains($m, 'too long') || str_contains($m, 'too short') => 'El video excede o no alcanza la duración permitida.',
             str_contains($m, 'download') || str_contains($m, 'fetch') || str_contains($m, 'could not retrieve') => 'Meta no pudo descargar el video desde el servidor.',
             str_contains($m, 'format') || str_contains($m, 'codec') || str_contains($m, 'unsupported') || str_contains($m, 'aspect ratio') => 'El formato del video no es compatible.',
+            str_contains($m, 'problem uploading your video') => 'Meta no pudo procesar la subida del video. Inténtalo de nuevo.',
             default => $message,
         };
     }
