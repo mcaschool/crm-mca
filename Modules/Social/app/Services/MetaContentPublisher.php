@@ -7,6 +7,7 @@ namespace Modules\Social\Services;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use Modules\Social\Models\SocialChannel;
 use Throwable;
@@ -23,12 +24,19 @@ use Throwable;
  *      espera un token IGAA → 190 "Cannot parse access token"). Nodo = IG User ID (external_id
  *      del canal de Instagram).
  *      1) POST /{ig_user_id}/media  {image_url, caption}  → {id: creation_id (contenedor)}
- *      2) GET  /{creation_id}?fields=status_code          → debe ser FINISHED antes de publicar
- *      3) POST /{ig_user_id}/media_publish  {creation_id} → {id: post_id}
+ *      2) GET  /{creation_id}?fields=status_code — IN_PROGRESS es NORMAL unos segundos tras
+ *         crear el contenedor: se espera con backoff corto y acotado (1s,2s,3s,5s,8s) hasta
+ *         FINISHED. ERROR/EXPIRED fallan de inmediato; PUBLISHED se trata como ya publicado.
+ *      3) POST /{ig_user_id}/media_publish  {creation_id} → {id: post_id}. Si Meta responde
+ *         2207027 ("media not available", transitorio), se reintenta hasta 2 veces tras
+ *         re-confirmar FINISHED.
  */
 final class MetaContentPublisher
 {
     private const TIMEOUT_SECONDS = 20;
+
+    /** Esperas (s) entre consultas del status del contenedor IG: corto y acotado (~19s máx). */
+    private const CONTAINER_POLL_DELAYS = [1, 2, 3, 5, 8];
 
     public function publishFacebookPhoto(SocialChannel $channel, string $imageUrl, string $caption): PublishResult
     {
@@ -98,17 +106,32 @@ final class MetaContentPublisher
                 return PublishResult::fail('Instagram no devolvió un contenedor de medios.');
             }
 
-            // 2) Verificar que el contenedor está listo (para imágenes suele ser inmediato).
-            $status = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
-                ->get("{$base}/{$containerId}", ['fields' => 'status_code']);
-            $code = $status->json('status_code');
-            if ($code !== 'FINISHED') {
-                return PublishResult::fail('El contenedor de Instagram no está listo (status: '.(is_string($code) ? $code : 'desconocido').').', $containerId);
+            // 2) Esperar a que el contenedor esté listo. IN_PROGRESS al primer intento es
+            //    normal (Meta aún procesa la imagen); se consulta con backoff acotado.
+            $state = $this->waitForContainer($base, $containerId, $token);
+
+            if ($state === 'PUBLISHED') {
+                // Ya publicado (p. ej. un intento anterior llegó a completarse): éxito seguro.
+                return PublishResult::ok('', $containerId);
+            }
+            if ($state === 'IN_PROGRESS') {
+                return PublishResult::fail('Instagram continúa procesando la imagen. Intente nuevamente.', $containerId);
+            }
+            if ($state !== 'FINISHED') {
+                // ERROR, EXPIRED o desconocido → fallo inmediato conservando el contenedor.
+                return PublishResult::fail('El contenedor de Instagram no está listo (status: '.$state.').', $containerId);
             }
 
-            // 3) Publicar el contenedor.
-            $publish = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
-                ->post("{$base}/{$igUserId}/media_publish", ['creation_id' => $containerId]);
+            // 3) Publicar el contenedor. 2207027 ("media not available") puede ser transitorio
+            //    justo tras FINISHED: hasta 2 reintentos, re-confirmando FINISHED antes de cada uno.
+            $publish = $this->publishContainer($base, $igUserId, $containerId, $token);
+            for ($retry = 0; $retry < 2 && $this->isMediaNotReady($publish); $retry++) {
+                Sleep::for(3)->seconds();
+                if ($this->containerStatus($base, $containerId, $token) !== 'FINISHED') {
+                    break;
+                }
+                $publish = $this->publishContainer($base, $igUserId, $containerId, $token);
+            }
 
             if (! $publish->successful()) {
                 return PublishResult::fail($this->error($publish), $containerId);
@@ -121,6 +144,54 @@ final class MetaContentPublisher
 
             return PublishResult::fail('No se pudo contactar con Instagram (red).');
         }
+    }
+
+    /**
+     * Espera a que el contenedor deje de estar IN_PROGRESS, consultando status_code con
+     * backoff corto y acotado (primera consulta inmediata; luego 1s,2s,3s,5s,8s). Devuelve
+     * el último status visto: FINISHED | PUBLISHED | ERROR | EXPIRED | IN_PROGRESS (si se
+     * agotó la espera) | UNKNOWN (respuesta sin status, se reintenta como IN_PROGRESS).
+     */
+    private function waitForContainer(string $base, string $containerId, string $token): string
+    {
+        $status = $this->containerStatus($base, $containerId, $token);
+
+        foreach (self::CONTAINER_POLL_DELAYS as $delay) {
+            if (! in_array($status, ['IN_PROGRESS', 'UNKNOWN'], true)) {
+                return $status;
+            }
+            Sleep::for($delay)->seconds();
+            $status = $this->containerStatus($base, $containerId, $token);
+        }
+
+        return $status;
+    }
+
+    /** Una consulta del status_code del contenedor ('UNKNOWN' si la respuesta no lo trae). */
+    private function containerStatus(string $base, string $containerId, string $token): string
+    {
+        $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
+            ->get("{$base}/{$containerId}", ['fields' => 'status_code']);
+        $code = $response->json('status_code');
+
+        return is_string($code) && $code !== '' ? $code : 'UNKNOWN';
+    }
+
+    private function publishContainer(string $base, string $igUserId, string $containerId, string $token): Response
+    {
+        return Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
+            ->post("{$base}/{$igUserId}/media_publish", ['creation_id' => $containerId]);
+    }
+
+    /** Error Meta 2207027: "Media ID is not available" — transitorio justo tras FINISHED. */
+    private function isMediaNotReady(Response $response): bool
+    {
+        if ($response->successful()) {
+            return false;
+        }
+
+        return (int) ($response->json('error.error_subcode') ?? 0) === 2207027
+            || (int) ($response->json('error.code') ?? 0) === 2207027;
     }
 
     private function error(Response $response): string

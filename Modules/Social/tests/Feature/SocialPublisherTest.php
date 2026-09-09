@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Sleep;
 use Livewire\Livewire;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Institutions\Models\Institution;
@@ -22,6 +23,7 @@ use Modules\Social\Services\SocialPublishService;
  */
 beforeEach(function () {
     config(['social.graph_version' => 'v26.0']);
+    Sleep::fake(); // el polling del contenedor IG no duerme de verdad en tests
 });
 
 /**
@@ -98,6 +100,132 @@ it('Instagram: hace el flujo de 2 pasos con URL pública y publica', function ()
         && $r->hasHeader('Authorization', 'Bearer IG_TOKEN'));
     // Paso 2: publicar el contenedor.
     Http::assertSent(fn ($r) => str_contains($r->url(), '/media_publish') && $r['creation_id'] === 'IG_CONT_1');
+});
+
+// ----------------------------------------------------------------------------------
+// Contenedor IG: IN_PROGRESS es normal al inicio → se espera con backoff acotado
+// (el caso "FINISHED inmediato → éxito" lo cubre el test del flujo de 2 pasos de arriba)
+// ----------------------------------------------------------------------------------
+it('Instagram: contenedor IN_PROGRESS que pasa a FINISHED publica correctamente', function () {
+    publisherCtx();
+    $statusCalls = 0;
+    Http::fake(function ($request) use (&$statusCalls) {
+        $url = $request->url();
+        if (str_contains($url, '/media_publish')) {
+            return Http::response(['id' => 'IG_POST_WAIT'], 200);
+        }
+        if (str_contains($url, '/media')) {
+            return Http::response(['id' => 'IG_CONT_WAIT'], 200);
+        }
+        $statusCalls++;
+
+        return Http::response(['status_code' => $statusCalls < 3 ? 'IN_PROGRESS' : 'FINISHED'], 200);
+    });
+
+    $post = publisher()->publish(makePost(), ['instagram']);
+
+    $t = $post->targets->firstWhere('network', 'instagram');
+    expect($t->status)->toBe('published');
+    expect($t->external_post_id)->toBe('IG_POST_WAIT');
+    expect($t->container_id)->toBe('IG_CONT_WAIT');
+    expect($statusCalls)->toBe(3); // 2× IN_PROGRESS + 1× FINISHED
+});
+
+it('Instagram: contenedor en ERROR falla de inmediato conservando el containerId', function () {
+    publisherCtx();
+    Http::fake(function ($request) {
+        $url = $request->url();
+        if (str_contains($url, '/media_publish')) {
+            return Http::response(['id' => 'NO_DEBERIA_LLEGAR'], 200);
+        }
+        if (str_contains($url, '/media')) {
+            return Http::response(['id' => 'IG_CONT_ERR'], 200);
+        }
+
+        return Http::response(['status_code' => 'ERROR'], 200);
+    });
+
+    $post = publisher()->publish(makePost(), ['instagram']);
+
+    $t = $post->targets->firstWhere('network', 'instagram');
+    expect($t->status)->toBe('failed');
+    expect($t->container_id)->toBe('IG_CONT_ERR');
+    expect($t->error_message)->toContain('ERROR');
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), '/media_publish'));
+});
+
+it('Instagram: contenedor EXPIRED falla de inmediato conservando el containerId', function () {
+    publisherCtx();
+    Http::fake(function ($request) {
+        $url = $request->url();
+        if (str_contains($url, '/media_publish')) {
+            return Http::response(['id' => 'NO_DEBERIA_LLEGAR'], 200);
+        }
+        if (str_contains($url, '/media')) {
+            return Http::response(['id' => 'IG_CONT_EXP'], 200);
+        }
+
+        return Http::response(['status_code' => 'EXPIRED'], 200);
+    });
+
+    $post = publisher()->publish(makePost(), ['instagram']);
+
+    $t = $post->targets->firstWhere('network', 'instagram');
+    expect($t->status)->toBe('failed');
+    expect($t->container_id)->toBe('IG_CONT_EXP');
+    expect($t->error_message)->toContain('EXPIRED');
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), '/media_publish'));
+});
+
+it('Instagram: IN_PROGRESS persistente agota el backoff y falla con mensaje claro', function () {
+    publisherCtx();
+    Http::fake(function ($request) {
+        $url = $request->url();
+        if (str_contains($url, '/media_publish')) {
+            return Http::response(['id' => 'NO_DEBERIA_LLEGAR'], 200);
+        }
+        if (str_contains($url, '/media')) {
+            return Http::response(['id' => 'IG_CONT_SLOW'], 200);
+        }
+
+        return Http::response(['status_code' => 'IN_PROGRESS'], 200);
+    });
+
+    $post = publisher()->publish(makePost(), ['instagram']);
+
+    $t = $post->targets->firstWhere('network', 'instagram');
+    expect($t->status)->toBe('failed');
+    expect($t->container_id)->toBe('IG_CONT_SLOW');
+    expect($t->error_message)->toContain('continúa procesando');
+    Sleep::assertSleptTimes(5); // backoff completo: 1s, 2s, 3s, 5s, 8s
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), '/media_publish'));
+});
+
+it('Instagram: reintenta media_publish tras el error transitorio 2207027 y publica', function () {
+    publisherCtx();
+    $publishCalls = 0;
+    Http::fake(function ($request) use (&$publishCalls) {
+        $url = $request->url();
+        if (str_contains($url, '/media_publish')) {
+            $publishCalls++;
+
+            return $publishCalls === 1
+                ? Http::response(['error' => ['message' => 'Media ID is not available', 'code' => 9007, 'error_subcode' => 2207027]], 400)
+                : Http::response(['id' => 'IG_POST_RETRY'], 200);
+        }
+        if (str_contains($url, '/media')) {
+            return Http::response(['id' => 'IG_CONT_RETRY'], 200);
+        }
+
+        return Http::response(['status_code' => 'FINISHED'], 200);
+    });
+
+    $post = publisher()->publish(makePost(), ['instagram']);
+
+    $t = $post->targets->firstWhere('network', 'instagram');
+    expect($t->status)->toBe('published');
+    expect($t->external_post_id)->toBe('IG_POST_RETRY');
+    expect($publishCalls)->toBe(2);
 });
 
 // ----------------------------------------------------------------------------------
