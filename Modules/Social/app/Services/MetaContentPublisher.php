@@ -13,9 +13,13 @@ use Modules\Social\Models\SocialChannel;
 use Throwable;
 
 /**
- * Publica una imagen con descripción en Meta (SALIDA de contenido, Bloque 5). Endpoints
- * confirmados en la doc vigente (versión configurable social.graph_version). El token viaja en
- * header Bearer, nunca en la URL; la imagen se pasa como URL PÚBLICA (Meta la descarga).
+ * Publica contenido en Meta (SALIDA, Bloque 5 + multiformato): POST (foto), REEL e HISTORIA
+ * (imagen o video) en Facebook Página + Instagram. Endpoints confirmados en la doc vigente
+ * (versión configurable social.graph_version). El token viaja en header Bearer, nunca en la
+ * URL; el medio se pasa como URL PÚBLICA (Meta lo descarga; los videos por file_url en la
+ * fase de subida de rupload). Instagram comparte UN solo flujo (contenedor → status con
+ * backoff → media_publish) para los tres formatos; Facebook comparte el flujo start/upload/
+ * finish entre Reels e Historias de video.
  *
  *  - Facebook (foto en Página): POST https://graph.facebook.com/{v}/{page_id}/photos
  *      body {url, message, published:true} → devuelve {id, post_id}.
@@ -35,8 +39,20 @@ final class MetaContentPublisher
 {
     private const TIMEOUT_SECONDS = 20;
 
-    /** Esperas (s) entre consultas del status del contenedor IG: corto y acotado (~19s máx). */
+    /** Timeout mayor para la fase de subida de video (Meta descarga el archivo vía file_url). */
+    private const UPLOAD_TIMEOUT_SECONDS = 60;
+
+    /** Esperas (s) entre consultas del status del contenedor IG (imagen): corto (~19s máx). */
     private const CONTAINER_POLL_DELAYS = [1, 2, 3, 5, 8];
+
+    /**
+     * Esperas (s) para contenedores de VIDEO (Reels/Historias de video): el procesamiento es
+     * asíncrono, pero la espera síncrona queda ACOTADA a ~16s para no colgar la petición web
+     * en hosting compartido. Si Meta necesita más, el target queda en estado RECUPERABLE
+     * 'processing' (conservando el contenedor) y se reanuda con "Continuar" — la misma lógica
+     * que en el futuro podrá envolver un Job en cola.
+     */
+    private const CONTAINER_POLL_DELAYS_VIDEO = [3, 5, 8];
 
     public function publishFacebookPhoto(SocialChannel $channel, string $imageUrl, string $caption): PublishResult
     {
@@ -78,6 +94,41 @@ final class MetaContentPublisher
 
     public function publishInstagramImage(SocialChannel $channel, string $imageUrl, string $caption): PublishResult
     {
+        return $this->publishInstagramMedia($channel, ['image_url' => $imageUrl, 'caption' => $caption], isVideo: false);
+    }
+
+    /** Reel de Instagram: contenedor media_type=REELS con video_url (procesamiento asíncrono). */
+    public function publishInstagramReel(SocialChannel $channel, string $videoUrl, string $caption): PublishResult
+    {
+        return $this->publishInstagramMedia($channel, [
+            'media_type' => 'REELS',
+            'video_url' => $videoUrl,
+            'caption' => $caption,
+            'share_to_feed' => true,
+        ], isVideo: true);
+    }
+
+    /** Historia de Instagram con IMAGEN: contenedor media_type=STORIES + image_url (sin caption). */
+    public function publishInstagramStoryImage(SocialChannel $channel, string $imageUrl): PublishResult
+    {
+        return $this->publishInstagramMedia($channel, ['media_type' => 'STORIES', 'image_url' => $imageUrl], isVideo: false);
+    }
+
+    /** Historia de Instagram con VIDEO: contenedor media_type=STORIES + video_url (asíncrono). */
+    public function publishInstagramStoryVideo(SocialChannel $channel, string $videoUrl): PublishResult
+    {
+        return $this->publishInstagramMedia($channel, ['media_type' => 'STORIES', 'video_url' => $videoUrl], isVideo: true);
+    }
+
+    /**
+     * Flujo COMPARTIDO de publicación en Instagram (Post, Reel e Historia usan exactamente el
+     * mismo mecanismo: contenedor → status con backoff → media_publish con reintento 2207027).
+     * Solo cambian los parámetros del contenedor y los tiempos de espera (video > imagen).
+     *
+     * @param  array<string, mixed>  $params
+     */
+    private function publishInstagramMedia(SocialChannel $channel, array $params, bool $isVideo): PublishResult
+    {
         if (($fake = $this->fake('instagram')) !== null) {
             return $fake;
         }
@@ -96,10 +147,10 @@ final class MetaContentPublisher
         try {
             // 1) Crear contenedor.
             $create = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
-                ->post("{$base}/{$igUserId}/media", ['image_url' => $imageUrl, 'caption' => $caption]);
+                ->post("{$base}/{$igUserId}/media", $params);
 
             if (! $create->successful()) {
-                return PublishResult::fail($this->error($create));
+                return PublishResult::fail($this->friendlyError($create, $isVideo));
             }
             $containerId = $create->json('id');
             if (! is_string($containerId) || $containerId === '') {
@@ -107,38 +158,28 @@ final class MetaContentPublisher
             }
 
             // 2) Esperar a que el contenedor esté listo. IN_PROGRESS al primer intento es
-            //    normal (Meta aún procesa la imagen); se consulta con backoff acotado.
-            $state = $this->waitForContainer($base, $containerId, $token);
+            //    normal (Meta aún procesa el medio); se consulta con backoff acotado
+            //    (más largo para video, que es asíncrono).
+            $state = $this->waitForContainer($base, $containerId, $token, $isVideo);
 
             if ($state === 'PUBLISHED') {
                 // Ya publicado (p. ej. un intento anterior llegó a completarse): éxito seguro.
                 return PublishResult::ok('', $containerId);
             }
             if ($state === 'IN_PROGRESS') {
-                return PublishResult::fail('Instagram continúa procesando la imagen. Intente nuevamente.', $containerId);
+                // VIDEO: estado RECUPERABLE — el contenedor es válido, Meta solo necesita más
+                // tiempo. Se conserva el containerId y se reanuda con "Continuar" (jamás se
+                // marca failed ni se crea otro contenedor por esto). Imagen: reintento manual.
+                return $isVideo
+                    ? PublishResult::processing('Instagram continúa procesando el video.', $containerId)
+                    : PublishResult::fail('Instagram continúa procesando la imagen. Intente nuevamente.', $containerId);
             }
             if ($state !== 'FINISHED') {
                 // ERROR, EXPIRED o desconocido → fallo inmediato conservando el contenedor.
                 return PublishResult::fail('El contenedor de Instagram no está listo (status: '.$state.').', $containerId);
             }
 
-            // 3) Publicar el contenedor. 2207027 ("media not available") puede ser transitorio
-            //    justo tras FINISHED: hasta 2 reintentos, re-confirmando FINISHED antes de cada uno.
-            $publish = $this->publishContainer($base, $igUserId, $containerId, $token);
-            for ($retry = 0; $retry < 2 && $this->isMediaNotReady($publish); $retry++) {
-                Sleep::for(3)->seconds();
-                if ($this->containerStatus($base, $containerId, $token) !== 'FINISHED') {
-                    break;
-                }
-                $publish = $this->publishContainer($base, $igUserId, $containerId, $token);
-            }
-
-            if (! $publish->successful()) {
-                return PublishResult::fail($this->error($publish), $containerId);
-            }
-            $postId = $publish->json('id');
-
-            return PublishResult::ok(is_string($postId) ? $postId : '', $containerId);
+            return $this->publishFinishedContainer($base, $igUserId, $containerId, $token, $isVideo);
         } catch (Throwable $e) {
             Log::warning('social.publish.ig: error de red', ['error' => $e->getMessage()]);
 
@@ -147,16 +188,83 @@ final class MetaContentPublisher
     }
 
     /**
-     * Espera a que el contenedor deje de estar IN_PROGRESS, consultando status_code con
-     * backoff corto y acotado (primera consulta inmediata; luego 1s,2s,3s,5s,8s). Devuelve
-     * el último status visto: FINISHED | PUBLISHED | ERROR | EXPIRED | IN_PROGRESS (si se
-     * agotó la espera) | UNKNOWN (respuesta sin status, se reintenta como IN_PROGRESS).
+     * Reanuda un contenedor de VIDEO existente (Reel o Historia): consulta su status y, si ya
+     * está listo, lo publica. JAMÁS crea un contenedor nuevo — trabaja exclusivamente con el
+     * containerId recibido. Idempotente: un contenedor ya publicado (PUBLISHED) devuelve
+     * éxito sin volver a llamar a media_publish.
      */
-    private function waitForContainer(string $base, string $containerId, string $token): string
+    public function resumeInstagramContainer(SocialChannel $channel, string $containerId): PublishResult
+    {
+        if (($fake = $this->fake('instagram')) !== null) {
+            return $fake;
+        }
+
+        $token = (string) ($channel->credentials['token'] ?? '');
+        $igUserId = (string) ($channel->external_id ?? '');
+        if ($token === '' || $igUserId === '' || $containerId === '') {
+            return PublishResult::fail('Canal de Instagram sin token/user id o sin contenedor que reanudar.');
+        }
+
+        $version = (string) config('social.graph_version', 'v26.0');
+        $base = "https://graph.facebook.com/{$version}";
+
+        try {
+            $state = $this->waitForContainer($base, $containerId, $token, isVideo: true);
+
+            if ($state === 'PUBLISHED') {
+                return PublishResult::ok('', $containerId); // ya publicado: éxito idempotente
+            }
+            if ($state === 'IN_PROGRESS' || $state === 'UNKNOWN') {
+                return PublishResult::processing('Instagram continúa procesando el video.', $containerId);
+            }
+            if ($state !== 'FINISHED') {
+                return PublishResult::fail('El contenedor de Instagram no está listo (status: '.$state.').', $containerId);
+            }
+
+            return $this->publishFinishedContainer($base, $igUserId, $containerId, $token, isVideo: true);
+        } catch (Throwable $e) {
+            Log::warning('social.publish.ig.resume: error de red', ['error' => $e->getMessage()]);
+
+            // Fallo de red → sigue siendo recuperable: no perder el contenedor.
+            return PublishResult::processing('No se pudo contactar con Meta (red). Intente nuevamente.', $containerId);
+        }
+    }
+
+    /**
+     * media_publish de un contenedor ya FINISHED, con el reintento acotado del error
+     * transitorio 2207027 (compartido por el flujo normal y la reanudación).
+     */
+    private function publishFinishedContainer(string $base, string $igUserId, string $containerId, string $token, bool $isVideo): PublishResult
+    {
+        $publish = $this->publishContainer($base, $igUserId, $containerId, $token);
+        for ($retry = 0; $retry < 2 && $this->isMediaNotReady($publish); $retry++) {
+            Sleep::for(3)->seconds();
+            if ($this->containerStatus($base, $containerId, $token) !== 'FINISHED') {
+                break;
+            }
+            $publish = $this->publishContainer($base, $igUserId, $containerId, $token);
+        }
+
+        if (! $publish->successful()) {
+            return PublishResult::fail($this->friendlyError($publish, $isVideo), $containerId);
+        }
+        $postId = $publish->json('id');
+
+        return PublishResult::ok(is_string($postId) ? $postId : '', $containerId);
+    }
+
+    /**
+     * Espera a que el contenedor deje de estar IN_PROGRESS, consultando status_code con
+     * backoff acotado (primera consulta inmediata; imagen: 1,2,3,5,8s · video: 3,5,8,10,15,15s).
+     * Devuelve el último status visto: FINISHED | PUBLISHED | ERROR | EXPIRED | IN_PROGRESS
+     * (si se agotó la espera) | UNKNOWN (respuesta sin status, se reintenta como IN_PROGRESS).
+     */
+    private function waitForContainer(string $base, string $containerId, string $token, bool $isVideo = false): string
     {
         $status = $this->containerStatus($base, $containerId, $token);
+        $delays = $isVideo ? self::CONTAINER_POLL_DELAYS_VIDEO : self::CONTAINER_POLL_DELAYS;
 
-        foreach (self::CONTAINER_POLL_DELAYS as $delay) {
+        foreach ($delays as $delay) {
             if (! in_array($status, ['IN_PROGRESS', 'UNKNOWN'], true)) {
                 return $status;
             }
@@ -192,6 +300,180 @@ final class MetaContentPublisher
 
         return (int) ($response->json('error.error_subcode') ?? 0) === 2207027
             || (int) ($response->json('error.code') ?? 0) === 2207027;
+    }
+
+    /**
+     * Reel en la Página de Facebook (flujo oficial en 3 fases con Page Access Token):
+     *  1) POST /{page_id}/video_reels {upload_phase:start}  → {video_id, upload_url}
+     *  2) POST al upload_url (rupload.facebook.com) con header file_url → Meta descarga el
+     *     video desde la URL pública del CRM (hosted file: nada se carga en memoria PHP).
+     *  3) POST /{page_id}/video_reels {upload_phase:finish, video_state:PUBLISHED, description}.
+     */
+    public function publishFacebookReel(SocialChannel $channel, string $videoUrl, string $caption): PublishResult
+    {
+        if (($fake = $this->fake('facebook')) !== null) {
+            return $fake;
+        }
+
+        return $this->publishFacebookVideoFlow($channel, 'video_reels', $videoUrl, [
+            'video_state' => 'PUBLISHED',
+            'description' => $caption,
+        ]);
+    }
+
+    /**
+     * Historia de FOTO en la Página: 1) sube la foto SIN publicar (/photos published=false),
+     * 2) la publica como historia (/photo_stories con photo_id). Guarda el post_id devuelto.
+     */
+    public function publishFacebookStoryPhoto(SocialChannel $channel, string $imageUrl): PublishResult
+    {
+        if (($fake = $this->fake('facebook')) !== null) {
+            return $fake;
+        }
+
+        [$token, $pageId, $base] = $this->facebookContext($channel);
+        if ($token === '' || $pageId === '') {
+            return PublishResult::fail('Canal de Facebook sin token o sin page id.');
+        }
+
+        try {
+            $photo = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
+                ->post("{$base}/{$pageId}/photos", ['url' => $imageUrl, 'published' => false]);
+            if (! $photo->successful()) {
+                return PublishResult::fail($this->friendlyError($photo, false));
+            }
+            $photoId = $photo->json('id');
+            if (! is_string($photoId) || $photoId === '') {
+                return PublishResult::fail('Facebook no devolvió el id de la foto para la historia.');
+            }
+
+            $story = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
+                ->post("{$base}/{$pageId}/photo_stories", ['photo_id' => $photoId]);
+            if (! $story->successful()) {
+                return PublishResult::fail($this->friendlyError($story, false));
+            }
+            $postId = $story->json('post_id') ?? $story->json('id');
+
+            return PublishResult::ok(is_string($postId) && $postId !== '' ? $postId : $photoId);
+        } catch (Throwable $e) {
+            Log::warning('social.publish.fb.story: error de red', ['error' => $e->getMessage()]);
+
+            return PublishResult::fail('No se pudo contactar con Facebook (red).');
+        }
+    }
+
+    /** Historia de VIDEO en la Página (3 fases /video_stories, mismo mecanismo que el Reel). */
+    public function publishFacebookStoryVideo(SocialChannel $channel, string $videoUrl): PublishResult
+    {
+        if (($fake = $this->fake('facebook')) !== null) {
+            return $fake;
+        }
+
+        return $this->publishFacebookVideoFlow($channel, 'video_stories', $videoUrl, []);
+    }
+
+    /**
+     * Flujo COMPARTIDO de video de Página (Reels e Historias de video): start → upload por
+     * file_url (hosted file en rupload.facebook.com) → finish. Guarda como external id el
+     * post_id devuelto por finish o, en su defecto, el video_id.
+     *
+     * @param  array<string, mixed>  $finishParams
+     */
+    private function publishFacebookVideoFlow(SocialChannel $channel, string $edge, string $videoUrl, array $finishParams): PublishResult
+    {
+        [$token, $pageId, $base] = $this->facebookContext($channel);
+        if ($token === '' || $pageId === '') {
+            return PublishResult::fail('Canal de Facebook sin token o sin page id.');
+        }
+
+        try {
+            // 1) start → video_id + upload_url.
+            $start = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
+                ->post("{$base}/{$pageId}/{$edge}", ['upload_phase' => 'start']);
+            if (! $start->successful()) {
+                return PublishResult::fail($this->friendlyError($start, true));
+            }
+            $videoId = $start->json('video_id');
+            if (! is_string($videoId) || $videoId === '') {
+                return PublishResult::fail('Facebook no devolvió un video id.');
+            }
+            // Se usa EXACTAMENTE el upload_url que entrega Meta en start: nunca se
+            // reconstruye a mano. Sin upload_url válido → fallo claro (con diagnóstico en
+            // el log; el cuerpo de start no contiene tokens).
+            $uploadUrl = $start->json('upload_url');
+            if (! is_string($uploadUrl) || ! str_starts_with($uploadUrl, 'https://')) {
+                Log::warning('social.publish.fb.video: start sin upload_url válido', ['edge' => $edge, 'body' => $start->json()]);
+
+                return PublishResult::fail('Facebook no devolvió la URL de subida del video.');
+            }
+
+            // 2) upload: Meta descarga el video desde la URL pública (header file_url).
+            //    Auth de rupload es "OAuth {token}" (formato documentado de esta fase).
+            $upload = Http::timeout(self::UPLOAD_TIMEOUT_SECONDS)->acceptJson()
+                ->withHeaders(['Authorization' => 'OAuth '.$token, 'file_url' => $videoUrl])
+                ->post($uploadUrl);
+            if (! $upload->successful() || $upload->json('success') !== true) {
+                Log::warning('social.publish.fb.video: fallo en la fase de subida', ['edge' => $edge, 'status' => $upload->status(), 'body' => $upload->json()]);
+
+                return PublishResult::fail('Meta no pudo descargar el video desde el servidor.');
+            }
+
+            // 3) finish.
+            $finish = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
+                ->post("{$base}/{$pageId}/{$edge}", array_merge(['upload_phase' => 'finish', 'video_id' => $videoId], $finishParams));
+            if (! $finish->successful()) {
+                return PublishResult::fail($this->friendlyError($finish, true));
+            }
+            $postId = $finish->json('post_id');
+
+            return PublishResult::ok(is_string($postId) && $postId !== '' ? $postId : $videoId);
+        } catch (Throwable $e) {
+            Log::warning('social.publish.fb.video: error de red', ['edge' => $edge, 'error' => $e->getMessage()]);
+
+            return PublishResult::fail('No se pudo contactar con Facebook (red).');
+        }
+    }
+
+    /**
+     * @return array{0: string, 1: string, 2: string}
+     */
+    private function facebookContext(SocialChannel $channel): array
+    {
+        $version = (string) config('social.graph_version', 'v26.0');
+
+        return [
+            (string) ($channel->credentials['token'] ?? ''),
+            (string) ($channel->external_id ?? ''),
+            "https://graph.facebook.com/{$version}",
+        ];
+    }
+
+    /**
+     * Convierte un error de Meta en un mensaje comprensible para el usuario; el mensaje técnico
+     * ORIGINAL queda siempre en el log para diagnóstico (nunca se registran tokens).
+     */
+    private function friendlyError(Response $response, bool $isVideo): string
+    {
+        $message = $this->error($response);
+        Log::warning('social.publish: Meta rechazó', [
+            'status' => $response->status(),
+            'code' => $response->json('error.code'),
+            'subcode' => $response->json('error.error_subcode'),
+            'message' => $message,
+        ]);
+
+        if (! $isVideo) {
+            return $message;
+        }
+
+        $m = mb_strtolower($message);
+
+        return match (true) {
+            str_contains($m, 'duration') || str_contains($m, 'too long') || str_contains($m, 'too short') => 'El video excede o no alcanza la duración permitida.',
+            str_contains($m, 'download') || str_contains($m, 'fetch') || str_contains($m, 'could not retrieve') => 'Meta no pudo descargar el video desde el servidor.',
+            str_contains($m, 'format') || str_contains($m, 'codec') || str_contains($m, 'unsupported') || str_contains($m, 'aspect ratio') => 'El formato del video no es compatible.',
+            default => $message,
+        };
     }
 
     private function error(Response $response): string

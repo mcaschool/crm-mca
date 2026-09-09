@@ -9,21 +9,33 @@ use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Modules\Social\Models\SocialPost;
+use Modules\Social\Models\SocialPostTarget;
 use Modules\Social\Services\PostImageService;
+use Modules\Social\Services\PostVideoService;
 use Modules\Social\Services\SocialPublishService;
+use RuntimeException;
 
 /**
- * Publicador (Bloque 5): una imagen + descripción se publica a la vez en la Página de Facebook
- * y en Instagram. La publicación por red es independiente (una puede fallar y la otra no); el
- * resultado se muestra POR RED. Acceso: canPublishSocial (Admin/Marketing) + guard del panel;
- * scoping por institución reutilizado (solo canales/redes de la institución activa).
+ * Publicador multiformato (Bloque 5 + extensión): POST (imagen + descripción), REEL (video +
+ * descripción) e HISTORIA (imagen o video, sin descripción) hacia la Página de Facebook y/o
+ * Instagram. La publicación por red es independiente (una puede fallar y la otra no); el
+ * resultado se muestra POR RED. El POST conserva exactamente su flujo histórico (image_*).
+ * Acceso: canPublishSocial (Admin/Marketing) + guard del panel; scoping por institución.
  */
 #[Layout('layouts.app')]
 class Publisher extends Component
 {
     use WithFileUploads;
 
+    /** Tipo de publicación: post | reel | story. */
+    public string $contentType = 'post';
+
+    /** Medio de la Historia: image | video (solo aplica cuando contentType = story). */
+    public string $storyMedia = 'image';
+
     public mixed $image = null;
+
+    public mixed $video = null;
 
     public string $caption = '';
 
@@ -43,18 +55,64 @@ class Publisher extends Component
         abort_unless(auth()->user()?->canPublishSocial() ?? false, 403);
     }
 
+    /** Cambia el tipo de publicación y limpia archivo elegido, resultado y errores previos. */
+    public function setContentType(string $type): void
+    {
+        if (! in_array($type, SocialPost::CONTENT_TYPES, true)) {
+            return;
+        }
+
+        $this->contentType = $type;
+        $this->reset(['image', 'video', 'result']);
+        $this->resetValidation();
+    }
+
+    /** Cambia el medio de la Historia (imagen | video) y limpia el archivo elegido. */
+    public function setStoryMedia(string $media): void
+    {
+        if (! in_array($media, SocialPost::MEDIA_TYPES, true)) {
+            return;
+        }
+
+        $this->storyMedia = $media;
+        $this->reset(['image', 'video', 'result']);
+        $this->resetValidation();
+    }
+
     public function updatedImage(): void
     {
         $this->result = null;
         $this->validateOnly('image', ['image' => ['image', 'mimes:jpg,jpeg,png', 'max:8192']]);
     }
 
-    public function publish(PostImageService $images, SocialPublishService $service): void
+    public function updatedVideo(): void
     {
-        $this->validate([
-            'image' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:8192'],
-            'caption' => ['nullable', 'string', 'max:2200'],
-        ]);
+        $this->result = null;
+        $this->validateOnly('video', ['video' => ['file', 'mimetypes:video/mp4', 'max:102400']]);
+    }
+
+    /** ¿El formato seleccionado sube VIDEO? (Reel siempre; Historia según su toggle). */
+    private function wantsVideo(): bool
+    {
+        return $this->contentType === 'reel'
+            || ($this->contentType === 'story' && $this->storyMedia === 'video');
+    }
+
+    public function publish(PostImageService $images, PostVideoService $videos, SocialPublishService $service): void
+    {
+        $wantsVideo = $this->wantsVideo();
+        $mediaField = $wantsVideo ? 'video' : 'image';
+
+        // REQUISITOS validables en servidor: tipo real (MIME) y tamaño. Duración/FPS/resolución
+        // los valida Meta al publicar (sin ffprobe fiable en hosting compartido) y sus errores
+        // se traducen a mensajes claros. Las recomendaciones (9:16, 1080×1920) van en la UI.
+        $rules = $wantsVideo
+            ? ['video' => ['required', 'file', 'mimetypes:video/mp4', 'max:102400']]
+            : ['image' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:8192']];
+        if ($this->contentType !== 'story') {
+            $rules['caption'] = ['nullable', 'string', 'max:2200'];
+        }
+        $this->validate($rules, [], ['video' => 'video', 'image' => 'imagen']);
 
         $available = $service->availableNetworks();
         $networks = [];
@@ -66,35 +124,95 @@ class Publisher extends Component
         }
 
         if ($networks === []) {
-            $this->addError('image', __('Selecciona al menos una red con canal configurado.'));
+            $this->addError($mediaField, __('Selecciona al menos una red con canal configurado.'));
 
             return;
         }
 
-        $stored = $images->storeJpeg((string) $this->image->get());
-
         $post = new SocialPost;
         $post->created_by = (int) auth()->id();
-        $post->caption = $this->caption !== '' ? $this->caption : null;
-        $post->image_path = $stored['path'];
-        $post->image_public_url = $stored['url'];
+        $post->content_type = $this->contentType;
+        $post->media_type = $wantsVideo ? 'video' : 'image';
+        // Las Historias no llevan descripción (las APIs de destino no la usan como un post).
+        $post->caption = $this->contentType !== 'story' && $this->caption !== '' ? $this->caption : null;
         $post->status = 'pending';
+
+        if ($wantsVideo) {
+            try {
+                $stored = $videos->store($this->video);
+            } catch (RuntimeException $e) {
+                $this->addError('video', $e->getMessage());
+
+                return;
+            }
+            $post->media_path = $stored['path'];
+            $post->media_public_url = $stored['url'];
+            $post->media_mime = $stored['mime'];
+        } elseif ($this->contentType === 'story') {
+            $stored = $images->storeJpeg((string) $this->image->get());
+            $post->media_path = $stored['path'];
+            $post->media_public_url = $stored['url'];
+            $post->media_mime = 'image/jpeg';
+        } else {
+            // POST: flujo histórico intacto (campos image_*).
+            $stored = $images->storeJpeg((string) $this->image->get());
+            $post->image_path = $stored['path'];
+            $post->image_public_url = $stored['url'];
+        }
+
         $post->save();
 
         $post = $service->publish($post, $networks);
 
-        $this->result = $post->targets->map(fn ($t): array => [
+        $this->result = $post->targets->map(fn ($t): array => $this->resultRow($t))->all();
+
+        // Limpiar el formulario para una nueva publicación (el resultado queda visible).
+        $this->reset(['image', 'video', 'caption']);
+        $this->toFacebook = true;
+        $this->toInstagram = true;
+    }
+
+    /**
+     * "Continuar": reanuda un target de Instagram que quedó en 'processing' (video que Meta
+     * seguía procesando). Guardas: permiso canPublishSocial, target de la institución ACTIVA
+     * (InstitutionScope: un id de otro tenant no se encuentra), red instagram, estado
+     * processing y container_id presente. La lógica vive en SocialPublishService::resumeTarget
+     * (futuro cuerpo de un Job); aquí solo se autoriza, se invoca y se refresca el resultado.
+     */
+    public function resumeTarget(int $targetId, SocialPublishService $service): void
+    {
+        abort_unless(auth()->user()?->canPublishSocial() ?? false, 403);
+
+        $target = SocialPostTarget::query()->find($targetId);
+        if ($target === null
+            || $target->network !== 'instagram'
+            || $target->status !== 'processing'
+            || (string) $target->container_id === '') {
+            return;
+        }
+
+        $target = $service->resumeTarget($target);
+
+        if (is_array($this->result)) {
+            $this->result = collect($this->result)
+                ->map(fn (array $row): array => ($row['id'] ?? null) === $target->id ? $this->resultRow($target) : $row)
+                ->all();
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resultRow(SocialPostTarget $t): array
+    {
+        return [
+            'id' => $t->id,
             'network' => $t->network,
             'status' => $t->status,
             'external_post_id' => $t->external_post_id,
             'error' => $t->error_message,
             'url' => $this->postUrl($t->network, $t->external_post_id),
-        ])->all();
-
-        // Limpiar el formulario para una nueva publicación (el resultado queda visible).
-        $this->reset(['image', 'caption']);
-        $this->toFacebook = true;
-        $this->toInstagram = true;
+        ];
     }
 
     private function postUrl(string $network, ?string $externalId): ?string
