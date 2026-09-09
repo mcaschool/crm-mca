@@ -15,6 +15,7 @@
         <x-ui.tokens />
         <x-ui.shell-styles />
         <style>[x-cloak]{display:none !important}</style>
+        @stack('styles')
     </head>
     <body class="antialiased" style="margin:0">
         @php

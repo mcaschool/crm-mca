@@ -1,4 +1,4 @@
-<div class="social-inbox" wire:key="social-inbox" wire:poll.2s>
+@push('styles')
     <style>
         /* La bandeja es una pantalla tipo app: ocupa el ANCHO COMPLETO del bloque central.
            El layout reserva un carril derecho vacío de 300px en todas las páginas; aquí lo
@@ -61,7 +61,9 @@
         .sb-empty small{font-size:12.5px;max-width:320px}
         .sb-list__empty{padding:40px 22px;text-align:center;color:var(--sb-muted);font-size:13px}
     </style>
+@endpush
 
+<div class="social-inbox" wire:key="social-inbox" wire:poll.2s>
     {{-- ===================== PANEL IZQUIERDO ===================== --}}
     <aside class="sb-list">
         <div class="sb-list__head">
@@ -76,7 +78,7 @@
                         wire:key="conv-{{ $conv->id }}">
                     <span class="sb-item__avatar">
                         {{ $initial }}
-                        <span class="sb-item__badge-src">
+                        <span class="sb-item__badge-src" wire:ignore>
                             @include('social::partials.provider-icon', ['provider' => $conv->provider, 'size' => 14])
                         </span>
                     </span>
@@ -106,14 +108,14 @@
             <header class="sb-thread__head">
                 <span class="sb-item__avatar">
                     {{ $sInitial }}
-                    <span class="sb-item__badge-src">
+                    <span class="sb-item__badge-src" wire:ignore wire:key="ico-hdr-av-{{ $selected->provider }}">
                         @include('social::partials.provider-icon', ['provider' => $selected->provider, 'size' => 14])
                     </span>
                 </span>
                 <span class="sb-thread__who">
                     <strong>{{ $selected->contact_name ?: __('Contacto sin nombre') }}</strong>
                     <small>
-                        @include('social::partials.provider-icon', ['provider' => $selected->provider, 'size' => 14])
+                        <span wire:ignore wire:key="ico-hdr-sm-{{ $selected->provider }}" style="display:inline-flex">@include('social::partials.provider-icon', ['provider' => $selected->provider, 'size' => 14])</span>
                         {{ $selected->channel?->providerLabel() }} · {{ $selected->channel?->display_name }}
                     </small>
                 </span>
@@ -171,7 +173,7 @@
                         </button>
                     </div>
                     <p class="sb-compose__note">
-                        @include('social::partials.provider-icon', ['provider' => $selected->provider, 'size' => 14])
+                        <span wire:ignore wire:key="ico-note-{{ $selected->provider }}" style="display:inline-flex">@include('social::partials.provider-icon', ['provider' => $selected->provider, 'size' => 14])</span>
                         {{ __('Se envía directamente al contacto por :canal.', ['canal' => $selected->channel?->providerLabel()]) }}
                     </p>
                 @else
@@ -180,14 +182,14 @@
                         <button type="button" class="sb-send" disabled>{{ __('Enviar') }}</button>
                     </div>
                     <p class="sb-compose__note">
-                        <x-ui.icon name="lock" class="w-4 h-4" />
+                        <span wire:ignore style="display:inline-flex"><x-ui.icon name="lock" class="w-4 h-4" /></span>
                         {{ __('El envío de WhatsApp se habilita con su canal propio.') }}
                     </p>
                 @endif
             </div>
         @else
             <div class="sb-empty">
-                <span class="sb-empty__icon"><x-ui.icon name="inbox" class="w-7 h-7" /></span>
+                <span class="sb-empty__icon" wire:ignore><x-ui.icon name="inbox" class="w-7 h-7" /></span>
                 <p>{{ __('Selecciona una conversación') }}</p>
                 <small>{{ __('Elige un chat de la lista para ver el hilo completo. El origen (WhatsApp, Instagram o Messenger) se muestra en cada conversación.') }}</small>
             </div>
