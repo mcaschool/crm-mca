@@ -898,18 +898,37 @@ it('Post de video en Facebook: Resumable Upload con el USER token y publicación
     Http::assertSent(fn ($r) => str_contains($r->url(), '/upload:SESS_1')
         && $r->hasHeader('Authorization', 'OAuth FB_UPLOAD_TOKEN')
         && $r->hasHeader('file_offset', '0'));
-    // Fase 3 (publicación en la Página) con el PAGE token de siempre.
-    Http::assertSent(fn ($r) => str_contains($r->url(), 'graph-video.facebook.com')
-        && str_contains($r->url(), '/PAGE_1/videos')
-        && $r->hasHeader('Authorization', 'Bearer FB_TOKEN')
-        && $r['fbuploader_video_file_chunk'] === 'HANDLE_1'
-        && $r['description'] === 'Video del taller');
+    // Fase 3 (publicación en la Página): multipart/form-data REAL (no JSON) con el PAGE
+    // token como parte access_token (contrato -F de graph-video), sin token en la URL.
+    Http::assertSent(function ($r): bool {
+        if (! str_contains($r->url(), 'graph-video.facebook.com')
+            || ! str_contains($r->url(), '/PAGE_1/videos')
+            || ! $r->isMultipart()) {
+            return false;
+        }
+        $part = function (string $name) use ($r) {
+            foreach ($r->data() as $p) {
+                if (($p['name'] ?? null) === $name) {
+                    return $p['contents'] ?? null;
+                }
+            }
+
+            return null;
+        };
+
+        return $part('access_token') === 'FB_TOKEN'
+            && $part('description') === 'Video del taller'
+            && $part('fbuploader_video_file_chunk') === 'HANDLE_1'
+            && ! str_contains($r->url(), 'FB_TOKEN'); // el token jamás va en la URL/query
+    });
     // El Page token NUNCA se usa en el resumable upload (sin fallback)…
     Http::assertNotSent(fn ($r) => (str_contains($r->url(), '/uploads') || str_contains($r->url(), '/upload:'))
         && ($r->hasHeader('Authorization', 'Bearer FB_TOKEN') || $r->hasHeader('Authorization', 'OAuth FB_TOKEN')));
-    // …y el USER token NUNCA publica en la Página (la fase 3 es solo del Page token).
+    // …y el USER token NUNCA aparece en la fase 3 (ni como header ni como parte multipart).
     Http::assertNotSent(fn ($r) => str_contains($r->url(), 'graph-video.facebook.com')
-        && ($r->hasHeader('Authorization', 'Bearer FB_UPLOAD_TOKEN') || $r->hasHeader('Authorization', 'OAuth FB_UPLOAD_TOKEN')));
+        && ($r->hasHeader('Authorization', 'Bearer FB_UPLOAD_TOKEN')
+            || $r->hasHeader('Authorization', 'OAuth FB_UPLOAD_TOKEN')
+            || str_contains((string) json_encode($r->data()), 'FB_UPLOAD_TOKEN')));
     Http::assertNotSent(fn ($r) => str_contains($r->url(), '/video_reels'));
 });
 

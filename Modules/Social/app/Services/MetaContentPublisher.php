@@ -337,8 +337,8 @@ final class MetaContentPublisher
      * con llamadas del Page token ni se hardcodea.
      *  1) POST /{app_id}/uploads             → sesión de subida (USER token)
      *  2) POST /upload:{session_id}          → binario en STREAMING (OAuth USER token) → {h}
-     *  3) POST graph-video.facebook.com/{v}/{page_id}/videos
-     *          {description, fbuploader_video_file_chunk: h} → {id: video_id}  (PAGE token)
+     *  3) POST graph-video.facebook.com/{v}/{page_id}/videos — multipart/form-data con
+     *     access_token (PAGE token), description y fbuploader_video_file_chunk → {id: video_id}
      * El archivo se lee del disco público por stream: nunca se carga entero en memoria.
      */
     public function publishFacebookVideoPost(SocialChannel $channel, string $mediaPath, string $caption): PublishResult
@@ -403,10 +403,14 @@ final class MetaContentPublisher
                 return $this->videoPostFailure('phase2', $upload, $size, 'Meta no pudo recibir el video desde el servidor.');
             }
 
-            // 3) Publicar el video de Página con el handle (PAGE Access Token de siempre).
+            // 3) Publicar el video de Página con el handle (PAGE Access Token). El contrato
+            //    documentado de graph-video es multipart/form-data (-F): enviar JSON provocaba
+            //    400 code 6000/subcode 1363019 en esta fase. El token va como parte multipart
+            //    access_token (así lo documenta Meta), nunca en la URL/query ni en logs.
             $version = (string) config('social.graph_version', 'v26.0');
-            $publish = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
+            $publish = Http::timeout(self::TIMEOUT_SECONDS)->acceptJson()->asMultipart()
                 ->post("https://graph-video.facebook.com/{$version}/{$pageId}/videos", [
+                    'access_token' => $token,
                     'description' => $caption,
                     'fbuploader_video_file_chunk' => $handle,
                 ]);
