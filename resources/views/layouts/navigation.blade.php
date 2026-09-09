@@ -74,7 +74,7 @@
                        x-data="{ n: {{ $socialUnread }} }" x-on:social-unread-updated.window="n = $event.detail.total">
                         <x-ui.icon name="inbox" /> {{ __('Bandeja social') }}
                         <span x-show="n > 0" x-text="n"
-                              style="margin-left:auto;min-width:18px;height:18px;padding:0 6px;border-radius:10px;background:#C9A84C;color:#241a05;font-size:11px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center">{{ $socialUnread ?: '' }}</span>
+                              style="margin-left:auto;min-width:18px;height:18px;padding:0 6px;border-radius:10px;background:#C9A84C;color:#241a05;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">{{ $socialUnread ?: '' }}</span>
                     </a>
                 @endif
                 @if (auth()->user()?->canPublishSocial())

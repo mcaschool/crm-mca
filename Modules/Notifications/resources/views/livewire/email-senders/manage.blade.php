@@ -99,14 +99,14 @@
                             <div style="font-weight:700;font-size:15px;color:var(--ink)">{{ $sender->name }}
                                 @if ($sender->status !== 'active')<span class="mca-help" style="font-weight:600">· inactivo</span>@endif
                             </div>
-                            <div class="mca-help" style="margin-top:2px"><x-ui.icon name="mail" class="ic" style="width:13px;height:13px" /> {{ $sender->from_address }}</div>
+                            <div class="mca-help" style="margin-top:2px;display:flex;align-items:center;gap:6px"><x-ui.icon name="mail" class="ic" style="width:13px;height:13px" /> {{ $sender->from_address }}</div>
                             <div class="mca-help" style="margin-top:4px">
                                 SMTP: {{ $sender->maskedConfig()['host'] ?? '—' }}:{{ $sender->maskedConfig()['port'] ?? '—' }}
                                 · usuario {{ $sender->maskedConfig()['username'] ?? '—' }}
                                 · contraseña <code>{{ $sender->maskedConfig()['password'] ?? '••••' }}</code>
                             </div>
                             @if ($sender->last_tested_at)
-                                <div class="mca-help" style="margin-top:4px;color:{{ $sender->last_test_ok ? 'var(--mca-ok, #1B7A4B)' : 'var(--mca-warn, #B4232A)' }}">
+                                <div class="mca-help" style="margin-top:4px;display:flex;align-items:center;gap:6px;color:{{ $sender->last_test_ok ? 'var(--mca-ok, #1B7A4B)' : 'var(--mca-warn, #B4232A)' }}">
                                     <x-ui.icon name="{{ $sender->last_test_ok ? 'check' : 'x' }}" class="ic" style="width:13px;height:13px" />
                                     Última prueba {{ $sender->last_tested_at->diffForHumans() }}: {{ $sender->last_test_message }}
                                 </div>

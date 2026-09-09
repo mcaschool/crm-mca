@@ -83,16 +83,15 @@
             </div>
         @endif
 
-        {{-- ---------------- LISTA (agrupada por proveedor) ---------------- --}}
-        @forelse ($grouped as $providerKey => $list)
-            <div style="display:flex;align-items:center;gap:8px;margin:18px 0 10px">
-                @include('social::partials.provider-icon', ['provider' => $providerKey, 'size' => 18])
-                <h2 style="font-size:14px;font-weight:700;margin:0">{{ $providers[$providerKey] ?? $providerKey }}</h2>
-                <span style="color:var(--muted);font-size:13px">({{ $list->count() }})</span>
-            </div>
-            <div class="mca-grid">
+        {{-- ---------------- LISTA (tarjetas lado a lado, igual que los webhooks) ---------------- --}}
+        <div class="mca-grid">
+            @forelse ($grouped as $providerKey => $list)
                 @foreach ($list as $c)
                     <div class="card card-p" wire:key="ch-{{ $c->id }}" style="display:flex;flex-direction:column">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                            @include('social::partials.provider-icon', ['provider' => $providerKey, 'size' => 16])
+                            <span style="font-size:12px;font-weight:600;color:var(--muted)">{{ $providers[$providerKey] ?? $providerKey }}</span>
+                        </div>
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
                             <h3 style="font-size:14.5px;font-weight:700;margin:0">{{ $c->display_name }}</h3>
                             <span class="badge {{ $c->is_active ? 'badge-on' : 'badge-off' }}">{{ $c->is_active ? __('activo') : __('inactivo') }}</span>
@@ -109,10 +108,10 @@
                         </div>
                     </div>
                 @endforeach
-            </div>
-        @empty
-            <p style="color:var(--muted);font-size:13.5px;margin:14px 2px">{{ __('Aún no hay canales configurados. Crea el primero con «Nuevo canal».') }}</p>
-        @endforelse
+            @empty
+                <p style="color:var(--muted);font-size:13.5px;margin:14px 2px">{{ __('Aún no hay canales configurados. Crea el primero con «Nuevo canal».') }}</p>
+            @endforelse
+        </div>
 
         {{-- ---------------- AYUDA DE WEBHOOK ---------------- --}}
         <div style="margin:28px 0 10px">
