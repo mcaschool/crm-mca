@@ -41,6 +41,12 @@ class Publisher extends Component
     public function mount(): void
     {
         abort_unless(auth()->user()?->canPublishSocial() ?? false, 403);
+
+        // Instagram deshabilitado TEMPORALMENTE (permiso de publicación pendiente de App
+        // Review de Meta). Ver config social.instagram_publish_enabled.
+        if (! (bool) config('social.instagram_publish_enabled')) {
+            $this->toInstagram = false;
+        }
     }
 
     public function updatedImage(): void
@@ -61,7 +67,9 @@ class Publisher extends Component
         if ($this->toFacebook && isset($available['facebook'])) {
             $networks[] = 'facebook';
         }
-        if ($this->toInstagram && isset($available['instagram'])) {
+        // Barandilla de servidor: aunque el toggle llegara en true, Instagram no publica
+        // mientras el permiso esté pendiente de aprobación (evita el error #10 de Meta).
+        if ($this->toInstagram && isset($available['instagram']) && (bool) config('social.instagram_publish_enabled')) {
             $networks[] = 'instagram';
         }
 
@@ -115,6 +123,7 @@ class Publisher extends Component
         return view('social::publisher', [
             'hasFacebook' => isset($available['facebook']),
             'hasInstagram' => isset($available['instagram']),
+            'igPublishEnabled' => (bool) config('social.instagram_publish_enabled'),
         ]);
     }
 }

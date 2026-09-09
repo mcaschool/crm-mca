@@ -63,4 +63,15 @@ return [
     | definir → publicación real. Los tests no lo usan (usan Http::fake).
     */
     'fake_publish' => env('SOCIAL_FAKE_PUBLISH'),
+
+    /*
+    | Publicación en Instagram DESHABILITADA temporalmente (default false): el permiso de
+    | publicación (instagram_business_content_publish) está EN App Review de Meta pero aún
+    | sin aprobar (access_level: none) → publicar daría "(#10) Requires instagram_content_
+    | publish permission". El Publicador muestra Instagram como "pendiente de aprobación"
+    | y solo publica en Facebook. Cuando Meta apruebe: SOCIAL_IG_PUBLISH_ENABLED=true en
+    | .env + optimize:clear (y alinear el publicador al trío nuevo: graph.instagram.com +
+    | token IGAA en credentials['publish_token'] — tarea pendiente anotada).
+    */
+    'instagram_publish_enabled' => (bool) env('SOCIAL_IG_PUBLISH_ENABLED', false),
 ];

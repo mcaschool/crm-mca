@@ -89,10 +89,16 @@
                     @include('social::partials.provider-icon', ['provider' => 'facebook', 'size' => 18])
                     {{ __('Facebook (Página)') }} @unless($hasFacebook) <em>· {{ __('sin canal') }}</em> @endunless
                 </label>
-                <label class="sp-net {{ $hasInstagram ? '' : 'off' }}">
-                    <input type="checkbox" wire:model="toInstagram" @checked($toInstagram && $hasInstagram) @disabled(! $hasInstagram)>
+                @php($igOn = $hasInstagram && $igPublishEnabled)
+                <label class="sp-net {{ $igOn ? '' : 'off' }}">
+                    <input type="checkbox" wire:model="toInstagram" @checked($toInstagram && $igOn) @disabled(! $igOn)>
                     @include('social::partials.provider-icon', ['provider' => 'instagram', 'size' => 18])
-                    {{ __('Instagram') }} @unless($hasInstagram) <em>· {{ __('sin canal') }}</em> @endunless
+                    {{ __('Instagram') }}
+                    @if (! $hasInstagram)
+                        <em>· {{ __('sin canal') }}</em>
+                    @elseif (! $igPublishEnabled)
+                        <em>· {{ __('No disponible temporalmente (pendiente de aprobación de Meta)') }}</em>
+                    @endif
                 </label>
             </div>
 
