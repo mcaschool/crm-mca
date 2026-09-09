@@ -75,13 +75,8 @@
         {{-- Cambiar contraseña --}}
         <div class="card card-p fade" style="margin-top:16px">
             <h3 class="mca-h1" style="font-size:16px;margin-bottom:4px">Cambiar contraseña</h3>
-            <p class="mca-sub" style="margin-bottom:16px">Necesitas tu contraseña actual. La nueva debe cumplir los requisitos de seguridad.</p>
+            <p class="mca-sub" style="margin-bottom:16px">Escribe tu nueva contraseña y confírmala. Debe cumplir los requisitos de seguridad.</p>
 
-            <div class="field">
-                <label>Contraseña actual</label>
-                <input type="password" wire:model="current_password" autocomplete="current-password">
-                @error('current_password') <span class="mca-err">{{ $message }}</span> @enderror
-            </div>
             <div style="display:flex;gap:16px;flex-wrap:wrap">
                 <div class="field" style="flex:1;min-width:200px">
                     <label>Nueva contraseña</label>

@@ -18,8 +18,9 @@ use Modules\Identity\Services\UserAvatarService;
 /**
  * "Mi perfil": el propio usuario ve sus datos en SOLO LECTURA (nombre, correo,
  * numero de identidad enmascarado, departamento). Puede gestionar SU FOTO de
- * perfil (es su imagen, no un dato sensible) y cambiar SU contrasena (validando la
- * actual + fortaleza). NO puede editar su correo/identidad ni gestionar a otros.
+ * perfil (es su imagen, no un dato sensible) y cambiar SU contrasena (solo se exige
+ * fortaleza + confirmacion; NO se pide la actual). NO puede editar su correo/identidad
+ * ni gestionar a otros.
  */
 #[Layout('layouts.app')]
 class MiPerfil extends Component
@@ -27,8 +28,6 @@ class MiPerfil extends Component
     use WithFileUploads;
 
     public mixed $avatar = null;
-
-    public string $current_password = '';
 
     public string $password = '';
 
@@ -66,9 +65,8 @@ class MiPerfil extends Component
     public function updatePassword(AuditService $audit): void
     {
         $this->validate([
-            'current_password' => ['required', 'current_password'],
             'password' => ['required', 'confirmed', Password::defaults()],
-        ], [], ['current_password' => 'contraseña actual', 'password' => 'nueva contraseña']);
+        ], [], ['password' => 'nueva contraseña']);
 
         $user = auth()->user();
         $user->password = Hash::make($this->password);
@@ -77,7 +75,7 @@ class MiPerfil extends Component
         // Auditoria: solo el HECHO del cambio (jamas la contraseña).
         $audit->log('account.password_changed', $user);
 
-        $this->reset(['current_password', 'password', 'password_confirmation']);
+        $this->reset(['password', 'password_confirmation']);
         session()->flash('status', 'Contraseña actualizada.');
     }
 

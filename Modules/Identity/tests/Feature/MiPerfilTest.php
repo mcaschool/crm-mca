@@ -37,20 +37,18 @@ it('un usuario normal accede a Mi perfil; NO a la gestion de usuarios', function
     test()->get('/users/create')->assertForbidden();
 });
 
-it('cambia su propia contrasena validando la actual', function () {
+it('cambia su propia contrasena sin exigir la actual', function () {
     $user = normalUser();
 
-    // Contrasena actual incorrecta -> error.
+    // La confirmacion no coincide -> error (sigue validando fortaleza + confirmacion).
     Livewire::test(MiPerfil::class)
-        ->set('current_password', 'incorrecta')
         ->set('password', 'NuevaClave123!')
-        ->set('password_confirmation', 'NuevaClave123!')
+        ->set('password_confirmation', 'NoCoincide')
         ->call('updatePassword')
-        ->assertHasErrors('current_password');
+        ->assertHasErrors('password');
 
-    // Actual correcta + fuerte + confirmada -> se actualiza.
+    // Nueva + confirmada -> se actualiza SIN pedir la contrasena actual.
     Livewire::test(MiPerfil::class)
-        ->set('current_password', 'OldPass123!')
         ->set('password', 'NuevaClave123!')
         ->set('password_confirmation', 'NuevaClave123!')
         ->call('updatePassword')
