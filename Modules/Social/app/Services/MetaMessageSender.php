@@ -57,19 +57,6 @@ final class MetaMessageSender
 
         [$url, $payload] = $this->buildRequest($provider, $recipient, $text);
 
-        // TEMP DEBUG (diagnóstico envío IG, error 190) — QUITAR tras el diagnóstico. Confirma
-        // si el token llega ÍNTEGRO al punto de envío. No expone el token completo.
-        Log::info('social.send.debug.token', [
-            'provider' => $provider,
-            'token_len' => strlen($token),
-            'token_trimmed_len' => strlen(trim($token)),
-            'token_head' => substr($token, 0, 6),
-            'token_tail' => substr($token, -4),
-            'has_whitespace' => (bool) preg_match('/\s/', $token),
-            'auth_via' => 'header Authorization: Bearer',
-            'url' => $url,
-        ]);
-
         try {
             $response = Http::timeout(self::TIMEOUT_SECONDS)
                 ->withToken($token)

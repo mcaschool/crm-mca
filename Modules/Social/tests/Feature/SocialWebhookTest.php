@@ -160,6 +160,29 @@ it('canal desconocido: responde 200 (park) y no crea nada', function () {
 });
 
 // ----------------------------------------------------------------------------------
+// Regresión Messenger (post-incidente): el canal se resuelve por provider + external_id.
+// En producción el canal 'messenger' tenía un external_id equivocado en social_channels y
+// los entrantes se aparcaban; el arreglo fue el DATO de BD, no el código. Se fija ambos
+// extremos: external_id que no casa → parked; external_id correcto → mensaje ingerido.
+// ----------------------------------------------------------------------------------
+it('Messenger inbound: external_id que no coincide aparca; el correcto ingiere', function () {
+    $institution = socialWebhookCtx();   // crea el canal 'messenger' con external_id demo_fb_page
+
+    // Page ID entrante que NO coincide con el external_id del canal → parked, nada creado.
+    $mismatch = str_replace('demo_fb_page', 'page_id_no_registrado', fx('messenger'));
+    postWebhook('messenger', $mismatch)->assertOk()->assertJsonPath('results.0.status', 'parked');
+    app(CurrentInstitution::class)->runFor($institution->id, fn () => expect(SocialMessage::query()->count())->toBe(0));
+
+    // Mismo payload con el external_id correcto → created (canal resuelto por provider+external_id).
+    postWebhook('messenger', fx('messenger'))->assertOk()->assertJsonPath('results.0.status', 'created');
+    app(CurrentInstitution::class)->runFor($institution->id, function () {
+        $conv = SocialConversation::query()->where('provider', 'messenger')->first();
+        expect($conv)->not->toBeNull();
+        expect(SocialMessage::query()->where('external_message_id', 'm_MSGR00000001')->count())->toBe(1);
+    });
+});
+
+// ----------------------------------------------------------------------------------
 // Eventos no soportados → 200 + ignored, sin crear mensaje
 // ----------------------------------------------------------------------------------
 it('ignora un echo (is_echo) sin crear mensaje', function () {
