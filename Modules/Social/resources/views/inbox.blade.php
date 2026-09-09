@@ -77,7 +77,12 @@
                         class="sb-item {{ $selected && $selected->id === $conv->id ? 'on' : '' }}"
                         wire:key="conv-{{ $conv->id }}">
                     <span class="sb-item__avatar">
-                        {{ $initial }}
+                        @if ($conv->contact_avatar_url)
+                            <img src="{{ $conv->contact_avatar_url }}" alt="" referrerpolicy="no-referrer"
+                                 style="width:100%;height:100%;border-radius:50%;object-fit:cover">
+                        @else
+                            {{ $initial }}
+                        @endif
                         <span class="sb-item__badge-src" wire:ignore>
                             @include('social::partials.provider-icon', ['provider' => $conv->provider, 'size' => 14])
                         </span>
@@ -107,7 +112,12 @@
             @php $sInitial = mb_strtoupper(mb_substr($selected->contact_name ?: '?', 0, 1)); @endphp
             <header class="sb-thread__head">
                 <span class="sb-item__avatar">
-                    {{ $sInitial }}
+                    @if ($selected->contact_avatar_url)
+                        <img src="{{ $selected->contact_avatar_url }}" alt="" referrerpolicy="no-referrer"
+                             style="width:100%;height:100%;border-radius:50%;object-fit:cover">
+                    @else
+                        {{ $sInitial }}
+                    @endif
                     <span class="sb-item__badge-src" wire:ignore wire:key="ico-hdr-av-{{ $selected->provider }}">
                         @include('social::partials.provider-icon', ['provider' => $selected->provider, 'size' => 14])
                     </span>

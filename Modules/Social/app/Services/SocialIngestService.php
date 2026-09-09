@@ -20,10 +20,15 @@ use Modules\Social\Models\SocialMessage;
  *  - Upsert de conversación por (social_channel_id, external_conversation_id).
  *  - Inserción idempotente del mensaje por (social_conversation_id, external_message_id).
  *  - Todo dentro de una transacción; bloqueo de la conversación para serializar reintentos.
+ *  - Tras confirmar (fuera de la transacción), resolución best-effort del nombre/foto del
+ *    contacto vía Graph API la PRIMERA vez que llega un entrante sin nombre (Messenger/IG).
  */
 final class SocialIngestService
 {
-    public function __construct(private readonly CurrentInstitution $context) {}
+    public function __construct(
+        private readonly CurrentInstitution $context,
+        private readonly ContactProfileResolver $profiles,
+    ) {}
 
     public function ingest(NormalizedMessage $m): IngestResult
     {
@@ -44,9 +49,47 @@ final class SocialIngestService
             return IngestResult::parked();
         }
 
-        return $this->context->runFor($channel->institution_id, fn (): IngestResult => DB::transaction(
+        $result = $this->context->runFor($channel->institution_id, fn (): IngestResult => DB::transaction(
             fn (): IngestResult => $this->store($channel, $m)
         ));
+
+        // Resolución de perfil FUERA de la transacción (no hace HTTP con la fila bloqueada) y
+        // best-effort: si falla, el mensaje ya quedó ingerido. Solo en el PRIMER entrante de un
+        // contacto sin nombre (Messenger/IG); tras el primer éxito no vuelve a llamar.
+        if ($result->status === 'created' && $result->conversationId !== null && $m->direction === 'inbound') {
+            $this->resolveContactProfile($channel, $m->provider, $result->conversationId);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Rellena nombre/foto del contacto la primera vez (contact_name vacío) para Messenger/IG.
+     * Nunca lanza: cualquier fallo de Graph se ignora (el resolver ya devuelve nulls).
+     */
+    private function resolveContactProfile(SocialChannel $channel, string $provider, int $conversationId): void
+    {
+        if (! in_array($provider, ['messenger', 'instagram'], true)) {
+            return;
+        }
+
+        $this->context->runFor($channel->institution_id, function () use ($channel, $provider, $conversationId): void {
+            $conversation = SocialConversation::query()->find($conversationId);
+            if ($conversation === null
+                || ((string) ($conversation->contact_name ?? '')) !== ''
+                || ((string) ($conversation->contact_external_id ?? '')) === '') {
+                return; // ya tiene nombre, o no hay id de contacto que resolver
+            }
+
+            $profile = $this->profiles->resolve($channel, $provider, (string) $conversation->contact_external_id);
+            if ($profile['name'] === null && $profile['avatar'] === null) {
+                return;
+            }
+
+            $conversation->contact_name = $profile['name'] ?? $conversation->contact_name;
+            $conversation->contact_avatar_url = $profile['avatar'] ?? $conversation->contact_avatar_url;
+            $conversation->save();
+        });
     }
 
     private function store(SocialChannel $channel, NormalizedMessage $m): IngestResult

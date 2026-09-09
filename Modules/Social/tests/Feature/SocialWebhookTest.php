@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Institutions\Models\Institution;
@@ -27,6 +28,10 @@ beforeEach(function () {
         'social.secrets.instagram' => WH_SECRET,
         'social.webhook_verify_token' => WH_VERIFY,
     ]);
+    // La ingesta de Messenger/IG intenta resolver nombre+foto vía Graph; sin credenciales
+    // reales aquí, se stubea todo a 200 vacío para no hacer llamadas de red (no altera el
+    // nombre del contacto: la resolución se prueba aparte en SocialContactProfileTest).
+    Http::fake();
 });
 
 /** Institución con los 3 canales cuyos external_id coinciden con los fixtures. */
