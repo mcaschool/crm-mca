@@ -107,6 +107,20 @@ it('no vuelve a llamar a Graph si el contacto ya tiene nombre', function () {
     expect(SocialConversation::query()->first()->contact_name)->toBe('Ana');
 });
 
+it('una URL de foto muy larga (CDN de Meta) se guarda sin romper la ingesta', function () {
+    contactCtx('instagram', 'IGU_1');
+    // Las URLs firmadas de Meta superan 255 chars; la columna es TEXT tras la migración.
+    $longUrl = 'https://scontent.cdninstagram.com/v/t51.2885-19/'.str_repeat('a', 600).'.jpg?oe=6AA761A8';
+    Http::fake(['graph.facebook.com/*' => Http::response(['name' => 'Foto Larga', 'profile_pic' => $longUrl], 200)]);
+
+    $result = ingestService()->ingest(inbound('instagram', 'IGU_1', 'IGSID_9'));
+
+    expect($result->status)->toBe('created');
+    $conv = SocialConversation::query()->first();
+    expect($conv->contact_name)->toBe('Foto Larga');
+    expect($conv->contact_avatar_url)->toBe($longUrl);
+});
+
 it('WhatsApp no dispara resolución por Graph', function () {
     contactCtx('whatsapp', 'WA_1');
     Http::fake();

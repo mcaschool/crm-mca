@@ -12,6 +12,7 @@ use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialMessage;
+use Throwable;
 
 /**
  * Núcleo de ingesta (independiente de la ENTRADA: webhook Meta, o cualquier otra fuente
@@ -73,23 +74,30 @@ final class SocialIngestService
             return;
         }
 
-        $this->context->runFor($channel->institution_id, function () use ($channel, $provider, $conversationId): void {
-            $conversation = SocialConversation::query()->find($conversationId);
-            if ($conversation === null
-                || ((string) ($conversation->contact_name ?? '')) !== ''
-                || ((string) ($conversation->contact_external_id ?? '')) === '') {
-                return; // ya tiene nombre, o no hay id de contacto que resolver
-            }
+        // Best-effort de verdad: cualquier fallo aquí (Graph, o el propio save) se ignora. El
+        // mensaje YA quedó ingerido antes de llegar a este punto; resolver el perfil nunca debe
+        // tumbar el webhook.
+        try {
+            $this->context->runFor($channel->institution_id, function () use ($channel, $provider, $conversationId): void {
+                $conversation = SocialConversation::query()->find($conversationId);
+                if ($conversation === null
+                    || ((string) ($conversation->contact_name ?? '')) !== ''
+                    || ((string) ($conversation->contact_external_id ?? '')) === '') {
+                    return; // ya tiene nombre, o no hay id de contacto que resolver
+                }
 
-            $profile = $this->profiles->resolve($channel, $provider, (string) $conversation->contact_external_id);
-            if ($profile['name'] === null && $profile['avatar'] === null) {
-                return;
-            }
+                $profile = $this->profiles->resolve($channel, $provider, (string) $conversation->contact_external_id);
+                if ($profile['name'] === null && $profile['avatar'] === null) {
+                    return;
+                }
 
-            $conversation->contact_name = $profile['name'] ?? $conversation->contact_name;
-            $conversation->contact_avatar_url = $profile['avatar'] ?? $conversation->contact_avatar_url;
-            $conversation->save();
-        });
+                $conversation->contact_name = $profile['name'] ?? $conversation->contact_name;
+                $conversation->contact_avatar_url = $profile['avatar'] ?? $conversation->contact_avatar_url;
+                $conversation->save();
+            });
+        } catch (Throwable $e) {
+            Log::info('social.contact.resolve: no se pudo guardar el perfil', ['provider' => $provider, 'error' => $e->getMessage()]);
+        }
     }
 
     private function store(SocialChannel $channel, NormalizedMessage $m): IngestResult
