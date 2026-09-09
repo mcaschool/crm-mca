@@ -52,12 +52,16 @@ function publisher(): SocialPublishService
     return app(SocialPublishService::class);
 }
 
-/** Fake que responde OK a las 3 llamadas del flujo IG y a la foto de FB. */
+/**
+ * Fake que responde OK a las 3 llamadas del flujo IG y a la foto de FB. IG y FB comparten
+ * host (graph.facebook.com), así que se distingue por PATH: /photos = Facebook; /media_publish
+ * y /media = Instagram; el resto (GET del contenedor) = status FINISHED.
+ */
 function fakeAllOk(): void
 {
     Http::fake(function ($request) {
         $url = $request->url();
-        if (str_contains($url, 'graph.facebook.com')) {
+        if (str_contains($url, '/photos')) {
             return Http::response(['id' => 'PHOTO_1', 'post_id' => 'FB_POST_1'], 200);
         }
         if (str_contains($url, '/media_publish')) {
@@ -86,8 +90,9 @@ it('Instagram: hace el flujo de 2 pasos con URL pública y publica', function ()
     expect($t->external_post_id)->toBe('IG_POST_1');
     expect($post->status)->toBe('published');
 
-    // Paso 1: contenedor con la URL PÚBLICA (no binario) y el caption.
-    Http::assertSent(fn ($r) => $r->url() === 'https://graph.instagram.com/v26.0/IGU_1/media'
+    // Paso 1: contenedor con la URL PÚBLICA (no binario) y el caption. Host graph.facebook.com
+    // (Page token EAA), nodo = IG User ID.
+    Http::assertSent(fn ($r) => $r->url() === 'https://graph.facebook.com/v26.0/IGU_1/media'
         && $r['image_url'] === 'https://cdn.mca.test/foto.jpg'
         && $r['caption'] === 'Nueva microcredencial 🎓'
         && $r->hasHeader('Authorization', 'Bearer IG_TOKEN'));
@@ -122,7 +127,7 @@ it('Facebook: publica la foto con url pública + message y guarda el post id', f
 it('éxito parcial: Facebook ok e Instagram falla → post partial', function () {
     publisherCtx();
     Http::fake(function ($request) {
-        if (str_contains($request->url(), 'graph.facebook.com')) {
+        if (str_contains($request->url(), '/photos')) {
             return Http::response(['post_id' => 'FB_POST_2'], 200);
         }
 
@@ -142,7 +147,7 @@ it('éxito parcial inverso: Facebook falla e Instagram ok → post partial', fun
     publisherCtx();
     Http::fake(function ($request) {
         $url = $request->url();
-        if (str_contains($url, 'graph.facebook.com')) {
+        if (str_contains($url, '/photos')) {
             return Http::response(['error' => ['message' => 'FB caído', 'code' => 1]], 500);
         }
         if (str_contains($url, '/media_publish')) {

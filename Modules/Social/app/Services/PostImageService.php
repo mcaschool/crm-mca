@@ -11,10 +11,15 @@ use RuntimeException;
 /**
  * Normaliza la imagen subida a JPEG (Instagram exige JPEG) y la guarda en el disco PÚBLICO,
  * devolviendo la ruta y la URL HTTPS pública que Meta descargará. Aplana la transparencia
- * (PNG) sobre blanco para evitar fondos negros al convertir.
+ * (PNG) sobre blanco para evitar fondos negros al convertir. NO redimensiona: conserva las
+ * dimensiones originales (Meta reduce en su lado si excede sus máximos). La calidad de
+ * codificación es alta para minimizar la pérdida por recompresión.
  */
 final class PostImageService
 {
+    /** Calidad de codificación JPEG (0-100). Alta para conservar nitidez; Meta recomprime igual. */
+    private const JPEG_QUALITY = 92;
+
     /**
      * @return array{path: string, url: string}
      */
@@ -33,7 +38,7 @@ final class PostImageService
         imagecopy($canvas, $source, 0, 0, 0, 0, $width, $height);
 
         ob_start();
-        imagejpeg($canvas, null, 88);
+        imagejpeg($canvas, null, self::JPEG_QUALITY);
         $jpeg = (string) ob_get_clean();
 
         imagedestroy($source);

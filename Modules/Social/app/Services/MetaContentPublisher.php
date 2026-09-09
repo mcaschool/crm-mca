@@ -18,7 +18,10 @@ use Throwable;
  *
  *  - Facebook (foto en Página): POST https://graph.facebook.com/{v}/{page_id}/photos
  *      body {url, message, published:true} → devuelve {id, post_id}.
- *  - Instagram (2 pasos, API con IG Login): host graph.instagram.com
+ *  - Instagram (2 pasos, Graph API de Facebook): host graph.facebook.com con el Page Access
+ *      Token EAA del canal (el mismo que usa Facebook y la mensajería; graph.instagram.com
+ *      espera un token IGAA → 190 "Cannot parse access token"). Nodo = IG User ID (external_id
+ *      del canal de Instagram).
  *      1) POST /{ig_user_id}/media  {image_url, caption}  → {id: creation_id (contenedor)}
  *      2) GET  /{creation_id}?fields=status_code          → debe ser FINISHED antes de publicar
  *      3) POST /{ig_user_id}/media_publish  {creation_id} → {id: post_id}
@@ -78,7 +81,9 @@ final class MetaContentPublisher
         }
 
         $version = (string) config('social.graph_version', 'v26.0');
-        $base = "https://graph.instagram.com/{$version}";
+        // Token EAA (Page Access Token) → Graph API de Facebook, NO graph.instagram.com
+        // (ese espera IGAA → 190). El nodo sigue siendo el IG User ID (external_id del canal).
+        $base = "https://graph.facebook.com/{$version}";
 
         try {
             // 1) Crear contenedor.
