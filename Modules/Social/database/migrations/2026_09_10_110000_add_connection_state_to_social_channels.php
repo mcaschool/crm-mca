@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Estado de conexión del canal (Coexistence-ready). NO va en credentials porque no es un
  * secreto y la UI/las consultas lo necesitan en claro:
- *  - connection_status: pending_setup | connected_cloud_api | connected_coexistence |
- *    offboarded | reconnecting | disconnected | error (null = legado, se asume Cloud API).
+ *  - connection_status: pending_setup | onboarding | connected_cloud_api |
+ *    connected_coexistence | offboarded | reconnecting | disconnected | error
+ *    (null = legado, se asume Cloud API).
  *  - connection_meta: metadata NO sensible del onboarding/sincronización (waba suscrita,
  *    marcas de una-sola-vez de sync de contactos/historial, offboarded_at, progreso de
  *    history…). Jamás tokens, secretos ni authorization codes.

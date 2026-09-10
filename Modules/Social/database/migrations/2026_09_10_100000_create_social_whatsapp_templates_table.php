@@ -23,8 +23,11 @@ return new class extends Migration
             $table->foreignId('institution_id')->constrained('institutions')->restrictOnDelete();
             $table->foreignId('social_channel_id')->constrained('social_channels')->cascadeOnDelete();
             $table->string('meta_template_id')->nullable()->index(); // id que asigna Meta al crearla
-            $table->string('name');                                   // lowercase [a-z0-9_]
-            $table->string('language');                               // código Meta: es, es_MX, en_US…
+            // Meta admite nombres de hasta 512 (igual que el validator local); el string()
+            // por defecto (VARCHAR 255) truncaría. language corto para que el índice único
+            // compuesto quede holgado en utf8mb4 (8 + 2048 + 128 bytes < 3072 de InnoDB).
+            $table->string('name', 512);                              // lowercase [a-z0-9_]
+            $table->string('language', 32);                           // código Meta: es, es_MX, en_US…
             $table->string('category');                               // MARKETING | UTILITY | AUTHENTICATION
             $table->string('status')->index();                        // string flexible (ver docblock)
             $table->string('quality_score')->nullable();              // SOLO el score: GREEN | YELLOW | RED | UNKNOWN
