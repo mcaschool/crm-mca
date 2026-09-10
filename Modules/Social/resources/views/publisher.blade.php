@@ -141,10 +141,19 @@
                         <x-ui.icon name="image" class="w-8 h-8" />
                         <span class="sp-drop__title">{{ __('Subir imagen') }}</span>
                         <span class="sp-drop__hint">
+                            {{-- Instagram exige JPEG; sin IG, el PNG también pasa TAL CUAL. --}}
                             @if ($contentType === 'story')
-                                {{ __('JPG o PNG · vertical 9:16 recomendado · se normaliza a JPEG') }}
+                                @if ($toInstagram)
+                                    {{ __('JPEG · Vertical 9:16 recomendado · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+                                @else
+                                    {{ __('JPG y PNG · Vertical 9:16 recomendado · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+                                @endif
                             @else
-                                {{ __('JPG o PNG · se normaliza a JPEG para publicar') }}
+                                @if ($toInstagram)
+                                    {{ __('JPEG · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+                                @else
+                                    {{ __('JPG y PNG · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+                                @endif
                             @endif
                         </span>
                     @endif

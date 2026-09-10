@@ -1123,3 +1123,172 @@ it('rollup: Facebook published + Instagram processing = post processing (no part
     expect($post->targets->firstWhere('network', 'facebook')->status)->toBe('published');
     expect($post->targets->firstWhere('network', 'instagram')->status)->toBe('processing');
 });
+
+// ----------------------------------------------------------------------------------
+// POLÍTICA DE PRESERVACIÓN: PNG pasa TAL CUAL a Facebook; con Instagram se BLOQUEA
+// antes de cualquier HTTP (nunca conversión silenciosa, nunca publicación parcial)
+// ----------------------------------------------------------------------------------
+/** MP4 mínimo con cabecera ftyp real (finfo lo detecta como video/mp4). */
+function mfMp4Bytes(): string
+{
+    return hex2bin('0000001c').'ftypisom'.hex2bin('00000200').'isomiso2avc1mp41'.str_repeat('V', 512);
+}
+
+it('FB-only: un Post con PNG se publica TAL CUAL (.png, sin derivado JPEG)', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    mfFakeVideoOk();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->set('image', UploadedFile::fake()->image('captura.png', 640, 480))
+        ->set('toInstagram', false)
+        ->call('publish')
+        ->assertHasNoErrors();
+
+    $post = SocialPost::query()->first();
+    expect($post->status)->toBe('published');
+    expect(str_ends_with((string) $post->image_path, '.png'))->toBeTrue();
+    expect(str_ends_with((string) $post->image_public_url, '/'.$post->image_path))->toBeTrue();
+
+    // Un ÚNICO archivo en storage y es el PNG: ningún JPEG derivado.
+    $files = Storage::disk('public')->allFiles('social-posts');
+    expect($files)->toHaveCount(1);
+    expect(str_ends_with($files[0], '.png'))->toBeTrue();
+
+    // Facebook recibe la URL de ESE archivo.
+    Http::assertSent(fn ($r) => str_contains($r->url(), '/PAGE_1/photos')
+        && $r['url'] === $post->image_public_url);
+});
+
+it('FB-only: una Historia con PNG se publica tal cual (media image/png)', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    mfFakeVideoOk();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->call('setContentType', 'story')
+        ->set('image', UploadedFile::fake()->image('story.png', 1080, 1920))
+        ->set('toInstagram', false)
+        ->call('publish')
+        ->assertHasNoErrors();
+
+    $post = SocialPost::query()->first();
+    expect($post->targets->first()->status)->toBe('published');
+    expect($post->media_mime)->toBe('image/png');
+    expect(str_ends_with((string) $post->media_path, '.png'))->toBeTrue();
+});
+
+it('Instagram Post con PNG: rechazado ANTES de cualquier HTTP, sin modificar el archivo', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    Http::fake();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->set('image', UploadedFile::fake()->image('captura.png', 100, 100))
+        ->set('toFacebook', false)
+        ->call('publish')
+        ->assertHasErrors('image')
+        ->assertSee('Instagram requiere imágenes en formato JPEG');
+
+    Http::assertNothingSent();
+    expect(SocialPost::query()->count())->toBe(0);
+});
+
+it('Instagram Historia con PNG: rechazada antes de cualquier HTTP', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    Http::fake();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->call('setContentType', 'story')
+        ->set('image', UploadedFile::fake()->image('story.png', 100, 100))
+        ->set('toFacebook', false)
+        ->call('publish')
+        ->assertHasErrors('image')
+        ->assertSee('Instagram requiere imágenes en formato JPEG');
+
+    Http::assertNothingSent();
+    expect(SocialPost::query()->count())->toBe(0);
+});
+
+it('Facebook + Instagram con PNG: BLOQUEO total antes de publicar en cualquiera (sin parciales)', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    Http::fake();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->set('image', UploadedFile::fake()->image('captura.png', 100, 100))
+        ->call('publish')
+        ->assertHasErrors('image')
+        ->assertSee('Instagram requiere imágenes en formato JPEG');
+
+    Http::assertNothingSent(); // ni Facebook ni Instagram: cero publicaciones parciales
+    expect(SocialPost::query()->count())->toBe(0);
+});
+
+// ----------------------------------------------------------------------------------
+// Preservación demostrada por SHA-256 (solo en tests; nunca en producción)
+// ----------------------------------------------------------------------------------
+it('el MP4 se persiste byte a byte: SHA-256 idéntico al original', function () {
+    Storage::fake('public');
+    $src = mfMp4Bytes();
+
+    // UploadedFile REAL (no Testing\File): el MIME se detecta por CONTENIDO via finfo,
+    // igual que en producción.
+    $tmp = (string) tempnam(sys_get_temp_dir(), 'mp4');
+    file_put_contents($tmp, $src);
+
+    $stored = app(\Modules\Social\Services\PostVideoService::class)
+        ->store(new UploadedFile($tmp, 'clip.mp4', 'video/mp4', null, true));
+
+    $persisted = (string) Storage::disk('public')->get($stored['path']);
+    expect(hash('sha256', $persisted))->toBe(hash('sha256', $src));
+    expect($stored['mime'])->toBe('video/mp4');
+    expect(str_ends_with($stored['url'], '/'.$stored['path']))->toBeTrue();
+});
+
+it('FB Post de video: el source multipart corresponde al MISMO archivo persistido', function () {
+    mfCtx();
+    Storage::fake('public');
+    $src = mfMp4Bytes();
+    Storage::disk('public')->put('social-posts/post-video.mp4', $src);
+    mfFakeVideoOk();
+
+    $t = mfService()->publish(SocialPost::factory()->postVideo()->create(), ['facebook'])
+        ->targets->firstWhere('network', 'facebook');
+
+    expect($t->status)->toBe('published');
+    // El persistido sigue siendo idéntico al fixture (nada lo tocó)…
+    expect(hash('sha256', (string) Storage::disk('public')->get('social-posts/post-video.mp4')))
+        ->toBe(hash('sha256', $src));
+    // …y el multipart adjunta exactamente ese archivo (filename del path persistido).
+    Http::assertSent(function ($r): bool {
+        if (! str_ends_with($r->url(), '/PAGE_1/videos') || ! $r->isMultipart()) {
+            return false;
+        }
+        foreach ($r->data() as $p) {
+            if (is_array($p) && ($p['name'] ?? null) === 'source') {
+                return ($p['filename'] ?? null) === 'post-video.mp4';
+            }
+        }
+
+        return false;
+    });
+});
+
+it('Instagram recibe la URL EXACTA del archivo almacenado (sin variantes ni thumbnails)', function () {
+    [, $user] = mfCtx();
+    Storage::fake('public');
+    mfFakeVideoOk();
+
+    Livewire::actingAs($user)->test(Publisher::class)
+        ->set('image', UploadedFile::fake()->image('promo.jpg', 800, 800))
+        ->set('toFacebook', false)
+        ->call('publish')
+        ->assertHasNoErrors();
+
+    $post = SocialPost::query()->first();
+    expect(str_ends_with((string) $post->image_public_url, '/'.$post->image_path))->toBeTrue();
+    Http::assertSent(fn ($r) => str_ends_with($r->url(), '/IGU_1/media')
+        && $r['image_url'] === $post->image_public_url);
+});

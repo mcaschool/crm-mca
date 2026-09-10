@@ -191,6 +191,18 @@ class Publisher extends Component
             return;
         }
 
+        // POLÍTICA DE PRESERVACIÓN: el CRM nunca convierte formatos. Instagram exige JPEG
+        // en imágenes; si hay un PNG con Instagram entre los destinos, se BLOQUEA aquí —
+        // antes de publicar en CUALQUIER red — para no dejar publicaciones parciales
+        // (Facebook publicado + Instagram rechazado). El archivo no se modifica jamás.
+        if (! $wantsVideo
+            && in_array('instagram', $networks, true)
+            && $this->image->getMimeType() === 'image/png') {
+            $this->addError('image', __('Instagram requiere imágenes en formato JPEG para este tipo de publicación. Convierte o exporta la imagen como JPG/JPEG y vuelve a seleccionarla. El archivo no ha sido modificado.'));
+
+            return;
+        }
+
         $post = new SocialPost;
         $post->created_by = (int) auth()->id();
         $post->content_type = $this->contentType;
@@ -211,13 +223,14 @@ class Publisher extends Component
             $post->media_public_url = $stored['url'];
             $post->media_mime = $stored['mime'];
         } elseif ($this->contentType === 'story') {
-            $stored = $images->storeJpeg((string) $this->image->get());
+            // La imagen se guarda TAL CUAL (JPEG o PNG, byte a byte; sin recompresión).
+            $stored = $images->store((string) $this->image->get());
             $post->media_path = $stored['path'];
             $post->media_public_url = $stored['url'];
-            $post->media_mime = 'image/jpeg';
+            $post->media_mime = $stored['mime'];
         } else {
-            // POST: flujo histórico intacto (campos image_*).
-            $stored = $images->storeJpeg((string) $this->image->get());
+            // POST de imagen: byte a byte en los campos image_* históricos.
+            $stored = $images->store((string) $this->image->get());
             $post->image_path = $stored['path'];
             $post->image_public_url = $stored['url'];
         }
