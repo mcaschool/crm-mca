@@ -50,6 +50,23 @@
         .sb-send--on:hover{background:#17497f}
         .sb-compose textarea:not(:disabled){background:#fff;color:var(--sb-ink)}
         .sb-compose__note{margin:8px 2px 0;font-size:11.5px;color:var(--sb-muted);display:flex;align-items:center;gap:6px}
+        /* ---- Media en burbujas (adjuntos WhatsApp servidos por ruta autenticada) ---- */
+        .sb-media{display:block;margin-bottom:4px}
+        .sb-media img{max-width:260px;max-height:260px;border-radius:10px;display:block}
+        .sb-media video{max-width:280px;max-height:300px;border-radius:10px;display:block}
+        .sb-media audio{max-width:260px;display:block}
+        .sb-doc{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border-radius:9px;background:rgba(255,255,255,.85);border:1px solid var(--sb-line);color:var(--sb-ink);font-size:12.5px;font-weight:600;text-decoration:none;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .sb-out .sb-doc{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.35);color:#fff}
+        .sb-doc--pending{opacity:.75;font-weight:500;cursor:default}
+        /* ---- Adjuntar (solo WhatsApp) ---- */
+        .sb-attach{flex:0 0 auto;width:40px;height:40px;border:1px solid var(--sb-line);border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--sb-muted);cursor:pointer;transition:color .12s,border-color .12s}
+        .sb-attach:hover{color:var(--sb-blue);border-color:var(--sb-blue)}
+        .sb-attach input{display:none}
+        .sb-attach__chip{display:inline-flex;align-items:center;gap:8px;margin:8px 2px 0;padding:5px 10px;border:1px solid var(--sb-line);border-radius:9px;background:#F8FAFC;font-size:12px;color:var(--sb-ink);max-width:100%}
+        .sb-attach__chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .sb-attach__chip button{border:none;background:none;color:var(--sb-muted);cursor:pointer;font-size:14px;line-height:1;padding:0}
+        .sb-attach__chip button:hover{color:#8A1C1C}
+        .sb-attach__err{margin:7px 2px 0;font-size:12px;color:#8A1C1C}
         /* Saliente fallido (error genérico o fuera de ventana 24h). */
         .sb-out--failed{background:#FCE9E9;color:#8A1C1C;border:1px solid #F1C4C4}
         .sb-out--failed time{opacity:.8}
@@ -141,23 +158,63 @@
                     new MutationObserver(() => { if (atBottom) toBottom(); }).observe(el, { childList: true, subtree: true });
                  ">
                 @forelse ($messages as $msg)
-                    @php $failed = in_array($msg->status, ['failed', 'failed_window'], true); @endphp
+                    @php
+                        $failed = in_array($msg->status, ['failed', 'failed_window'], true);
+                        $atts = is_array($msg->attachments) ? $msg->attachments : [];
+                        $hasStoredMedia = collect($atts)->contains(fn ($a) => is_array($a) && ! empty($a['storage_path']));
+                    @endphp
                     <div class="sb-bubble {{ $msg->direction === 'outbound' ? 'sb-out' : 'sb-in' }} {{ $failed ? 'sb-out--failed' : '' }}"
                          wire:key="msg-{{ $msg->id }}">
-                        {!! nl2br(e($msg->body ?: '—')) !!}
+                        @foreach ($atts as $ai => $att)
+                            @if (is_array($att) && ! empty($att['storage_path']))
+                                @php
+                                    $mediaUrl = route('social.media.show', ['message' => $msg->id, 'index' => $ai]);
+                                    $mediaType = (string) ($att['type'] ?? 'document');
+                                @endphp
+                                <span class="sb-media" wire:ignore wire:key="att-{{ $msg->id }}-{{ $ai }}">
+                                    @if ($mediaType === 'image' || $mediaType === 'sticker')
+                                        <a href="{{ $mediaUrl }}" target="_blank" rel="noopener"><img src="{{ $mediaUrl }}" alt="" loading="lazy"></a>
+                                    @elseif ($mediaType === 'video')
+                                        <video controls preload="metadata" src="{{ $mediaUrl }}"></video>
+                                    @elseif ($mediaType === 'audio')
+                                        <audio controls preload="none" src="{{ $mediaUrl }}"></audio>
+                                    @else
+                                        <a class="sb-doc" href="{{ $mediaUrl }}" target="_blank" rel="noopener">
+                                            <x-ui.icon name="file-text" class="w-4 h-4" />
+                                            {{ $att['filename'] ?? __('Documento') }}
+                                        </a>
+                                    @endif
+                                </span>
+                            @elseif (is_array($att) && ! empty($att['provider_media_id']))
+                                <span class="sb-doc sb-doc--pending">{{ __('Adjunto no disponible todavía.') }}</span>
+                            @endif
+                        @endforeach
+                        @if ($msg->body !== null && $msg->body !== '')
+                            {!! nl2br(e($msg->body)) !!}
+                        @elseif (! $hasStoredMedia && $atts === [])
+                            —
+                        @endif
                         <time>
                             {{ optional($msg->provider_timestamp ?? $msg->created_at)->format('d/m H:i') }}
                             @if ($msg->direction === 'outbound')
                                 @switch($msg->status)
                                     @case('pending') · {{ __('Enviando…') }} @break
                                     @case('sent') · {{ __('Enviado') }} @break
+                                    @case('delivered') · {{ __('Entregado') }} @break
+                                    @case('read') · {{ __('Leído') }} @break
                                     @case('failed') · {{ __('Fallido') }} @break
                                     @case('failed_window') · {{ __('Fallido') }} @break
                                 @endswitch
                             @endif
                         </time>
                         @if ($msg->status === 'failed_window')
-                            <div class="sb-bubble__warn">{{ __('No se puede responder: pasaron más de 24h desde el último mensaje del contacto.') }}</div>
+                            <div class="sb-bubble__warn">
+                                @if ($selected->provider === 'whatsapp')
+                                    {{ __('Fuera de la ventana de 24 horas: se requiere una plantilla de WhatsApp aprobada para iniciar o reanudar la conversación.') }}
+                                @else
+                                    {{ __('No se puede responder: pasaron más de 24h desde el último mensaje del contacto.') }}
+                                @endif
+                            </div>
                         @elseif ($msg->status === 'failed')
                             <div class="sb-bubble__warn">{{ __('No se pudo enviar el mensaje. Inténtalo de nuevo.') }}</div>
                         @endif
@@ -170,18 +227,39 @@
             <div class="sb-compose">
                 @if ($canReply)
                     {{-- La caja la gobierna Alpine y va wire:ignore: el poll de 2 s no debe pisar
-                         lo que el usuario está escribiendo. El texto se pasa al enviar. --}}
+                         lo que el usuario está escribiendo. El texto se pasa al enviar (con
+                         adjunto de WhatsApp seleccionado, hace de caption). --}}
                     <div class="sb-compose__row" x-data="{ draft: '' }"
-                         x-on:keydown.enter.prevent="if (draft.trim() !== '') $wire.send(draft).then(ok => { if (ok) draft = '' })">
+                         x-on:keydown.enter.prevent="if (draft.trim() !== '' || $wire.attachment) $wire.send(draft).then(ok => { if (ok) draft = '' })">
+                        @if ($selected->provider === 'whatsapp')
+                            <label class="sb-attach" title="{{ __('Adjuntar archivo') }}">
+                                <x-ui.icon name="upload" class="w-4 h-4" />
+                                <input type="file" wire:model="attachment"
+                                       accept="image/jpeg,image/png,video/mp4,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt">
+                            </label>
+                        @endif
                         <textarea rows="1" wire:ignore x-model="draft"
                                   placeholder="{{ __('Escribe una respuesta…') }}"></textarea>
                         <button type="button" class="sb-send sb-send--on"
-                                x-on:click="if (draft.trim() !== '') $wire.send(draft).then(ok => { if (ok) draft = '' })"
+                                x-on:click="if (draft.trim() !== '' || $wire.attachment) $wire.send(draft).then(ok => { if (ok) draft = '' })"
                                 wire:target="send" wire:loading.attr="disabled">
                             <span wire:loading.remove wire:target="send">{{ __('Enviar') }}</span>
                             <span wire:loading wire:target="send">{{ __('Enviando…') }}</span>
                         </button>
                     </div>
+                    @if ($selected->provider === 'whatsapp')
+                        <div wire:loading wire:target="attachment" class="sb-attach__chip">{{ __('Subiendo archivo…') }}</div>
+                        @if ($attachment !== null)
+                            <div class="sb-attach__chip" wire:loading.remove wire:target="attachment">
+                                <span>{{ $attachment->getClientOriginalName() }}
+                                    · {{ number_format($attachment->getSize() / 1048576, 1, '.', '') }} MB</span>
+                                <button type="button" wire:click="removeAttachment" title="{{ __('Quitar adjunto') }}">✕</button>
+                            </div>
+                        @endif
+                        @error('attachment')
+                            <p class="sb-attach__err">{{ $message }}</p>
+                        @enderror
+                    @endif
                     <p class="sb-compose__note">
                         <span wire:ignore wire:key="ico-note-{{ $selected->provider }}" style="display:inline-flex">@include('social::partials.provider-icon', ['provider' => $selected->provider, 'size' => 14])</span>
                         {{ __('Se envía directamente al contacto por :canal.', ['canal' => $selected->channel?->providerLabel()]) }}

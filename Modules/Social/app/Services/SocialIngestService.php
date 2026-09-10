@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Social\Jobs\ProcessWhatsAppInboundMedia;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialMessage;
@@ -61,7 +62,98 @@ final class SocialIngestService
             $this->resolveContactProfile($channel, $m->provider, $result->conversationId);
         }
 
+        // Media de WhatsApp: el webhook trae un media ID (no URL). La descarga NO puede
+        // bloquear el 200 a Meta → se despacha tras enviar la respuesta (afterResponse),
+        // en un Job idempotente y best-effort: si falla, el mensaje ya quedó ingerido con
+        // su provider_media_id. Solo en 'created': un reintento de Meta (duplicate) no
+        // vuelve a descargar.
+        if ($result->status === 'created' && $result->messageId !== null
+            && $m->provider === 'whatsapp' && $m->attachments !== null) {
+            ProcessWhatsAppInboundMedia::dispatchAfterResponse($channel->id, $result->messageId, $channel->institution_id);
+        }
+
         return $result;
+    }
+
+    /**
+     * Aplica un estado de WhatsApp (value.statuses) a un mensaje YA existente, localizado
+     * por wamid DENTRO del canal correspondiente (y por tanto de su institución). Nunca
+     * lanza ni crea mensajes fantasma: un wamid desconocido solo deja un log seguro.
+     *
+     * @return 'updated'|'ignored'|'unknown'|'parked'
+     */
+    public function applyStatus(NormalizedStatus $s): string
+    {
+        $channel = $this->context->runGlobally(fn (): ?SocialChannel => SocialChannel::query()
+            ->where('provider', $s->provider)
+            ->where('external_id', $s->channelExternalId)
+            ->first());
+
+        if ($channel === null) {
+            Log::info('social.status: canal no configurado, estado aparcado', [
+                'provider' => $s->provider,
+                'channel_external_id' => $s->channelExternalId,
+            ]);
+
+            return 'parked';
+        }
+
+        return $this->context->runFor($channel->institution_id, function () use ($channel, $s): string {
+            $message = SocialMessage::query()
+                ->where('external_message_id', $s->messageExternalId)
+                ->whereHas('conversation', fn ($q) => $q->where('social_channel_id', $channel->id))
+                ->first();
+
+            if ($message === null) {
+                // Solo información segura: nunca tokens ni payloads (el wamid no es secreto).
+                Log::info('social.status: wamid desconocido, estado ignorado', [
+                    'provider' => $s->provider,
+                    'status' => $s->status,
+                ]);
+
+                return 'unknown';
+            }
+
+            if (! $this->statusAdvances((string) ($message->status ?? ''), $s->status)) {
+                return 'ignored'; // p. ej. un delivered tardío tras un read: no hay regresión.
+            }
+
+            $message->status = $s->status;
+            $message->save();
+
+            return 'updated';
+        });
+    }
+
+    /**
+     * Máquina de estados del saliente de WhatsApp (progreso estricto, sin regresiones):
+     *
+     *   inicial (pending/…) → sent | failed
+     *   sent                → delivered | read | failed
+     *   delivered           → read            (NUNCA → sent ni → failed tardíos)
+     *   read                → TERMINAL        (nada lo cambia)
+     *   failed              → TERMINAL        (sin recuperación: un wamid que Meta reportó
+     *                                          fallido no vuelve a la vida; un reenvío desde
+     *                                          el panel crea un mensaje NUEVO con otro wamid)
+     */
+    private function statusAdvances(string $current, string $incoming): bool
+    {
+        // Terminales: read y failed no admiten ningún cambio posterior.
+        if ($current === 'read' || $current === 'failed') {
+            return false;
+        }
+
+        $rank = ['sent' => 1, 'delivered' => 2, 'read' => 3];
+        $currentRank = $rank[$current] ?? 0; // pending/failed_window/'' = estado inicial
+
+        if ($incoming === 'failed') {
+            // failed solo desde el estado inicial o desde sent: un failed tardío jamás
+            // desmiente un delivered (y read ya es terminal arriba).
+            return $currentRank <= 1;
+        }
+
+        // sent/delivered/read solo AVANZAN: un sent tardío no degrada delivered, etc.
+        return ($rank[$incoming] ?? 0) > $currentRank;
     }
 
     /**

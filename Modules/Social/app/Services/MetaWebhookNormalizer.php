@@ -32,11 +32,66 @@ final class MetaWebhookNormalizer
     }
 
     /**
+     * Estados de entrega de WhatsApp (value.statuses dentro del field 'messages'):
+     * sent/delivered/read/failed referidos por wamid. Salen por un canal APARTE de los
+     * mensajes porque no crean nada: solo actualizan un SocialMessage existente.
+     * Otros proveedores no reportan estados por esta vía → lista vacía.
+     *
+     * PUNTOS DE EXTENSIÓN COEXISTENCE (futuro, hoy ignorados con 200):
+     *  - field 'history'            → backfill del historial: nueva rama en fromWhatsapp().
+     *  - field 'smb_app_state_sync' → sync de estado de la app: nueva rama en fromWhatsapp().
+     *  - field 'account_update'     → cambios de la cuenta: nueva rama en fromWhatsapp().
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<int, NormalizedStatus>
+     */
+    public function normalizeStatuses(string $provider, array $payload): array
+    {
+        if ($provider !== 'whatsapp') {
+            return [];
+        }
+
+        $out = [];
+        foreach ($this->arr($payload, 'entry') as $entry) {
+            foreach ($this->arr($entry, 'changes') as $change) {
+                if (($change['field'] ?? null) !== 'messages') {
+                    continue;
+                }
+                $value = is_array($change['value'] ?? null) ? $change['value'] : [];
+                $channelId = (string) ($this->obj($value, 'metadata')['phone_number_id'] ?? '');
+                if ($channelId === '') {
+                    continue;
+                }
+
+                foreach ($this->arr($value, 'statuses') as $st) {
+                    $id = (string) ($st['id'] ?? '');
+                    $status = (string) ($st['status'] ?? '');
+                    if ($id === '' || ! in_array($status, ['sent', 'delivered', 'read', 'failed'], true)) {
+                        continue;
+                    }
+
+                    $error = null;
+                    foreach ($this->arr($st, 'errors') as $err) {
+                        $error = isset($err['message']) ? (string) $err['message']
+                            : (isset($err['title']) ? (string) $err['title'] : null);
+                        break;
+                    }
+
+                    $out[] = new NormalizedStatus('whatsapp', $channelId, $id, $status, $error);
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * WhatsApp Business (object 'whatsapp_business_account'):
      *  - field 'messages': mensajes ENTRANTES del usuario (value.messages).
      *  - field 'smb_message_echoes': ecos de COEXISTENCIA (value.message_echoes), lo que el
      *    negocio envía desde la app del teléfono → se ingiere como SALIENTE (sender 'app').
-     * Los value.statuses (sent/delivered/read) se ignoran.
+     * Los value.statuses (sent/delivered/read/failed) NO salen por aquí: los emite
+     * normalizeStatuses() y solo actualizan mensajes existentes.
      *
      * @param  array<string, mixed>  $payload
      * @return array<int, NormalizedMessage>
@@ -220,11 +275,13 @@ final class MetaWebhookNormalizer
         }
         $media = is_array($msg[$type] ?? null) ? $msg[$type] : [];
 
-        // WhatsApp entrega un media id (no URL directa); se resuelve vía Graph al responder.
+        // WhatsApp entrega un media ID (NO una URL): se guarda como provider_media_id y la
+        // ingesta lo resuelve vía Graph (WhatsAppMediaService) añadiendo storage_path/mime/size.
         return [[
             'type' => $this->normalizeType($type),
-            'url' => isset($media['id']) ? (string) $media['id'] : null,
+            'provider_media_id' => isset($media['id']) ? (string) $media['id'] : null,
             'mime' => isset($media['mime_type']) ? (string) $media['mime_type'] : null,
+            'filename' => isset($media['filename']) ? (string) $media['filename'] : null,
         ]];
     }
 

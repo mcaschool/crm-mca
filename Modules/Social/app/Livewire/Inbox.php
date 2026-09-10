@@ -7,8 +7,10 @@ namespace Modules\Social\Livewire;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Services\SocialOutboundService;
+use RuntimeException;
 
 /**
  * Bandeja social unificada (Bloque 2, solo UI). Cumple el rol de "InboxController" en este
@@ -21,9 +23,19 @@ use Modules\Social\Services\SocialOutboundService;
 #[Layout('layouts.app')]
 class Inbox extends Component
 {
+    use WithFileUploads;
+
     public ?int $selectedId = null;
 
     public string $draft = '';
+
+    /**
+     * Adjunto saliente de WhatsApp (imagen/video/audio/documento). La validación fina
+     * (MIME real + límites oficiales por tipo) la hace WhatsAppMediaService al enviar.
+     *
+     * @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null
+     */
+    public $attachment = null;
 
     public function mount(): void
     {
@@ -48,18 +60,35 @@ class Inbox extends Component
 
         $this->selectedId = $conversation->id;
         $this->draft = '';
+        $this->attachment = null;
+        $this->resetErrorBag('attachment');
+    }
+
+    /** Validación temprana del adjunto (el límite fino por tipo lo aplica el servicio). */
+    public function updatedAttachment(): void
+    {
+        $this->resetErrorBag('attachment');
+        $this->validateOnly('attachment', ['attachment' => ['nullable', 'file', 'max:102400']], [
+            'attachment.max' => __('El archivo supera el límite de 100 MB de WhatsApp.'),
+        ]);
+    }
+
+    public function removeAttachment(): void
+    {
+        $this->attachment = null;
+        $this->resetErrorBag('attachment');
     }
 
     /**
-     * Envía la respuesta del agente (solo Instagram/Messenger; WhatsApp queda deshabilitado).
-     * El scoping por institución lo garantiza la consulta (solo encuentra conversaciones de la
-     * institución activa); si no la encuentra, no hace nada.
+     * Envía la respuesta del agente (Instagram/Messenger/WhatsApp). En WhatsApp admite un
+     * adjunto: el texto de la caja hace de caption. El scoping por institución lo garantiza
+     * la consulta (solo encuentra conversaciones de la institución activa).
      */
     public function send(SocialOutboundService $outbound, string $text = ''): bool
     {
         // El texto llega desde la caja (Alpine, wire:ignore); $this->draft es el respaldo.
         $text = trim($text !== '' ? $text : $this->draft);
-        if ($text === '' || $this->selectedId === null) {
+        if (($text === '' && $this->attachment === null) || $this->selectedId === null) {
             return false;
         }
 
@@ -68,7 +97,23 @@ class Inbox extends Component
             return false;
         }
 
-        $outbound->send($conversation, $text, auth()->user());
+        if ($this->attachment !== null) {
+            if ($conversation->provider !== 'whatsapp') {
+                return false; // adjuntos solo por WhatsApp en este bloque
+            }
+            try {
+                $outbound->sendWhatsAppMedia($conversation, $this->attachment, $text, auth()->user());
+            } catch (RuntimeException $e) {
+                // Mensaje ya apto para el usuario (formato/tamaño); nunca datos del API.
+                $this->addError('attachment', $e->getMessage());
+
+                return false;
+            }
+            $this->attachment = null;
+        } else {
+            $outbound->send($conversation, $text, auth()->user());
+        }
+
         $this->draft = '';
 
         return true;

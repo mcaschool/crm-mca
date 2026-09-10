@@ -48,7 +48,8 @@ final class WebhookController
     }
 
     /**
-     * Recepción de eventos. Normaliza el payload crudo y delega cada mensaje al núcleo.
+     * Recepción de eventos. Normaliza el payload crudo y delega: cada mensaje al núcleo de
+     * ingesta y cada estado (value.statuses de WhatsApp) al reconciliador por wamid.
      */
     public function handle(Request $request, string $provider): JsonResponse
     {
@@ -56,9 +57,10 @@ final class WebhookController
         $payload = is_array($decoded) ? $decoded : [];
 
         $messages = $this->normalizer->normalize($provider, $payload);
+        $statuses = $this->normalizer->normalizeStatuses($provider, $payload);
 
-        if ($messages === []) {
-            // Evento sin mensajes procesables (estados, echoes, comentarios/feed, etc.).
+        if ($messages === [] && $statuses === []) {
+            // Evento sin nada procesable (echoes IG/Messenger, comentarios/feed, etc.).
             Log::info('social.webhook: evento sin mensajes ingeribles', [
                 'provider' => $provider,
                 'object' => is_string($payload['object'] ?? null) ? $payload['object'] : null,
@@ -77,6 +79,12 @@ final class WebhookController
             ];
         }
 
-        return response()->json(['status' => 'ok', 'results' => $results], 200);
+        // Los estados nunca fallan el webhook: wamid desconocido o regresión → se ignoran.
+        $statusResults = [];
+        foreach ($statuses as $status) {
+            $statusResults[] = $this->ingest->applyStatus($status);
+        }
+
+        return response()->json(['status' => 'ok', 'results' => $results, 'statuses' => $statusResults], 200);
     }
 }

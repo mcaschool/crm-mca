@@ -127,17 +127,32 @@ it('fuera de la ventana de 24h deja el mensaje en failed_window', function () {
 });
 
 // ----------------------------------------------------------------------------------
-// WhatsApp: NO se envía en este bloque
+// WhatsApp: sale por su canal propio (/{PHONE_NUMBER_ID}/messages); el detalle completo
+// vive en SocialWhatsAppTest. Un proveedor desconocido sigue rechazándose.
 // ----------------------------------------------------------------------------------
-it('WhatsApp no se envía en este bloque (no soportado) y no llama a la red', function () {
+it('WhatsApp se envía por su propio endpoint con el token del canal', function () {
     [, $user, , , $wConv] = outboundCtx();
-    Http::fake();
+    Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.OUTBOUND1']]], 200)]);
 
-    expect(fn () => outbound()->send($wConv, 'hola', $user))
+    $message = outbound()->send($wConv, 'hola', $user);
+
+    expect($message->status)->toBe('sent');
+    expect($message->external_message_id)->toBe('wamid.OUTBOUND1');
+    Http::assertSent(fn ($request) => $request->url() === 'https://graph.facebook.com/v26.0/WA_1/messages'
+        && $request->hasHeader('Authorization', 'Bearer WA_TOKEN')
+        && $request['messaging_product'] === 'whatsapp');
+});
+
+it('un proveedor fuera de SENDABLE se rechaza sin llamar a la red', function () {
+    [, $user, $mConv] = outboundCtx();
+    Http::fake();
+    $mConv->provider = 'telegram'; // proveedor inexistente en SENDABLE
+
+    expect(fn () => outbound()->send($mConv, 'hola', $user))
         ->toThrow(UnsupportedSocialProviderException::class);
 
     Http::assertNothingSent();
-    expect(SocialMessage::query()->where('social_conversation_id', $wConv->id)->count())->toBe(0);
+    expect(SocialMessage::query()->where('social_conversation_id', $mConv->id)->count())->toBe(0);
 });
 
 // ----------------------------------------------------------------------------------
