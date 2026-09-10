@@ -13,6 +13,19 @@
             </div>
             <div class="sp" style="flex:1"></div>
             @can('create', \Modules\Social\Models\SocialChannel::class)
+                {{-- Embedded Signup (Coexistence): preparado, pero bloqueado por feature flag
+                     hasta el cutover real — imposible una conexión accidental. --}}
+                @if ($this->signupReady())
+                    <button type="button" class="btn btn-sm" title="{{ __('Inicia la conexión del WhatsApp Business App (Coexistence).') }}">
+                        <x-ui.icon name="plug" class="ic" style="width:15px;height:15px" /> {{ __('Conectar WhatsApp Business') }}
+                    </button>
+                @else
+                    <button type="button" class="btn btn-sm" disabled
+                            title="{{ __('Configuración pendiente: falta habilitar el Embedded Signup de Meta (SOCIAL_WA_SIGNUP_ENABLED y SOCIAL_WA_SIGNUP_CONFIG_ID).') }}">
+                        <x-ui.icon name="plug" class="ic" style="width:15px;height:15px" />
+                        {{ __('Conectar WhatsApp Business') }} · {{ __('Configuración pendiente') }}
+                    </button>
+                @endif
                 <button type="button" wire:click="create" class="btn btn-primary btn-sm">
                     <x-ui.icon name="plus" class="ic" style="width:15px;height:15px" /> {{ __('Nuevo canal') }}
                 </button>
@@ -69,6 +82,15 @@
                         @error('token') <span class="mca-err">{{ $message }}</span> @enderror
                     </div>
 
+                    @if ($provider === 'whatsapp')
+                        <div class="field">
+                            <label>WABA ID</label>
+                            <input type="text" wire:model="waba_id" autocomplete="off" placeholder="{{ __('ID de la cuenta de WhatsApp Business (para plantillas)') }}">
+                            <p class="mca-help">{{ __('Necesario para gestionar plantillas. Se guarda cifrado junto al token.') }}</p>
+                            @error('waba_id') <span class="mca-err">{{ $message }}</span> @enderror
+                        </div>
+                    @endif
+
                     <div class="field">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                             <input type="checkbox" wire:model="is_active" style="width:16px;height:16px"> {{ __('Canal activo') }}
@@ -99,6 +121,16 @@
                         <div style="margin-top:8px;font-size:13px;color:var(--muted);flex:1">
                             <div>{{ $extLabels[$providerKey] ?? __('ID') }}: <span style="font-family:ui-monospace,monospace">{{ $c->external_id ?: '—' }}</span></div>
                             <div style="margin-top:2px">{{ __('Token') }}: <span style="font-family:ui-monospace,monospace">{{ $masks[$c->id] }}</span></div>
+                            @if ($providerKey === 'whatsapp')
+                                <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+                                    <span class="badge {{ $c->connection_status === 'offboarded' ? 'badge-off' : 'badge-on' }}">{{ __($c->connectionLabel()) }}</span>
+                                </div>
+                                @if ($c->connection_status === 'offboarded')
+                                    <div style="margin-top:4px;font-size:12px;color:#8A1C1C">
+                                        {{ __('El teléfono se desconectó de la API: los envíos están bloqueados hasta reconectar. Las credenciales se conservan.') }}
+                                    </div>
+                                @endif
+                            @endif
                         </div>
                         <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px">
                             <button type="button" wire:click="edit({{ $c->id }})" class="btn btn-primary btn-sm">{{ __('Editar') }}</button>

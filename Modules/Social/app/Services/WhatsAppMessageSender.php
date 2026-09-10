@@ -43,6 +43,23 @@ final class WhatsAppMessageSender
     }
 
     /**
+     * Envía una PLANTILLA aprobada (type=template). $components es la lista oficial de
+     * componentes con parámetros (p. ej. body con parameters posicionales), o [] si la
+     * plantilla no tiene variables.
+     *
+     * @param  array<int, array<string, mixed>>  $components
+     */
+    public function sendTemplate(SocialChannel $channel, SocialConversation $conversation, string $name, string $languageCode, array $components = []): SendResult
+    {
+        $template = ['name' => $name, 'language' => ['code' => $languageCode]];
+        if ($components !== []) {
+            $template['components'] = $components;
+        }
+
+        return $this->dispatch($channel, $conversation, ['type' => 'template', 'template' => $template]);
+    }
+
+    /**
      * Envía un adjunto ya subido a la Media API de WhatsApp (referenciado por media id).
      * caption solo aplica a image/video/document; filename solo a document.
      *
@@ -77,6 +94,11 @@ final class WhatsAppMessageSender
                 'error' => SendResult::failed('Simulado (local): error de API.'),
                 default => SendResult::sent('wamid.FAKE_'.Str::upper(Str::random(12))),
             };
+        }
+
+        // Canal offboarded (Coexistence): la API no acepta envíos hasta reconectar.
+        if (! $channel->canSendViaApi()) {
+            return SendResult::failed('El número está desconectado de la API (offboarded). Reconecta el canal para volver a enviar.');
         }
 
         $token = (string) ($channel->credentials['token'] ?? '');

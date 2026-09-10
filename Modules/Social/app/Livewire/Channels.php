@@ -33,6 +33,9 @@ class Channels extends Component
 
     public string $token = '';
 
+    /** WABA ID (solo WhatsApp): vive en credentials cifradas junto al token. NO es secreto. */
+    public string $waba_id = '';
+
     public bool $is_active = true;
 
     public ?string $currentTokenMask = null;
@@ -58,6 +61,7 @@ class Channels extends Component
         $this->provider = $channel->provider;
         $this->display_name = $channel->display_name;
         $this->external_id = (string) $channel->external_id;
+        $this->waba_id = (string) (data_get($channel->credentials, 'waba_id') ?? '');
         $this->is_active = (bool) $channel->is_active;
         $this->token = '';                       // barrera: nunca se precarga el secreto
         $current = (string) (data_get($channel->credentials, 'token') ?? '');
@@ -86,6 +90,7 @@ class Channels extends Component
             'display_name' => ['required', 'string', 'max:120'],
             'external_id' => ['required', 'string', 'max:191'],
             'token' => [$creating ? 'required' : 'nullable', 'string'],
+            'waba_id' => ['nullable', 'string', 'max:64'],
             'is_active' => ['boolean'],
         ]);
 
@@ -114,6 +119,9 @@ class Channels extends Component
         if (trim($this->token) !== '') {
             $credentials['token'] = trim($this->token);
         }
+        if ($channel->provider === 'whatsapp' || $creating && $this->provider === 'whatsapp') {
+            $credentials['waba_id'] = trim($this->waba_id);
+        }
         $channel->credentials = $credentials;
         $channel->save();
 
@@ -129,9 +137,15 @@ class Channels extends Component
 
     private function resetForm(): void
     {
-        $this->reset(['editingId', 'display_name', 'external_id', 'token', 'currentTokenMask']);
+        $this->reset(['editingId', 'display_name', 'external_id', 'token', 'waba_id', 'currentTokenMask']);
         $this->provider = 'whatsapp';
         $this->is_active = true;
+    }
+
+    /** El Embedded Signup está listo (flag + config Meta); si no, "Configuración pendiente". */
+    public function signupReady(): bool
+    {
+        return app(\Modules\Social\Services\WhatsAppCoexistenceService::class)->isEnabled();
     }
 
     public function render(): View

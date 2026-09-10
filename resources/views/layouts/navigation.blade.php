@@ -82,6 +82,11 @@
                         <x-ui.icon name="image" /> {{ __('Publicador') }}
                     </a>
                 @endif
+                @can('viewAny', \Modules\Social\Models\SocialChannel::class)
+                    <a href="{{ route('social.wa-templates') }}" class="mca-nav-item {{ request()->routeIs('social.wa-templates') ? 'on' : '' }}">
+                        <x-ui.icon name="file-text" /> {{ __('Plantillas de WhatsApp') }}
+                    </a>
+                @endcan
             </div>
         @endif
 

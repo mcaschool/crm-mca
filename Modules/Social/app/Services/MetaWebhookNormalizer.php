@@ -86,6 +86,57 @@ final class MetaWebhookNormalizer
     }
 
     /**
+     * Backfill de HISTORIAL de Coexistence (field 'history'): value.history[].threads[]
+     * trae hilos por contacto (id = wa_id) con mensajes en el mismo formato que los
+     * entrantes. La dirección se deduce por `from`: si coincide con el contacto es
+     * entrante; si no, lo envió el negocio (saliente, sender 'app'). Todos se marcan
+     * fromHistory=true (sin unread, sin retroceder preview). Los chunks pueden llegar
+     * desordenados: la idempotencia por wamid y el guard de last_message_at lo toleran.
+     *
+     * @param  array<string, mixed>  $value
+     * @return array<int, NormalizedMessage>
+     */
+    public function fromWhatsappHistory(string $channelExternalId, array $value): array
+    {
+        $out = [];
+        foreach ($this->arr($value, 'history') as $chunk) {
+            foreach ($this->arr($chunk, 'threads') as $thread) {
+                $contact = (string) ($thread['id'] ?? '');
+                if ($contact === '') {
+                    continue;
+                }
+                foreach ($this->arr($thread, 'messages') as $msg) {
+                    $id = (string) ($msg['id'] ?? '');
+                    $type = (string) ($msg['type'] ?? 'other');
+                    if ($id === '') {
+                        continue;
+                    }
+                    $inbound = (string) ($msg['from'] ?? '') === $contact;
+
+                    $out[] = new NormalizedMessage(
+                        provider: 'whatsapp',
+                        channelExternalId: $channelExternalId,
+                        conversationExternalId: $contact,
+                        contactName: null,
+                        contactExternalId: $contact,
+                        contactAvatarUrl: null,
+                        messageExternalId: $id,
+                        type: $this->normalizeType($type),
+                        body: $this->whatsappBody($msg, $type),
+                        attachments: $this->whatsappAttachments($msg, $type),
+                        providerTimestamp: $this->tsFromSeconds($msg['timestamp'] ?? null),
+                        direction: $inbound ? 'inbound' : 'outbound',
+                        senderType: $inbound ? 'contact' : 'app',
+                        fromHistory: true,
+                    );
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * WhatsApp Business (object 'whatsapp_business_account'):
      *  - field 'messages': mensajes ENTRANTES del usuario (value.messages).
      *  - field 'smb_message_echoes': ecos de COEXISTENCIA (value.message_echoes), lo que el

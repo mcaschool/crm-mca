@@ -25,6 +25,7 @@ use Modules\Social\Database\Factories\SocialMessageFactory;
  * @property string $sender_type
  * @property int|null $sent_by
  * @property \Illuminate\Support\Carbon|null $provider_timestamp
+ * @property \Illuminate\Support\Carbon|null $created_at
  */
 class SocialMessage extends Model
 {

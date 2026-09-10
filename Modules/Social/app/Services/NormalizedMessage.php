@@ -35,5 +35,8 @@ final readonly class NormalizedMessage
         public ?CarbonImmutable $providerTimestamp,
         public string $direction = 'inbound',
         public string $senderType = 'contact',
+        // Mensaje del BACKFILL de historial (Coexistence): se ingiere igual, pero sin
+        // subir unread y sin retroceder preview/last_message_at de la conversación.
+        public bool $fromHistory = false,
     ) {}
 }

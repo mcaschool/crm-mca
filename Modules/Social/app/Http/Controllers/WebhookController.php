@@ -10,6 +10,8 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 use Modules\Social\Services\MetaWebhookNormalizer;
 use Modules\Social\Services\SocialIngestService;
+use Modules\Social\Services\WhatsAppCoexistenceService;
+use Modules\Social\Services\WhatsAppTemplateService;
 
 /**
  * Webhook DIRECTO de Meta (sin intermediario). Dos verbos por proveedor:
@@ -26,6 +28,8 @@ final class WebhookController
     public function __construct(
         private readonly MetaWebhookNormalizer $normalizer,
         private readonly SocialIngestService $ingest,
+        private readonly WhatsAppTemplateService $templates,
+        private readonly WhatsAppCoexistenceService $coexistence,
     ) {}
 
     /**
@@ -59,7 +63,17 @@ final class WebhookController
         $messages = $this->normalizer->normalize($provider, $payload);
         $statuses = $this->normalizer->normalizeStatuses($provider, $payload);
 
-        if ($messages === [] && $statuses === []) {
+        // Eventos exclusivos de WhatsApp: plantillas (status/categoría/calidad) y
+        // Coexistence (agenda, historial, account_update). Nunca lanzan: siempre 200.
+        $templateEvents = 0;
+        $coexistence = ['contacts' => 0, 'history' => 0, 'account' => 0];
+        if ($provider === 'whatsapp') {
+            $templateEvents = $this->templates->handleWebhook($payload);
+            $coexistence = $this->coexistence->handleWebhook($payload);
+        }
+        $extras = $templateEvents + array_sum($coexistence);
+
+        if ($messages === [] && $statuses === [] && $extras === 0) {
             // Evento sin nada procesable (echoes IG/Messenger, comentarios/feed, etc.).
             Log::info('social.webhook: evento sin mensajes ingeribles', [
                 'provider' => $provider,
@@ -85,6 +99,12 @@ final class WebhookController
             $statusResults[] = $this->ingest->applyStatus($status);
         }
 
-        return response()->json(['status' => 'ok', 'results' => $results, 'statuses' => $statusResults], 200);
+        return response()->json([
+            'status' => 'ok',
+            'results' => $results,
+            'statuses' => $statusResults,
+            'templates' => $templateEvents,
+            'coexistence' => $coexistence,
+        ], 200);
     }
 }

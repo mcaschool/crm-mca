@@ -41,11 +41,33 @@ return [
 
     /*
     | App ID de la app de Meta (MCA Automation). NO es un secreto, pero vive en env para no
-    | hardcodearlo. Lo usa la Resumable Upload API del Post de VIDEO en Facebook
-    | (POST /{APP_ID}/uploads). La subida usa credentials['video_upload_token'] del canal
-    | (Long-Lived User Token); la publicación final usa el Page Access Token de siempre.
+    | hardcodearlo. Lo usan: la Uploads API de ejemplos de media para PLANTILLAS de WhatsApp
+    | (POST /{APP_ID}/uploads) y el intercambio server-side del authorization code del
+    | Embedded Signup (junto con el App Secret, que nunca sale del servidor).
     */
     'meta_app_id' => env('SOCIAL_META_APP_ID'),
+
+    /*
+    | Embedded Signup (Coexistence-ready). PREPARADO pero APAGADO por defecto: mientras
+    | enabled=false, el botón "Conectar WhatsApp Business" muestra "Configuración
+    | pendiente" y el endpoint de conexión rechaza cualquier intento (evita una conexión
+    | accidental en producción mientras el número real siga en YCloud).
+    | Requires Facebook Login for Business configuration using WhatsApp Embedded
+    | Signup v4 (la versión del flujo la gobierna el Configuration ID, no el código).
+    |   SOCIAL_WA_SIGNUP_ENABLED=true          # activar SOLO en el cutover
+    |   SOCIAL_WA_SIGNUP_CONFIG_ID=...         # config ID de Facebook Login for Business
+    |
+    | NOTA OPERATIVA (antes del cutover, en el panel de Meta — NO lo hace el código):
+    | la suscripción del webhook de whatsapp_business_account debe incluir los campos
+    |   messages, account_update, history, smb_app_state_sync, smb_message_echoes,
+    |   message_template_status_update, template_category_update,
+    |   message_template_quality_update
+    | apuntando a /api/social/webhook/whatsapp con SOCIAL_APP_SECRET(_WHATSAPP).
+    */
+    'embedded_signup' => [
+        'enabled' => (bool) env('SOCIAL_WA_SIGNUP_ENABLED', false),
+        'config_id' => env('SOCIAL_WA_SIGNUP_CONFIG_ID'),
+    ],
 
     /*
     | Salida (Bloque 4): responder desde el CRM hacia Meta (Instagram + Messenger).

@@ -9,6 +9,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Modules\Social\Models\SocialConversation;
+use Modules\Social\Models\SocialWhatsAppTemplate;
 use Modules\Social\Services\SocialOutboundService;
 use RuntimeException;
 
@@ -79,6 +80,103 @@ class Inbox extends Component
         $this->resetErrorBag('attachment');
     }
 
+    // ---------------------------------------------------- plantillas (WhatsApp)
+
+    public bool $showTemplates = false;
+
+    public ?int $templateId = null;
+
+    /** @var array<int, string> Valores de las variables {{n}} de la plantilla elegida. */
+    public array $templateParams = [];
+
+    public function openTemplates(): void
+    {
+        $this->showTemplates = true;
+        $this->templateId = null;
+        $this->templateParams = [];
+        $this->resetErrorBag('template');
+    }
+
+    public function closeTemplates(): void
+    {
+        $this->showTemplates = false;
+        $this->templateId = null;
+        $this->templateParams = [];
+        $this->resetErrorBag('template');
+    }
+
+    /** Elige una plantilla APROBADA del canal de la conversación (scoped por institución). */
+    public function chooseTemplate(int $id): void
+    {
+        $template = $this->selectableTemplate($id);
+        if ($template === null) {
+            return;
+        }
+        $this->templateId = $template->id;
+        $this->templateParams = array_fill_keys($template->positionalVariables(), '');
+        $this->resetErrorBag('template');
+    }
+
+    public function sendTemplate(SocialOutboundService $outbound): bool
+    {
+        $conversation = $this->selectedId !== null ? SocialConversation::query()->find($this->selectedId) : null;
+        $template = $this->templateId !== null ? $this->selectableTemplate($this->templateId) : null;
+        if ($conversation === null || $conversation->provider !== 'whatsapp' || $template === null) {
+            return false;
+        }
+
+        try {
+            $outbound->sendWhatsAppTemplate($conversation, $template, $this->templateParams, auth()->user());
+        } catch (RuntimeException $e) {
+            $this->addError('template', $e->getMessage());
+
+            return false;
+        }
+
+        $this->closeTemplates();
+        $this->draft = '';
+
+        return true;
+    }
+
+    /** Solo plantillas APPROVED, sin header de media, del canal de la conversación. */
+    private function selectableTemplate(int $id): ?SocialWhatsAppTemplate
+    {
+        $conversation = $this->selectedId !== null ? SocialConversation::query()->find($this->selectedId) : null;
+        if ($conversation === null) {
+            return null;
+        }
+
+        $template = SocialWhatsAppTemplate::query()
+            ->where('id', $id)
+            ->where('social_channel_id', $conversation->social_channel_id)
+            ->where('status', SocialWhatsAppTemplate::SENDABLE_STATUS)
+            ->first();
+
+        return $template !== null && ! $template->hasMediaHeader() ? $template : null;
+    }
+
+    /**
+     * Ventana de servicio de 24h: abierta si el ÚLTIMO entrante del contacto es de hace
+     * menos de 24h. Comparación entre instantes absolutos (provider_timestamp se guarda
+     * en UTC): nunca con la hora local "ingenua". Es una regla PREVENTIVA de UI/backend;
+     * la validación definitiva sigue siendo Meta (131047 → failed_window).
+     */
+    private function whatsappWindowOpen(SocialConversation $conversation): bool
+    {
+        $lastInbound = $conversation->messages()
+            ->where('direction', 'inbound')
+            ->orderByRaw('COALESCE(provider_timestamp, created_at) desc')
+            ->first();
+        if ($lastInbound === null) {
+            return false; // sin entrante del usuario no hay ventana: solo plantillas
+        }
+
+        $at = $lastInbound->provider_timestamp ?? $lastInbound->created_at;
+
+        return $at !== null && $at->greaterThan(now()->subHours(24));
+    }
+
     /**
      * Envía la respuesta del agente (Instagram/Messenger/WhatsApp). En WhatsApp admite un
      * adjunto: el texto de la caja hace de caption. El scoping por institución lo garantiza
@@ -94,6 +192,14 @@ class Inbox extends Component
 
         $conversation = SocialConversation::query()->find($this->selectedId);
         if ($conversation === null || ! in_array($conversation->provider, SocialOutboundService::SENDABLE, true)) {
+            return false;
+        }
+
+        // Ventana de 24h (WhatsApp): fuera de ella el mensaje libre se bloquea TAMBIÉN en
+        // backend (la UI ya lo previene); solo se permite responder con plantilla aprobada.
+        if ($conversation->provider === 'whatsapp' && ! $this->whatsappWindowOpen($conversation)) {
+            $this->addError('draft', __('La ventana de atención de 24 horas ha finalizado. Para contactar nuevamente debes utilizar una plantilla aprobada.'));
+
             return false;
         }
 
@@ -142,6 +248,28 @@ class Inbox extends Component
         $canReply = $selected !== null
             && in_array($selected->provider, SocialOutboundService::SENDABLE, true);
 
+        // WhatsApp: estado de la ventana de 24h, plantillas elegibles y alerta offboarded.
+        $waWindowOpen = true;
+        $waTemplates = collect();
+        $waOffboarded = false;
+        $waChosen = null;
+        if ($selected !== null && $selected->provider === 'whatsapp') {
+            $waWindowOpen = $this->whatsappWindowOpen($selected);
+            $waOffboarded = ! ($selected->channel?->canSendViaApi() ?? true);
+            if ($this->showTemplates) {
+                $waTemplates = SocialWhatsAppTemplate::query()
+                    ->where('social_channel_id', $selected->social_channel_id)
+                    ->where('status', SocialWhatsAppTemplate::SENDABLE_STATUS)
+                    ->orderBy('name')
+                    ->get()
+                    ->reject(fn (SocialWhatsAppTemplate $t): bool => $t->hasMediaHeader())
+                    ->values();
+                $waChosen = $this->templateId !== null
+                    ? $waTemplates->firstWhere('id', $this->templateId)
+                    : null;
+            }
+        }
+
         // Badge del menú: total de no leídos de la institución. Se emite en cada ciclo del
         // poll (2 s) para que el badge del sidebar se refresque en vivo mientras se ve la bandeja.
         $this->dispatch('social-unread-updated', total: (int) SocialConversation::query()->sum('unread_count'));
@@ -151,6 +279,10 @@ class Inbox extends Component
             'selected' => $selected,
             'messages' => $messages,
             'canReply' => $canReply,
+            'waWindowOpen' => $waWindowOpen,
+            'waTemplates' => $waTemplates,
+            'waOffboarded' => $waOffboarded,
+            'waChosen' => $waChosen,
         ]);
     }
 }

@@ -59,6 +59,19 @@ function waCtx(): array
         'contact_name' => 'Cliente WA',
     ]);
 
+    // Entrante reciente: deja ABIERTA la ventana de 24h (los envíos libres de la bandeja
+    // se bloquean cuando el último inbound tiene más de 24 horas).
+    $inbound = new SocialMessage;
+    $inbound->social_conversation_id = $conversation->id;
+    $inbound->external_message_id = 'wamid.CTX_INBOUND';
+    $inbound->direction = 'inbound';
+    $inbound->type = 'text';
+    $inbound->body = 'hola';
+    $inbound->status = 'received';
+    $inbound->sender_type = 'contact';
+    $inbound->provider_timestamp = now()->subMinutes(5);
+    $inbound->save();
+
     return [$institution, $user, $channel, $conversation];
 }
 

@@ -11,6 +11,8 @@ use Illuminate\Support\Str;
 use Modules\Social\Exceptions\UnsupportedSocialProviderException;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialMessage;
+use Modules\Social\Models\SocialWhatsAppTemplate;
+use RuntimeException;
 
 /**
  * Orquesta el envío saliente desde el panel: persiste el mensaje, llama a Meta y refleja el
@@ -109,6 +111,102 @@ final class SocialOutboundService
         $this->touchConversation($conversation, $caption !== '' ? $caption : '['.$type.']', $message);
 
         return $message;
+    }
+
+    /**
+     * Envía una PLANTILLA aprobada por WhatsApp (fuera o dentro de la ventana de 24h).
+     * $parameters son los valores posicionales [1 => 'Carlos', 2 => 'MBA', …]. En el
+     * mensaje local se guarda el texto RENDERIZADO (para la burbuja) y metadata NO
+     * sensible de la plantilla (id/nombre/idioma/parámetros) — nunca tokens ni payloads.
+     *
+     * @param  array<int, string>  $parameters
+     */
+    public function sendWhatsAppTemplate(SocialConversation $conversation, SocialWhatsAppTemplate $template, array $parameters, User $user): SocialMessage
+    {
+        if ($conversation->provider !== 'whatsapp') {
+            throw UnsupportedSocialProviderException::for($conversation->provider);
+        }
+        $channel = $conversation->channel;
+        if ($channel === null || $template->social_channel_id !== $channel->id) {
+            throw new RuntimeException(__('La plantilla no pertenece al canal de esta conversación.'));
+        }
+        if (! $template->isApproved()) {
+            throw new RuntimeException(__('Solo se pueden enviar plantillas APROBADAS por WhatsApp.'));
+        }
+        if ($template->hasMediaHeader()) {
+            throw new RuntimeException(__('El envío de plantillas con encabezado de imagen/video/documento desde la bandeja llegará después.'));
+        }
+
+        $missing = array_diff($template->positionalVariables(), array_keys(array_filter($parameters, fn ($v) => trim((string) $v) !== '')));
+        if ($missing !== []) {
+            throw new RuntimeException(__('Completa el valor de todas las variables de la plantilla.'));
+        }
+
+        // Texto renderizado para la burbuja de la bandeja (sustituye {{n}} por su valor).
+        $bodyText = (string) ($template->component('BODY')['text'] ?? '');
+        $rendered = preg_replace_callback(
+            '/\{\{(\d+)\}\}/',
+            fn (array $m): string => (string) ($parameters[(int) $m[1]] ?? $m[0]),
+            $bodyText,
+        ) ?? $bodyText;
+
+        $meta = [[
+            'type' => 'template',
+            'template_id' => $template->meta_template_id,
+            'template_name' => $template->name,
+            'template_language' => $template->language,
+            'template_parameters' => array_map(strval(...), $parameters),
+        ]];
+        $message = $this->newOutbound($conversation, 'template', $rendered, $meta, $user);
+
+        $result = $this->whatsapp->sendTemplate(
+            $channel,
+            $conversation,
+            $template->name,
+            $template->language,
+            $this->templateComponents($template, $parameters),
+        );
+
+        $this->applyResult($message, $result);
+        $this->touchConversation($conversation, $rendered, $message);
+
+        return $message;
+    }
+
+    /**
+     * Componentes con parámetros para el envío (body y, si aplica, header de texto).
+     *
+     * @param  array<int, string>  $parameters
+     * @return array<int, array<string, mixed>>
+     */
+    private function templateComponents(SocialWhatsAppTemplate $template, array $parameters): array
+    {
+        $validator = new WhatsAppTemplateValidator;
+        $components = [];
+
+        $header = $template->component('HEADER');
+        if ($header !== null && strtoupper((string) ($header['format'] ?? 'TEXT')) === 'TEXT') {
+            $headerVars = $validator->variables((string) ($header['text'] ?? ''));
+            if ($headerVars !== []) {
+                $components[] = [
+                    'type' => 'header',
+                    'parameters' => [['type' => 'text', 'text' => (string) ($parameters[$headerVars[0]] ?? '')]],
+                ];
+            }
+        }
+
+        $bodyVars = $validator->variables((string) ($template->component('BODY')['text'] ?? ''));
+        if ($bodyVars !== []) {
+            $components[] = [
+                'type' => 'body',
+                'parameters' => array_map(
+                    fn (int $n): array => ['type' => 'text', 'text' => (string) ($parameters[$n] ?? '')],
+                    $bodyVars,
+                ),
+            ];
+        }
+
+        return $components;
     }
 
     /**

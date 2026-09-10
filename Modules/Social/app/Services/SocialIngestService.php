@@ -242,11 +242,16 @@ final class SocialIngestService
         $message->save();
 
         // Solo lo ENTRANTE incrementa no leídos; un saliente (agente o app del teléfono) no.
-        if ($m->direction === 'inbound') {
+        // El backfill de HISTORIAL tampoco: son mensajes antiguos ya atendidos en el teléfono.
+        if ($m->direction === 'inbound' && ! $m->fromHistory) {
             $conversation->unread_count = $conversation->unread_count + 1;
         }
-        $conversation->last_message_preview = Str::limit((string) ($m->body ?? '['.$m->type.']'), 140);
-        $conversation->last_message_at = $timestamp;
+        // Preview/last_message_at solo AVANZAN: un chunk de historial fuera de orden (o un
+        // mensaje antiguo) no debe pisar el último mensaje real de la conversación.
+        if ($conversation->last_message_at === null || $timestamp->greaterThanOrEqualTo($conversation->last_message_at)) {
+            $conversation->last_message_preview = Str::limit((string) ($m->body ?? '['.$m->type.']'), 140);
+            $conversation->last_message_at = $timestamp;
+        }
         $conversation->save();
 
         return IngestResult::created($conversation->id, $message->id);

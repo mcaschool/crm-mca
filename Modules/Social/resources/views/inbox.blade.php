@@ -67,6 +67,30 @@
         .sb-attach__chip button{border:none;background:none;color:var(--sb-muted);cursor:pointer;font-size:14px;line-height:1;padding:0}
         .sb-attach__chip button:hover{color:#8A1C1C}
         .sb-attach__err{margin:7px 2px 0;font-size:12px;color:#8A1C1C}
+        /* ---- Ventana de 24h cerrada + selector de plantillas (WhatsApp) ---- */
+        .sb-window{display:flex;flex-direction:column;gap:9px;align-items:flex-start;background:#FFF8E6;border:1px solid #EAD9A8;border-radius:10px;padding:11px 14px;font-size:12.5px;color:#7A5B12;line-height:1.45}
+        .sb-window strong{font-weight:700}
+        .sb-btn-tpl{border:none;border-radius:9px;padding:8px 14px;background:var(--sb-blue);color:#fff;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit}
+        .sb-btn-tpl:hover{background:#17497f}
+        .sb-offboard{display:flex;gap:8px;align-items:center;background:#FCE9E9;border:1px solid #F1C4C4;color:#8A1C1C;border-radius:10px;padding:9px 13px;font-size:12.5px;font-weight:600;margin:10px 14px 0}
+        .sb-tpl-overlay{position:fixed;inset:0;background:rgba(16,24,40,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px}
+        .sb-tpl-modal{background:#fff;border-radius:14px;width:min(560px,100%);max-height:min(640px,90vh);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 50px rgba(16,24,40,.25)}
+        .sb-tpl-modal__head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--sb-line)}
+        .sb-tpl-modal__head h2{margin:0;font-size:15px;font-weight:700}
+        .sb-tpl-modal__head button{border:none;background:none;font-size:16px;color:var(--sb-muted);cursor:pointer}
+        .sb-tpl-modal__body{padding:14px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+        .sb-tpl-item{display:flex;flex-direction:column;gap:5px;border:1px solid var(--sb-line);border-radius:10px;padding:11px 13px;cursor:pointer;text-align:left;background:#fff;font-family:inherit;transition:border-color .12s}
+        .sb-tpl-item:hover{border-color:var(--sb-blue)}
+        .sb-tpl-item__top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        .sb-tpl-item__top strong{font-size:13px}
+        .sb-tag{display:inline-flex;align-items:center;border-radius:7px;padding:2px 7px;font-size:10.5px;font-weight:700;letter-spacing:.02em;border:1px solid var(--sb-line);color:var(--sb-muted);background:#F8FAFC}
+        .sb-tag--ok{background:#E8F5EC;border-color:#BFE3C9;color:#1F7A3D}
+        .sb-tpl-item__preview{font-size:12.5px;color:var(--sb-ink);background:var(--sb-bg);border-radius:8px;padding:8px 10px;white-space:pre-wrap}
+        .sb-tpl-param{display:flex;flex-direction:column;gap:4px}
+        .sb-tpl-param label{font-size:12px;font-weight:600;color:var(--sb-muted)}
+        .sb-tpl-param input{border:1px solid var(--sb-line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px}
+        .sb-tpl-modal__foot{display:flex;justify-content:flex-end;gap:10px;padding:12px 18px;border-top:1px solid var(--sb-line)}
+        .sb-tpl-back{border:1px solid var(--sb-line);background:#fff;border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--sb-muted);cursor:pointer;font-family:inherit}
         /* Saliente fallido (error genérico o fuera de ventana 24h). */
         .sb-out--failed{background:#FCE9E9;color:#8A1C1C;border:1px solid #F1C4C4}
         .sb-out--failed time{opacity:.8}
@@ -148,6 +172,13 @@
                 </span>
             </header>
 
+            @if ($waOffboarded)
+                <div class="sb-offboard">
+                    <x-ui.icon name="alert-triangle" class="w-4 h-4" />
+                    {{ __('Este número está desconectado de la API (offboarded). Los envíos quedan bloqueados hasta reconectar el canal.') }}
+                </div>
+            @endif
+
             <div class="sb-msgs" wire:key="msgs-{{ $selected->id }}"
                  x-data="{ atBottom: true }"
                  x-init="
@@ -225,7 +256,18 @@
             </div>
 
             <div class="sb-compose">
-                @if ($canReply)
+                @if ($canReply && $selected->provider === 'whatsapp' && ! $waWindowOpen)
+                    {{-- Ventana de 24h cerrada: composer libre bloqueado (también en backend);
+                         solo se puede contactar con una plantilla aprobada. --}}
+                    <div class="sb-window">
+                        <span><strong>{{ __('La ventana de atención de 24 horas ha finalizado.') }}</strong>
+                            {{ __('Para contactar nuevamente debes utilizar una plantilla aprobada.') }}</span>
+                        <button type="button" class="sb-btn-tpl" wire:click="openTemplates">{{ __('Seleccionar plantilla') }}</button>
+                    </div>
+                    @error('template')
+                        <p class="sb-attach__err">{{ $message }}</p>
+                    @enderror
+                @elseif ($canReply)
                     {{-- La caja la gobierna Alpine y va wire:ignore: el poll de 2 s no debe pisar
                          lo que el usuario está escribiendo. El texto se pasa al enviar (con
                          adjunto de WhatsApp seleccionado, hace de caption). --}}
@@ -283,4 +325,68 @@
             </div>
         @endif
     </section>
+
+    {{-- ============ Selector de plantillas (WhatsApp, solo APPROVED) ============ --}}
+    @if ($showTemplates && $selected && $selected->provider === 'whatsapp')
+        <div class="sb-tpl-overlay" wire:click.self="closeTemplates">
+            <div class="sb-tpl-modal">
+                <div class="sb-tpl-modal__head">
+                    <h2>{{ $waChosen ? __('Completar plantilla') : __('Seleccionar plantilla') }}</h2>
+                    <button type="button" wire:click="closeTemplates" title="{{ __('Cerrar') }}">✕</button>
+                </div>
+                <div class="sb-tpl-modal__body">
+                    @if (! $waChosen)
+                        @forelse ($waTemplates as $tpl)
+                            <button type="button" class="sb-tpl-item" wire:click="chooseTemplate({{ $tpl->id }})" wire:key="tpl-{{ $tpl->id }}">
+                                <span class="sb-tpl-item__top">
+                                    <strong>{{ $tpl->name }}</strong>
+                                    <span class="sb-tag sb-tag--ok">{{ __('Aprobada') }}</span>
+                                    <span class="sb-tag">{{ $tpl->category }}</span>
+                                    <span class="sb-tag">{{ $tpl->language }}</span>
+                                </span>
+                                <span class="sb-tpl-item__preview">{{ $tpl->component('BODY')['text'] ?? '' }}</span>
+                            </button>
+                        @empty
+                            <p style="margin:6px 2px;font-size:13px;color:var(--sb-muted)">
+                                {{ __('No hay plantillas aprobadas disponibles para este canal. Créalas y sincronízalas en «Plantillas de WhatsApp».') }}
+                            </p>
+                        @endforelse
+                    @else
+                        @php
+                            $tplBody = (string) ($waChosen->component('BODY')['text'] ?? '');
+                            $tplPreview = preg_replace_callback('/\{\{(\d+)\}\}/', fn ($m) => trim((string) ($templateParams[(int) $m[1]] ?? '')) !== '' ? (string) $templateParams[(int) $m[1]] : $m[0], $tplBody);
+                        @endphp
+                        <div class="sb-tpl-item__top">
+                            <strong>{{ $waChosen->name }}</strong>
+                            <span class="sb-tag">{{ $waChosen->category }}</span>
+                            <span class="sb-tag">{{ $waChosen->language }}</span>
+                        </div>
+                        @foreach ($waChosen->positionalVariables() as $n)
+                            <div class="sb-tpl-param" wire:key="tpl-param-{{ $n }}">
+                                <label>{{ __('Variable') }} {{ chr(123).chr(123).$n.chr(125).chr(125) }}</label>
+                                <input type="text" wire:model.live="templateParams.{{ $n }}">
+                            </div>
+                        @endforeach
+                        <div>
+                            <label style="font-size:12px;font-weight:600;color:var(--sb-muted)">{{ __('Vista previa') }}</label>
+                            <div class="sb-tpl-item__preview" style="margin-top:4px">{{ $tplPreview }}</div>
+                        </div>
+                        @error('template')
+                            <p class="sb-attach__err">{{ $message }}</p>
+                        @enderror
+                    @endif
+                </div>
+                @if ($waChosen)
+                    <div class="sb-tpl-modal__foot">
+                        <button type="button" class="sb-tpl-back" wire:click="openTemplates">{{ __('Volver') }}</button>
+                        <button type="button" class="sb-btn-tpl" wire:click="sendTemplate"
+                                wire:loading.attr="disabled" wire:target="sendTemplate">
+                            <span wire:loading.remove wire:target="sendTemplate">{{ __('Enviar plantilla') }}</span>
+                            <span wire:loading wire:target="sendTemplate">{{ __('Enviando…') }}</span>
+                        </button>
+                    </div>
+                @endif
+            </div>
+        </div>
+    @endif
 </div>
