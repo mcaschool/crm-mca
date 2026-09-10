@@ -329,17 +329,14 @@ final class MetaContentPublisher
     }
 
     /**
-     * VIDEO normal en la Página (Post de video) — Facebook Video API oficial, NO Reels.
-     * La doc separa DOS tokens y aquí se respeta sin fallbacks:
-     *  - Resumable Upload API (fases 1-2): USER token → credentials['video_upload_token'].
-     *  - Publicación en la Página (fase 3): PAGE token → credentials['token'] (el de siempre).
-     * El App ID sale de config social.meta_app_id (SOCIAL_META_APP_ID); jamás se descubre
-     * con llamadas del Page token ni se hardcodea.
-     *  1) POST /{app_id}/uploads             → sesión de subida (USER token)
-     *  2) POST /upload:{session_id}          → binario en STREAMING (OAuth USER token) → {h}
-     *  3) POST graph-video.facebook.com/{v}/{page_id}/videos — multipart/form-data con
-     *     access_token (PAGE token), description y fbuploader_video_file_chunk → {id: video_id}
-     * El archivo se lee del disco público por stream: nunca se carga entero en memoria.
+     * VIDEO normal en la Página (Post de video): UN SOLO request al endpoint vigente de
+     * Page Videos — POST graph.facebook.com/{v}/{page_id}/videos, multipart/form-data con
+     * access_token (PAGE token de siempre), description y source (el MP4 en streaming).
+     * VALIDADO EN PRODUCCIÓN: el mecanismo anterior (Resumable Upload + file handle +
+     * fbuploader_video_file_chunk en graph-video) devolvía 400 code 6000/subcode 1363019
+     * sistemáticamente, incluso reproducido con cURL fuera de Laravel; la subida directa
+     * con 'source' publica correctamente con el mismo Page token almacenado. Este flujo NO
+     * usa video_upload_token ni SOCIAL_META_APP_ID.
      */
     public function publishFacebookVideoPost(SocialChannel $channel, string $mediaPath, string $caption): PublishResult
     {
@@ -352,18 +349,6 @@ final class MetaContentPublisher
             return PublishResult::fail('Canal de Facebook sin token o sin page id.');
         }
 
-        // Token de SUBIDA (User token). SIN fallback al Page token: si falta, este flujo
-        // falla controladamente y Reels/Historias (que solo usan Page token) siguen intactos.
-        $uploadToken = (string) ($channel->credentials['video_upload_token'] ?? '');
-        if ($uploadToken === '') {
-            return PublishResult::fail('El canal de Facebook no tiene configurada la autorización necesaria para subir videos.');
-        }
-
-        $appId = (string) (config('social.meta_app_id') ?? '');
-        if ($appId === '') {
-            return PublishResult::fail('Falta configurar SOCIAL_META_APP_ID para subir videos a Facebook.');
-        }
-
         $disk = Storage::disk('public');
         if ($mediaPath === '' || ! $disk->exists($mediaPath)) {
             return PublishResult::fail('No se encontró el archivo de video en el servidor.');
@@ -374,48 +359,31 @@ final class MetaContentPublisher
         $stream = null;
 
         try {
-            // 1) Sesión de subida (Resumable Upload API, USER token). El contrato documentado
-            //    lleva file_name/file_length/file_type como QUERY PARAMETERS del POST (enviarlos
-            //    como cuerpo JSON provocaba 400 code 6000/subcode 1363019); la autenticación va
-            //    en el header estándar de Graph (Bearer), nunca en la URL.
-            $session = Http::timeout(self::TIMEOUT_SECONDS)->withToken($uploadToken)->acceptJson()
-                ->withQueryParameters([
-                    'file_name' => basename($mediaPath),
-                    'file_length' => $size,
-                    'file_type' => 'video/mp4',
-                ])
-                ->post("{$base}/{$appId}/uploads");
-            $sessionId = $session->json('id'); // formato "upload:XXXX"
-            if (! $session->successful() || ! is_string($sessionId) || $sessionId === '') {
-                return $this->videoPostFailure('phase1', $session, $size);
-            }
-
-            // 2) Transferir el binario en streaming (OAuth USER token) → file handle.
             $stream = fopen($absolute, 'rb');
             if ($stream === false) {
                 return PublishResult::fail('No se pudo leer el archivo de video del servidor.');
             }
-            $upload = Http::timeout(self::VIDEO_TRANSFER_TIMEOUT_SECONDS)->acceptJson()
-                ->withHeaders(['Authorization' => 'OAuth '.$uploadToken, 'file_offset' => '0'])
-                ->send('POST', "{$base}/{$sessionId}", ['body' => $stream]);
-            $handle = $upload->json('h');
-            if (! $upload->successful() || ! is_string($handle) || $handle === '') {
-                return $this->videoPostFailure('phase2', $upload, $size, 'Meta no pudo recibir el video desde el servidor.');
-            }
 
-            // 3) Publicar el video de Página con el handle (PAGE Access Token). El contrato
-            //    documentado de graph-video es multipart/form-data (-F): enviar JSON provocaba
-            //    400 code 6000/subcode 1363019 en esta fase. El token va como parte multipart
-            //    access_token (así lo documenta Meta), nunca en la URL/query ni en logs.
-            $version = (string) config('social.graph_version', 'v26.0');
-            $publish = Http::timeout(self::TIMEOUT_SECONDS)->acceptJson()->asMultipart()
-                ->post("https://graph-video.facebook.com/{$version}/{$pageId}/videos", [
+            // multipart/form-data REAL: 'source' viaja como stream (el MP4 nunca se carga
+            // entero en memoria) y el token va como parte access_token — jamás en la URL.
+            $publish = Http::timeout(self::VIDEO_TRANSFER_TIMEOUT_SECONDS)->acceptJson()
+                ->attach('source', $stream, basename($mediaPath), ['Content-Type' => 'video/mp4'])
+                ->post("{$base}/{$pageId}/videos", [
                     'access_token' => $token,
                     'description' => $caption,
-                    'fbuploader_video_file_chunk' => $handle,
                 ]);
+
             if (! $publish->successful()) {
-                return $this->videoPostFailure('phase3', $publish, $size);
+                // Diagnóstico SEGURO: nunca token, Authorization, multipart, archivo ni binario.
+                Log::warning('social.publish.fb.videopost.failed', [
+                    'status' => $publish->status(),
+                    'code' => $publish->json('error.code'),
+                    'subcode' => $publish->json('error.error_subcode'),
+                    'message' => $publish->json('error.message'),
+                    'file_size' => $size,
+                ]);
+
+                return PublishResult::fail($this->friendlyVideoMessage($this->error($publish)));
             }
             $videoId = $publish->json('id');
 
@@ -556,26 +524,6 @@ final class MetaContentPublisher
             (string) ($channel->external_id ?? ''),
             "https://graph.facebook.com/{$version}",
         ];
-    }
-
-    /**
-     * Fallo de una fase del Post de video de FB con diagnóstico SEGURO por fase: status HTTP,
-     * code/subcode/message de Meta, tamaño del archivo y fase. NUNCA se registran tokens,
-     * headers Authorization, la query (podría llevar credenciales en otros contextos) ni el
-     * handle. El mensaje al usuario es el traducido (o uno explícito de la fase).
-     */
-    private function videoPostFailure(string $phase, Response $response, int $fileSize, ?string $overrideMessage = null): PublishResult
-    {
-        Log::warning("social.publish.fb.videopost.{$phase}_failed", [
-            'phase' => $phase,
-            'status' => $response->status(),
-            'code' => $response->json('error.code'),
-            'subcode' => $response->json('error.error_subcode'),
-            'message' => $response->json('error.message'),
-            'file_size' => $fileSize,
-        ]);
-
-        return PublishResult::fail($overrideMessage ?? $this->friendlyVideoMessage($this->error($response)));
     }
 
     /**

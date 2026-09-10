@@ -36,9 +36,8 @@ function mfCtx(): array
     app(CurrentInstitution::class)->set($institution->id);
     $user = User::factory()->create(['institution_id' => $institution->id, 'role' => 'marketing']);
 
-    // El canal de Facebook lleva DOS credenciales: Page token (todo) + User token de subida
-    // (SOLO Resumable Upload del Post de video). Distintos a propósito para los asserts.
-    SocialChannel::factory()->create(['provider' => 'messenger', 'external_id' => 'PAGE_1', 'is_active' => true, 'credentials' => ['token' => 'FB_TOKEN', 'video_upload_token' => 'FB_UPLOAD_TOKEN']]);
+    // TODO el módulo de Facebook opera con el Page Access Token único del canal.
+    SocialChannel::factory()->create(['provider' => 'messenger', 'external_id' => 'PAGE_1', 'is_active' => true, 'credentials' => ['token' => 'FB_TOKEN']]);
     SocialChannel::factory()->create(['provider' => 'instagram', 'external_id' => 'IGU_1', 'is_active' => true, 'credentials' => ['token' => 'IG_TOKEN']]);
 
     return [$institution, $user];
@@ -57,16 +56,6 @@ function mfFakeVideoOk(): void
         if (str_contains($url, 'rupload.facebook.com')) {
             return Http::response(['success' => true], 200);
         }
-        // Facebook Video API (Post de video): sesión → binario → publicación.
-        if (str_contains($url, 'graph-video.facebook.com')) {
-            return Http::response(['id' => 'FB_VIDEO_POST_1'], 200);
-        }
-        if (str_contains($url, '/uploads')) {
-            return Http::response(['id' => 'upload:SESS_1'], 200);
-        }
-        if (str_contains($url, '/upload:')) {
-            return Http::response(['h' => 'HANDLE_1'], 200);
-        }
         if (str_contains($url, '/video_reels') || str_contains($url, '/video_stories')) {
             return ($request['upload_phase'] ?? null) === 'start'
                 ? Http::response(['video_id' => 'VID_1', 'upload_url' => 'https://rupload.facebook.com/video-upload/v26.0/VID_1'], 200)
@@ -77,6 +66,10 @@ function mfFakeVideoOk(): void
         }
         if (str_contains($url, '/photos')) {
             return Http::response(['id' => 'PHOTO_9'], 200);
+        }
+        // Post de video FB: UN solo request multipart a /{page_id}/videos.
+        if (str_contains($url, '/videos')) {
+            return Http::response(['id' => 'FB_VIDEO_POST_1'], 200);
         }
         if (str_contains($url, '/media_publish')) {
             return Http::response(['id' => 'IG_POST_V1'], 200);
@@ -872,7 +865,7 @@ it('Post: muestra el selector Imagen/Video', function () {
         ->assertSee('Video');
 });
 
-it('Post de video en Facebook: Resumable Upload con el USER token y publicación con el PAGE token', function () {
+it('Post de video en Facebook: UN solo request multipart a /{PAGE_ID}/videos con Page token y source', function () {
     mfCtx();
     Storage::fake('public');
     Storage::disk('public')->put('social-posts/post-video.mp4', 'contenido-mp4');
@@ -884,82 +877,62 @@ it('Post de video en Facebook: Resumable Upload con el USER token y publicación
     expect($t->status)->toBe('published');
     expect($t->external_post_id)->toBe('FB_VIDEO_POST_1');
 
-    // App ID sale de config (SOCIAL_META_APP_ID): jamás se descubre con GET /app.
-    Http::assertNotSent(fn ($r) => str_ends_with($r->url(), '/app'));
-    // FASE 1 con el USER token — y con file_name/file_length/file_type como QUERY
-    // PARAMETERS del POST (cuerpo vacío: NO se envían como JSON), según el contrato
-    // documentado de la Resumable Upload API.
-    Http::assertSent(fn ($r) => str_contains($r->url(), '/APP_1/uploads')
-        && $r->hasHeader('Authorization', 'Bearer FB_UPLOAD_TOKEN')
-        && str_contains($r->url(), 'file_name=post-video.mp4')
-        && str_contains($r->url(), 'file_length='.strlen('contenido-mp4'))
-        && str_contains($r->url(), 'file_type=video')
-        && ! str_contains($r->body(), 'file_name')); // los parámetros van en la QUERY, no en el cuerpo
-    Http::assertSent(fn ($r) => str_contains($r->url(), '/upload:SESS_1')
-        && $r->hasHeader('Authorization', 'OAuth FB_UPLOAD_TOKEN')
-        && $r->hasHeader('file_offset', '0'));
-    // Fase 3 (publicación en la Página): multipart/form-data REAL (no JSON) con el PAGE
-    // token como parte access_token (contrato -F de graph-video), sin token en la URL.
+    // Exactamente UNA llamada a Meta en todo el flujo.
+    expect(Http::recorded())->toHaveCount(1);
+
+    // URL exacta en graph.facebook.com, multipart REAL (no JSON), con las tres partes:
+    // access_token = PAGE token · description = caption · source = archivo (con filename).
     Http::assertSent(function ($r): bool {
-        if (! str_contains($r->url(), 'graph-video.facebook.com')
-            || ! str_contains($r->url(), '/PAGE_1/videos')
-            || ! $r->isMultipart()) {
+        if ($r->url() !== 'https://graph.facebook.com/v26.0/PAGE_1/videos' || ! $r->isMultipart()) {
             return false;
         }
-        $part = function (string $name) use ($r) {
-            foreach ($r->data() as $p) {
-                if (($p['name'] ?? null) === $name) {
-                    return $p['contents'] ?? null;
-                }
-            }
+        $parts = collect($r->data());
+        $contents = fn (string $name) => ($parts->firstWhere('name', $name) ?? [])['contents'] ?? null;
+        $source = $parts->firstWhere('name', 'source') ?? [];
 
-            return null;
-        };
-
-        return $part('access_token') === 'FB_TOKEN'
-            && $part('description') === 'Video del taller'
-            && $part('fbuploader_video_file_chunk') === 'HANDLE_1'
-            && ! str_contains($r->url(), 'FB_TOKEN'); // el token jamás va en la URL/query
+        return $contents('access_token') === 'FB_TOKEN'
+            && $contents('description') === 'Video del taller'
+            && ($source['filename'] ?? null) === 'post-video.mp4'                    // parte de ARCHIVO
+            && ($source['headers']['Content-Type'] ?? null) === 'video/mp4'          // con su MIME
+            && ! is_string($source['contents'] ?? null)                              // stream, no string
+            && ! str_contains($r->url(), 'FB_TOKEN');                                // token jamás en URL
     });
-    // El Page token NUNCA se usa en el resumable upload (sin fallback)…
-    Http::assertNotSent(fn ($r) => (str_contains($r->url(), '/uploads') || str_contains($r->url(), '/upload:'))
-        && ($r->hasHeader('Authorization', 'Bearer FB_TOKEN') || $r->hasHeader('Authorization', 'OAuth FB_TOKEN')));
-    // …y el USER token NUNCA aparece en la fase 3 (ni como header ni como parte multipart).
-    Http::assertNotSent(fn ($r) => str_contains($r->url(), 'graph-video.facebook.com')
-        && ($r->hasHeader('Authorization', 'Bearer FB_UPLOAD_TOKEN')
-            || $r->hasHeader('Authorization', 'OAuth FB_UPLOAD_TOKEN')
-            || str_contains((string) json_encode($r->data()), 'FB_UPLOAD_TOKEN')));
+
+    // El mecanismo antiguo desapareció por completo de este flujo.
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), '/uploads'));
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), '/upload:'));
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), 'graph-video.facebook.com'));
     Http::assertNotSent(fn ($r) => str_contains($r->url(), '/video_reels'));
+    Http::assertNotSent(function ($r): bool {
+        foreach ($r->data() as $p) {
+            if (is_array($p) && ($p['name'] ?? null) === 'fbuploader_video_file_chunk') {
+                return true;
+            }
+        }
+
+        return false;
+    });
 });
 
-it('fallo en FASE 1 del Post de video FB: diagnóstico seguro por fase, sin tokens en el log', function () {
+it('error de Meta en el Post de video FB: registra videopost.failed sin tokens ni binarios', function () {
     mfCtx();
     Storage::fake('public');
     Storage::disk('public')->put('social-posts/post-video.mp4', 'contenido-mp4');
     Log::spy();
-    Http::fake(function ($request) {
-        if (str_contains($request->url(), '/uploads')) {
-            return Http::response(['error' => [
-                'message' => 'There was a problem uploading your video file. Please try again with another file.',
-                'code' => 6000,
-                'error_subcode' => 1363019,
-            ]], 400);
-        }
-
-        return Http::response([], 200);
-    });
+    Http::fake(['*' => Http::response(['error' => [
+        'message' => 'There was a problem uploading your video file. Please try again with another file.',
+        'code' => 6000,
+        'error_subcode' => 1363019,
+    ]], 400)]);
 
     $t = mfService()->publish(SocialPost::factory()->postVideo()->create(), ['facebook'])
         ->targets->firstWhere('network', 'facebook');
 
     expect($t->status)->toBe('failed');
     expect($t->error_message)->toBe('Meta no pudo procesar la subida del video. Inténtalo de nuevo.');
-    // No pasó de la fase 1: ni transferencia ni publicación.
-    Http::assertNotSent(fn ($r) => str_contains($r->url(), '/upload:'));
-    Http::assertNotSent(fn ($r) => str_contains($r->url(), 'graph-video'));
 
     Log::shouldHaveReceived('warning')->withArgs(function (string $message, array $context = []): bool {
-        if ($message !== 'social.publish.fb.videopost.phase1_failed') {
+        if ($message !== 'social.publish.fb.videopost.failed') {
             return false;
         }
         $dump = (string) json_encode($context);
@@ -967,31 +940,31 @@ it('fallo en FASE 1 del Post de video FB: diagnóstico seguro por fase, sin toke
         return ($context['code'] ?? null) === 6000
             && ($context['subcode'] ?? null) === 1363019
             && ($context['file_size'] ?? null) === strlen('contenido-mp4')
-            && ! str_contains($dump, 'FB_UPLOAD_TOKEN')
-            && ! str_contains($dump, 'FB_TOKEN')
+            && ! str_contains($dump, 'FB_TOKEN')          // ningún token
+            && ! str_contains($dump, 'contenido-mp4')     // ningún binario/multipart
             && ! str_contains($dump, 'Authorization');
     })->once();
 });
 
-it('sin video_upload_token: el Post de video FB falla controlado y Reel/Historia siguen funcionando con el Page token', function () {
+it('el Post de video FB funciona con SOLO el Page token (sin video_upload_token) y Reel/Historia intactos', function () {
     mfCtx();
     Storage::fake('public');
     Storage::disk('public')->put('social-posts/post-video.mp4', 'contenido-mp4');
-    // Canal de Facebook SOLO con Page token (sin autorización de subida).
+    // Canal de Facebook explícitamente con SOLO el Page token: es todo lo que este flujo necesita.
     SocialChannel::query()->where('provider', 'messenger')->first()
         ->update(['credentials' => ['token' => 'FB_TOKEN']]);
     mfFakeVideoOk();
 
-    // Post de video → fallo controlado, sin fallback y sin llamadas de subida.
     $t = mfService()->publish(SocialPost::factory()->postVideo()->create(), ['facebook'])
         ->targets->firstWhere('network', 'facebook');
 
-    expect($t->status)->toBe('failed');
-    expect($t->error_message)->toBe('El canal de Facebook no tiene configurada la autorización necesaria para subir videos.');
+    expect($t->status)->toBe('published');
+    expect($t->external_post_id)->toBe('FB_VIDEO_POST_1');
+    // El USER token no interviene y el mecanismo antiguo no se invoca.
     Http::assertNotSent(fn ($r) => str_contains($r->url(), '/uploads') || str_contains($r->url(), '/upload:'));
     Http::assertNotSent(fn ($r) => str_contains($r->url(), 'graph-video.facebook.com'));
 
-    // Reel y Historia de video: intactos con SOLO el Page token.
+    // Reel y Historia de video: intactos con el mismo Page token.
     $reel = mfService()->publish(SocialPost::factory()->reel()->create(), ['facebook'])
         ->targets->firstWhere('network', 'facebook');
     expect($reel->status)->toBe('published');
@@ -1023,18 +996,9 @@ it('Post de video dual puede quedar partial (FB ok, IG falla)', function () {
     Storage::fake('public');
     Storage::disk('public')->put('social-posts/post-video.mp4', 'contenido-mp4');
     Http::fake(function ($request) {
-        $url = $request->url();
-        if (str_contains($url, 'graph-video.facebook.com')) {
+        // FB publica con el único request multipart a /{page_id}/videos.
+        if (str_contains($request->url(), '/videos')) {
             return Http::response(['id' => 'FB_VIDEO_POST_1'], 200);
-        }
-        if (str_ends_with($url, '/app')) {
-            return Http::response(['id' => 'APP_1'], 200);
-        }
-        if (str_contains($url, '/uploads')) {
-            return Http::response(['id' => 'upload:SESS_1'], 200);
-        }
-        if (str_contains($url, '/upload:')) {
-            return Http::response(['h' => 'HANDLE_1'], 200);
         }
 
         // Contenedor IG rechaza.
