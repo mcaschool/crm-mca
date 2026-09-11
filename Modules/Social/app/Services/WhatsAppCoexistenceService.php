@@ -573,7 +573,10 @@ final class WhatsAppCoexistenceService
     {
         $version = (string) config('social.graph_version', 'v26.0');
         $appId = (string) config('social.meta_app_id', '');
-        $secret = (string) (config('social.app_secret') ?? '');
+        // Misma filosofía que VerifyMetaSignature: el App Secret ESPECÍFICO de WhatsApp
+        // (social.secrets.whatsapp) es el primario — es el App Secret real de la app de
+        // Facebook —, con social.app_secret solo como fallback si no está configurado.
+        $secret = (string) (config('social.secrets.whatsapp') ?? config('social.app_secret') ?? '');
         if ($secret === '') {
             throw new RuntimeException(__('Falta el App Secret en la configuración del servidor.'));
         }

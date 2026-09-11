@@ -6,10 +6,12 @@ use App\Models\User;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\TestResponse;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Institutions\Models\Institution;
 use Modules\Social\Jobs\ProcessWhatsAppInboundMedia;
+use Modules\Social\Jobs\ProcessWhatsAppPostOnboarding;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialMessage;
@@ -117,6 +119,8 @@ function wcFakeSignup(string $waba = 'WABA_NEW', string $phone = 'PHONE_NEW', st
             'id' => $phone,
         ], 200),
         "graph.facebook.com/v26.0/{$waba}/subscribed_apps" => Http::response(['success' => true], 200),
+        // El post-onboarding (contactos+historial) corre after-response tras el signup.
+        'graph.facebook.com/v26.0/*/smb_app_data' => Http::response(['success' => true, 'request_id' => 'REQ_AUTO'], 200),
     ]);
 }
 
@@ -235,6 +239,92 @@ it('sin confirmación is_on_biz_app/platform_type el canal queda en onboarding, 
         ->toBe('onboarding'); // jamás se finge connected_coexistence
 });
 
+it('el intercambio OAuth usa el secreto ESPECÍFICO de WhatsApp cuando está configurado', function () {
+    [$institution, $user] = wcCtx();
+    config(['social.secrets.whatsapp' => 'WA_SPECIFIC_SECRET']);
+    wcFakeSignup();
+    $logged = [];
+    Log::listen(function ($event) use (&$logged) {
+        $logged[] = $event->message.' '.json_encode($event->context);
+    });
+    $state = wcService()->issueState($user->id, $institution->id);
+
+    // Firmar el webhook no interviene aquí; el POST del panel usa sesión+CSRF.
+    test()->actingAs($user)->post(route('social.wa-signup'), [
+        'state' => $state, 'code' => 'AUTHCODE_S', 'waba_id' => 'WABA_NEW', 'phone_number_id' => 'PHONE_NEW',
+    ])->assertOk();
+
+    Http::assertSent(function ($request) {
+        if (! str_contains($request->url(), 'oauth/access_token')) {
+            return false;
+        }
+
+        return $request['client_secret'] === 'WA_SPECIFIC_SECRET' // primario: secrets.whatsapp
+            && ! str_contains($request->url(), 'WA_SPECIFIC_SECRET'); // jamás en la URL
+    });
+    expect(implode(' ', $logged))->not->toContain('WA_SPECIFIC_SECRET');
+    expect(implode(' ', $logged))->not->toContain('AUTHCODE_S');
+});
+
+it('sin secreto específico, el intercambio OAuth cae al app_secret común (fallback)', function () {
+    [$institution, $user] = wcCtx();
+    expect(config('social.secrets.whatsapp'))->toBeNull(); // no configurado en este test
+    wcFakeSignup();
+    $state = wcService()->issueState($user->id, $institution->id);
+
+    test()->actingAs($user)->post(route('social.wa-signup'), [
+        'state' => $state, 'code' => 'C', 'waba_id' => 'WABA_NEW', 'phone_number_id' => 'PHONE_NEW',
+    ])->assertOk();
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'oauth/access_token')
+        && $request['client_secret'] === WC_SECRET);
+});
+
+it('un error del intercambio OAuth devuelve mensaje sanitizado (sin secreto ni code)', function () {
+    [$institution, $user] = wcCtx();
+    config(['social.secrets.whatsapp' => 'WA_SPECIFIC_SECRET']);
+    Http::fake(['graph.facebook.com/v26.0/oauth/access_token' => Http::response([
+        'error' => ['message' => 'Invalid verification code format.', 'code' => 100],
+    ], 400)]);
+    $state = wcService()->issueState($user->id, $institution->id);
+
+    $res = test()->actingAs($user)->post(route('social.wa-signup'), [
+        'state' => $state, 'code' => 'AUTHCODE_BAD', 'waba_id' => 'W', 'phone_number_id' => 'P',
+    ]);
+
+    $res->assertStatus(422)->assertJsonPath('status', 'error');
+    $message = (string) $res->json('message');
+    expect($message)->not->toContain('WA_SPECIFIC_SECRET');
+    expect($message)->not->toContain('AUTHCODE_BAD');
+    expect(SocialChannel::query()->where('external_id', 'P')->exists())->toBeFalse();
+});
+
+it('un payload incompleto del signup se rechaza por validación (422)', function () {
+    [$institution, $user] = wcCtx();
+    Http::fake();
+    $state = wcService()->issueState($user->id, $institution->id);
+
+    test()->actingAs($user)->postJson(route('social.wa-signup'), [
+        'state' => $state, 'waba_id' => 'W', 'phone_number_id' => 'P', // sin code
+    ])->assertStatus(422)->assertJsonValidationErrors('code');
+
+    Http::assertNothingSent();
+});
+
+it('repetir el signup del MISMO número actualiza el canal sin duplicarlo', function () {
+    [$institution, $user] = wcCtx();
+    wcFakeSignup();
+
+    foreach (range(1, 2) as $i) {
+        $state = wcService()->issueState($user->id, $institution->id);
+        test()->actingAs($user)->post(route('social.wa-signup'), [
+            'state' => $state, 'code' => 'C'.$i, 'waba_id' => 'WABA_NEW', 'phone_number_id' => 'PHONE_NEW',
+        ])->assertOk();
+    }
+
+    expect(SocialChannel::query()->where('external_id', 'PHONE_NEW')->count())->toBe(1);
+});
+
 it('el business token queda CIFRADO en la base de datos', function () {
     [$institution, $user] = wcCtx();
     wcFakeSignup(waba: 'W1', phone: 'P1', token: 'BIZTOKEN_SECRETO');
@@ -351,6 +441,118 @@ it('si el usuario rechazó compartir historial (2593109) se marca declined y el 
     expect($channel->connection_meta['history_sync_status'])->toBe('declined');
     expect($channel->canSendViaApi())->toBeTrue();
     expect(wcService()->startHistorySync($channel))->toBe('already_requested'); // no reintenta solo
+});
+
+// ==================================================================================
+// Post-onboarding automático (contactos → historial, after-response)
+// ==================================================================================
+
+it('el signup exitoso despacha el post-onboarding after-response', function () {
+    [$institution, $user] = wcCtx();
+    wcFakeSignup();
+    Bus::fake();
+    $state = wcService()->issueState($user->id, $institution->id);
+
+    test()->actingAs($user)->post(route('social.wa-signup'), [
+        'state' => $state, 'code' => 'C', 'waba_id' => 'WABA_NEW', 'phone_number_id' => 'PHONE_NEW',
+    ])->assertOk();
+
+    Bus::assertDispatchedAfterResponse(ProcessWhatsAppPostOnboarding::class);
+});
+
+it('el post-onboarding ejecuta PRIMERO contactos y DESPUÉS historial, con request_id', function () {
+    [$institution, , $channel] = wcCtx();
+    $order = [];
+    Http::fake(function ($request) use (&$order) {
+        if (str_contains($request->url(), 'smb_app_data')) {
+            $order[] = $request['sync_type'];
+
+            return Http::response(['success' => true, 'request_id' => 'REQ_'.count($order)], 200);
+        }
+
+        return Http::response(['success' => true], 200);
+    });
+
+    (new ProcessWhatsAppPostOnboarding($channel->id, $institution->id))->handle();
+
+    expect($order)->toBe(['smb_app_state_sync', 'history']);
+    $meta = $channel->refresh()->connection_meta;
+    expect($meta['contacts_sync_request_id'])->toBe('REQ_1');
+    expect($meta['history_sync_request_id'])->toBe('REQ_2');
+    expect($meta['history_sync_status'])->toBe('requested');
+});
+
+it('history declined durante el post-onboarding no rompe el canal ya conectado', function () {
+    [$institution, , $channel] = wcCtx();
+    $channel->connection_status = 'connected_coexistence';
+    $channel->save();
+    Http::fake(function ($request) {
+        if (str_contains($request->url(), 'smb_app_data') && $request['sync_type'] === 'history') {
+            return Http::response(['error' => ['message' => 'declined on phone', 'code' => 2593109]], 400);
+        }
+
+        return Http::response(['success' => true, 'request_id' => 'REQ_C'], 200);
+    });
+
+    (new ProcessWhatsAppPostOnboarding($channel->id, $institution->id))->handle();
+
+    $channel->refresh();
+    expect($channel->connection_meta['contacts_sync_request_id'])->toBe('REQ_C'); // contactos OK
+    expect($channel->connection_meta['history_sync_status'])->toBe('declined');
+    expect($channel->connection_status)->toBe('connected_coexistence'); // intacto
+    expect($channel->canSendViaApi())->toBeTrue();
+});
+
+it('un fallo transitorio en el post-onboarding no consume los syncs (retry del job posible)', function () {
+    [$institution, , $channel] = wcCtx();
+    Http::fake(['graph.facebook.com/*' => Http::response(['error' => ['message' => 'oops', 'code' => 1]], 500)]);
+
+    (new ProcessWhatsAppPostOnboarding($channel->id, $institution->id))->handle();
+
+    $meta = $channel->refresh()->connection_meta ?? [];
+    expect($meta)->not->toHaveKey('contacts_sync_started_at');
+    expect($meta)->not->toHaveKey('history_sync_started_at');
+    expect($channel->refresh()->is_active)->toBeTrue(); // el canal no se invalida
+});
+
+// ==================================================================================
+// UI del Embedded Signup (Canales)
+// ==================================================================================
+
+it('con el flag apagado la página de Canales NO carga el SDK y muestra Configuración pendiente', function () {
+    [, $user] = wcCtx();
+    config(['social.embedded_signup.enabled' => false]);
+
+    \Livewire\Livewire::actingAs($user)->test(\Modules\Social\Livewire\Channels::class)
+        ->assertSee(__('Configuración pendiente'))
+        ->assertDontSee('connect.facebook.net');
+});
+
+it('con el flag activo la página carga el SDK con el flujo v4 (config_id + featureType)', function () {
+    [, $user] = wcCtx();
+
+    \Livewire\Livewire::actingAs($user)->test(\Modules\Social\Livewire\Channels::class)
+        ->assertSee('connect.facebook.net', false)
+        ->assertSee('whatsapp_business_app_onboarding', false)
+        ->assertSee('override_default_response_type', false)
+        ->assertDontSee('sessionInfoVersion');
+});
+
+it('signupState() emite un state válido de un solo uso, y null con el flujo apagado', function () {
+    [$institution, $user] = wcCtx();
+    $this->actingAs($user);
+    app(CurrentInstitution::class)->set($institution->id);
+
+    $component = new \Modules\Social\Livewire\Channels;
+    $state = $component->signupState();
+    expect($state)->toBeString()->not->toBe('');
+
+    // Un solo uso: consumible exactamente una vez, para SU institución.
+    expect(wcService()->consumeState($user->id, $state))->toBe($institution->id);
+    expect(wcService()->consumeState($user->id, $state))->toBeNull();
+
+    config(['social.embedded_signup.enabled' => false]);
+    expect($component->signupState())->toBeNull();
 });
 
 // ==================================================================================

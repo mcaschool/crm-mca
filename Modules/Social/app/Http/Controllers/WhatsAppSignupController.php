@@ -7,6 +7,7 @@ namespace Modules\Social\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Social\Jobs\ProcessWhatsAppPostOnboarding;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Services\WhatsAppCoexistenceService;
 use RuntimeException;
@@ -58,6 +59,14 @@ final class WhatsAppSignupController
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
         }
 
-        return response()->json(['status' => 'connected', 'channel_id' => $channel->id]);
+        // Post-onboarding automático FUERA del ciclo de respuesta: contactos y luego
+        // historial (best-effort e idempotentes; un fallo no revierte la conexión).
+        ProcessWhatsAppPostOnboarding::dispatchAfterResponse($channel->id, $channel->institution_id);
+
+        return response()->json([
+            'status' => 'connected',
+            'channel_id' => $channel->id,
+            'connection_status' => $channel->connection_status,
+        ]);
     }
 }

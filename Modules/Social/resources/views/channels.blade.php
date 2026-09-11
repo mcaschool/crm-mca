@@ -13,12 +13,120 @@
             </div>
             <div class="sp" style="flex:1"></div>
             @can('create', \Modules\Social\Models\SocialChannel::class)
-                {{-- Embedded Signup (Coexistence): preparado, pero bloqueado por feature flag
-                     hasta el cutover real — imposible una conexión accidental. --}}
+                {{-- Embedded Signup v4 (Coexistence): el SDK de Facebook SOLO se carga cuando
+                     el feature flag está activo y existen App ID + Configuration ID; con el
+                     flag apagado esta rama ni se renderiza (imposible conexión accidental). --}}
                 @if ($this->signupReady())
-                    <button type="button" class="btn btn-sm" title="{{ __('Inicia la conexión del WhatsApp Business App (Coexistence).') }}">
-                        <x-ui.icon name="plug" class="ic" style="width:15px;height:15px" /> {{ __('Conectar WhatsApp Business') }}
-                    </button>
+                    @php($waSignupCfg = $this->signupConfig())
+                    <span wire:ignore x-data="waEmbeddedSignup()" style="display:inline-flex;align-items:center;gap:8px">
+                        <script>
+                            window.waEmbeddedSignup = function () {
+                                return {
+                                    cfg: @js($waSignupCfg),
+                                    endpoint: @js(route('social.wa-signup')),
+                                    csrf: @js(csrf_token()),
+                                    labels: @js([
+                                        'idle' => __('Conectar WhatsApp Business'),
+                                        'starting' => __('Iniciando…'),
+                                        'connecting' => __('Conectando…'),
+                                        'connected' => __('Conectado'),
+                                        'cancelled' => __('Cancelado'),
+                                        'error' => __('Error'),
+                                    ]),
+                                    status: 'idle',
+                                    message: '',
+                                    busy: false,
+                                    submitted: false,
+                                    state: null, code: null, wabaId: null, phoneId: null,
+
+                                    init() {
+                                        // SDK solo aquí (la rama existe únicamente con el flag activo).
+                                        if (! document.getElementById('facebook-jssdk')) {
+                                            const s = document.createElement('script');
+                                            s.id = 'facebook-jssdk';
+                                            s.src = 'https://connect.facebook.net/en_US/sdk.js';
+                                            s.async = true; s.defer = true; s.crossOrigin = 'anonymous';
+                                            document.body.appendChild(s);
+                                        }
+                                        const cfg = this.cfg;
+                                        window.fbAsyncInit = () => {
+                                            FB.init({ appId: cfg.app_id, autoLogAppEvents: false, xfbml: false, version: cfg.version });
+                                        };
+                                        // Evento v4 del Embedded Signup: llega por window message desde facebook.com.
+                                        window.addEventListener('message', (event) => {
+                                            try {
+                                                const origin = new URL(event.origin).hostname;
+                                                if (! origin.endsWith('facebook.com')) return;
+                                                const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                                                if (! data || data.type !== 'WA_EMBEDDED_SIGNUP') return;
+                                                if (data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING' || data.event === 'FINISH') {
+                                                    this.wabaId = data.data?.waba_id ?? null;
+                                                    this.phoneId = data.data?.phone_number_id ?? null;
+                                                    this.trySubmit();
+                                                } else if (data.event === 'CANCEL') {
+                                                    if (this.status !== 'connected') { this.status = 'cancelled'; this.busy = false; }
+                                                } else if (data.event === 'ERROR') {
+                                                    this.fail(@js(__('La conexión con Meta devolvió un error. Inténtalo de nuevo.')));
+                                                }
+                                                // Nunca se loguea el payload ni el code.
+                                            } catch (e) { /* mensajes ajenos: ignorar */ }
+                                        });
+                                    },
+
+                                    async start() {
+                                        if (this.busy || this.status === 'connected' || typeof FB === 'undefined') return;
+                                        this.busy = true; this.submitted = false; this.message = '';
+                                        this.code = null; this.wabaId = null; this.phoneId = null;
+                                        this.status = 'starting';
+                                        // El state SIEMPRE lo emite el backend (one-time, ligado a usuario+institución).
+                                        this.state = await this.$wire.signupState();
+                                        if (! this.state) { this.fail(@js(__('No se pudo iniciar la conexión. Recarga la página.'))); return; }
+                                        this.status = 'connecting';
+                                        FB.login((response) => {
+                                            const code = response?.authResponse?.code;
+                                            if (code) { this.code = code; this.trySubmit(); }
+                                            else if (this.status !== 'connected' && ! this.submitted) { this.status = 'cancelled'; this.busy = false; }
+                                        }, {
+                                            config_id: this.cfg.config_id,
+                                            response_type: 'code',
+                                            override_default_response_type: true,
+                                            extras: { featureType: 'whatsapp_business_app_onboarding' },
+                                        });
+                                    },
+
+                                    async trySubmit() {
+                                        if (this.submitted || ! this.state || ! this.code || ! this.wabaId || ! this.phoneId) return;
+                                        this.submitted = true; // anti doble-submit/doble onboarding
+                                        try {
+                                            const res = await fetch(this.endpoint, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrf },
+                                                body: JSON.stringify({ state: this.state, code: this.code, waba_id: this.wabaId, phone_number_id: this.phoneId }),
+                                            });
+                                            const body = await res.json();
+                                            this.code = null; this.state = null; // el code no se conserva en memoria
+                                            if (res.ok && body.status === 'connected') {
+                                                this.status = 'connected'; this.busy = false;
+                                                this.$wire.$refresh(); // la lista muestra el canal y su connection_status real
+                                            } else {
+                                                this.fail(body.message || @js(__('No se pudo completar la conexión. Inténtalo de nuevo.')));
+                                            }
+                                        } catch (e) {
+                                            this.fail(@js(__('No se pudo completar la conexión. Inténtalo de nuevo.')));
+                                        }
+                                    },
+
+                                    fail(message) { this.status = 'error'; this.message = message; this.busy = false; this.submitted = false; },
+                                };
+                            };
+                        </script>
+                        <button type="button" class="btn btn-sm" x-on:click="start()" x-bind:disabled="busy"
+                                title="{{ __('Inicia la conexión del WhatsApp Business App (Coexistence).') }}">
+                            <x-ui.icon name="plug" class="ic" style="width:15px;height:15px" />
+                            <span x-text="labels[status] ?? labels.idle">{{ __('Conectar WhatsApp Business') }}</span>
+                        </button>
+                        <span x-show="message !== ''" x-text="message" style="font-size:12px;color:#8A1C1C;max-width:260px"></span>
+                    </span>
                 @else
                     <button type="button" class="btn btn-sm" disabled
                             title="{{ __('Configuración pendiente: falta habilitar el Embedded Signup de Meta (SOCIAL_WA_SIGNUP_ENABLED y SOCIAL_WA_SIGNUP_CONFIG_ID).') }}">

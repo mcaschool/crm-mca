@@ -148,6 +148,43 @@ class Channels extends Component
         return app(\Modules\Social\Services\WhatsAppCoexistenceService::class)->isEnabled();
     }
 
+    /**
+     * Emite el state anti-CSRF del Embedded Signup (lo pide el JS AL PULSAR el botón;
+     * nunca se genera en el navegador). Un solo uso, TTL corto, ligado a este usuario
+     * y su institución (WhatsAppCoexistenceService::issueState). Devuelve null si el
+     * flujo está apagado o el usuario no puede administrar canales.
+     */
+    public function signupState(): ?string
+    {
+        $coexistence = app(\Modules\Social\Services\WhatsAppCoexistenceService::class);
+        $user = auth()->user();
+        if (! $coexistence->isEnabled() || $user === null || ! $user->can('create', SocialChannel::class)) {
+            return null;
+        }
+
+        $institutionId = app(\Modules\Core\Tenancy\CurrentInstitution::class)->id();
+        if ($institutionId === null) {
+            return null;
+        }
+
+        return $coexistence->issueState((int) $user->id, $institutionId);
+    }
+
+    /**
+     * Datos PÚBLICOS que necesita el SDK de Facebook en el navegador (App ID y
+     * Configuration ID no son secretos; el App Secret jamás sale del servidor).
+     *
+     * @return array{app_id: string, config_id: string, version: string}
+     */
+    public function signupConfig(): array
+    {
+        return [
+            'app_id' => (string) config('social.meta_app_id', ''),
+            'config_id' => (string) config('social.embedded_signup.config_id', ''),
+            'version' => (string) config('social.graph_version', 'v26.0'),
+        ];
+    }
+
     public function render(): View
     {
         $channels = SocialChannel::query()->orderBy('provider')->orderBy('display_name')->get();
