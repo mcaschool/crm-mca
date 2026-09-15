@@ -59,6 +59,14 @@ class Index extends Component
     public function mount(): void
     {
         $this->authorize('viewAny', Lead::class);
+
+        // Badge del sidebar: entrar al módulo marca los leads como VISTOS para este
+        // usuario y avisa al menú para que el contador caiga al instante (mismo
+        // patrón de evento de navegador que la Bandeja social).
+        $badges = app(\Modules\Crm\Services\SidebarBadges::class);
+        $badges->markSeen(auth()->user(), 'leads');
+        $counts = $badges->counts(auth()->user());
+        $this->dispatch('crm-badges-updated', leads: $counts['leads'], contacts: $counts['contacts']);
     }
 
     public function updated(string $property): void

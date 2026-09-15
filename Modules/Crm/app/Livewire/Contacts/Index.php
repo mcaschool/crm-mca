@@ -23,6 +23,13 @@ class Index extends Component
     public function mount(): void
     {
         $this->authorize('viewAny', Contact::class);
+
+        // Badge del sidebar: entrar al módulo marca los contactos como VISTOS para
+        // este usuario y avisa al menú (mismo patrón que la Bandeja social).
+        $badges = app(\Modules\Crm\Services\SidebarBadges::class);
+        $badges->markSeen(auth()->user(), 'contacts');
+        $counts = $badges->counts(auth()->user());
+        $this->dispatch('crm-badges-updated', leads: $counts['leads'], contacts: $counts['contacts']);
     }
 
     /**
