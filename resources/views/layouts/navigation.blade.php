@@ -124,6 +124,9 @@
                 <a href="{{ route('social.channels') }}" class="mca-nav-item {{ request()->routeIs('social.channels') ? 'on' : '' }}">
                     <x-ui.icon name="message-circle" /> {{ __('Canales sociales') }}
                 </a>
+                <a href="{{ route('mcp.admin') }}" class="mca-nav-item {{ request()->routeIs('mcp.admin') ? 'on' : '' }}">
+                    <x-ui.icon name="bot" /> {{ __('ChatGPT / MCP') }}
+                </a>
             @endif
             @can('viewAny', \Modules\Audit\Models\AuditLog::class)
                 <a href="{{ route('audit.index') }}" class="mca-nav-item {{ request()->routeIs('audit.*') ? 'on' : '' }}">

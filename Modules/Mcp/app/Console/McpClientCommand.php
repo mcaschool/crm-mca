@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Modules\Mcp\Console;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Str;
 use Modules\Mcp\Models\McpClient;
+use Modules\Mcp\Services\McpClientManager;
 
 /**
  * Gestión de credenciales del servidor MCP:
@@ -20,6 +20,11 @@ final class McpClientCommand extends Command
     protected $signature = 'mcp:client {action : create|rotate|revoke|list} {name?} {--institution=}';
 
     protected $description = 'Gestiona los clientes (Bearer) del servidor MCP privado';
+
+    public function __construct(private readonly McpClientManager $clients)
+    {
+        parent::__construct();
+    }
 
     public function handle(): int
     {
@@ -44,14 +49,8 @@ final class McpClientCommand extends Command
             return $this->failWith("Ya existe un cliente '{$name}' (usa rotate para renovar su token).");
         }
 
-        $token = $this->newToken();
         $institution = $this->option('institution');
-        McpClient::query()->create([
-            'name' => $name,
-            'token_hash' => hash('sha256', $token),
-            'institution_id' => is_numeric($institution) ? (int) $institution : null,
-            'is_active' => true,
-        ]);
+        [, $token] = $this->clients->create($name, is_numeric($institution) ? (int) $institution : null);
 
         $this->info("Cliente MCP '{$name}' creado".(is_numeric($institution) ? " (institución {$institution})" : ' (GLOBAL)').'.');
         $this->newLine();
@@ -68,8 +67,7 @@ final class McpClientCommand extends Command
             return $this->failWith("No existe el cliente '{$name}'.");
         }
 
-        $token = $this->newToken();
-        $client->forceFill(['token_hash' => hash('sha256', $token), 'is_active' => true])->save();
+        $token = $this->clients->rotate($client);
 
         $this->info("Token de '{$name}' ROTADO (el anterior quedó invalidado).");
         $this->newLine();
@@ -85,7 +83,7 @@ final class McpClientCommand extends Command
         if ($client === null) {
             return $this->failWith("No existe el cliente '{$name}'.");
         }
-        $client->forceFill(['is_active' => false])->save();
+        $this->clients->revoke($client);
         $this->info("Cliente '{$name}' revocado (acceso denegado de inmediato).");
 
         return self::SUCCESS;
@@ -104,11 +102,6 @@ final class McpClientCommand extends Command
         $this->table(['Nombre', 'Institución', 'Estado', 'Hash', 'Último uso'], $rows);
 
         return self::SUCCESS;
-    }
-
-    private function newToken(): string
-    {
-        return 'mcp_'.Str::random(48);
     }
 
     private function failWith(string $message): int

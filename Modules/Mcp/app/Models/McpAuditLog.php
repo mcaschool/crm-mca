@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $status
  * @property string|null $error
  * @property int $duration_ms
+ * @property \Illuminate\Support\Carbon|null $created_at
  */
 class McpAuditLog extends Model
 {

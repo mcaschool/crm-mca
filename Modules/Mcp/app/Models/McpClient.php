@@ -18,6 +18,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property int|null $institution_id
  * @property bool $is_active
  * @property \Illuminate\Support\Carbon|null $last_used_at
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
  */
 class McpClient extends Model
 {
