@@ -234,15 +234,24 @@ class Admin extends Component
 
         if ($os === 'windows') {
             // PowerShell: Read-Host -AsSecureString; la clave solo vive en memoria.
+            // Scope USER: MCA CRM queda disponible en todos los proyectos.
             $body = "# Instalador MCA CRM para Claude Code (Windows)\r\n"
                 ."# Pide la clave al ejecutarse; no la muestra ni la guarda.\r\n"
                 ."\$sec = Read-Host -AsSecureString 'Pega la clave de acceso de MCA CRM'\r\n"
                 ."\$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR(\$sec)\r\n"
                 ."\$key = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(\$bstr)\r\n"
-                ."claude mcp add mca-crm --transport http \"{$endpoint}\" --header \"Authorization: Bearer \$key\"\r\n"
+                ."claude mcp add mca-crm --scope user --transport http \"{$endpoint}\" --header \"Authorization: Bearer \$key\"\r\n"
                 ."[Runtime.InteropServices.Marshal]::ZeroFreeBSTR(\$bstr)\r\n"
                 ."Remove-Variable key\r\n"
-                ."Write-Host 'Conexion agregada. Abre Claude Code y usa MCA CRM.'\r\n";
+                ."claude mcp get mca-crm\r\n"
+                ."if (\$LASTEXITCODE -eq 0) {\r\n"
+                ."  Write-Host ''\r\n"
+                ."  Write-Host 'OK  MCA CRM agregado a Claude Code'\r\n"
+                ."  Write-Host 'OK  Disponible en todos tus proyectos'\r\n"
+                ."  Write-Host 'OK  Conexion verificada'\r\n"
+                ."} else {\r\n"
+                ."  Write-Host 'No se pudo verificar la conexion. Revisa la clave y que el servidor este disponible; vuelve a ejecutar este instalador.'\r\n"
+                ."}\r\n";
 
             return response()->streamDownload(fn () => print ($body), 'conectar-mca-crm.ps1', ['Content-Type' => 'text/plain; charset=utf-8']);
         }
@@ -252,9 +261,16 @@ class Admin extends Component
             ."# Instalador MCA CRM para Claude Code (macOS/Linux)\n"
             ."# Pide la clave al ejecutarse; no la muestra ni la guarda.\n"
             ."read -s -p 'Pega la clave de acceso de MCA CRM: ' KEY; echo\n"
-            ."claude mcp add mca-crm --transport http \"{$endpoint}\" --header \"Authorization: Bearer \$KEY\"\n"
+            ."claude mcp add mca-crm --scope user --transport http \"{$endpoint}\" --header \"Authorization: Bearer \$KEY\"\n"
             ."unset KEY\n"
-            ."echo 'Conexion agregada. Abre Claude Code y usa MCA CRM.'\n";
+            ."if claude mcp get mca-crm; then\n"
+            ."  echo ''\n"
+            ."  echo 'OK  MCA CRM agregado a Claude Code'\n"
+            ."  echo 'OK  Disponible en todos tus proyectos'\n"
+            ."  echo 'OK  Conexion verificada'\n"
+            ."else\n"
+            ."  echo 'No se pudo verificar la conexion. Revisa la clave y que el servidor este disponible; vuelve a ejecutar este instalador.'\n"
+            ."fi\n";
 
         return response()->streamDownload(fn () => print ($body), 'conectar-mca-crm.sh', ['Content-Type' => 'application/x-sh']);
     }
@@ -263,14 +279,14 @@ class Admin extends Component
     {
         $isSuper = auth()->user()->isSuperAdmin();
 
-        // Estado por preset (¿hay una conexión activa de ese asistente?).
-        $active = McpClient::query()->where('is_active', true)
-            ->selectRaw('assistant_type, count(*) as n')->groupBy('assistant_type')
-            ->pluck('n', 'assistant_type');
+        // "Conectado" SOLO si hubo una llamada MCP autenticada real (last_used_at
+        // lo fija VerifyMcpToken); tener una credencial activa no basta.
+        $connectedTypes = McpClient::query()->where('is_active', true)->whereNotNull('last_used_at')
+            ->pluck('assistant_type')->unique();
         $presets = [
-            'chatgpt' => $active->get('chatgpt', 0) > 0,
-            'claude' => $active->get('claude', 0) > 0,
-            'claude_code' => $active->get('claude_code', 0) > 0,
+            'chatgpt' => $connectedTypes->contains('chatgpt'),
+            'claude' => $connectedTypes->contains('claude'),
+            'claude_code' => $connectedTypes->contains('claude_code'),
         ];
 
         $connections = McpClient::query()->orderByDesc('is_active')->orderBy('name')->get()
@@ -283,6 +299,8 @@ class Admin extends Component
                     ? __('Técnico').($c->allow_write ? ' · '.__('escritura') : '')
                     : __('Inspección'),
                 'active' => (bool) $c->is_active,
+                // Estado real: revocado / pendiente de conexión / conectado.
+                'state' => ! $c->is_active ? 'disconnected' : ($c->last_used_at !== null ? 'connected' : 'pending'),
                 'bearer' => $c->auth_kind === 'bearer',
                 'technical' => $c->effectiveProfile() === McpClient::PROFILE_TECHNICAL,
                 'allow_write' => (bool) $c->allow_write,

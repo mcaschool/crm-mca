@@ -132,8 +132,47 @@ it('los instaladores piden la clave localmente y NO contienen el token real', fu
     expect($unix)->not->toContain($token);  // macOS/Linux: sin el token real
     expect($win)->toContain('Read-Host -AsSecureString'); // pide la clave en local
     expect($unix)->toContain('read -s');
-    expect($win)->toContain('claude mcp add mca-crm');
+    expect($win)->toContain('claude mcp add mca-crm --scope user');   // scope USER
+    expect($unix)->toContain('claude mcp add mca-crm --scope user');
+    expect($win)->toContain('claude mcp get mca-crm');   // verificación inmediata
+    expect($unix)->toContain('claude mcp get mca-crm');
     expect($unix)->toContain('/api/mcp');   // el endpoint (no secreto) sí va
+});
+
+it('el estado de una conexión pasa de Pendiente a Conectado y a Desconectado', function () {
+    [, $user] = adminCtx();
+    [$client] = app(McpClientManager::class)->create('estado', null, 'claude_code', 'technical', false, 'bearer');
+
+    // Recién creada: sin actividad MCP → Pendiente de conexión.
+    Livewire::actingAs($user)->test(Admin::class)
+        ->call('setTab', 'connections')
+        ->assertSee('Pendiente de conexión')
+        ->assertDontSee('Conectado');
+
+    // Tras una llamada MCP autenticada (VerifyMcpToken fija last_used_at) → Conectado.
+    $client->forceFill(['last_used_at' => now()])->save();
+    Livewire::actingAs($user)->test(Admin::class)
+        ->call('setTab', 'connections')
+        ->assertSee('Conectado')
+        ->assertDontSee('Pendiente de conexión');
+
+    // Revocada → Desconectado.
+    $client->forceFill(['is_active' => false])->save();
+    Livewire::actingAs($user)->test(Admin::class)
+        ->call('setTab', 'connections')
+        ->assertSee('Desconectado');
+});
+
+it('la tarjeta Claude Code solo figura Conectado tras una llamada MCP exitosa', function () {
+    [, $user] = adminCtx();
+    [$client] = app(McpClientManager::class)->create('cc-card', null, 'claude_code', 'technical', false, 'bearer');
+
+    // Con credencial pero sin actividad: NO conectado.
+    Livewire::actingAs($user)->test(Admin::class)->assertSee('No conectado');
+
+    // Con actividad registrada: Conectado.
+    $client->forceFill(['last_used_at' => now()])->save();
+    Livewire::actingAs($user)->test(Admin::class)->assertSee('Conectado');
 });
 
 it('un admin de institución (no super) solo conecta para SU institución', function () {

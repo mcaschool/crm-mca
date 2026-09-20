@@ -33,6 +33,16 @@ function profileClient(string $profile, bool $allowWrite): string
     return $token;
 }
 
+it('una llamada MCP autenticada fija last_used_at (base del estado Conectado)', function () {
+    $token = profileClient('inspection', false);
+    $client = McpClient::query()->latest('id')->first();
+    expect($client->last_used_at)->toBeNull(); // recién creado: pendiente
+
+    mcpRpc($token, 'tools/list')->assertOk();
+
+    expect($client->refresh()->last_used_at)->not->toBeNull(); // ya "conectado"
+});
+
 it('INSPECTION: tools/list oculta las herramientas de escritura', function () {
     $token = profileClient('inspection', false);
 

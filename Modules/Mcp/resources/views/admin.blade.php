@@ -115,7 +115,7 @@
                             <td style="font-weight:600">{{ $c['name'] }}</td>
                             <td>{{ $c['institution'] }}</td>
                             <td>{{ $c['access'] }}</td>
-                            <td><span class="badge {{ $c['active'] ? 'badge-on' : 'badge-off' }}">{{ $c['active'] ? __('Activa') : __('Desconectada') }}</span></td>
+                            <td><span class="badge {{ $c['state'] === 'connected' ? 'badge-on' : 'badge-off' }}">{{ $c['state'] === 'connected' ? __('Conectado') : ($c['state'] === 'pending' ? __('Pendiente de conexión') : __('Desconectado')) }}</span></td>
                             <td>{{ $c['last_used']?->diffForHumans() ?? __('nunca') }}</td>
                             <td>{{ $c['created']?->format('d/m/Y') ?? '—' }}</td>
                             <td style="white-space:nowrap">

@@ -322,6 +322,7 @@
     "Conexión \":n\" revocada. El acceso quedó desactivado.": "Connection \":n\" revoked. Access has been disabled.",
     "Conexiones IA": "AI connections",
     "Probar": "Test",
+    "Pendiente de conexión": "Pending connection",
     "Servidor MCP operativo: :n herramientas disponibles.": "MCP server operational: :n tools available.",
     "No se pudo verificar el servidor: la base de datos no responde.": "Could not verify the server: the database is not responding.",
     "Conecta asistentes de inteligencia artificial con MCA CRM de forma segura.": "Connect AI assistants to MCA CRM securely.",
