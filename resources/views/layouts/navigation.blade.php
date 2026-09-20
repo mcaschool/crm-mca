@@ -125,7 +125,7 @@
                     <x-ui.icon name="message-circle" /> {{ __('Canales sociales') }}
                 </a>
                 <a href="{{ route('mcp.admin') }}" class="mca-nav-item {{ request()->routeIs('mcp.admin') ? 'on' : '' }}">
-                    <x-ui.icon name="bot" /> {{ __('ChatGPT / MCP') }}
+                    <x-ui.icon name="bot" /> {{ __('IA / MCP') }}
                 </a>
             @endif
             @can('viewAny', \Modules\Audit\Models\AuditLog::class)

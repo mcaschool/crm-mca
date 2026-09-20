@@ -24,8 +24,12 @@ function mcpCtx(bool $global = true): array
 {
     $institution = Institution::factory()->create();
     $token = 'mcp_'.str_repeat('t', 44).uniqid();
+    // Cliente técnico con escritura HABILITADA explícitamente: estos tests
+    // ejercitan tools de lectura y de escritura (la escritura nunca es default).
     McpClient::query()->create([
         'name' => 'test-'.uniqid(),
+        'profile' => 'technical',
+        'allow_write' => true,
         'token_hash' => hash('sha256', $token),
         'institution_id' => $global ? null : $institution->id,
         'is_active' => true,

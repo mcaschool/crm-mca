@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Mcp\Support;
 
+use Modules\Mcp\Models\McpClient;
 use Modules\Mcp\Tools\CodeTools;
 use Modules\Mcp\Tools\DataTools;
 use Modules\Mcp\Tools\DiscoveryTools;
@@ -26,16 +27,20 @@ final class ToolRegistry
     /**
      * @return array<int, array{name: string, description: string, inputSchema: array<string, mixed>}>
      */
-    public function list(): array
+    public function list(?McpClient $client = null): array
     {
-        return array_map(
+        return array_values(array_map(
             fn (array $tool): array => [
                 'name' => $tool['name'],
                 'description' => $tool['description'],
                 'inputSchema' => $tool['inputSchema'],
             ],
-            $this->definitions(),
-        );
+            // El perfil de la conexión filtra qué herramientas se anuncian.
+            array_filter(
+                $this->definitions(),
+                fn (array $tool): bool => $client === null || AccessProfile::allows($client, $tool['name']),
+            ),
+        ));
     }
 
     /**
@@ -46,6 +51,11 @@ final class ToolRegistry
     {
         foreach ($this->definitions() as $tool) {
             if ($tool['name'] === $name) {
+                // Barrera de BACKEND: el perfil impide ejecutar, no solo listar.
+                if (! AccessProfile::allows($context->client, $name)) {
+                    throw new McpToolException(AccessProfile::denialMessage($context->client, $name));
+                }
+
                 /** @var array<string, mixed> */
                 return ($tool['handler'])($arguments, $context);
             }

@@ -17,7 +17,7 @@ use Modules\Mcp\Services\McpClientManager;
  */
 final class McpClientCommand extends Command
 {
-    protected $signature = 'mcp:client {action : create|rotate|revoke|list} {name?} {--institution=}';
+    protected $signature = 'mcp:client {action : create|rotate|revoke|list} {name?} {--institution=} {--allow-write : habilita las herramientas de escritura (por defecto solo lectura)}';
 
     protected $description = 'Gestiona los clientes (Bearer) del servidor MCP privado';
 
@@ -50,9 +50,16 @@ final class McpClientCommand extends Command
         }
 
         $institution = $this->option('institution');
-        [, $token] = $this->clients->create($name, is_numeric($institution) ? (int) $institution : null);
+        $allowWrite = (bool) $this->option('allow-write');
+        // Escritura SIEMPRE explícita: sin --allow-write, el cliente es de solo lectura.
+        [, $token] = $this->clients->create(
+            name: $name,
+            institutionId: is_numeric($institution) ? (int) $institution : null,
+            allowWrite: $allowWrite,
+        );
 
-        $this->info("Cliente MCP '{$name}' creado".(is_numeric($institution) ? " (institución {$institution})" : ' (GLOBAL)').'.');
+        $this->info("Cliente MCP '{$name}' creado".(is_numeric($institution) ? " (institución {$institution})" : ' (GLOBAL)')
+            .($allowWrite ? ' [escritura habilitada]' : ' [solo lectura]').'.');
         $this->newLine();
         $this->warn('Token (se muestra UNA sola vez, guárdalo en el cliente MCP):');
         $this->line($token);

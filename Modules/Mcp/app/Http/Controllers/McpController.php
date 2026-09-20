@@ -54,7 +54,7 @@ final class McpController
         return match ($method) {
             'initialize' => $this->result($id, $this->initialize($params)),
             'ping' => $this->result($id, (object) []),
-            'tools/list' => $this->result($id, ['tools' => $this->tools->list()]),
+            'tools/list' => $this->result($id, ['tools' => $this->tools->list($client)]),
             'tools/call' => $this->toolsCall($client, $id, $params),
             default => $this->error($id, -32601, 'Método no soportado: '.$method),
         };

@@ -19,15 +19,27 @@ final class McpClientManager
 {
     /**
      * Crea un cliente y devuelve [modelo, token en claro]. institutionId null =
-     * cliente GLOBAL (transversal); con valor = acotado a esa institución.
+     * cliente GLOBAL (transversal); con valor = acotado a esa institución. La
+     * ESCRITURA es SIEMPRE explícita: allowWrite es false por defecto (estado
+     * seguro), lo pasen la UI o el CLI.
      *
      * @return array{0: McpClient, 1: string}
      */
-    public function create(string $name, ?int $institutionId = null): array
-    {
+    public function create(
+        string $name,
+        ?int $institutionId = null,
+        string $assistantType = 'generic',
+        string $profile = McpClient::PROFILE_TECHNICAL,
+        bool $allowWrite = false,
+        string $authKind = 'bearer',
+    ): array {
         $token = $this->newToken();
         $client = McpClient::query()->create([
             'name' => $name,
+            'assistant_type' => $assistantType,
+            'profile' => $profile,
+            'allow_write' => $allowWrite,
+            'auth_kind' => $authKind,
             'token_hash' => hash('sha256', $token),
             'institution_id' => $institutionId,
             'is_active' => true,
