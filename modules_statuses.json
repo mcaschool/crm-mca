@@ -9,5 +9,6 @@
     "Ai": true,
     "Notifications": true,
     "Audit": true,
-    "Social": true
+    "Social": true,
+    "Mcp": true
 }

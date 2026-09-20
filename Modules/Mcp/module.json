@@ -1,0 +1,11 @@
+{
+    "name": "Mcp",
+    "alias": "mcp",
+    "description": "Servidor MCP privado: acceso transversal de asistentes a todo MCA CRM (Streamable HTTP + Bearer).",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Mcp\\Providers\\McpServiceProvider"
+    ],
+    "files": []
+}
