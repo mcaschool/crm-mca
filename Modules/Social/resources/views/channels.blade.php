@@ -13,6 +13,15 @@
             </div>
             <div class="sp" style="flex:1"></div>
             @can('create', \Modules\Social\Models\SocialChannel::class)
+                {{-- Grupo de acciones de conexión: Meta y WhatsApp, uno al lado del otro y
+                     alineados a la derecha; hacen wrap natural en pantallas pequeñas. --}}
+                <div style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap">
+                {{-- «Conectar Meta»: enlace GET normal (SIN wire:navigate: navegar a la
+                     pantalla Meta no debe pasar por Livewire). Estilo primario azul. --}}
+                <a href="{{ route('social.meta') }}" class="btn btn-primary btn-sm"
+                   title="{{ __('Detecta tu Página de Facebook e Instagram con Facebook Login, sin datos técnicos.') }}">
+                    <x-ui.icon name="plug" class="ic" style="width:15px;height:15px" /> {{ __('Conectar Meta') }}
+                </a>
                 {{-- Embedded Signup v4 (Coexistence): el SDK de Facebook SOLO se carga cuando
                      el feature flag está activo y existen App ID + Configuration ID; con el
                      flag apagado esta rama ni se renderiza (imposible conexión accidental). --}}
@@ -134,18 +143,8 @@
                         {{ __('Conectar WhatsApp Business') }} · {{ __('Configuración pendiente') }}
                     </button>
                 @endif
-                {{-- «Conectar Meta»: onboarding visual (Facebook Login for Business) para
-                     Facebook/Messenger + Instagram. Convive con los canales actuales; no los
-                     modifica. El formulario manual de abajo se mantiene como alta avanzada. --}}
-                {{-- Enlace GET normal (como el resto del panel): navegar de Canales a la
-                     pantalla Meta NO debe pasar por Livewire. Con wire:navigate esta
-                     navegación acababa haciendo una petición GET a /livewire/update (ruta
-                     POST-only → 405). --}}
-                <a href="{{ route('social.meta') }}" class="btn btn-sm"
-                   title="{{ __('Detecta tu Página de Facebook e Instagram con Facebook Login, sin datos técnicos.') }}">
-                    <x-ui.icon name="plug" class="ic" style="width:15px;height:15px" /> {{ __('Conectar Meta') }}
-                </a>
-                <button type="button" wire:click="create" class="btn btn-primary btn-sm">
+                </div>{{-- /grupo de acciones de conexión --}}
+                <button type="button" wire:click="create" class="btn btn-primary btn-sm" style="margin-left:8px">
                     <x-ui.icon name="plus" class="ic" style="width:15px;height:15px" /> {{ __('Nuevo canal') }}
                 </button>
             @endcan
