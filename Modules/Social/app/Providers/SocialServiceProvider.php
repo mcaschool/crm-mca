@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Modules\Social\Livewire\Channels;
 use Modules\Social\Livewire\Inbox;
+use Modules\Social\Livewire\MetaConnect;
 use Modules\Social\Livewire\Publisher;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Policies\SocialChannelPolicy;
@@ -39,5 +40,6 @@ class SocialServiceProvider extends ModuleServiceProvider
         Livewire::component('social.inbox', Inbox::class);
         Livewire::component('social.publisher', Publisher::class);
         Livewire::component('social.channels', Channels::class);
+        Livewire::component('social.meta-connect', MetaConnect::class);
     }
 }

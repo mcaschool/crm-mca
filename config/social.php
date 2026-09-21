@@ -70,6 +70,50 @@ return [
     ],
 
     /*
+    | «Conectar Meta» — onboarding visual de Facebook Login for Business para descubrir
+    | Páginas de Facebook (Messenger) e Instagram Professional asociado. Es un flujo NUEVO
+    | que CONVIVE con la conexión Meta ya operativa (no la sustituye) y que en esta etapa
+    | solo hace login + descubrimiento + visualización (NO crea ni sobreescribe canales).
+    |
+    | El Configuration ID es configuración de PLATAFORMA de MCA CRM (la app de Meta es única
+    | y da servicio a todas las instituciones); NO pertenece a ninguna institución y NO se
+    | hardcodea. Se define UNA sola vez en el .env del servidor:
+    |   SOCIAL_META_LOGIN_CONFIG_ID=...   # config ID de Facebook Login for Business (Pages/IG)
+    |
+    | Reutiliza el resto de la config Meta existente: SOCIAL_META_APP_ID (App ID), el App
+    | Secret real de la Meta App (social.meta.app_secret; jamás sale del servidor) y
+    | SOCIAL_GRAPH_VERSION. Permisos que este flujo evidencia para App Review:
+    | business_management, pages_show_list, instagram_basic (y luego, solo donde haga falta,
+    | pages_read_engagement y pages_manage_metadata).
+    |
+    | Si el config_id está vacío, el flujo NO se rompe: el botón muestra un estado amigable
+    | según el tipo de usuario y no se inicia ningún login.
+    */
+    'meta' => [
+        'login_config_id' => env('SOCIAL_META_LOGIN_CONFIG_ID'),
+
+        /*
+        | App Secret de PLATAFORMA para el Facebook Login for Business general. Semánticamente
+        | pertenece a la Meta App de MCA CRM, no a un canal concreto: el flujo «Conectar Meta»
+        | no debe depender de WhatsApp/Messenger/Instagram para decidir qué secreto usa. No se
+        | introduce una variable .env nueva: se reutiliza el App Secret REAL ya existente de la
+        | app de Facebook (el que usan Facebook/Messenger), con el común como último recurso.
+        | El App Secret jamás sale del servidor.
+        */
+        'app_secret' => env('SOCIAL_APP_SECRET_WHATSAPP') ?? env('SOCIAL_APP_SECRET'),
+
+        /*
+        | Atajo SOLO-LOCAL (APP_ENV=local) para desarrollar el flujo sin credenciales reales
+        | de Meta: si está definido, MetaConnectionService NO llama a la red y devuelve activos
+        | simulados, y el botón se considera disponible aunque falte el config_id.
+        |   SOCIAL_META_FAKE_DISCOVERY=ok | empty
+        | En producción se deja SIN definir → login y descubrimiento REALES. Los tests no lo
+        | usan (usan Http::fake).
+        */
+        'fake_discovery' => env('SOCIAL_META_FAKE_DISCOVERY'),
+    ],
+
+    /*
     | Salida (Bloque 4): responder desde el CRM hacia Meta (Instagram + Messenger).
     | Versión de Graph API CONFIGURABLE (no hardcodeada). La última publicada por Meta a
     | fecha de este bloque es v26.0 (changelog oficial, jul-2026); se deja en env para

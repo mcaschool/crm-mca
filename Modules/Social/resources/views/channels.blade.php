@@ -134,6 +134,13 @@
                         {{ __('Conectar WhatsApp Business') }} · {{ __('Configuración pendiente') }}
                     </button>
                 @endif
+                {{-- «Conectar Meta»: onboarding visual (Facebook Login for Business) para
+                     Facebook/Messenger + Instagram. Convive con los canales actuales; no los
+                     modifica. El formulario manual de abajo se mantiene como alta avanzada. --}}
+                <a href="{{ route('social.meta') }}" class="btn btn-sm" wire:navigate
+                   title="{{ __('Detecta tu Página de Facebook e Instagram con Facebook Login, sin datos técnicos.') }}">
+                    <x-ui.icon name="plug" class="ic" style="width:15px;height:15px" /> {{ __('Conectar Meta') }}
+                </a>
                 <button type="button" wire:click="create" class="btn btn-primary btn-sm">
                     <x-ui.icon name="plus" class="ic" style="width:15px;height:15px" /> {{ __('Nuevo canal') }}
                 </button>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Modules\Social\Http\Controllers\MediaController;
 use Modules\Social\Http\Controllers\WhatsAppSignupController;
+use Modules\Social\Livewire\MetaConnect;
 use Modules\Social\Livewire\WhatsAppTemplates;
 
 /*
@@ -24,6 +25,10 @@ Route::get('/social/media/{message}/{index}', [MediaController::class, 'show'])
 
 // Plantillas de WhatsApp (listado, diseñador, sync). Acceso Admin (policy en mount).
 Route::get('/social/plantillas', WhatsAppTemplates::class)->name('social.wa-templates');
+
+// «Conectar Meta»: onboarding visual (Facebook Login for Business) que descubre Páginas +
+// Instagram. Convive con la conexión Meta actual; en esta etapa solo login + descubrimiento.
+Route::get('/social/meta', MetaConnect::class)->name('social.meta');
 
 // Callback del Embedded Signup (Coexistence). CSRF del grupo web + flag + state.
 Route::post('/social/whatsapp/conectar', [WhatsAppSignupController::class, 'store'])
