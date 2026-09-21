@@ -155,6 +155,34 @@ it('ignora filas sin id o sin token', function () {
         ->and($result->pages[0]->pageId)->toBe('PAGE_OK');
 });
 
+it('descubre con User Access Token (UAT) usando el token tal cual, sin intercambiar código', function () {
+    mcCtx();
+    mcFakeAccounts([[
+        'id' => 'PAGE_1',
+        'name' => 'MCA Business & Postgraduate School',
+        'access_token' => 'PAGETOK_1',
+        'instagram_business_account' => ['id' => 'IG_1', 'username' => 'mcaschoolofbusiness'],
+    ]]);
+
+    $result = mcService()->discoverAssets('', 'UAT_TOKEN');
+
+    expect($result->pages)->toHaveCount(1)
+        ->and($result->pages[0]->pageId)->toBe('PAGE_1')
+        ->and($result->pages[0]->instagramUsername)->toBe('mcaschoolofbusiness');
+
+    // UAT: el token se usa como Bearer TAL CUAL; NO se llama a oauth/access_token.
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'oauth/access_token'));
+    Http::assertSent(fn ($request) => ! str_contains($request->url(), '/me/accounts')
+        || $request->hasHeader('Authorization', 'Bearer UAT_TOKEN'));
+});
+
+it('lanza un error amigable si no llegan ni code ni access token', function () {
+    mcCtx();
+
+    expect(fn () => mcService()->discoverAssets('', ''))
+        ->toThrow(RuntimeException::class);
+});
+
 it('lanza un error amigable si Meta rechaza el intercambio de código', function () {
     mcCtx();
     Http::fake([
@@ -175,6 +203,42 @@ it('la plataforma NO está configurada si falta el config id global', function (
     config(['social.meta.login_config_id' => null]);
 
     expect(mcService()->isPlatformConfigured())->toBeFalse();
+});
+
+// ============================================================ tipo de token (plataforma)
+
+it('browserConfig usa token_type=system por defecto y normaliza valores inválidos', function () {
+    expect(mcService()->browserConfig()['token_type'])->toBe('system');
+
+    config(['social.meta.login_token_type' => 'user']);
+    expect(mcService()->browserConfig()['token_type'])->toBe('user');
+
+    config(['social.meta.login_token_type' => 'lo-que-sea']);
+    expect(mcService()->browserConfig()['token_type'])->toBe('system');
+});
+
+it('token_type=user: browserConfig lo refleja y response_type queda gated a system', function () {
+    [, $user] = mcCtx('admin');
+    config(['social.meta.login_token_type' => 'user']);
+
+    // El valor que consume el SDK (this.cfg.token_type) sale de aquí.
+    expect(mcService()->browserConfig()['token_type'])->toBe('user');
+
+    // En el script, response_type/override SOLO se añaden bajo la rama system;
+    // con token_type=user esa rama no se ejecuta → FB.login(cb, { config_id }).
+    Livewire::actingAs($user)->test(MetaConnect::class)
+        ->assertSee("if (this.cfg.token_type === 'system')", false);
+});
+
+it('token_type=system: browserConfig lo refleja y conserva response_type=code + override', function () {
+    [, $user] = mcCtx('admin');
+    config(['social.meta.login_token_type' => 'system']);
+
+    expect(mcService()->browserConfig()['token_type'])->toBe('system');
+
+    Livewire::actingAs($user)->test(MetaConnect::class)
+        ->assertSee("opts.response_type = 'code'", false)
+        ->assertSee('opts.override_default_response_type = true', false);
 });
 
 // ============================================================ Livewire (UX)
@@ -207,6 +271,29 @@ it('el descubrimiento lleva a la selección y NO crea ningún canal', function (
 
     expect($component->get('pages'))->toHaveCount(1)
         ->and(SocialChannel::query()->count())->toBe(0);
+});
+
+it('el flujo UAT (access token) descubre, no crea canales y no filtra el token', function () {
+    [$institution, $user] = mcCtx('admin');
+    mcFakeAccounts([[
+        'id' => 'PAGE_1',
+        'name' => 'MCA Business & Postgraduate School',
+        'access_token' => 'PAGETOK_1',
+        'instagram_business_account' => ['id' => 'IG_1', 'username' => 'mcaschoolofbusiness'],
+    ]]);
+    $state = mcService()->issueState($user->id, $institution->id);
+
+    $component = Livewire::actingAs($user)->test(MetaConnect::class)
+        ->call('discover', $state, '', 'UAT_TOKEN')
+        ->assertSet('step', 'select')
+        ->assertSet('selectedPageId', 'PAGE_1')
+        ->assertSee('mcaschoolofbusiness')
+        ->assertDontSee('UAT_TOKEN')
+        ->assertDontSee('PAGETOK_1');
+
+    expect($component->get('pages'))->toHaveCount(1)
+        ->and(SocialChannel::query()->count())->toBe(0);
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'oauth/access_token'));
 });
 
 it('un state inválido no inicia el descubrimiento', function () {

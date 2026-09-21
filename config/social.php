@@ -93,6 +93,22 @@ return [
         'login_config_id' => env('SOCIAL_META_LOGIN_CONFIG_ID'),
 
         /*
+        | Tipo de token de la configuración de Facebook Login for Business (config de
+        | PLATAFORMA). Debe conocerse ANTES de abrir el diálogo porque cambia los parámetros
+        | de FB.login (Meta lo documenta y un System User con response_type incorrecto es una
+        | causa conocida de fallo):
+        |   - 'user'   → FB.login(cb, { config_id })                    (User Access Token)
+        |   - 'system' → FB.login(cb, { config_id, response_type:'code',
+        |                             override_default_response_type:true })  (System User)
+        |   SOCIAL_META_LOGIN_TOKEN_TYPE=user|system
+        | Cualquier valor distinto de 'user' se normaliza a 'system' (default seguro): así el
+        | flujo System User existente no se rompe si la variable falta o viene mal escrita.
+        */
+        'login_token_type' => strtolower((string) env('SOCIAL_META_LOGIN_TOKEN_TYPE', 'system')) === 'user'
+            ? 'user'
+            : 'system',
+
+        /*
         | App Secret de PLATAFORMA para el Facebook Login for Business general. Semánticamente
         | pertenece a la Meta App de MCA CRM, no a un canal concreto: el flujo «Conectar Meta»
         | no debe depender de WhatsApp/Messenger/Instagram para decidir qué secreto usa. No se

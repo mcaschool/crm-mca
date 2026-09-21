@@ -47,10 +47,11 @@ final class MetaConnectionService
     }
 
     /**
-     * Datos PÚBLICOS que necesita el SDK de Facebook en el navegador (App ID y Configuration
-     * ID no son secretos; el App Secret jamás sale del servidor).
+     * Datos PÚBLICOS que necesita el SDK de Facebook en el navegador (App ID, Configuration
+     * ID y tipo de token no son secretos; el App Secret jamás sale del servidor). token_type
+     * gobierna los parámetros de FB.login y siempre vale 'user' o 'system' (default seguro).
      *
-     * @return array{app_id: string, config_id: string, version: string}
+     * @return array{app_id: string, config_id: string, version: string, token_type: string}
      */
     public function browserConfig(): array
     {
@@ -58,7 +59,14 @@ final class MetaConnectionService
             'app_id' => $this->appId(),
             'config_id' => $this->loginConfigId(),
             'version' => $this->graphVersion(),
+            'token_type' => $this->loginTokenType(),
         ];
+    }
+
+    /** Tipo de token de la configuración: 'user' o 'system' (cualquier otro valor → 'system'). */
+    public function loginTokenType(): string
+    {
+        return config('social.meta.login_token_type') === 'user' ? 'user' : 'system';
     }
 
     // ----------------------------------------------------------------- state anti-CSRF
@@ -86,19 +94,30 @@ final class MetaConnectionService
     // ----------------------------------------------------------------- descubrimiento
 
     /**
-     * Intercambia el authorization code por un user access token (server-side) y descubre
-     * las Páginas accesibles con su Instagram Professional asociado. NO persiste nada.
+     * Descubre las Páginas accesibles (con su Instagram Professional asociado) a partir de
+     * lo que devolvió Facebook Login for Business. NO persiste nada. Soporta los DOS tipos
+     * de configuración, inferidos por el propio resultado de FB.login (sin variable de tipo):
+     *
+     *  - User Access Token: el navegador entrega directamente el access token → se usa TAL
+     *    CUAL (no hay code que intercambiar).
+     *  - System User (BISU): el navegador entrega un authorization code → intercambio
+     *    server-side (App Secret nunca sale del backend).
+     *
+     * El access token nunca se registra, ni se incluye en excepciones, ni se devuelve a la UI.
      */
-    public function discoverAssets(string $code): MetaDiscoveryResult
+    public function discoverAssets(string $code = '', string $accessToken = ''): MetaDiscoveryResult
     {
         if (($fake = $this->fakeMode()) !== null) {
             return $this->fakeDiscovery($fake);
         }
-        if ($code === '') {
+
+        if ($accessToken !== '') {
+            $token = $accessToken;                 // User Access Token: uso directo
+        } elseif ($code !== '') {
+            $token = $this->exchangeCode($code);   // System User: intercambio server-side
+        } else {
             throw new RuntimeException(__('Faltan datos de la autorización de Meta. Vuelve a iniciar el proceso.'));
         }
-
-        $token = $this->exchangeCode($code);
 
         return $this->fetchPages($token);
     }

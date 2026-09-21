@@ -76,21 +76,31 @@
                                             this.state = await this.$wire.connectState();
                                             if (! this.state) { this.status = 'idle'; this.busy = false; return; }
                                             this.status = 'connecting';
+                                            // El tipo lo fija la plataforma (config), NO se adivina: Meta exige los
+                                            // parámetros correctos ANTES del diálogo (un System User con response_type
+                                            // incorrecto es causa conocida de fallo).
+                                            //   user   → FB.login(cb, { config_id })
+                                            //   system → FB.login(cb, { config_id, response_type:'code', override_default_response_type:true })
+                                            const opts = { config_id: this.cfg.config_id };
+                                            if (this.cfg.token_type === 'system') {
+                                                opts.response_type = 'code';
+                                                opts.override_default_response_type = true;
+                                            }
                                             FB.login((response) => {
-                                                const code = response?.authResponse?.code;
-                                                if (code) { this.finish(code); }
+                                                const auth = response?.authResponse;
+                                                const code = auth?.code;
+                                                const token = auth?.accessToken;
+                                                if (code) { this.finish(code, null); }
+                                                else if (token) { this.finish(null, token); }
                                                 else { this.status = 'idle'; this.busy = false; }
-                                            }, {
-                                                config_id: this.cfg.config_id,
-                                                response_type: 'code',
-                                                override_default_response_type: true,
-                                            });
+                                            }, opts);
                                         },
 
-                                        async finish(code) {
+                                        // El code/token se envía de inmediato al backend por HTTPS; jamás se guarda en
+                                        // this.*, localStorage/sessionStorage ni logs. El backend infiere el tipo.
+                                        async finish(code, token) {
                                             this.status = 'discovering';
-                                            // El code se envía de inmediato al backend; jamás se guarda ni se loguea.
-                                            await this.$wire.discover(this.state, code);
+                                            await this.$wire.discover(this.state, code || '', token || '');
                                             this.state = null; this.busy = false; this.status = 'idle';
                                         },
                                     };

@@ -82,10 +82,12 @@ class MetaConnect extends Component
     }
 
     /**
-     * Recibe el state + authorization code del navegador, valida el state (un solo uso,
-     * misma institución) e intercambia el código server-side para descubrir los activos.
+     * Recibe el state + lo que devolvió Facebook Login for Business, valida el state (un solo
+     * uso, misma institución) y descubre los activos. Soporta los dos tipos de configuración:
+     * un authorization code (System User → intercambio server-side) o un access token (User
+     * Access Token → uso directo). El token/código nunca se guarda en propiedades públicas.
      */
-    public function discover(string $state, string $code): void
+    public function discover(string $state, string $code = '', string $accessToken = ''): void
     {
         $this->authorize('create', SocialChannel::class);
         $this->errorMessage = '';
@@ -102,7 +104,7 @@ class MetaConnect extends Component
         }
 
         try {
-            $result = $service->discoverAssets($code);
+            $result = $service->discoverAssets($code, $accessToken);
         } catch (RuntimeException $e) {
             $this->errorMessage = $e->getMessage();
 
