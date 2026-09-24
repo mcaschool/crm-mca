@@ -10,9 +10,11 @@ use Livewire\Livewire;
 use Modules\Ai\Livewire\Advisor\Configure as AdvisorConfigure;
 use Modules\Ai\Livewire\Advisor\Form as AdvisorForm;
 use Modules\Ai\Livewire\Advisor\Index as AdvisorIndex;
+use Modules\Ai\Livewire\AiAlertBell;
 use Modules\Ai\Livewire\Knowledge\Index as KnowledgeIndex;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Policies\KnowledgeSourcePolicy;
+use Modules\Ai\Services\AiAlertDispatcher;
 use Modules\Ai\Services\AiChatClient;
 use Modules\Ai\Services\AiUsageRecorder;
 use Modules\Ai\Services\OpenAiCompatibleChatClient;
@@ -41,11 +43,12 @@ class AiServiceProvider extends ModuleServiceProvider
         parent::register();
 
         // El cliente que reciben los consumidores es el DECORADOR: envuelve al
-        // transporte real y añade telemetría (ai_usage_events) para toda la IA del CRM.
+        // transporte real y añade telemetría + alertas para toda la IA del CRM.
         $this->app->bind(AiChatClient::class, function ($app): RecordingAiChatClient {
             return new RecordingAiChatClient(
                 $app->make(OpenAiCompatibleChatClient::class),
                 $app->make(AiUsageRecorder::class),
+                $app->make(AiAlertDispatcher::class),
             );
         });
     }
@@ -63,6 +66,7 @@ class AiServiceProvider extends ModuleServiceProvider
         Livewire::component('ai.advisor.configure', AdvisorConfigure::class);
         Livewire::component('ai.advisor.index', AdvisorIndex::class);
         Livewire::component('ai.advisor.form', AdvisorForm::class);
+        Livewire::component('ai.ai-alert-bell', AiAlertBell::class);
     }
 
     /**

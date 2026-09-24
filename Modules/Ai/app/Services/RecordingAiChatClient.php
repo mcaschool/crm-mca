@@ -8,16 +8,17 @@ use Modules\Integrations\Models\Integration;
 use Throwable;
 
 /**
- * Decorador de AiChatClient que centraliza la TELEMETRÍA para TODOS los consumidores:
- * registra cada llamada (éxito o error) en ai_usage_events. El transporte real queda
- * puro (solo habla HTTP). Es el único punto por el que pasa toda la IA del CRM, así que
- * cualquier agente/proceso nuevo hereda la observabilidad sin código.
+ * Decorador de AiChatClient que centraliza OBSERVABILIDAD para TODOS los consumidores:
+ * registra telemetría (ai_usage_events) y dispara alertas normalizadas ante fallos.
+ * El transporte real queda puro (solo habla HTTP). Es el único punto por el que pasa
+ * toda la IA del CRM, así que cualquier agente/proceso nuevo hereda esto sin código.
  */
 final class RecordingAiChatClient implements AiChatClient
 {
     public function __construct(
         private readonly AiChatClient $inner,
         private readonly AiUsageRecorder $recorder,
+        private readonly AiAlertDispatcher $alerts,
     ) {}
 
     public function chat(Integration $integration, string $model, array $messages, array $params = [], ?AiExecutionContext $context = null): AiChatResponse
@@ -27,10 +28,11 @@ final class RecordingAiChatClient implements AiChatClient
         } catch (AiProviderException $e) {
             if ($context !== null) {
                 $this->recorder->failure($context, $e);
+                $this->alerts->failure($context, $e);
             }
             throw $e;
         } catch (Throwable $e) {
-            // Error no normalizado: telemetría sin categoría; se propaga.
+            // Error no normalizado: telemetría sin categoría; sin alerta (no clasificable).
             if ($context !== null) {
                 $this->recorder->failure($context, null);
             }
@@ -39,6 +41,8 @@ final class RecordingAiChatClient implements AiChatClient
 
         if ($context !== null) {
             $this->recorder->success($context, $res);
+            // Si esta combinación estaba en incidente, cierra y notifica "restablecido".
+            $this->alerts->recovery($context);
         }
 
         return $res;

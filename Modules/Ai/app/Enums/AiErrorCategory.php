@@ -51,4 +51,19 @@ enum AiErrorCategory: string
     {
         return in_array($this, [self::RateLimited, self::Timeout, self::ProviderUnavailable], true);
     }
+
+    /** Etiqueta administrativa legible (para la notificación al admin). */
+    public function label(): string
+    {
+        return match ($this) {
+            self::AuthenticationError => 'Error de autenticación',
+            self::QuotaExhausted => 'Cuota agotada',
+            self::RateLimited => 'Límite de solicitudes',
+            self::ModelUnavailable => 'Modelo no disponible',
+            self::Timeout => 'Tiempo de espera agotado',
+            self::ProviderUnavailable => 'Proveedor no disponible',
+            self::InvalidRequest => 'Solicitud inválida',
+            self::Unknown => 'Error desconocido',
+        };
+    }
 }

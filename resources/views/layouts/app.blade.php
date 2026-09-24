@@ -77,6 +77,9 @@
                     {{-- Aviso in-app de leads nuevos (sondeo ~10s): campana = toggle de sonido + pop-up. --}}
                     <livewire:crm.new-lead-notifier />
 
+                    {{-- Campana de alertas de IA (solo administradores): servicio caído/restablecido. --}}
+                    <livewire:ai.ai-alert-bell />
+
                     {{-- Selector de idioma (ES/EN): persiste en users.preferred_language, que SetLocale lee. --}}
                     <x-dropdown align="right" width="48">
                         <x-slot name="trigger">
