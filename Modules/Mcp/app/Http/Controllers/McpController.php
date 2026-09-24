@@ -48,19 +48,45 @@ final class McpController
 
         // Notificaciones (sin id): se aceptan sin cuerpo de respuesta.
         if (str_starts_with($method, 'notifications/')) {
+            $this->debugRequest($method, $client, null, 202);
+
             return response()->noContent(202);
         }
 
         /** @var array<int,string>|null $scopes scopes del token OAuth (null = Bearer estático) */
         $scopes = $request->attributes->get('mcp_oauth_scopes');
 
+        if ($method === 'tools/list') {
+            $tools = $this->tools->list($client);
+            $this->debugRequest($method, $client, count($tools), 200);
+
+            return $this->result($id, ['tools' => $tools]);
+        }
+
+        $this->debugRequest($method, $client, null, 200);
+
         return match ($method) {
             'initialize' => $this->result($id, $this->initialize($params)),
             'ping' => $this->result($id, (object) []),
-            'tools/list' => $this->result($id, ['tools' => $this->tools->list($client)]),
             'tools/call' => $this->toolsCall($client, $id, $params, $scopes),
             default => $this->error($id, -32601, 'Método no soportado: '.$method),
         };
+    }
+
+    /** Log diagnóstico TEMPORAL de la petición MCP: metadatos NO sensibles (sin tokens/args). */
+    private function debugRequest(string $method, ?McpClient $client, ?int $toolsCount, int $httpStatus): void
+    {
+        if (! config('mcp.debug_requests', false)) {
+            return;
+        }
+        Log::info('mcp.request', array_filter([
+            'method' => $method !== '' ? $method : '(sin método)',
+            'mcp_client_id' => $client?->id,
+            'profile' => $client?->effectiveProfile(),
+            'institution_id' => $client?->institution_id,
+            'tools_count' => $toolsCount,
+            'http' => $httpStatus,
+        ], fn ($v) => $v !== null));
     }
 
     /**

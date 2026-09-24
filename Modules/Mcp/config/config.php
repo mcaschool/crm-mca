@@ -25,6 +25,11 @@ return [
     // Directorios del repo donde crm_code_search / crm_code_read pueden entrar.
     'code_roots' => ['app', 'Modules', 'config', 'routes', 'database', 'resources', 'tests', 'lang', 'public'],
 
+    // Logging diagnóstico TEMPORAL de las peticiones MCP (initialize/notifications/tools).
+    // Registra metadatos NO sensibles (método, mcp_client_id, perfil, institución, nº de
+    // tools, http). NUNCA tokens, secretos, argumentos ni resultados. Apagar con env=false.
+    'debug_requests' => (bool) env('MCP_DEBUG_REQUESTS', false),
+
     /*
     |--------------------------------------------------------------------------
     | OAuth 2.1 para ChatGPT (Authorization Code + PKCE S256 + DCR)

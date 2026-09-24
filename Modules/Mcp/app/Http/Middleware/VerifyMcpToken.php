@@ -6,6 +6,7 @@ namespace Modules\Mcp\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Modules\Mcp\Models\McpClient;
 use Modules\Mcp\Services\OAuthService;
 use Symfony\Component\HttpFoundation\Response;
@@ -27,6 +28,8 @@ final class VerifyMcpToken
     {
         $token = (string) $request->bearerToken();
         if ($token === '') {
+            $this->debugAuthFail('no_token');
+
             return $this->unauthorized();
         }
 
@@ -40,6 +43,7 @@ final class VerifyMcpToken
             $this->touch($client);
             $request->attributes->set('mcp_client', $client);
             $request->attributes->set('mcp_oauth_scopes', null); // bearer: sin restricción por scope
+            $this->debugAuth('bearer', $client);
 
             return $next($request);
         }
@@ -52,13 +56,40 @@ final class VerifyMcpToken
                 $this->touch($oauthClient);
                 $request->attributes->set('mcp_client', $oauthClient);
                 $request->attributes->set('mcp_oauth_scopes', $access->scopes());
+                $this->debugAuth('oauth', $oauthClient);
 
                 return $next($request);
             }
         }
 
         // Token presente pero inválido/expirado/revocado.
+        $this->debugAuthFail('invalid_token');
+
         return $this->unauthorized('invalid_token', 'El token no es válido o ha expirado.');
+    }
+
+    /** Log diagnóstico TEMPORAL del resultado de autenticación (sin token ni secretos). */
+    private function debugAuth(string $kind, McpClient $client): void
+    {
+        if (! config('mcp.debug_requests', false)) {
+            return;
+        }
+        Log::info('mcp.request.auth', [
+            'result' => 'ok',
+            'auth' => $kind,
+            'mcp_client_id' => $client->id,
+            'profile' => $client->effectiveProfile(),
+            'institution_id' => $client->institution_id,
+            'allow_write' => (bool) $client->allow_write,
+        ]);
+    }
+
+    private function debugAuthFail(string $reason): void
+    {
+        if (! config('mcp.debug_requests', false)) {
+            return;
+        }
+        Log::info('mcp.request.auth', ['result' => 'unauthorized', 'reason' => $reason]);
     }
 
     private function touch(McpClient $client): void

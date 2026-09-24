@@ -25,20 +25,27 @@ final class ToolRegistry
     ) {}
 
     /**
-     * @return array<int, array{name: string, description: string, inputSchema: array<string, mixed>, annotations: array<string,bool>, securitySchemes: array<string,mixed>}>
+     * @return array<int, array{name: string, description: string, inputSchema: array<string, mixed>, annotations: array<string,bool>, securitySchemes: array<string,mixed>, _meta: array<string,mixed>}>
      */
     public function list(?McpClient $client = null): array
     {
         return array_values(array_map(
-            fn (array $tool): array => [
-                'name' => $tool['name'],
-                'description' => $tool['description'],
-                'inputSchema' => $tool['inputSchema'],
-                // Anotaciones MCP (readOnlyHint/destructiveHint) y política OAuth por tool,
-                // derivadas de la clasificación read/write de AccessProfile (fuente única).
-                'annotations' => AccessProfile::annotations($tool['name']),
-                'securitySchemes' => AccessProfile::securityScheme($tool['name']),
-            ],
+            function (array $tool): array {
+                $security = AccessProfile::securityScheme($tool['name']);
+
+                return [
+                    'name' => $tool['name'],
+                    'description' => $tool['description'],
+                    'inputSchema' => $tool['inputSchema'],
+                    // Anotaciones MCP (readOnlyHint/destructiveHint), derivadas de la
+                    // clasificación read/write de AccessProfile (fuente única).
+                    'annotations' => AccessProfile::annotations($tool['name']),
+                    // Política OAuth por tool: descriptor compatible con OpenAI Apps SDK, que
+                    // requiere securitySchemes en el nivel principal Y su espejo en _meta.
+                    'securitySchemes' => $security,
+                    '_meta' => ['securitySchemes' => $security],
+                ];
+            },
             // El perfil de la conexión filtra qué herramientas se anuncian.
             array_filter(
                 $this->definitions(),

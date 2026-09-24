@@ -313,6 +313,24 @@ it('el Bearer estático de Claude Code sigue autenticando y ve sus 20 tools con 
     expect($client->auth_kind)->toBe('bearer')->and($client->allow_write)->toBeTrue()->and($client->institution_id)->toBeNull();
 });
 
+it('tools/list expone el descriptor compatible con OpenAI Apps SDK (securitySchemes + espejo _meta idéntico)', function () {
+    [, $plain] = bearerClient('technical', true); // 20 tools (read + write)
+    $tools = collect(mcp($plain, ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list'])->assertOk()->json('result.tools'));
+
+    expect($tools)->toHaveCount(20);
+    foreach ($tools as $t) {
+        expect($t)->toHaveKeys(['name', 'description', 'inputSchema', 'annotations', 'securitySchemes', '_meta'])
+            ->and($t['inputSchema']['type'])->toBe('object')
+            ->and($t['securitySchemes']['type'])->toBe('oauth2')
+            // Espejo IDÉNTICO en _meta.securitySchemes (requisito del descriptor Apps SDK).
+            ->and($t['_meta']['securitySchemes'])->toBe($t['securitySchemes'])
+            ->and($t['annotations'])->toHaveKey('readOnlyHint');
+    }
+
+    expect($tools->firstWhere('name', 'crm_overview')['securitySchemes']['scopes'])->toBe(['mcp:read'])
+        ->and($tools->firstWhere('name', 'crm_record_create')['securitySchemes']['scopes'])->toBe(['mcp:write']);
+});
+
 it('el 401 sin token incluye resource_metadata en WWW-Authenticate', function () {
     $r = test()->postJson('/api/mcp', ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list'])->assertStatus(401);
     expect($r->headers->get('WWW-Authenticate'))->toContain('resource_metadata=', '/.well-known/oauth-protected-resource');
