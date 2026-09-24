@@ -14,7 +14,9 @@ use Modules\Ai\Livewire\Knowledge\Index as KnowledgeIndex;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Policies\KnowledgeSourcePolicy;
 use Modules\Ai\Services\AiChatClient;
+use Modules\Ai\Services\AiUsageRecorder;
 use Modules\Ai\Services\OpenAiCompatibleChatClient;
+use Modules\Ai\Services\RecordingAiChatClient;
 use Nwidart\Modules\Support\ModuleServiceProvider;
 
 class AiServiceProvider extends ModuleServiceProvider
@@ -38,7 +40,14 @@ class AiServiceProvider extends ModuleServiceProvider
     {
         parent::register();
 
-        $this->app->bind(AiChatClient::class, OpenAiCompatibleChatClient::class);
+        // El cliente que reciben los consumidores es el DECORADOR: envuelve al
+        // transporte real y añade telemetría (ai_usage_events) para toda la IA del CRM.
+        $this->app->bind(AiChatClient::class, function ($app): RecordingAiChatClient {
+            return new RecordingAiChatClient(
+                $app->make(OpenAiCompatibleChatClient::class),
+                $app->make(AiUsageRecorder::class),
+            );
+        });
     }
 
     /**

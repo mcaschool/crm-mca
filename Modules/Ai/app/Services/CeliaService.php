@@ -127,12 +127,24 @@ class CeliaService
             [['role' => 'user', 'content' => $message]],
         );
 
+        $integration = $resolved['integration'];
+        $context = new AiExecutionContext(
+            institutionId: (int) $conversation->institution_id,
+            process: 'conversation',
+            integrationId: (int) $integration->getKey(),
+            provider: (string) ($integration->provider ?? ''),
+            model: (string) $resolved['model'],
+            botId: (int) $conversation->bot_id,
+            agentId: null,
+        );
+
         try {
             $result = $this->ai->chat(
-                $resolved['integration'],
+                $integration,
                 $resolved['model'],
                 $chat,
-                array_merge($resolved['params'], ['json' => true, 'max_tokens' => 500]),
+                array_merge($resolved['params'], ['structured' => true, 'max_tokens' => 500]),
+                $context,
             );
         } catch (Throwable) {
             $reply = $this->trans('celia.ai_unavailable', $locale, ['catalog' => $this->catalogUrl($locale)]);
@@ -247,13 +259,16 @@ class CeliaService
     {
         $limit = (int) config('crm.celia.history_messages', 6);
 
+        // El mensaje del turno ACTUAL ya se registró en handle(); es el más reciente.
+        // Se descarta SIEMPRE (slice(1) sobre el orden descendente) para no duplicarlo,
+        // porque converse() lo vuelve a añadir explícitamente como el último 'user'.
         return $conversation->messages()
             ->whereIn('sender_type', ['user', 'celia'])
             ->orderByDesc('id')
-            ->limit($limit + 1) // +1 porque el mensaje actual ya se registro
+            ->offset(1)         // salta el mensaje más reciente (el turno actual, ya registrado)
+            ->limit($limit)
             ->get()
-            ->reverse()
-            ->slice(0, $limit)
+            ->reverse()         // orden cronológico para el modelo
             ->map(fn ($m) => [
                 'role' => $m->sender_type === 'celia' ? 'assistant' : 'user',
                 'content' => (string) $m->content,

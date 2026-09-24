@@ -242,3 +242,23 @@ it('una consulta general (sin disparador) deja el contacto como CONTACTO, sin le
         expect(Lead::query()->count())->toBe(0);
     });
 });
+
+it('NO duplica el mensaje actual del usuario en el prompt (history() + converse())', function () {
+    $bot = celiaBot();
+    $fake = bindFakeAi();
+    $session = celiaSession($bot);
+    $h = celiaHeaders($bot);
+
+    $this->withHeaders($h)->postJson('/api/v1/widget/celia/start', ['session_id' => $session])->assertOk();
+    $this->withHeaders($h)->postJson('/api/v1/widget/celia', ['session_id' => $session, 'message' => 'primera'])->assertOk();
+    $this->withHeaders($h)->postJson('/api/v1/widget/celia', ['session_id' => $session, 'message' => 'segunda pregunta'])->assertOk();
+
+    // Última llamada al modelo: 'segunda pregunta' debe ir UNA sola vez y como último mensaje.
+    $last = end($fake->calls);
+    $messages = $last['messages'];
+    $lastMsg = end($messages);
+
+    expect(collect($messages)->where('role', 'user')->pluck('content')->filter(fn ($c) => $c === 'segunda pregunta')->count())->toBe(1)
+        ->and($lastMsg['role'])->toBe('user')
+        ->and($lastMsg['content'])->toBe('segunda pregunta');
+});
