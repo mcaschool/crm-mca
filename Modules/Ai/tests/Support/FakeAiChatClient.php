@@ -6,6 +6,7 @@ namespace Modules\Ai\Tests\Support;
 
 use Modules\Ai\Services\AiChatClient;
 use Modules\Ai\Services\AiChatResponse;
+use Modules\Ai\Services\AiExecutionContext;
 use Modules\Integrations\Models\Integration;
 use RuntimeException;
 
@@ -16,7 +17,7 @@ use RuntimeException;
  */
 class FakeAiChatClient implements AiChatClient
 {
-    /** @var array<int, array{integration: Integration, model: string, messages: array<int,array{role:string,content:string}>, params: array<string,mixed>}> */
+    /** @var array<int, array{integration: Integration, model: string, messages: array<int,array{role:string,content:string}>, params: array<string,mixed>, context: AiExecutionContext|null}> */
     public array $calls = [];
 
     private string $content;
@@ -48,9 +49,9 @@ class FakeAiChatClient implements AiChatClient
         return $this;
     }
 
-    public function chat(Integration $integration, string $model, array $messages, array $params = []): AiChatResponse
+    public function chat(Integration $integration, string $model, array $messages, array $params = [], ?AiExecutionContext $context = null): AiChatResponse
     {
-        $this->calls[] = compact('integration', 'model', 'messages', 'params');
+        $this->calls[] = compact('integration', 'model', 'messages', 'params', 'context');
 
         if ($this->throw) {
             throw new RuntimeException('Fallo simulado del proveedor.');

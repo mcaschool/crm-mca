@@ -8,6 +8,8 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Modules\Ai\Services\ModelCatalog;
+use Modules\Ai\Services\ModelProfile;
 use Modules\Institutions\Models\Bot;
 use Modules\Integrations\Models\AiProcessConfig;
 use Modules\Integrations\Models\Integration;
@@ -25,7 +27,7 @@ class Manage extends Component
 {
     public ?int $botId = null;
 
-    /** @var array<string, array{integration_id: ?int, model: string}> */
+    /** @var array<string, array{integration_id: ?int, model: string, thinking?: bool, temperature?: string, max_tokens?: string, timeout?: string}> */
     public array $rows = [];
 
     public function mount(): void
@@ -52,11 +54,35 @@ class Manage extends Component
 
         foreach ($this->processes() as $process) {
             $config = $existing->get($process);
+            $params = $config instanceof AiProcessConfig && is_array($config->params) ? $config->params : [];
             $this->rows[$process] = [
                 'integration_id' => $config instanceof AiProcessConfig ? $config->integration_id : null,
                 'model' => $config instanceof AiProcessConfig ? (string) $config->model : '',
+                'thinking' => (bool) ($params['thinking'] ?? false),
+                'temperature' => isset($params['temperature']) ? (string) $params['temperature'] : '',
+                'max_tokens' => isset($params['max_tokens']) ? (string) $params['max_tokens'] : '',
+                'timeout' => isset($params['timeout']) ? (string) $params['timeout'] : '',
             ];
         }
+    }
+
+    /**
+     * Capacidades RESUELTAS de la fila (proveedor de la integración + modelo escrito),
+     * para que la vista muestre solo lo compatible. null si la fila está incompleta.
+     */
+    public function profileFor(string $process): ?ModelProfile
+    {
+        $row = $this->rows[$process] ?? null;
+        if ($row === null || empty($row['integration_id']) || trim((string) $row['model']) === '') {
+            return null;
+        }
+
+        $integration = Integration::query()->find($row['integration_id']);
+        if ($integration === null) {
+            return null;
+        }
+
+        return app(ModelCatalog::class)->profile((string) ($integration->provider ?? ''), trim((string) $row['model']));
     }
 
     public function save(): void
@@ -68,7 +94,9 @@ class Manage extends Component
         // El bot debe ser de esta institucion (scope global lo garantiza).
         $bot = Bot::query()->findOrFail($this->botId);
 
-        $aiIntegrationIds = Integration::query()->where('type', 'ai_provider')->pluck('id')->all();
+        $aiIntegrations = Integration::query()->where('type', 'ai_provider')->get()->keyBy('id');
+        $aiIntegrationIds = $aiIntegrations->keys()->all();
+        $catalog = app(ModelCatalog::class);
 
         foreach ($this->processes() as $process) {
             $row = $this->rows[$process] ?? ['integration_id' => null, 'model' => ''];
@@ -83,9 +111,32 @@ class Manage extends Component
                 "rows.{$process}.model" => ['required', 'string', 'max:100'],
             ]);
 
+            $model = trim((string) $row['model']);
+            $integration = $aiIntegrations->get((int) $row['integration_id']);
+            $profile = $catalog->profile((string) ($integration->provider ?? ''), $model);
+
+            // Overrides GATEADOS por capacidad: nunca se guarda algo que el modelo no soporta.
+            $params = [];
+            if ($profile->supportsThinking() && ! empty($row['thinking'])) {
+                $params['thinking'] = true;
+            }
+            if (is_numeric($row['temperature'] ?? null)) {
+                $params['temperature'] = (float) $row['temperature'];
+            }
+            if (is_numeric($row['max_tokens'] ?? null)) {
+                $mt = (int) $row['max_tokens'];
+                if ($profile->maxOutput() !== null) {
+                    $mt = min($mt, $profile->maxOutput());
+                }
+                $params['max_tokens'] = $mt;
+            }
+            if (is_numeric($row['timeout'] ?? null)) {
+                $params['timeout'] = (int) $row['timeout'];
+            }
+
             AiProcessConfig::query()->updateOrCreate(
                 ['bot_id' => $bot->getKey(), 'process' => $process],
-                ['integration_id' => (int) $row['integration_id'], 'model' => trim((string) $row['model']), 'status' => 'active'],
+                ['integration_id' => (int) $row['integration_id'], 'model' => $model, 'params' => $params === [] ? null : $params, 'status' => 'active'],
             );
         }
 
@@ -100,10 +151,20 @@ class Manage extends Component
 
     public function render(): View
     {
+        $catalog = app(ModelCatalog::class);
+        $aiIntegrations = Integration::query()->where('type', 'ai_provider')->get();
+
+        // Modelos conocidos por proveedor (para datalist de sugerencias en el panel).
+        $modelsByProvider = [];
+        foreach ($aiIntegrations->pluck('provider')->filter()->unique() as $prov) {
+            $modelsByProvider[(string) $prov] = $catalog->modelsFor((string) $prov);
+        }
+
         return view('integrations::livewire.ai-processes.manage', [
             'bots' => Bot::query()->orderBy('name')->get(),
             'processes' => $this->processes(),
-            'aiIntegrations' => Integration::query()->where('type', 'ai_provider')->get(),
+            'aiIntegrations' => $aiIntegrations,
+            'modelsByProvider' => $modelsByProvider,
         ]);
     }
 }

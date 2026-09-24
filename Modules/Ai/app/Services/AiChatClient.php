@@ -15,7 +15,8 @@ interface AiChatClient
 {
     /**
      * @param  array<int, array{role: string, content: string}>  $messages
-     * @param  array<string, mixed>  $params  temperatura, max_tokens, json...
+     * @param  array<string, mixed>  $params  intención conceptual: temperature, max_tokens, structured, thinking, timeout...
+     * @param  AiExecutionContext|null  $context  QUIÉN ejecuta (para métricas/alertas/auditoría); nunca metadata en params.
      */
-    public function chat(Integration $integration, string $model, array $messages, array $params = []): AiChatResponse;
+    public function chat(Integration $integration, string $model, array $messages, array $params = [], ?AiExecutionContext $context = null): AiChatResponse;
 }

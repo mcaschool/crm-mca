@@ -33,7 +33,7 @@ it('POSTea a <base>/chat/completions con Bearer y enable_thinking=false para Qwe
     $base = 'https://ws-e5k52dsi23yw71v9.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1';
     $integration = aiIntegration('qwen', $base);
 
-    $client = new OpenAiCompatibleChatClient;
+    $client = app(OpenAiCompatibleChatClient::class);
     $res = $client->chat($integration, 'qwen3.7-plus', [['role' => 'user', 'content' => 'hola']], ['json' => true]);
 
     expect($res->content)->toBe('{"reply":"ok","action":"answer"}');
@@ -55,7 +55,7 @@ it('tolera una Base URL con barra final o con /chat/completions pegado', functio
     $base = 'https://ws-e5k52dsi23yw71v9.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1';
     $integration = aiIntegration('qwen', $base.'/chat/completions/');
 
-    (new OpenAiCompatibleChatClient)->chat($integration, 'qwen3.7-plus', [['role' => 'user', 'content' => 'hi']]);
+    app(OpenAiCompatibleChatClient::class)->chat($integration, 'qwen3.7-plus', [['role' => 'user', 'content' => 'hi']]);
 
     Http::assertSent(fn ($request) => $request->url() === $base.'/chat/completions');
 });
@@ -65,7 +65,7 @@ it('NO envia enable_thinking para proveedores que no son Qwen (p. ej. openai)', 
 
     $integration = aiIntegration('openai', 'https://api.openai.com/v1');
 
-    (new OpenAiCompatibleChatClient)->chat($integration, 'gpt-5-mini', [['role' => 'user', 'content' => 'hi']]);
+    app(OpenAiCompatibleChatClient::class)->chat($integration, 'gpt-5-mini', [['role' => 'user', 'content' => 'hi']]);
 
     Http::assertSent(fn ($request) => ! array_key_exists('enable_thinking', $request->data()));
 });
