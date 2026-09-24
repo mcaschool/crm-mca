@@ -7,14 +7,19 @@ namespace Modules\Mcp\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Modules\Mcp\Models\McpClient;
+use Modules\Mcp\Services\OAuthService;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Autenticación del servidor MCP: Bearer token emitido con `mcp:client`.
- * El token viaja SOLO en el header Authorization (nunca en la URL) y se
- * compara por su SHA-256 contra mcp_clients (revocable/rotable al instante:
- * is_active=false o rotate invalidan el acceso). Sin token válido → 401 y el
- * endpoint no revela nada más.
+ * Autenticación del servidor MCP en DOS ramas:
+ *  1) Bearer estático `mcp_...` (Claude Code): SHA-256 contra mcp_clients — SIN CAMBIOS.
+ *  2) Si no coincide, access token OAuth `mcpoauth_...` (ChatGPT): validado por
+ *     OAuthService (hash, activo, expiración, resource) y resuelto al mcp_client enlazado.
+ *
+ * El permiso operativo lo impone SIEMPRE el estado de mcp_client (profile/allow_write/
+ * institution); el scope del token es una barrera adicional (se propaga a la request).
+ * Sin token válido → 401 con WWW-Authenticate + resource_metadata (para que el cliente
+ * inicie/renueve la autorización).
  */
 final class VerifyMcpToken
 {
@@ -25,30 +30,60 @@ final class VerifyMcpToken
             return $this->unauthorized();
         }
 
+        // Rama 1: Bearer estático de siempre (Claude Code). Intacta.
         $client = McpClient::query()
             ->where('token_hash', hash('sha256', $token))
             ->where('is_active', true)
             ->first();
-        if ($client === null) {
-            return $this->unauthorized();
+
+        if ($client !== null) {
+            $this->touch($client);
+            $request->attributes->set('mcp_client', $client);
+            $request->attributes->set('mcp_oauth_scopes', null); // bearer: sin restricción por scope
+
+            return $next($request);
         }
 
-        // last_used_at con trote de 60s para no escribir en cada llamada.
+        // Rama 2: access token OAuth (ChatGPT).
+        $access = app(OAuthService::class)->validateAccessToken($token);
+        if ($access !== null) {
+            $oauthClient = $access->mcpClient()->where('is_active', true)->first();
+            if ($oauthClient !== null) {
+                $this->touch($oauthClient);
+                $request->attributes->set('mcp_client', $oauthClient);
+                $request->attributes->set('mcp_oauth_scopes', $access->scopes());
+
+                return $next($request);
+            }
+        }
+
+        // Token presente pero inválido/expirado/revocado.
+        return $this->unauthorized('invalid_token', 'El token no es válido o ha expirado.');
+    }
+
+    private function touch(McpClient $client): void
+    {
         if ($client->last_used_at === null || $client->last_used_at->lt(now()->subMinute())) {
             $client->forceFill(['last_used_at' => now()])->save();
         }
-
-        $request->attributes->set('mcp_client', $client);
-
-        return $next($request);
     }
 
-    private function unauthorized(): Response
+    private function unauthorized(?string $error = null, string $description = ''): Response
     {
+        $prm = app(OAuthService::class)->issuer().'/.well-known/oauth-protected-resource';
+        $challenge = 'Bearer realm="mca-crm-mcp"';
+        if ($error !== null) {
+            $challenge .= ', error="'.$error.'"';
+            if ($description !== '') {
+                $challenge .= ', error_description="'.addslashes($description).'"';
+            }
+        }
+        $challenge .= ', resource_metadata="'.$prm.'"';
+
         return response()->json([
             'jsonrpc' => '2.0',
             'id' => null,
             'error' => ['code' => -32001, 'message' => 'No autorizado.'],
-        ], 401, ['WWW-Authenticate' => 'Bearer realm="mca-crm-mcp"']);
+        ], 401, ['WWW-Authenticate' => $challenge]);
     }
 }

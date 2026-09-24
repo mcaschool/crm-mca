@@ -31,6 +31,45 @@ final class AccessProfile
         'crm_record_create', 'crm_record_update', 'crm_record_delete', 'crm_execute',
     ];
 
+    /** Herramientas DESTRUCTIVAS (para destructiveHint). Subconjunto de WRITE_TOOLS. */
+    public const DESTRUCTIVE_TOOLS = ['crm_record_delete', 'crm_execute'];
+
+    public const SCOPE_READ = 'mcp:read';
+
+    public const SCOPE_WRITE = 'mcp:write';
+
+    /** Scope OAuth REQUERIDO por la herramienta (derivado de la MISMA clasificación). */
+    public static function requiredScope(string $tool): string
+    {
+        return in_array($tool, self::WRITE_TOOLS, true) ? self::SCOPE_WRITE : self::SCOPE_READ;
+    }
+
+    /**
+     * securityScheme OAuth de la herramienta (para tools/list). Un único scope por tool,
+     * derivado de READ_TOOLS/WRITE_TOOLS (sin reglas dispersas por las 20 tools).
+     *
+     * @return array<string,mixed>
+     */
+    public static function securityScheme(string $tool): array
+    {
+        return ['type' => 'oauth2', 'scopes' => [self::requiredScope($tool)]];
+    }
+
+    /**
+     * Anotaciones MCP de la herramienta, derivadas de la clasificación read/write.
+     *
+     * @return array<string,bool>
+     */
+    public static function annotations(string $tool): array
+    {
+        $isWrite = in_array($tool, self::WRITE_TOOLS, true);
+
+        return [
+            'readOnlyHint' => ! $isWrite,
+            'destructiveHint' => in_array($tool, self::DESTRUCTIVE_TOOLS, true),
+        ];
+    }
+
     /** ¿La conexión puede usar esta herramienta? (perfil + allow_write). */
     public static function allows(McpClient $client, string $tool): bool
     {

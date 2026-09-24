@@ -25,7 +25,7 @@ final class ToolRegistry
     ) {}
 
     /**
-     * @return array<int, array{name: string, description: string, inputSchema: array<string, mixed>}>
+     * @return array<int, array{name: string, description: string, inputSchema: array<string, mixed>, annotations: array<string,bool>, securitySchemes: array<string,mixed>}>
      */
     public function list(?McpClient $client = null): array
     {
@@ -34,6 +34,10 @@ final class ToolRegistry
                 'name' => $tool['name'],
                 'description' => $tool['description'],
                 'inputSchema' => $tool['inputSchema'],
+                // Anotaciones MCP (readOnlyHint/destructiveHint) y política OAuth por tool,
+                // derivadas de la clasificación read/write de AccessProfile (fuente única).
+                'annotations' => AccessProfile::annotations($tool['name']),
+                'securitySchemes' => AccessProfile::securityScheme($tool['name']),
             ],
             // El perfil de la conexión filtra qué herramientas se anuncian.
             array_filter(
@@ -51,9 +55,17 @@ final class ToolRegistry
     {
         foreach ($this->definitions() as $tool) {
             if ($tool['name'] === $name) {
-                // Barrera de BACKEND: el perfil impide ejecutar, no solo listar.
+                // Barrera de BACKEND: el perfil (estado del mcp_client) impide ejecutar,
+                // no solo listar. Es la autorización operativa REAL.
                 if (! AccessProfile::allows($context->client, $name)) {
                     throw new McpToolException(AccessProfile::denialMessage($context->client, $name));
+                }
+
+                // Barrera ADICIONAL de scope para conexiones OAuth: aunque el mcp_client
+                // permita la acción, el token debe traer el scope requerido. Para el Bearer
+                // de Claude Code (scopes null) no aplica.
+                if ($context->scopes !== null && ! in_array(AccessProfile::requiredScope($name), $context->scopes, true)) {
+                    throw McpToolException::insufficientScope($name, AccessProfile::requiredScope($name));
                 }
 
                 /** @var array<string, mixed> */

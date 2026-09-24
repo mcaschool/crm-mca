@@ -17,9 +17,13 @@ use Modules\Mcp\Models\McpClient;
  */
 final class McpContext
 {
+    /**
+     * @param  array<int,string>|null  $scopes  scopes del token OAuth (null = Bearer estático, sin restricción por scope)
+     */
     public function __construct(
         public readonly McpClient $client,
         public readonly string $correlationId,
+        public readonly ?array $scopes = null,
     ) {}
 
     /**

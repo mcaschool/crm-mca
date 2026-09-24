@@ -51,11 +51,14 @@ final class McpController
             return response()->noContent(202);
         }
 
+        /** @var array<int,string>|null $scopes scopes del token OAuth (null = Bearer estático) */
+        $scopes = $request->attributes->get('mcp_oauth_scopes');
+
         return match ($method) {
             'initialize' => $this->result($id, $this->initialize($params)),
             'ping' => $this->result($id, (object) []),
             'tools/list' => $this->result($id, ['tools' => $this->tools->list($client)]),
-            'tools/call' => $this->toolsCall($client, $id, $params),
+            'tools/call' => $this->toolsCall($client, $id, $params, $scopes),
             default => $this->error($id, -32601, 'Método no soportado: '.$method),
         };
     }
@@ -81,12 +84,13 @@ final class McpController
 
     /**
      * @param  array<string, mixed>  $params
+     * @param  array<int,string>|null  $scopes
      */
-    private function toolsCall(McpClient $client, mixed $id, array $params): Response
+    private function toolsCall(McpClient $client, mixed $id, array $params, ?array $scopes = null): Response
     {
         $name = (string) ($params['name'] ?? '');
         $arguments = is_array($params['arguments'] ?? null) ? $params['arguments'] : [];
-        $context = new McpContext($client, (string) Str::uuid());
+        $context = new McpContext($client, (string) Str::uuid(), $scopes);
         $started = microtime(true);
 
         try {
@@ -104,10 +108,17 @@ final class McpController
         } catch (McpToolException $e) {
             $this->audit($client, $context, $name, $arguments, 'error', $e->getMessage(), $started);
 
+            $meta = ['correlationId' => $context->correlationId];
+            // Challenge OAuth a nivel de tool (p. ej. scope insuficiente): ChatGPT sabe que
+            // debe (re)autorizar. Solo aplica a conexiones OAuth.
+            if ($e->challenge !== null && $context->scopes !== null) {
+                $meta['mcp/www_authenticate'] = $e->challenge;
+            }
+
             return $this->result($id, [
                 'content' => [['type' => 'text', 'text' => 'Error: '.$e->getMessage()]],
                 'isError' => true,
-                '_meta' => ['correlationId' => $context->correlationId],
+                '_meta' => $meta,
             ]);
         } catch (Throwable $e) {
             // Error interno: al asistente solo llega un mensaje genérico + correlation id;
