@@ -303,8 +303,8 @@ it('el Bearer estático de Claude Code sigue autenticando y ve sus 20 tools con 
     $tools = collect($list->json('result.tools'));
 
     expect($tools)->toHaveCount(20)
-        ->and($tools->firstWhere('name', 'crm_overview')['securitySchemes'])->toBe(['type' => 'oauth2', 'scopes' => ['mcp:read']])
-        ->and($tools->firstWhere('name', 'crm_record_create')['securitySchemes'])->toBe(['type' => 'oauth2', 'scopes' => ['mcp:write']])
+        ->and($tools->firstWhere('name', 'crm_overview')['securitySchemes'])->toBe([['type' => 'oauth2', 'scopes' => ['mcp:read']]])
+        ->and($tools->firstWhere('name', 'crm_record_create')['securitySchemes'])->toBe([['type' => 'oauth2', 'scopes' => ['mcp:write']]])
         ->and($tools->firstWhere('name', 'crm_overview')['annotations']['readOnlyHint'])->toBeTrue()
         ->and($tools->firstWhere('name', 'crm_record_delete')['annotations']['destructiveHint'])->toBeTrue();
 
@@ -321,14 +321,17 @@ it('tools/list expone el descriptor compatible con OpenAI Apps SDK (securitySche
     foreach ($tools as $t) {
         expect($t)->toHaveKeys(['name', 'description', 'inputSchema', 'annotations', 'securitySchemes', '_meta'])
             ->and($t['inputSchema']['type'])->toBe('object')
-            ->and($t['securitySchemes']['type'])->toBe('oauth2')
-            // Espejo IDÉNTICO en _meta.securitySchemes (requisito del descriptor Apps SDK).
+            // OpenAI Apps SDK exige que securitySchemes sea una LISTA de esquemas
+            // (tagged-union), no un objeto: nuestras tools llevan exactamente un esquema OAuth.
+            ->and($t['securitySchemes'])->toBeArray()->toBeList()->toHaveCount(1)
+            ->and($t['securitySchemes'][0]['type'])->toBe('oauth2')
+            // Espejo IDÉNTICO en _meta.securitySchemes (misma lista, requisito del descriptor).
             ->and($t['_meta']['securitySchemes'])->toBe($t['securitySchemes'])
             ->and($t['annotations'])->toHaveKey('readOnlyHint');
     }
 
-    expect($tools->firstWhere('name', 'crm_overview')['securitySchemes']['scopes'])->toBe(['mcp:read'])
-        ->and($tools->firstWhere('name', 'crm_record_create')['securitySchemes']['scopes'])->toBe(['mcp:write']);
+    expect($tools->firstWhere('name', 'crm_overview')['securitySchemes'][0]['scopes'])->toBe(['mcp:read'])
+        ->and($tools->firstWhere('name', 'crm_record_create')['securitySchemes'][0]['scopes'])->toBe(['mcp:write']);
 });
 
 it('el 401 sin token incluye resource_metadata en WWW-Authenticate', function () {

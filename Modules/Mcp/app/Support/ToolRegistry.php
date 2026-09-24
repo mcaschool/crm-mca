@@ -25,7 +25,7 @@ final class ToolRegistry
     ) {}
 
     /**
-     * @return array<int, array{name: string, description: string, inputSchema: array<string, mixed>, annotations: array<string,bool>, securitySchemes: array<string,mixed>, _meta: array<string,mixed>}>
+     * @return array<int, array{name: string, description: string, inputSchema: array<string, mixed>, annotations: array<string,bool>, securitySchemes: array<int,array<string,mixed>>, _meta: array<string,mixed>}>
      */
     public function list(?McpClient $client = null): array
     {

@@ -45,14 +45,18 @@ final class AccessProfile
     }
 
     /**
-     * securityScheme OAuth de la herramienta (para tools/list). Un único scope por tool,
-     * derivado de READ_TOOLS/WRITE_TOOLS (sin reglas dispersas por las 20 tools).
+     * securitySchemes OAuth de la herramienta (para tools/list). OpenAI Apps SDK exige
+     * una LISTA de esquemas (tagged-union), no un único objeto; aquí es una lista con un
+     * único esquema OAuth cuyo scope deriva de READ_TOOLS/WRITE_TOOLS (fuente única).
      *
-     * @return array<string,mixed>
+     * @return array<int,array<string,mixed>>
      */
     public static function securityScheme(string $tool): array
     {
-        return ['type' => 'oauth2', 'scopes' => [self::requiredScope($tool)]];
+        return [[
+            'type' => 'oauth2',
+            'scopes' => [self::requiredScope($tool)],
+        ]];
     }
 
     /**

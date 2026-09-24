@@ -48,6 +48,7 @@ it('INSPECTION: tools/list oculta las herramientas de escritura', function () {
 
     $names = collect(mcpRpc($token, 'tools/list')->json('result.tools'))->pluck('name');
 
+    expect($names)->toHaveCount(16); // inspection: solo las 16 de lectura
     expect($names)->toContain('crm_query', 'crm_overview', 'crm_code_read'); // lectura sí
     expect($names)->not->toContain('crm_record_create', 'crm_record_update', 'crm_record_delete', 'crm_execute');
 });
