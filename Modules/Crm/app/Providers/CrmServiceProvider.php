@@ -74,6 +74,12 @@ class CrmServiceProvider extends ModuleServiceProvider
         RateLimiter::for('incompany', fn (Request $request) => Limit::perMinute(
             (int) config('crm.incompany.rate_per_min', 20)
         )->by($request->ip()));
+
+        // Rate limit del endpoint público GENERAL de captación de leads: por IP.
+        // El exceso responde 429 (throttle:lead-intake en la ruta).
+        RateLimiter::for('lead-intake', fn (Request $request) => Limit::perMinute(
+            (int) config('crm.lead_intake.rate_per_min', 60)
+        )->by($request->ip()));
     }
 
     /**

@@ -162,6 +162,17 @@ return [
         'rate_per_min' => (int) env('CRM_INCOMPANY_RATE_PER_MIN', 20),
     ],
 
+    // Endpoint público GENERAL de captación de leads (n8n → CRM, /api/v1/leads/intake).
+    'lead_intake' => [
+        // Rate limit por IP (anti-inundación de leads falsos). El exceso responde 429.
+        'rate_per_min' => (int) env('CRM_LEAD_INTAKE_RATE_PER_MIN', 60),
+        // Tamaño máximo del cuerpo de la solicitud (bytes). Cuerpos mayores → 413.
+        'max_payload_bytes' => (int) env('CRM_LEAD_INTAKE_MAX_BYTES', 16384), // 16 KB
+        // Ventana de idempotencia (minutos): reintentos de n8n con el mismo request_id
+        // dentro de esta ventana devuelven el mismo lead sin duplicar (action=duplicate).
+        'idempotency_minutes' => (int) env('CRM_LEAD_INTAKE_IDEMPOTENCY_MINUTES', 1440), // 24 h
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Procesos de IA (capa agnostica) — se configuran por institucion/bot

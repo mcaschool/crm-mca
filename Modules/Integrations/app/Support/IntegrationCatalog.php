@@ -60,6 +60,10 @@ final class IntegrationCatalog
                     // Token Bearer que autentica el endpoint ENTRANTE de leads InCompany
                     // (n8n → CRM). Se guarda cifrado y enmascarado; se rota reemplazándolo.
                     ['key' => 'incompany_inbound_token', 'label' => 'Token entrante InCompany (Bearer)', 'secret' => true, 'required' => false, 'type' => 'password'],
+                    // Token Bearer que autentica el endpoint GENERAL de captación de leads
+                    // (n8n → CRM, POST /api/v1/leads/intake). Independiente del de InCompany;
+                    // se guarda cifrado y enmascarado, y se rota reemplazándolo.
+                    ['key' => 'lead_intake_token', 'label' => 'Token entrante de leads (Bearer)', 'secret' => true, 'required' => false, 'type' => 'password'],
                 ],
             ],
             'google' => [
