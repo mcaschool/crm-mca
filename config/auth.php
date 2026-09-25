@@ -116,4 +116,30 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Política de doble factor (2FA)
+    |--------------------------------------------------------------------------
+    |
+    | El 2FA es OBLIGATORIO para todos los usuarios del panel. `exempt_emails`
+    | es una excepción TEMPORAL y estrictamente acotada: los correos listados
+    | (separados por comas en TWO_FACTOR_EXEMPT_EMAILS) pueden entrar al panel
+    | sin configurar el segundo factor. Vacío o ausente = NADIE exento, es decir
+    | el comportamiento por defecto: 2FA obligatorio para todos. Los correos se
+    | normalizan (trim + minúsculas) para una comparación insensible a mayúsculas
+    | y espacios. Uso previsto: acceso del revisor de Meta durante la revisión de
+    | la app; retirar el correo y regenerar la caché de config al terminar.
+    |
+    */
+
+    'two_factor' => [
+        'exempt_emails' => array_values(array_filter(
+            array_map(
+                static fn (string $email): string => mb_strtolower(trim($email)),
+                explode(',', (string) env('TWO_FACTOR_EXEMPT_EMAILS', ''))
+            ),
+            static fn (string $email): bool => $email !== ''
+        )),
+    ],
+
 ];

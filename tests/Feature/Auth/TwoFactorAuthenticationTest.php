@@ -128,6 +128,79 @@ it('la politica obligatoria empuja a "Mi perfil" a quien no tiene 2FA', function
     test()->actingAs($user)->get('/mi-perfil')->assertOk();
 });
 
+// --- Excepción temporal y acotada (revisor de Meta) ---------------------------
+
+/** Usuario SIN 2FA confirmado (candidato a la política obligatoria). */
+function userSinDobleFactor(string $email): User
+{
+    return twoFactorUser([
+        'email' => $email,
+        'two_factor_secret' => null,
+        'two_factor_recovery_codes' => null,
+        'two_factor_confirmed_at' => null,
+    ])->refresh();
+}
+
+it('CASO 1: un usuario normal sin 2FA sigue siendo redirigido a "Mi perfil"', function () {
+    config()->set('auth.two_factor.exempt_emails', ['meta.reviewer@mcaschool.education']);
+    $user = userSinDobleFactor('normal@example.com');
+
+    test()->actingAs($user)->get('/dashboard')->assertRedirect(route('profile.me'));
+});
+
+it('CASO 2: el correo exento accede a una ruta protegida sin configurar 2FA', function () {
+    config()->set('auth.two_factor.exempt_emails', ['meta.reviewer@mcaschool.education']);
+    $user = userSinDobleFactor('meta.reviewer@mcaschool.education');
+
+    expect($user->hasTwoFactorEnabled())->toBeFalse();
+    test()->actingAs($user)->get('/dashboard')->assertOk();
+});
+
+it('CASO 3: un usuario distinto NO queda exento', function () {
+    config()->set('auth.two_factor.exempt_emails', ['meta.reviewer@mcaschool.education']);
+    $user = userSinDobleFactor('otro@mcaschool.education');
+
+    test()->actingAs($user)->get('/dashboard')->assertRedirect(route('profile.me'));
+});
+
+it('CASO 4: una lista vacía no exime a nadie (política por defecto)', function () {
+    config()->set('auth.two_factor.exempt_emails', []);
+    $user = userSinDobleFactor('meta.reviewer@mcaschool.education');
+
+    test()->actingAs($user)->get('/dashboard')->assertRedirect(route('profile.me'));
+});
+
+it('CASO 5a: la comparación ignora mayúsculas/minúsculas y espacios en el correo del usuario', function () {
+    config()->set('auth.two_factor.exempt_emails', ['meta.reviewer@mcaschool.education']);
+    // El usuario llega con distinta capitalización: el middleware normaliza y hace match.
+    $user = userSinDobleFactor('Meta.Reviewer@MCASchool.Education');
+
+    test()->actingAs($user)->get('/dashboard')->assertOk();
+});
+
+it('CASO 5b: la config normaliza la lista (trim + minúsculas) al parsear el env', function () {
+    putenv('TWO_FACTOR_EXEMPT_EMAILS=  Meta.Reviewer@MCASchool.Education , Otro@Example.com ');
+    $_ENV['TWO_FACTOR_EXEMPT_EMAILS'] = getenv('TWO_FACTOR_EXEMPT_EMAILS');
+
+    $cfg = require base_path('config/auth.php');
+
+    expect($cfg['two_factor']['exempt_emails'])
+        ->toBe(['meta.reviewer@mcaschool.education', 'otro@example.com']);
+
+    putenv('TWO_FACTOR_EXEMPT_EMAILS');
+    unset($_ENV['TWO_FACTOR_EXEMPT_EMAILS']);
+});
+
+it('CASO 6: un usuario con 2FA activado conserva el flujo normal de desafío (la excepción no aplica)', function () {
+    // Aunque el correo estuviera en la lista, tener 2FA activo manda: va al desafío.
+    config()->set('auth.two_factor.exempt_emails', ['meta.reviewer@mcaschool.education']);
+    twoFactorUser(['email' => 'meta.reviewer@mcaschool.education', 'two_factor_secret' => 'JBSWY3DPEHPK3PXP']);
+
+    test()->post('/login', ['email' => 'meta.reviewer@mcaschool.education', 'password' => 'password'])
+        ->assertRedirect(route('two-factor.login'));
+    test()->assertGuest();
+});
+
 // --- Cifrado en reposo --------------------------------------------------------
 
 it('guarda el secreto 2FA CIFRADO en la base de datos (no en texto plano)', function () {

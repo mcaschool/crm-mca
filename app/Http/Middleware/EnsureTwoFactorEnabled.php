@@ -14,6 +14,11 @@ use Symfony\Component\HttpFoundation\Response;
  * configurarlo antes de usar el resto del panel. Se permiten las rutas necesarias
  * para poder activarlo (Mi perfil, logout). El endpoint de Livewire vive fuera de
  * este grupo, asi que las acciones de activacion/confirmacion pueden ejecutarse.
+ *
+ * Excepcion TEMPORAL y acotada (config auth.two_factor.exempt_emails): los correos
+ * de esa lista pueden entrar SIN configurar el 2FA. Solo omite ESTE redirect; no
+ * altera el desafio de login de quienes ya tienen 2FA activado. Lista vacia = 2FA
+ * obligatorio para todos (comportamiento por defecto).
  */
 class EnsureTwoFactorEnabled
 {
@@ -23,10 +28,28 @@ class EnsureTwoFactorEnabled
 
         if ($user !== null
             && ! $user->hasTwoFactorEnabled()
+            && ! $this->isExempt($user->email)
             && ! $request->routeIs('profile.me', 'logout', 'two-factor.*')) {
             return redirect()->route('profile.me')->with('mustEnable2fa', true);
         }
 
         return $next($request);
+    }
+
+    /**
+     * ¿El correo está en la excepción temporal a la política 2FA? Comparación por
+     * correo normalizado (trim + minúsculas) contra la lista ya normalizada de
+     * config. No se registra ni expone en ningún sitio (ni logs ni auditoría).
+     */
+    private function isExempt(?string $email): bool
+    {
+        if ($email === null || $email === '') {
+            return false;
+        }
+
+        /** @var array<int, string> $exempt */
+        $exempt = config('auth.two_factor.exempt_emails', []);
+
+        return in_array(mb_strtolower(trim($email)), $exempt, true);
     }
 }
