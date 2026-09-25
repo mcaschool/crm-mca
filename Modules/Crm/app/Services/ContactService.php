@@ -34,9 +34,19 @@ class ContactService
             }
         }
 
-        // Consentimiento (D2): se sella una sola vez, cuando llega.
+        // Consentimiento (D2): se sella una sola vez, cuando llega. Si la fuente aporta la
+        // fecha real del consentimiento (consent_at), se respeta; si no, se sella ahora.
+        // Nunca se inventa consentimiento: solo se sella si `consent` llega verdadero.
         if (! empty($data['consent']) && $contact->consent_at === null) {
-            $contact->consent_at = now();
+            $consentAt = null;
+            if (! empty($data['consent_at'])) {
+                try {
+                    $consentAt = \Illuminate\Support\Carbon::parse((string) $data['consent_at']);
+                } catch (\Throwable) {
+                    $consentAt = null;
+                }
+            }
+            $contact->consent_at = $consentAt ?? now();
             $contact->consent_source = (string) ($data['consent_source'] ?? 'widget');
         }
 

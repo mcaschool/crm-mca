@@ -171,6 +171,30 @@ return [
         // Ventana de idempotencia (minutos): reintentos de n8n con el mismo request_id
         // dentro de esta ventana devuelven el mismo lead sin duplicar (action=duplicate).
         'idempotency_minutes' => (int) env('CRM_LEAD_INTAKE_IDEMPOTENCY_MINUTES', 1440), // 24 h
+
+        // Taxonomía CONTROLADA de product_type para este endpoint. NO se usa un valor
+        // por defecto: si no llega ni puede derivarse del formulario, el endpoint responde
+        // 422 (nunca clasifica como microcredencial de forma silenciosa).
+        'product_types' => ['maestria', 'diploma_avanzado', 'estancia_internacional', 'microcredencial', 'programa_ejecutivo'],
+
+        // Derivación de product_type a partir del `form` cuando el flujo no envía product_type
+        // explícito. Si el form no está aquí y no llega product_type → 422.
+        'form_product_type' => [
+            'maestrias_solicitud_informacion' => 'maestria',
+            'diplomas_avanzados_solicitud_informacion' => 'diploma_avanzado',
+            'estancias_solicitud_informacion' => 'estancia_internacional',
+            'microcredenciales_inscripcion' => 'microcredencial',
+            'programas_ejecutivos_inscripcion' => 'programa_ejecutivo',
+            'whatsapp_maestrias' => 'maestria',
+            'whatsapp_diplomas' => 'diploma_avanzado',
+            // 'mca_webhook_unico' no mapea a un product_type único: ese flujo DEBE enviarlo.
+        ],
+
+        // Alias CONTROLADOS de programa (alias → code del catálogo). Último recurso de
+        // resolución tras code, course_idnumber y nombre oficial. Vacío por defecto.
+        'program_aliases' => [
+            // 'micro-mba' => 'PE-001',
+        ],
     ],
 
     /*
