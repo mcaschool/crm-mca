@@ -89,11 +89,19 @@ class LeadIntake
         $countryRaw = isset($data['country']) ? trim((string) $data['country']) : '';
         $countryIso2 = $countryRaw !== '' ? CountryResolver::toIso2($countryRaw) : null;
 
+        // WhatsApp entrega el número en formato internacional garantizado (wa_id), aunque
+        // sin '+'. Fuera de ese canal no se asume internacional (no se inventa código país).
+        $channel = mb_strtolower(trim((string) ($data['channel'] ?? '')));
+        $source = mb_strtolower(trim((string) ($data['source'] ?? '')));
+        $assumeInternational = $channel === 'whatsapp' || $source === 'whatsapp';
+
+        // Identidad por email O teléfono, con conflicto controlado (no fusiona automáticamente).
         $contact = $this->contacts->createOrUpdate([
-            'email' => $data['email'],
+            'email' => $data['email'] ?? null,
             'first_name' => $data['first_name'] ?? null,
             'last_name' => $data['last_name'] ?? null,
             'phone' => $data['phone'] ?? null,
+            'phone_assume_international' => $assumeInternational,
             // Solo se escribe country si se resolvió a ISO-2 (nunca se copia a nacionalidad).
             'country' => $countryIso2,
             'preferred_language' => $data['preferred_language'] ?? null,
@@ -101,7 +109,7 @@ class LeadIntake
             'consent' => $data['consent'] ?? null,
             'consent_at' => $data['consent_at'] ?? null,
             'consent_source' => $data['consent_source'] ?? null,
-        ]);
+        ], strictIdentityConflict: true);
 
         // Programa: code → course_idnumber → nombre → alias. Null si no casa (no asociar mal).
         $programRaw = isset($data['program']) ? trim((string) $data['program']) : '';

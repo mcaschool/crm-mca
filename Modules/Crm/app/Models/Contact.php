@@ -17,8 +17,9 @@ use Modules\Crm\Database\Factories\ContactFactory;
  * @property int $institution_id
  * @property string $first_name
  * @property string|null $last_name
- * @property string $email
+ * @property string|null $email
  * @property string|null $phone
+ * @property string|null $phone_normalized
  * @property string|null $country
  * @property string $preferred_language
  * @property \Illuminate\Support\Carbon|null $consent_at
@@ -40,6 +41,7 @@ class Contact extends Model
         'last_name',
         'email',
         'phone',
+        'phone_normalized',
         'country',
         'preferred_language',
         'consent_at',

@@ -27,4 +27,14 @@ class ContactFactory extends Factory
             'consent_source' => 'widget',
         ];
     }
+
+    /** Contacto identificado SOLO por teléfono (sin email), con su teléfono normalizado. */
+    public function phoneOnly(string $phone = '+18095550000'): static
+    {
+        return $this->state(fn (): array => [
+            'email' => null,
+            'phone' => $phone,
+            'phone_normalized' => \Modules\Core\Support\PhoneNumber::normalize($phone),
+        ]);
+    }
 }

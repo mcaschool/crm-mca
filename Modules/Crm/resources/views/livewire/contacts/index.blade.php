@@ -26,7 +26,7 @@
                             <tr class="row" wire:key="contact-{{ $contact->id }}"
                                 onclick="window.location='{{ route('crm.contacts.show', $contact) }}'">
                                 <td class="t-strong">{{ trim($contact->first_name.' '.$contact->last_name) ?: '—' }}</td>
-                                <td class="t-mut">{{ $contact->email }}</td>
+                                <td class="t-mut">{{ $contact->email ?: $contact->phone ?: '—' }}</td>
                                 <td>{{ $contact->country ?: '—' }}</td>
                                 <td>{{ $contact->leads_count }}</td>
                                 <td>{{ $contact->conversations_count }}</td>

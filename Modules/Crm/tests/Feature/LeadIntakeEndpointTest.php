@@ -287,28 +287,124 @@ it('6) el país nunca se copia a nacionalidad', function () {
 // Identidad del lead — email (esquema) y bloqueo de email-o-teléfono
 // ===========================================================================
 
-it('7) lead con email → 201 created', function () {
+it('7) lead solo con email → 201 created', function () {
     leadIntakeCtx();
-    postIntake(LEAD_INTAKE_TOKEN, intakePayload(['email' => 'withmail@empresa.com']))
+    $payload = intakePayload(['email' => 'withmail@empresa.com']);
+    unset($payload['phone']);
+    postIntake(LEAD_INTAKE_TOKEN, $payload)
         ->assertStatus(201)->assertJson(['ok' => true, 'action' => 'created']);
 });
 
-it('8) lead con teléfono y SIN email — PENDIENTE de cambio de esquema (contacts.email NOT NULL)', function () {
-    // BLOQUEADO por esquema: contacts.email es NOT NULL + UNIQUE(institution_id,email).
-    // No se implementa con emails ficticios; requiere decisión de esquema/diseño (ver informe).
-    expect(true)->toBeTrue();
-})->skip('contacts.email NOT NULL: email-o-teléfono requiere cambio de esquema pendiente de aprobación.');
+it('8) lead solo con teléfono y SIN email → 201; contacto con email NULL y teléfono normalizado', function () {
+    [$institution] = leadIntakeCtx();
 
-it('9) faltan email y teléfono → 422 (email es obligatorio por esquema hoy)', function () {
+    $payload = intakePayload(['phone' => '+18095551234']);
+    unset($payload['email']);
+    $id = postIntake(LEAD_INTAKE_TOKEN, $payload)->assertStatus(201)->assertJson(['ok' => true])->json('lead_id');
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () use ($id) {
+        $contact = Lead::query()->findOrFail($id)->contact;
+        expect($contact->email)->toBeNull();
+        expect($contact->phone_normalized)->toBe('+18095551234');
+    });
+});
+
+it('8b) lead con email Y teléfono → 201', function () {
+    leadIntakeCtx();
+    postIntake(LEAD_INTAKE_TOKEN, intakePayload(['email' => 'both@empresa.com', 'phone' => '+18095550001']))
+        ->assertStatus(201)->assertJson(['ok' => true]);
+});
+
+it('9) faltan email y teléfono → 422 y no crea nada', function () {
     [$institution] = leadIntakeCtx();
 
     $payload = intakePayload();
     unset($payload['email'], $payload['phone']);
 
-    postIntake(LEAD_INTAKE_TOKEN, $payload)
-        ->assertStatus(422)->assertJsonStructure(['errors' => ['email']]);
+    postIntake(LEAD_INTAKE_TOKEN, $payload)->assertStatus(422)->assertJson(['ok' => false]);
+    expect(intakeCounts($institution->id)['leads'])->toBe(0);
+});
+
+it('9b) teléfono ambiguo (nacional, sin país) y SIN email → 422', function () {
+    [$institution] = leadIntakeCtx();
+
+    $payload = intakePayload(['phone' => '5551234']); // sin + ni país → ambiguo
+    unset($payload['email']);
+    postIntake(LEAD_INTAKE_TOKEN, $payload)->assertStatus(422)->assertJsonStructure(['errors' => ['phone']]);
 
     expect(intakeCounts($institution->id)['leads'])->toBe(0);
+});
+
+it('9c) teléfono inválido CON email válido → 201 (email identifica; sin asociación incorrecta)', function () {
+    [$institution] = leadIntakeCtx();
+
+    $id = postIntake(LEAD_INTAKE_TOKEN, intakePayload(['email' => 'safe@empresa.com', 'phone' => '5551234']))
+        ->assertStatus(201)->json('lead_id');
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () use ($id) {
+        $contact = Lead::query()->findOrFail($id)->contact;
+        expect($contact->email)->toBe('safe@empresa.com');
+        expect($contact->phone)->toBe('5551234');          // crudo preservado
+        expect($contact->phone_normalized)->toBeNull();     // ambiguo → no dedup por teléfono
+    });
+});
+
+it('8c) teléfono de WhatsApp (internacional sin +) se normaliza cuando channel=whatsapp', function () {
+    [$institution] = leadIntakeCtx();
+
+    $payload = intakePayload(['phone' => '18095557777', 'channel' => 'whatsapp', 'source' => 'whatsapp', 'form' => 'whatsapp_maestrias']);
+    unset($payload['email']);
+    $id = postIntake(LEAD_INTAKE_TOKEN, $payload)->assertStatus(201)->json('lead_id');
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () use ($id) {
+        expect(Lead::query()->findOrFail($id)->contact->phone_normalized)->toBe('+18095557777');
+    });
+});
+
+it('deduplica por teléfono normalizado en el endpoint (sin email, distinto formato) → updated', function () {
+    [$institution] = leadIntakeCtx();
+
+    $p1 = intakePayload(['phone' => '+1 809 555 4321', 'request_id' => 'RID-P1']);
+    unset($p1['email']);
+    postIntake(LEAD_INTAKE_TOKEN, $p1)->assertStatus(201)->assertJson(['action' => 'created']);
+
+    $p2 = intakePayload(['phone' => '+18095554321', 'request_id' => 'RID-P2']);
+    unset($p2['email']);
+    postIntake(LEAD_INTAKE_TOKEN, $p2)->assertStatus(200)->assertJson(['action' => 'updated']);
+
+    expect(intakeCounts($institution->id)['contacts'])->toBe(1);
+});
+
+it('10c) conflicto de identidad (email→A, teléfono→B) → 409, no fusiona, audita sin PII', function () {
+    [$institution] = leadIntakeCtx();
+
+    // A por email.
+    postIntake(LEAD_INTAKE_TOKEN, (function () {
+        $p = intakePayload(['email' => 'a@empresa.com', 'request_id' => 'C-A']);
+        unset($p['phone']);
+
+        return $p;
+    })())
+        ->assertStatus(201);
+    // B por teléfono.
+    postIntake(LEAD_INTAKE_TOKEN, (function () {
+        $p = intakePayload(['phone' => '+18095550009', 'request_id' => 'C-B']);
+        unset($p['email']);
+
+        return $p;
+    })())
+        ->assertStatus(201);
+
+    // email→A y teléfono→B en la misma solicitud: conflicto controlado.
+    postIntake(LEAD_INTAKE_TOKEN, intakePayload(['email' => 'a@empresa.com', 'phone' => '+18095550009', 'request_id' => 'C-CONF']))
+        ->assertStatus(409)->assertJson(['ok' => false, 'error' => 'identity_conflict']);
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () {
+        expect(Contact::query()->count())->toBe(2); // no se fusionó ni creó un tercero
+        $log = AuditLog::query()->where('action', 'lead_intake.conflict')->first();
+        expect($log)->not->toBeNull();
+        expect(json_encode($log->getAttributes()))->not->toContain('a@empresa.com'); // sin PII
+    });
 });
 
 // ===========================================================================

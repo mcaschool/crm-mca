@@ -9,6 +9,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Modules\Audit\Services\AuditService;
+use Modules\Core\Support\PhoneNumber;
+use Modules\Crm\Exceptions\ContactIdentityConflictException;
+use Modules\Crm\Models\Contact;
 use Modules\Crm\Services\LeadIntake;
 
 /**
@@ -43,11 +46,9 @@ class LeadIntakeController
         $productTypes = (array) config('crm.lead_intake.product_types', []);
         $validator = Validator::make($request->all(), [
             'request_id' => ['nullable', 'string', 'max:190'],
-            // Contacto. NOTA: email es obligatorio hoy por el esquema (contacts.email NOT NULL
-            // + UNIQUE(institution_id,email)). El soporte email-O-teléfono exige un cambio de
-            // esquema/diseño pendiente de aprobación (ver informe); no se crean emails ficticios.
-            'email' => ['required', 'email:rfc', 'max:190'],
-            'phone' => ['nullable', 'string', 'max:30'],
+            // Identidad del contacto: email O teléfono (al menos uno). Nunca se fabrica email.
+            'email' => ['required_without:phone', 'nullable', 'email:rfc', 'max:190'],
+            'phone' => ['required_without:email', 'nullable', 'string', 'max:30'],
             'first_name' => ['nullable', 'string', 'max:80'],
             'last_name' => ['nullable', 'string', 'max:80'],
             // País: se acepta código ISO-2 O nombre completo; el CRM lo normaliza (no rechaza
@@ -70,6 +71,7 @@ class LeadIntakeController
             'consent_source' => ['nullable', Rule::in(['web_form', 'whatsapp', 'manual'])],
         ], [
             'required' => 'El campo «:attribute» es obligatorio.',
+            'required_without' => 'Debes enviar al menos «email» o «phone» para identificar el lead.',
             'string' => 'El campo «:attribute» debe ser texto.',
             'email' => 'El campo «:attribute» debe ser un correo válido.',
             'boolean' => 'El campo «:attribute» debe ser verdadero o falso.',
@@ -118,8 +120,47 @@ class LeadIntakeController
             ], 422);
         }
 
-        // (5) Alta/actualización idempotente reutilizando la dedup del CRM.
-        ['lead' => $lead, 'action' => $action, 'request_id' => $requestId] = $intake->ingest($data, $requestId);
+        // (4b) Identidad: sin email, el teléfono DEBE poder normalizarse (si no, no hay forma
+        // segura de identificar/deduplicar → 422, sin asociar mal). WhatsApp llega internacional.
+        $assumeInternational = in_array('whatsapp', [
+            mb_strtolower((string) ($data['channel'] ?? '')),
+            mb_strtolower((string) ($data['source'] ?? '')),
+        ], true);
+        if (($data['email'] ?? null) === null) {
+            if (PhoneNumber::normalize((string) ($data['phone'] ?? ''), $assumeInternational) === null) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Sin email, el teléfono debe venir en formato internacional válido (no ambiguo) para identificar el lead.',
+                    'errors' => ['phone' => ['Teléfono ambiguo o inválido y sin email: no se puede identificar el lead.']],
+                ], 422);
+            }
+        }
+
+        // (5) Alta/actualización idempotente reutilizando la dedup del CRM. Un conflicto de
+        // identidad (email y teléfono → contactos distintos) NO fusiona: se responde 409 y se
+        // audita sin datos personales (solo IDs y metadatos).
+        try {
+            ['lead' => $lead, 'action' => $action, 'request_id' => $requestId] = $intake->ingest($data, $requestId);
+        } catch (ContactIdentityConflictException $e) {
+            $auditable = Contact::query()->find($e->emailContactId) ?? Contact::query()->find($e->phoneContactId);
+            if ($auditable !== null) {
+                $audit->log('lead_intake.conflict', $auditable, array_filter([
+                    'request_id' => $requestId,
+                    'email_contact_id' => $e->emailContactId,
+                    'phone_contact_id' => $e->phoneContactId,
+                    'source' => $data['source'] ?? null,
+                    'form' => $data['form'] ?? null,
+                    'product_type' => $productType,
+                ], fn ($v) => $v !== null && $v !== ''));
+            }
+
+            return response()->json([
+                'ok' => false,
+                'error' => 'identity_conflict',
+                'message' => 'El email y el teléfono corresponden a contactos distintos; no se fusionan automáticamente. Revisión manual requerida.',
+                'request_id' => $requestId,
+            ], 409);
+        }
 
         // (6) Auditoría SIN datos personales ni token: solo metadatos de trazabilidad.
         $audit->log('lead_intake.received', $lead, array_filter([
