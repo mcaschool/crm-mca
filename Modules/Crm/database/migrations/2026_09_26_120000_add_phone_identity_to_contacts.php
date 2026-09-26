@@ -22,7 +22,17 @@ use Modules\Core\Support\PhoneNumber;
  *    null (no se modifica `phone`, no se fusionan contactos).
  *
  * Se usa el query builder (DB), no Eloquent, para no activar el InstitutionScope global
- * durante la migración. Reversible: down() revierte índice, columna y NOT NULL.
+ * durante la migración.
+ *
+ * REVERSIBILIDAD (importante): una vez que existe AL MENOS UN contacto sin email
+ * (identificado solo por teléfono), el rollback deja de ser posible de forma segura,
+ * porque el esquema anterior exige email NOT NULL y no se inventan emails ni se borran/
+ * fusionan contactos. Por eso down() es DEFENSIVO:
+ *   - Si NO hay contactos con email NULL → revierte por completo (índice, columna y NOT NULL).
+ *   - Si HAY contactos con email NULL → se DETIENE ANTES de tocar el esquema y lanza una
+ *     excepción clara. En ese caso la vuelta atrás operativa exige restaurar la copia de
+ *     seguridad previa al despliegue, o aplicar una migración correctiva hacia delante
+ *     (forward-only). Nunca se produce un rollback parcial.
  */
 return new class extends Migration
 {
@@ -42,13 +52,24 @@ return new class extends Migration
 
     public function down(): void
     {
+        // GUARDA PREVIA (antes de tocar el esquema): si existen contactos sin email, el
+        // esquema anterior (email NOT NULL) no puede restaurarse sin inventar emails ni
+        // borrar/fusionar contactos. Se aborta SIN alterar nada (evita el rollback parcial).
+        $withoutEmail = DB::table('contacts')->whereNull('email')->count();
+        if ($withoutEmail > 0) {
+            throw new RuntimeException(
+                "No se puede revertir esta migración: existen {$withoutEmail} contacto(s) sin email ".
+                '(identificados solo por teléfono). Restaurar email NOT NULL borraría/inventaría datos. '.
+                'Para volver atrás: restaura la copia de seguridad previa al despliegue o aplica una '.
+                'migración correctiva hacia delante (forward-only). No se ha alterado el esquema.'
+            );
+        }
+
+        // Sin contactos sin email: reversión completa y segura.
         Schema::table('contacts', function (Blueprint $table) {
             $table->dropUnique('contacts_institution_id_phone_normalized_unique');
             $table->dropColumn('phone_normalized');
         });
-
-        // Restaura el NOT NULL original (en un rollback sobre datos con email null fallaría;
-        // por eso el rollback se hace sobre esquema/entorno controlado).
         Schema::table('contacts', function (Blueprint $table) {
             $table->string('email', 190)->nullable(false)->change();
         });
