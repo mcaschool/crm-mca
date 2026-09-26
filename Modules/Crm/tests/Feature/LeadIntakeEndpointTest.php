@@ -532,6 +532,96 @@ it('18) programa NO resuelto: no asocia a uno incorrecto y marca pendiente (sin 
 });
 
 // ===========================================================================
+// Detección de origen WhatsApp — por prefijo whatsapp_ y por channel/source
+// ===========================================================================
+
+/** Payload WhatsApp: sin email, con nombre/apellido/teléfono (bare, internacional wa_id). */
+function waPayload(array $overrides = []): array
+{
+    $p = intakePayload(array_merge([
+        'first_name' => 'Wa', 'last_name' => 'Lead',
+        'phone' => '18095551000',          // sin '+': solo normaliza si el origen es WhatsApp
+        'product_type' => 'programa_ejecutivo',
+    ], $overrides));
+    unset($p['email']);
+
+    return $p;
+}
+
+it('form=whatsapp_micromba activa las reglas de WhatsApp (teléfono internacional sin + se normaliza)', function () {
+    [$institution] = leadIntakeCtx();
+    $id = postIntake(LEAD_INTAKE_TOKEN, waPayload(['form' => 'whatsapp_micromba']))->assertStatus(201)->json('lead_id');
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () use ($id) {
+        expect(Lead::query()->findOrFail($id)->contact->phone_normalized)->toBe('+18095551000');
+    });
+});
+
+it('form=whatsapp_pe activa las reglas de WhatsApp', function () {
+    [$institution] = leadIntakeCtx();
+    $id = postIntake(LEAD_INTAKE_TOKEN, waPayload(['form' => 'whatsapp_pe']))->assertStatus(201)->json('lead_id');
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () use ($id) {
+        expect(Lead::query()->findOrFail($id)->contact->phone_normalized)->toBe('+18095551000');
+    });
+});
+
+it('otro formulario con prefijo whatsapp_ (whatsapp_estancias) activa las reglas', function () {
+    [$institution] = leadIntakeCtx();
+    $id = postIntake(LEAD_INTAKE_TOKEN, waPayload(['form' => 'whatsapp_estancias', 'product_type' => 'estancia_internacional']))
+        ->assertStatus(201)->json('lead_id');
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () use ($id) {
+        expect(Lead::query()->findOrFail($id)->contact->phone_normalized)->toBe('+18095551000');
+    });
+});
+
+it('un form con «whatsapp» en OTRA posición (no prefijo) NO activa la regla → teléfono ambiguo sin email = 422', function () {
+    [$institution] = leadIntakeCtx();
+    // 'solicitud_whatsapp_web' contiene whatsapp_ pero NO al inicio → no es WhatsApp.
+    postIntake(LEAD_INTAKE_TOKEN, waPayload(['form' => 'solicitud_whatsapp_web']))
+        ->assertStatus(422)->assertJsonStructure(['errors' => ['phone']]);
+
+    expect(intakeCounts($institution->id)['leads'])->toBe(0);
+});
+
+it('la detección tolera espacios y mayúsculas (channel=«  WhatsApp  »)', function () {
+    [$institution] = leadIntakeCtx();
+    // form web (no prefijo) pero channel con espacios y mayúsculas → activa.
+    $id = postIntake(LEAD_INTAKE_TOKEN, waPayload(['form' => 'programas_ejecutivos_inscripcion', 'channel' => '  WhatsApp  ']))
+        ->assertStatus(201)->json('lead_id');
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () use ($id) {
+        expect(Lead::query()->findOrFail($id)->contact->phone_normalized)->toBe('+18095551000');
+    });
+});
+
+it('source=whatsapp o channel=whatsapp activan la regla independientemente del form', function () {
+    [$institution] = leadIntakeCtx();
+
+    // source=whatsapp con form web.
+    postIntake(LEAD_INTAKE_TOKEN, waPayload(['form' => 'microcredenciales_inscripcion', 'product_type' => 'microcredencial', 'source' => 'whatsapp']))
+        ->assertStatus(201);
+    // channel=whatsapp con form web.
+    postIntake(LEAD_INTAKE_TOKEN, waPayload(['form' => 'microcredenciales_inscripcion', 'product_type' => 'microcredencial', 'channel' => 'whatsapp', 'phone' => '18095552000']))
+        ->assertStatus(201);
+
+    app(CurrentInstitution::class)->runFor($institution->id, function () {
+        expect(\Modules\Crm\Models\Contact::query()->whereNotNull('phone_normalized')->count())->toBe(2);
+    });
+});
+
+it('un formulario WhatsApp exige first_name, last_name y phone (email opcional)', function () {
+    [$institution] = leadIntakeCtx();
+
+    $bad = waPayload(['form' => 'whatsapp_pe']);
+    unset($bad['last_name']); // falta apellido en un lead de WhatsApp
+    postIntake(LEAD_INTAKE_TOKEN, $bad)->assertStatus(422)->assertJsonStructure(['errors' => ['last_name']]);
+
+    expect(intakeCounts($institution->id)['leads'])->toBe(0);
+});
+
+// ===========================================================================
 // Límite de tamaño
 // ===========================================================================
 

@@ -13,6 +13,7 @@ use Modules\Core\Support\PhoneNumber;
 use Modules\Crm\Exceptions\ContactIdentityConflictException;
 use Modules\Crm\Models\Contact;
 use Modules\Crm\Services\LeadIntake;
+use Modules\Crm\Support\LeadIntakeChannel;
 
 /**
  * Endpoint PÚBLICO general de captación de leads desde n8n (POST /api/v1/leads/intake).
@@ -42,15 +43,22 @@ class LeadIntakeController
             ], 413);
         }
 
-        // (2) Validación estricta. Mensajes autónomos (no dependen de lang/validation.php).
+        // (2) Detección centralizada del origen WhatsApp (channel/source = whatsapp, o form con
+        // prefijo whatsapp_). Un lead de WhatsApp exige first_name + last_name + phone; el email
+        // sigue siendo opcional. Se lee en crudo (string seguro) porque decide la obligatoriedad.
+        $rawStr = static fn (string $key): string => is_string($v = $request->input($key)) ? $v : '';
+        $isWhatsApp = LeadIntakeChannel::isWhatsApp($rawStr('channel'), $rawStr('source'), $rawStr('form'));
+
+        // (3) Validación estricta. Mensajes autónomos (no dependen de lang/validation.php).
         $productTypes = (array) config('crm.lead_intake.product_types', []);
         $validator = Validator::make($request->all(), [
             'request_id' => ['nullable', 'string', 'max:190'],
             // Identidad del contacto: email O teléfono (al menos uno). Nunca se fabrica email.
-            'email' => ['required_without:phone', 'nullable', 'email:rfc', 'max:190'],
-            'phone' => ['required_without:email', 'nullable', 'string', 'max:30'],
-            'first_name' => ['nullable', 'string', 'max:80'],
-            'last_name' => ['nullable', 'string', 'max:80'],
+            // En WhatsApp, el teléfono (wa_id) es obligatorio; el email sigue opcional.
+            'email' => [$isWhatsApp ? 'nullable' : 'required_without:phone', 'nullable', 'email:rfc', 'max:190'],
+            'phone' => [$isWhatsApp ? 'required' : 'required_without:email', 'nullable', 'string', 'max:30'],
+            'first_name' => [$isWhatsApp ? 'required' : 'nullable', 'string', 'max:80'],
+            'last_name' => [$isWhatsApp ? 'required' : 'nullable', 'string', 'max:80'],
             // País: se acepta código ISO-2 O nombre completo; el CRM lo normaliza (no rechaza
             // el lead si no lo reconoce). Se limita la longitud para no abusar del cuerpo.
             'country' => ['nullable', 'string', 'max:80'],
@@ -90,7 +98,7 @@ class LeadIntakeController
 
         $data = $validator->validated();
 
-        // (3) product_type: explícito (taxonomía) o derivado del formulario. NUNCA por defecto
+        // (4) product_type: explícito (taxonomía) o derivado del formulario. NUNCA por defecto
         // microcredencial: si no se puede determinar, se rechaza de forma explícita.
         $productType = $data['product_type'] ?? null;
         if ($productType === null && isset($data['form'])) {
@@ -106,7 +114,7 @@ class LeadIntakeController
         }
         $data['product_type'] = $productType;
 
-        // (4) Idempotencia REAL: Idempotency-Key (cabecera) o request_id (cuerpo), del evento
+        // (5) Idempotencia REAL: Idempotency-Key (cabecera) o request_id (cuerpo), del evento
         // original. Sin relleno con UUID: si no llega ninguno, se rechaza.
         $requestId = trim((string) ($request->header('Idempotency-Key') ?? ''));
         if ($requestId === '') {
@@ -120,14 +128,11 @@ class LeadIntakeController
             ], 422);
         }
 
-        // (4b) Identidad: sin email, el teléfono DEBE poder normalizarse (si no, no hay forma
-        // segura de identificar/deduplicar → 422, sin asociar mal). WhatsApp llega internacional.
-        $assumeInternational = in_array('whatsapp', [
-            mb_strtolower((string) ($data['channel'] ?? '')),
-            mb_strtolower((string) ($data['source'] ?? '')),
-        ], true);
+        // (5b) Identidad: sin email, el teléfono DEBE poder normalizarse (si no, no hay forma
+        // segura de identificar/deduplicar → 422, sin asociar mal). WhatsApp llega internacional
+        // (assumeInternational) según la detección centralizada de arriba.
         if (($data['email'] ?? null) === null) {
-            if (PhoneNumber::normalize((string) ($data['phone'] ?? ''), $assumeInternational) === null) {
+            if (PhoneNumber::normalize((string) ($data['phone'] ?? ''), $isWhatsApp) === null) {
                 return response()->json([
                     'ok' => false,
                     'message' => 'Sin email, el teléfono debe venir en formato internacional válido (no ambiguo) para identificar el lead.',
@@ -136,7 +141,7 @@ class LeadIntakeController
             }
         }
 
-        // (5) Alta/actualización idempotente reutilizando la dedup del CRM. Un conflicto de
+        // (6) Alta/actualización idempotente reutilizando la dedup del CRM. Un conflicto de
         // identidad (email y teléfono → contactos distintos) NO fusiona: se responde 409 y se
         // audita sin datos personales (solo IDs y metadatos).
         try {
@@ -162,7 +167,7 @@ class LeadIntakeController
             ], 409);
         }
 
-        // (6) Auditoría SIN datos personales ni token: solo metadatos de trazabilidad.
+        // (7) Auditoría SIN datos personales ni token: solo metadatos de trazabilidad.
         $audit->log('lead_intake.received', $lead, array_filter([
             'action' => $action,
             'request_id' => $requestId,

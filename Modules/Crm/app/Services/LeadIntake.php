@@ -11,6 +11,7 @@ use Modules\Core\Support\CountryResolver;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Crm\Enums\InterestLevel;
 use Modules\Crm\Models\Lead;
+use Modules\Crm\Support\LeadIntakeChannel;
 use Modules\Institutions\Models\Bot;
 use RuntimeException;
 
@@ -91,9 +92,12 @@ class LeadIntake
 
         // WhatsApp entrega el número en formato internacional garantizado (wa_id), aunque
         // sin '+'. Fuera de ese canal no se asume internacional (no se inventa código país).
-        $channel = mb_strtolower(trim((string) ($data['channel'] ?? '')));
-        $source = mb_strtolower(trim((string) ($data['source'] ?? '')));
-        $assumeInternational = $channel === 'whatsapp' || $source === 'whatsapp';
+        // Detección centralizada (channel/source = whatsapp, o form con prefijo whatsapp_).
+        $assumeInternational = LeadIntakeChannel::isWhatsApp(
+            $data['channel'] ?? null,
+            $data['source'] ?? null,
+            $data['form'] ?? null,
+        );
 
         // Identidad por email O teléfono, con conflicto controlado (no fusiona automáticamente).
         $contact = $this->contacts->createOrUpdate([
