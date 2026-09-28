@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Modules\Ai\Services\CeliaService;
+use Modules\Ai\Services\ProgramAssignmentService;
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Models\ProgramCategory;
 use Modules\Chat\Models\ConversationNode;
@@ -43,6 +44,7 @@ class WidgetController extends Controller
         private readonly GuidedNavigationService $guided,
         private readonly MatcherService $matcher,
         private readonly CeliaService $celia,
+        private readonly ProgramAssignmentService $assignments,
     ) {}
 
     /** Inicia o recupera una conversacion (recuperacion de sesion por session_id). */
@@ -236,16 +238,25 @@ class WidgetController extends Controller
         );
     }
 
-    /** Opciones de las 5 preguntas (area/meta del catalogo real; resto de config). */
+    /**
+     * Opciones de las 5 preguntas (area/meta del catalogo real; resto de config). Area y meta
+     * salen SOLO de los programas activos ASIGNADOS a este bot (Bloque 4c): no se ofrecen
+     * caminos que el emparejador no puede cumplir.
+     */
     public function matcherOptions(Request $request): JsonResponse
     {
-        $this->bot($request);
+        $bot = $this->bot($request);
         $locale = app()->getLocale();
 
-        $areas = ProgramCategory::query()->where('status', 'active')->orderBy('name_es')->get()
+        $assigned = fn () => Program::query()->where('status', 'active')
+            ->whereIn('programs.id', $this->assignments->assignedIdsQuery((int) $bot->getKey()));
+
+        $areas = ProgramCategory::query()->where('status', 'active')
+            ->whereIn('id', $assigned()->whereNotNull('category_id')->select('category_id'))
+            ->orderBy('name_es')->get()
             ->map(fn (ProgramCategory $c) => ['value' => $c->getKey(), 'label' => $c->translate('name', $locale)])->all();
 
-        $metas = Program::query()->where('status', 'active')->whereNotNull('goal')
+        $metas = $assigned()->whereNotNull('goal')
             ->distinct()->orderBy('goal')->pluck('goal')
             ->map(fn (string $g) => ['value' => $g, 'label' => trans()->has('matcher.meta.'.$g) ? __('matcher.meta.'.$g) : $g])->all();
 

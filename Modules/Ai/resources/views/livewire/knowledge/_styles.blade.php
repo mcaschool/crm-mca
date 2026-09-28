@@ -198,6 +198,23 @@
     .kc-src-tags{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
     .kc-shared{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--mca-ink-2)}
 
+    /* Secciones de «Por agente» y «Programas que puede recomendar» (Bloque 4c) */
+    .kc-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:4px 0 12px;flex-wrap:wrap}
+    .kc-section-gap{margin-top:30px}
+    .kc-section-title{font-size:16px;font-weight:700;color:var(--mca-ink);margin:0}
+    .kc-section-sub{font-size:12.5px;color:var(--mca-ink-2);margin:3px 0 0}
+    .kc-prog-tools{margin-bottom:14px}
+    .kc-prog-count{font-size:12.5px;font-weight:600;color:var(--mca-ink-2);white-space:nowrap}
+    .kc-group-head:last-child{border-bottom:0}
+    .kc-area-toggle{display:inline-flex;align-items:center;gap:10px;border:0;background:transparent;padding:0;cursor:pointer;font:inherit;text-align:left}
+    .kc-chev{display:inline-flex;color:var(--mca-ink-3);transition:transform .15s;transform:rotate(-90deg)}
+    .kc-chev.open{transform:none}
+    .kc-chev svg{width:16px;height:16px}
+    .kc-area-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+    .kc-prog-row{padding:10px 18px}
+    .kc-prog-code{min-width:62px}
+    .kc-src.is-off .kc-name,.kc-src.is-off .kc-prog-code{opacity:.6}
+
     /* Drawer y modal */
     .kc-overlay{position:fixed;inset:0;background:rgba(19,37,61,.38);z-index:50;backdrop-filter:blur(1px)}
     .kc-drawer{position:fixed;top:0;right:0;bottom:0;width:min(700px,94vw);background:#fff;z-index:51;box-shadow:-12px 0 40px rgba(19,37,61,.18);display:flex;flex-direction:column}

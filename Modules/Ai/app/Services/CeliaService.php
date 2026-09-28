@@ -41,6 +41,7 @@ class CeliaService
         private readonly MessageService $messages,
         private readonly EventService $events,
         private readonly LeadConversionService $leadConversion,
+        private readonly ProgramAssignmentService $programAssignments,
     ) {}
 
     /**
@@ -181,7 +182,7 @@ class CeliaService
         $advisor = $bot !== null ? (string) $bot->assistant_name : 'Celia';
         $parts = [$this->trans('celia.greeting', $locale, ['name' => $name, 'advisor' => $advisor])];
 
-        $viewed = $this->viewedPrograms($contact, $locale);
+        $viewed = $this->viewedPrograms($contact, (int) $conversation->bot_id, $locale);
         if ($viewed !== []) {
             $parts[] = $this->trans('celia.context_viewed_programs', $locale, ['programs' => implode(', ', $viewed)]);
         }
@@ -200,9 +201,12 @@ class CeliaService
     }
 
     /**
+     * Programas vistos por el contacto que el asesor ACTUAL puede recomendar (Bloque 4c): los
+     * no asignados a este bot no se citan; si no queda ninguno, el saludo va sin esa frase.
+     *
      * @return array<int,string>
      */
-    private function viewedPrograms(?Contact $contact, string $locale): array
+    private function viewedPrograms(?Contact $contact, int $botId, string $locale): array
     {
         if ($contact === null) {
             return [];
@@ -210,6 +214,7 @@ class CeliaService
 
         $programIds = ProgramInterest::query()
             ->where('contact_id', $contact->getKey())
+            ->whereIn('program_id', $this->programAssignments->assignedIdsQuery($botId))
             ->orderByDesc('id')
             ->limit(3)
             ->pluck('program_id')

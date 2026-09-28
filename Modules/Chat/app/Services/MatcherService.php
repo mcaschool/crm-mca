@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Chat\Services;
 
 use Illuminate\Support\Collection;
+use Modules\Ai\Services\ProgramAssignmentService;
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Models\ProgramCategory;
 use Modules\Chat\Support\LevelMapper;
@@ -35,6 +36,7 @@ class MatcherService
         private readonly EventService $events,
         private readonly ProgramInterestService $interests,
         private readonly LeadService $leads,
+        private readonly ProgramAssignmentService $assignments,
     ) {}
 
     /**
@@ -47,7 +49,7 @@ class MatcherService
         $level = LevelMapper::resolve($answers['seniority'] ?? 'inicio', $answers['educacion'] ?? 'secundaria');
         $motivacion = ($answers['motivacion'] ?? '') !== '' ? $answers['motivacion'] : null;
 
-        [$programs, $tier] = $this->findWithDegradation($categoryId, $level, $goal);
+        [$programs, $tier] = $this->findWithDegradation((int) $bot->getKey(), $categoryId, $level, $goal);
 
         $this->recordCrm($bot, $contact, $conversation, $programs, $categoryId, $goal, $level, $motivacion, $answers);
 
@@ -56,14 +58,16 @@ class MatcherService
 
     /**
      * Degradacion: 1) area+nivel+meta, 2) area+meta, 3) mejores del area, 4) vacio.
-     * Solo programas ACTIVOS.
+     * Solo programas ACTIVOS y ASIGNADOS al bot en el Centro de Conocimiento (Bloque 4c):
+     * un bot sin programas asignados no recomienda ninguno.
      *
      * @return array{0: Collection<int, Program>, 1: int}
      */
-    private function findWithDegradation(?int $categoryId, string $level, ?string $goal): array
+    private function findWithDegradation(int $botId, ?int $categoryId, string $level, ?string $goal): array
     {
         $base = fn () => Program::query()
             ->where('status', 'active')
+            ->whereIn('programs.id', $this->assignments->assignedIdsQuery($botId))
             ->when($categoryId !== null, fn ($q) => $q->where('category_id', $categoryId))
             ->orderBy('display_order')
             ->orderBy('name_es');

@@ -81,6 +81,17 @@ class Bot extends Model
     }
 
     /**
+     * Programas del catálogo que el asesor PUEDE RECOMENDAR (Centro de Conocimiento, N:N vía
+     * bot_program). Los decide el administrador; el emparejador solo usa estos.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\Modules\Catalog\Models\Program, $this>
+     */
+    public function programs(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(\Modules\Catalog\Models\Program::class, 'bot_program')->withTimestamps();
+    }
+
+    /**
      * Fuentes creadas por/atribuidas a este bot por la columna legada bot_id (compatibilidad
      * con la UI actual, Ajuste 2). La lógica nueva usa knowledgeSources() (pivote).
      *

@@ -112,9 +112,10 @@ it('el emparejador devuelve programas y registra lead+evento', function () {
         'session_id' => $session, 'name' => 'Ana', 'email' => 'ana@example.com', 'consent' => true,
     ]);
 
-    $categoryId = app(CurrentInstitution::class)->runFor($bot->institution_id, function () {
+    $categoryId = app(CurrentInstitution::class)->runFor($bot->institution_id, function () use ($bot) {
         $cat = ProgramCategory::factory()->create();
-        Program::factory()->create(['category_id' => $cat->id, 'level' => 'intermedio', 'goal' => 'ascenso', 'status' => 'active']);
+        $program = Program::factory()->create(['category_id' => $cat->id, 'level' => 'intermedio', 'goal' => 'ascenso', 'status' => 'active']);
+        $bot->programs()->attach($program->id); // Bloque 4c: solo recomienda programas asignados
 
         return $cat->id;
     });

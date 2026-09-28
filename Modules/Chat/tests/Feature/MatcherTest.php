@@ -27,9 +27,13 @@ function matcherSetup(): array
 
 function program(int $categoryId, string $level, string $goal, string $status = 'active', int $order = 0): Program
 {
-    return Program::factory()->create([
+    $program = Program::factory()->create([
         'category_id' => $categoryId, 'level' => $level, 'goal' => $goal, 'status' => $status, 'display_order' => $order,
     ]);
+    // Bloque 4c: el emparejador solo usa programas ASIGNADOS al bot (el único bot del test).
+    Bot::query()->firstOrFail()->programs()->attach($program->id);
+
+    return $program;
 }
 
 // --- Mapeo de nivel (seniority + educacion) ---
