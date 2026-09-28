@@ -139,7 +139,8 @@
                 <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
                     <div>
                         <h3>Base de conocimiento</h3>
-                        <p class="mca-sub" style="margin-bottom:0">Sube uno o varios .md: se hace upsert por código y se sincroniza solo.</p>
+                        <p class="mca-sub" style="margin-bottom:0">Sube uno o varios .md: entran a la biblioteca central (upsert por código) y quedan asignados a este asesor.
+                            La gestión completa (categorías, otros agentes) está en el <a href="{{ route('ai.knowledge.agents') }}" style="color:var(--mca,#1E5AA8);font-weight:600">Centro de Conocimiento</a>.</p>
                     </div>
                     <button type="button" wire:click="sync" wire:loading.attr="disabled" wire:target="sync" class="btn btn-ghost btn-sm">
                         <span wire:loading.remove wire:target="sync"><x-ui.icon name="refresh" class="ic" style="width:15px;height:15px" /> Re-sincronizar</span>
@@ -169,10 +170,10 @@
                         <span class="di"><x-ui.icon name="file-text" class="ic" style="width:18px;height:18px" /></span>
                         <div class="dm">
                             <b>{{ $source->name }}</b>
-                            <span>{{ $source->code }} · {{ $source->last_synced_at ? 'sincronizado '.$source->last_synced_at->diffForHumans() : 'sin sincronizar' }}</span>
+                            <span>{{ $source->code }} · {{ $source->last_synced_at ? 'sincronizado '.$source->last_synced_at->diffForHumans() : 'sin sincronizar' }}@if (! $source->pivot->is_active) · <em>pausada para este asesor</em>@endif</span>
                         </div>
                         <button type="button" wire:click="removeKnowledge({{ $source->id }})"
-                                wire:confirm="¿Quitar este documento de conocimiento?" class="btn btn-danger btn-sm" title="Quitar">
+                                wire:confirm="¿Quitar este documento de este asesor? Seguirá disponible en la biblioteca." class="btn btn-danger btn-sm" title="Quitar de este asesor">
                             <x-ui.icon name="trash" class="ic" style="width:15px;height:15px" />
                         </button>
                     </div>

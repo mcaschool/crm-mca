@@ -109,17 +109,20 @@ it('sube foto y conocimiento en edicion, y permite quitar un documento', functio
         expect($bot->refresh()->avatar_path)->toBe('advisors/microcredenciales/avatar.png');
         Storage::disk('public')->assertExists('advisors/microcredenciales/avatar.png');
 
-        // Conocimiento (upsert + sync)
+        // Conocimiento: entra a la biblioteca central y queda asignado a este asesor (pivote).
         $comp->set('docs', [$md])->call('uploadKnowledge')->assertHasNoErrors();
-        $source = KnowledgeSource::query()->where('bot_id', $bot->id)->where('code', 'KB-A')->first();
+        $source = KnowledgeSource::query()->where('code', 'KB-A')->first();
         expect($source)->not->toBeNull();
         expect($source->source_file)->toBe('kb.md');
-        Storage::disk('knowledge')->assertExists('microcredenciales/kb.md');
+        Storage::disk('knowledge')->assertExists('biblioteca/sin_categoria/kb.md');
+        expect($bot->knowledgeSources()->where('knowledge_sources.id', $source->id)->exists())->toBeTrue();
 
-        // Quitar el documento (borra fila y archivo)
+        // Quitar el documento = quitarlo SOLO de este asesor (detach). La fuente y su archivo
+        // siguen en la biblioteca (pueden estar compartidos con otros agentes).
         $comp->call('removeKnowledge', $source->id)->assertHasNoErrors();
-        expect(KnowledgeSource::query()->where('code', 'KB-A')->exists())->toBeFalse();
-        Storage::disk('knowledge')->assertMissing('microcredenciales/kb.md');
+        expect($bot->knowledgeSources()->where('knowledge_sources.id', $source->id)->exists())->toBeFalse();
+        expect(KnowledgeSource::query()->where('code', 'KB-A')->exists())->toBeTrue();
+        Storage::disk('knowledge')->assertExists('biblioteca/sin_categoria/kb.md');
     });
 });
 

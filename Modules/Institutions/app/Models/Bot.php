@@ -68,11 +68,25 @@ class Bot extends Model
     }
 
     /**
-     * Fuentes de conocimiento del asesor (por bot_id).
+     * Fuentes de conocimiento ASIGNADAS al asesor (Centro de Conocimiento, N:N vía pivote
+     * bot_knowledge_source). El pivote lleva is_active para activar/desactivar por bot.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\Modules\Ai\Models\KnowledgeSource, $this>
+     */
+    public function knowledgeSources(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(\Modules\Ai\Models\KnowledgeSource::class, 'bot_knowledge_source')
+            ->withPivot('is_active')
+            ->withTimestamps();
+    }
+
+    /**
+     * Fuentes creadas por/atribuidas a este bot por la columna legada bot_id (compatibilidad
+     * con la UI actual, Ajuste 2). La lógica nueva usa knowledgeSources() (pivote).
      *
      * @return \Illuminate\Database\Eloquent\Relations\HasMany<\Modules\Ai\Models\KnowledgeSource, $this>
      */
-    public function knowledgeSources(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function ownedKnowledgeSources(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(\Modules\Ai\Models\KnowledgeSource::class);
     }

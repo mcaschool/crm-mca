@@ -22,10 +22,16 @@ class KnowledgeRetriever
     {
         $limit ??= (int) config('crm.celia.knowledge_sections', 3);
 
+        // Centro de Conocimiento: fuentes ACTIVAS asignadas a este bot en el pivote con
+        // is_active=true (una fuente puede compartirse entre varios bots). Mismo orden por
+        // priority; el troceo por "## " y el scoring no cambian.
         $sources = KnowledgeSource::query()
-            ->where('bot_id', $botId)
-            ->where('status', 'active')
-            ->orderByDesc('priority')
+            ->where('knowledge_sources.status', 'active')
+            ->join('bot_knowledge_source as bks', 'bks.knowledge_source_id', '=', 'knowledge_sources.id')
+            ->where('bks.bot_id', $botId)
+            ->where('bks.is_active', true)
+            ->orderByDesc('knowledge_sources.priority')
+            ->select('knowledge_sources.*')
             ->get();
 
         if ($sources->isEmpty()) {

@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\Route;
 use Modules\Ai\Livewire\Advisor\Configure as AdvisorConfigure;
 use Modules\Ai\Livewire\Advisor\Form as AdvisorForm;
 use Modules\Ai\Livewire\Advisor\Index as AdvisorIndex;
+use Modules\Ai\Livewire\Knowledge\Agents as KnowledgeAgents;
 use Modules\Ai\Livewire\Knowledge\Index as KnowledgeIndex;
+use Modules\Ai\Livewire\Knowledge\Library as KnowledgeLibrary;
 use Modules\Catalog\Livewire\Categories\Manage as CategoriesManage;
 use Modules\Catalog\Livewire\Programs\Form as ProgramsForm;
 use Modules\Catalog\Livewire\Programs\Index as ProgramsIndex;
@@ -86,6 +88,9 @@ $panel->group(function () {
     // Rutas previas (se conservan por compatibilidad; ya no estan en el menu).
     Route::get('/advisor', AdvisorConfigure::class)->name('ai.advisor.configure');
     Route::get('/knowledge', KnowledgeIndex::class)->name('ai.knowledge.index');
+    // Centro de Conocimiento — pestaña Biblioteca (solo Admin, gate en el componente).
+    Route::get('/centro-conocimiento', KnowledgeLibrary::class)->name('ai.knowledge.library');
+    Route::get('/centro-conocimiento/agentes', KnowledgeAgents::class)->name('ai.knowledge.agents');
 
     // Catalogo de programas (Livewire, Admin y Marketing por Policy; Admisiones no).
     Route::get('/catalog', ProgramsIndex::class)->name('catalog.programs.index');

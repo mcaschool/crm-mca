@@ -1,8 +1,19 @@
 <div>
     <x-ui.styles />
     <div class="mca-panel" style="padding:22px 26px 34px">
+        {{-- Aviso: esta vista es solo de consulta; la gestión completa está en el Centro. --}}
+        <div style="display:flex;gap:10px;align-items:flex-start;background:#eef4fb;border:1px solid #c8daf0;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13.5px">
+            <x-ui.icon name="book-open" class="ic" style="width:18px;height:18px;color:var(--mca,#1E5AA8);flex:none;margin-top:1px" />
+            <div>
+                <strong>{{ __('Vista de solo consulta.') }}</strong>
+                {{ __('La gestión completa del conocimiento (subir, activar, borrar y asignar fuentes a agentes) está en el') }}
+                <a href="{{ route('ai.knowledge.library') }}" style="color:var(--mca,#1E5AA8);font-weight:600">{{ __('Centro de Conocimiento') }}</a>.
+            </div>
+        </div>
+
         <div class="mca-toolbar">
-            <p class="mca-sub" style="margin:0">{{ __('Hechos transversales que Celia responde con sus palabras. Las reglas de conducta no se editan aquí.') }}</p>
+            <livewire:ai.advisor-selector />
+            <p class="mca-sub" style="margin:0 0 0 12px">{{ __('Hechos transversales que el agente responde con sus palabras. Las reglas de conducta no se editan aquí.') }}</p>
             <div class="sp"></div>
             <button type="button" wire:click="sync" wire:loading.attr="disabled" class="btn btn-primary btn-sm">
                 <span wire:loading.remove wire:target="sync"><x-ui.icon name="refresh" class="ic" style="width:15px;height:15px" /> {{ __('Sincronizar') }}</span>

@@ -13,6 +13,8 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Services\AdvisorDeletionService;
+use Modules\Ai\Services\KnowledgeAssignmentService;
+use Modules\Ai\Services\KnowledgeIngestService;
 use Modules\Ai\Services\KnowledgeSyncService;
 use Modules\Institutions\Models\Bot;
 use Modules\Integrations\Models\AiProcessConfig;
@@ -155,7 +157,11 @@ class Form extends Component
         session()->flash('status', 'Foto eliminada; se usa el avatar por defecto.');
     }
 
-    public function uploadKnowledge(KnowledgeSyncService $sync): void
+    /**
+     * Sube .md a la BIBLIOTECA central (mismo pipeline validado que el Centro de Conocimiento)
+     * y los asigna automáticamente a ESTE asesor vía el pivote. Los rechazados se informan.
+     */
+    public function uploadKnowledge(KnowledgeIngestService $ingest, KnowledgeAssignmentService $assign): void
     {
         abort_unless((bool) auth()->user()?->canManageIntegrations(), 403);
         $bot = $this->bot();
@@ -163,32 +169,32 @@ class Form extends Component
             return;
         }
 
-        $folder = $bot->advisorFolder();
-        $saved = 0;
-        foreach ($this->docs as $doc) {
-            if (! $doc instanceof TemporaryUploadedFile) {
-                continue;
-            }
-            $original = $doc->getClientOriginalName();
-            if (strtolower((string) pathinfo($original, PATHINFO_EXTENSION)) !== 'md') {
-                $this->addError('docs', 'Solo se admiten archivos .md (Markdown).');
-
-                continue;
-            }
-            $doc->storeAs($folder, $original, 'knowledge');
-            $saved++;
-        }
-
+        $report = $ingest->ingest($this->docs);
         $this->docs = [];
-        if ($saved === 0) {
-            return;
+
+        foreach ($report['codes'] as $code) {
+            $source = KnowledgeSource::query()->where('code', $code)->first();
+            if ($source !== null) {
+                $assign->assignSource($bot, $source);
+            }
         }
 
-        $report = $sync->sync($bot->getKey(), $folder);
-        session()->flash('status', "{$saved} archivo(s) subido(s). Conocimiento sincronizado ({$report['created']} nuevas, {$report['updated']} actualizadas).");
+        foreach ($report['results'] as $r) {
+            if ($r['result'] === 'Rechazado') {
+                $this->addError('docs', "{$r['file']}: {$r['reason']}");
+            }
+        }
+
+        if ($report['codes'] !== []) {
+            session()->flash('status', count($report['codes'])." documento(s) añadido(s) a la biblioteca y asignado(s) a {$bot->assistant_name}.");
+        }
     }
 
-    public function removeKnowledge(int $sourceId, KnowledgeSyncService $sync): void
+    /**
+     * Quita el documento SOLO de este asesor (detach del pivote). No borra la fuente ni su
+     * archivo: puede estar compartida con otros agentes. El borrado vive en la Biblioteca.
+     */
+    public function removeKnowledge(int $sourceId, KnowledgeAssignmentService $assign): void
     {
         abort_unless((bool) auth()->user()?->canManageIntegrations(), 403);
         $bot = $this->bot();
@@ -196,18 +202,14 @@ class Form extends Component
             return;
         }
 
-        $source = KnowledgeSource::query()->where('bot_id', $bot->getKey())->find($sourceId);
+        $source = $bot->knowledgeSources()->where('knowledge_sources.id', $sourceId)->first();
         if ($source === null) {
             return;
         }
 
-        // Borra el archivo de origen (si se conoce) para que no reaparezca al re-sincronizar.
-        if ($source->source_file !== null) {
-            Storage::disk('knowledge')->delete($bot->advisorFolder().'/'.$source->source_file);
-        }
-        $source->delete();
+        $assign->detach($bot, $source);
 
-        session()->flash('status', 'Documento de conocimiento eliminado.');
+        session()->flash('status', 'Documento quitado de este asesor (sigue disponible en la biblioteca).');
     }
 
     public function sync(KnowledgeSyncService $sync): void
@@ -275,9 +277,10 @@ class Form extends Component
     {
         $bot = $this->bot();
 
+        // Fuentes ASIGNADAS a este asesor (pivote), activas o pausadas.
         $sources = $bot === null
             ? collect()
-            : KnowledgeSource::query()->where('bot_id', $bot->getKey())->orderBy('code')->get();
+            : $bot->knowledgeSources()->orderBy('knowledge_sources.code')->get();
 
         $deleteBlockReason = $bot !== null ? app(AdvisorDeletionService::class)->blockReason($bot) : null;
 

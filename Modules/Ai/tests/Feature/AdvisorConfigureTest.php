@@ -78,12 +78,13 @@ it('sube un .md y sincroniza el conocimiento automaticamente (upsert)', function
             ->assertHasNoErrors();
 
         $bot = Bot::query()->where('status', 'active')->first();
-        // El archivo se guardo en la subcarpeta del asesor.
-        Storage::disk('knowledge')->assertExists('microcredenciales/kb_general.md');
-        // Y se sincronizo a knowledge_sources (upsert por codigo).
-        $source = KnowledgeSource::query()->where('bot_id', $bot->id)->where('code', 'KB-MC-GENERAL-001')->first();
+        // Centro de Conocimiento: el archivo entra a la biblioteca central (sin Categoria → sin_categoria).
+        Storage::disk('knowledge')->assertExists('biblioteca/sin_categoria/kb_general.md');
+        // Se sincronizó a knowledge_sources (upsert por código) y quedó asignado al asesor vía pivote.
+        $source = KnowledgeSource::query()->where('code', 'KB-MC-GENERAL-001')->first();
         expect($source)->not->toBeNull();
         expect($source->last_synced_at)->not->toBeNull();
+        expect($bot->knowledgeSources()->where('knowledge_sources.id', $source->id)->exists())->toBeTrue();
     });
 });
 

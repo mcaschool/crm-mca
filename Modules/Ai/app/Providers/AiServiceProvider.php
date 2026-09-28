@@ -10,8 +10,11 @@ use Livewire\Livewire;
 use Modules\Ai\Livewire\Advisor\Configure as AdvisorConfigure;
 use Modules\Ai\Livewire\Advisor\Form as AdvisorForm;
 use Modules\Ai\Livewire\Advisor\Index as AdvisorIndex;
+use Modules\Ai\Livewire\AdvisorSelector;
 use Modules\Ai\Livewire\AiAlertBell;
+use Modules\Ai\Livewire\Knowledge\Agents as KnowledgeAgents;
 use Modules\Ai\Livewire\Knowledge\Index as KnowledgeIndex;
+use Modules\Ai\Livewire\Knowledge\Library as KnowledgeLibrary;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Policies\KnowledgeSourcePolicy;
 use Modules\Ai\Services\AiAlertDispatcher;
@@ -63,6 +66,9 @@ class AiServiceProvider extends ModuleServiceProvider
         Gate::policy(KnowledgeSource::class, KnowledgeSourcePolicy::class);
 
         Livewire::component('ai.knowledge.index', KnowledgeIndex::class);
+        Livewire::component('ai.knowledge.library', KnowledgeLibrary::class);
+        Livewire::component('ai.knowledge.agents', KnowledgeAgents::class);
+        Livewire::component('ai.advisor-selector', AdvisorSelector::class);
         Livewire::component('ai.advisor.configure', AdvisorConfigure::class);
         Livewire::component('ai.advisor.index', AdvisorIndex::class);
         Livewire::component('ai.advisor.form', AdvisorForm::class);

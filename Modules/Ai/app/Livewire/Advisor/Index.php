@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Modules\Ai\Livewire\Advisor;
 
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
-use Modules\Ai\Models\KnowledgeSource;
 use Modules\Institutions\Models\Bot;
 use Modules\Integrations\Models\AiProcessConfig;
 
@@ -31,8 +31,11 @@ class Index extends Component
             ->get()
             ->keyBy('bot_id');
 
-        // Nº de documentos de conocimiento por bot.
-        $counts = KnowledgeSource::query()
+        // Nº de documentos de conocimiento ASIGNADOS y activos por bot (pivote del Centro de
+        // Conocimiento). Los bots ya vienen acotados a la institución por su scope global.
+        $counts = DB::table('bot_knowledge_source')
+            ->whereIn('bot_id', $bots->pluck('id')->all())
+            ->where('is_active', true)
             ->selectRaw('bot_id, count(*) as c')
             ->groupBy('bot_id')
             ->pluck('c', 'bot_id');

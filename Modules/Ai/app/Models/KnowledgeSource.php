@@ -65,6 +65,19 @@ class KnowledgeSource extends Model
         ];
     }
 
+    /**
+     * Bots a los que está asignada esta fuente (biblioteca central compartida). El pivote
+     * lleva is_active para activar/desactivar la fuente por bot sin desasignarla.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\Modules\Institutions\Models\Bot, $this>
+     */
+    public function bots(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(\Modules\Institutions\Models\Bot::class, 'bot_knowledge_source')
+            ->withPivot('is_active')
+            ->withTimestamps();
+    }
+
     protected static function newFactory(): KnowledgeSourceFactory
     {
         return KnowledgeSourceFactory::new();

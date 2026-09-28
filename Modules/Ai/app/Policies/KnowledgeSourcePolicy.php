@@ -29,4 +29,16 @@ class KnowledgeSourcePolicy
     {
         return $actor->canManageIntegrations();
     }
+
+    /** Activar/desactivar el estado global de una fuente (Centro de Conocimiento). */
+    public function update(User $actor, KnowledgeSource $source): bool
+    {
+        return $actor->canManageIntegrations();
+    }
+
+    /** Borrar una fuente y su archivo .md (Centro de Conocimiento). */
+    public function delete(User $actor, KnowledgeSource $source): bool
+    {
+        return $actor->canManageIntegrations();
+    }
 }

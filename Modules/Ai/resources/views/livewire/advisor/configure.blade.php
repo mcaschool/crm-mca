@@ -3,6 +3,7 @@
         <div>
             <h2 class="text-lg font-semibold text-gray-900">{{ __('Ficha del Asesor Académico') }}</h2>
             <p class="text-sm text-gray-500">{{ __('Nombre, foto y bases de conocimiento del asesor. El widget y los saludos leen estos valores.') }}</p>
+            <div style="margin-top:10px"><livewire:ai.advisor-selector /></div>
         </div>
 
         @if (session('status'))

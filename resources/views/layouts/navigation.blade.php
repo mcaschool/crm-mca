@@ -102,9 +102,14 @@
 
         <div class="mca-nav-group">
             <div class="mca-nav-label">CONFIGURACIÓN</div>
-            <a href="{{ route('advisors.index') }}" class="mca-nav-item {{ request()->routeIs('advisors.*') || request()->routeIs('ai.*') ? 'on' : '' }}">
+            <a href="{{ route('advisors.index') }}" class="mca-nav-item {{ request()->routeIs('advisors.*') || request()->routeIs('ai.advisor.*') ? 'on' : '' }}">
                 <x-ui.icon name="bot" /> {{ __('Asesores Inteligentes') }}
             </a>
+            @can('viewAny', \Modules\Ai\Models\KnowledgeSource::class)
+                <a href="{{ route('ai.knowledge.library') }}" class="mca-nav-item {{ request()->routeIs('ai.knowledge.library', 'ai.knowledge.agents') ? 'on' : '' }}">
+                    <x-ui.icon name="book-open" /> {{ __('Centro de Conocimiento') }}
+                </a>
+            @endcan
             @can('viewAny', \Modules\Catalog\Models\Program::class)
                 <a href="{{ route('catalog.programs.index') }}" class="mca-nav-item {{ request()->routeIs('catalog.*') ? 'on' : '' }}">
                     <x-ui.icon name="book-open" /> {{ __('Catálogo') }}

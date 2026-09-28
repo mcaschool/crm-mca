@@ -12,7 +12,10 @@ use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
 use Modules\Ai\Models\KnowledgeSource;
+use Modules\Ai\Services\KnowledgeAssignmentService;
+use Modules\Ai\Services\KnowledgeIngestService;
 use Modules\Ai\Services\KnowledgeSyncService;
+use Modules\Ai\Support\SelectedAdvisor;
 use Modules\Institutions\Models\Bot;
 
 /**
@@ -110,8 +113,11 @@ class Configure extends Component
         session()->flash('status', __('Foto de perfil eliminada; se usa el avatar por defecto.'));
     }
 
-    /** Sube uno o varios .md y sincroniza (upsert por codigo) sin pasos extra. */
-    public function uploadKnowledge(KnowledgeSyncService $sync): void
+    /**
+     * Sube .md a la BIBLIOTECA central (pipeline validado del Centro de Conocimiento) y los
+     * asigna automáticamente al asesor seleccionado vía el pivote.
+     */
+    public function uploadKnowledge(KnowledgeIngestService $ingest, KnowledgeAssignmentService $assign): void
     {
         $this->authorize('sync', KnowledgeSource::class);
 
@@ -120,34 +126,28 @@ class Configure extends Component
             return;
         }
 
-        $folder = $bot->advisorFolder();
-        $saved = 0;
-        foreach ($this->docs as $doc) {
-            if (! $doc instanceof TemporaryUploadedFile) {
-                continue;
-            }
-            $original = $doc->getClientOriginalName();
-            if (strtolower((string) pathinfo($original, PATHINFO_EXTENSION)) !== 'md') {
-                $this->addError('docs', __('Solo se admiten archivos .md (Markdown).'));
-
-                continue;
-            }
-            $doc->storeAs($folder, $original, 'knowledge');
-            $saved++;
-        }
-
+        $report = $ingest->ingest($this->docs);
         $this->docs = [];
 
-        if ($saved === 0) {
-            return;
+        foreach ($report['codes'] as $code) {
+            $source = KnowledgeSource::query()->where('code', $code)->first();
+            if ($source !== null) {
+                $assign->assignSource($bot, $source);
+            }
         }
 
-        $report = $sync->sync($bot->getKey(), $folder);
-        session()->flash('status', __(':saved archivo(s) subido(s). Conocimiento sincronizado: :created nuevas, :updated actualizadas.', [
-            'saved' => $saved,
-            'created' => $report['created'],
-            'updated' => $report['updated'],
-        ]));
+        foreach ($report['results'] as $r) {
+            if ($r['result'] === 'Rechazado') {
+                $this->addError('docs', $r['file'].': '.$r['reason']);
+            }
+        }
+
+        if ($report['codes'] !== []) {
+            session()->flash('status', __(':n documento(s) añadido(s) a la biblioteca y asignado(s) a :bot.', [
+                'n' => count($report['codes']),
+                'bot' => $bot->assistant_name,
+            ]));
+        }
     }
 
     /** Re-sincroniza la carpeta de conocimiento del asesor (sin subir nada nuevo). */
@@ -170,12 +170,12 @@ class Configure extends Component
     {
         $bot = $this->bot();
 
+        // Fuentes ASIGNADAS al asesor seleccionado (pivote), no por bot_id.
         $sources = $bot === null
             ? collect()
-            : KnowledgeSource::query()
-                ->where('bot_id', $bot->getKey())
-                ->orderByDesc('priority')
-                ->orderBy('code')
+            : $bot->knowledgeSources()
+                ->orderByDesc('knowledge_sources.priority')
+                ->orderBy('knowledge_sources.code')
                 ->get();
 
         return view('ai::livewire.advisor.configure', [
@@ -185,8 +185,9 @@ class Configure extends Component
         ]);
     }
 
+    /** Asesor elegido en el selector de agente (fallback: primer bot activo). */
     private function bot(): ?Bot
     {
-        return Bot::query()->where('status', 'active')->first();
+        return SelectedAdvisor::current();
     }
 }

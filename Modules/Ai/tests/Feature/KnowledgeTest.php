@@ -67,12 +67,14 @@ it('recupera solo las secciones mas relevantes a la pregunta (acotado)', functio
     $bot = knowledgeBot();
 
     app(CurrentInstitution::class)->runFor($bot->institution_id, function () use ($bot) {
-        KnowledgeSource::factory()->create([
+        $source = KnowledgeSource::factory()->create([
             'bot_id' => $bot->getKey(),
             'priority' => 5,
             'content_es' => "## Certificacion\nDiploma y certificado con verificacion digital.\n\n## Metodologia\nSeis semanas online a ritmo propio.\n\n## Inscripcion\nProceso online con cupones.",
             'status' => 'active',
         ]);
+        // Centro de Conocimiento: la recuperación es por asignación en el pivote.
+        $source->bots()->attach($bot->getKey(), ['is_active' => true]);
 
         $retriever = new KnowledgeRetriever;
         $text = $retriever->retrieve($bot->getKey(), '¿El certificado con verificacion?', 'es', 1);
