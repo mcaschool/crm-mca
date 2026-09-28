@@ -1,211 +1,300 @@
+@php
+    use Illuminate\Support\Str;
+
+    // Categorías normalizadas para chips y filtros ('' = sin categoría → clave sin_categoria).
+    $kcCats = collect($byCategory)
+        ->map(fn ($count, $key) => [
+            'key' => ($key === '' || $key === null) ? 'sin_categoria' : (string) $key,
+            'label' => ($key === '' || $key === null) ? __('Sin categoría') : Str::title(str_replace('_', ' ', (string) $key)),
+            'count' => (int) $count,
+        ])
+        ->sortBy(fn ($c) => $c['key'] === 'sin_categoria' ? 1 : 0)
+        ->values();
+    $kcNoCat = (int) ($kcCats->firstWhere('key', 'sin_categoria')['count'] ?? 0);
+
+    // Color de avatar estable por agente (hash del nombre sobre una paleta fija de tokens v4).
+    $kcPalette = [
+        ['bg' => 'var(--mca-gold-soft)', 'fg' => 'var(--mca-gold)'],
+        ['bg' => 'var(--mca-blue-soft)', 'fg' => 'var(--mca-blue)'],
+        ['bg' => 'var(--mca-ok-soft)', 'fg' => 'var(--mca-ok)'],
+        ['bg' => 'var(--mca-warn-soft)', 'fg' => 'var(--mca-warn)'],
+        ['bg' => '#F1EEF9', 'fg' => '#6D5AB8'],
+    ];
+    $kcAvatar = fn (string $name): array => $kcPalette[abs(crc32($name)) % count($kcPalette)];
+@endphp
+
 <div>
     <x-ui.styles />
+    @include('ai::livewire.knowledge._styles')
 
-    <div class="mca-head">
-        <div>
-            <h1 class="mca-h1">{{ __('Centro de Conocimiento') }}</h1>
-            <p class="mca-sub">{{ __('Biblioteca central de fuentes de conocimiento, compartible entre agentes.') }}</p>
-        </div>
-    </div>
-
-    @include('ai::livewire.knowledge._tabs')
-
-    @if (session('status'))
-        <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
-    @endif
-
-    {{-- 1) Resumen: total, activas, inactivas y por categoría (clic = filtrar) --}}
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px">
-        <button type="button" wire:click="clearFilters" class="card" style="text-align:left;padding:14px 16px;cursor:pointer;border:1px solid var(--line)">
-            <div class="t-mut" style="font-size:12px">{{ __('Total de fuentes') }}</div>
-            <div class="t-strong" style="font-size:24px">{{ $summary['total'] }}</div>
-        </button>
-        <button type="button" wire:click="$set('filterStatus','active')" class="card" style="text-align:left;padding:14px 16px;cursor:pointer;border:1px solid var(--line)">
-            <div class="t-mut" style="font-size:12px">{{ __('Activas') }}</div>
-            <div class="t-strong" style="font-size:24px;color:#1a7f4b">{{ $summary['active'] }}</div>
-        </button>
-        <button type="button" wire:click="$set('filterStatus','inactive')" class="card" style="text-align:left;padding:14px 16px;cursor:pointer;border:1px solid var(--line)">
-            <div class="t-mut" style="font-size:12px">{{ __('Inactivas') }}</div>
-            <div class="t-strong" style="font-size:24px;color:#9a6b00">{{ $summary['inactive'] }}</div>
-        </button>
-        @foreach ($byCategory as $cat => $count)
-            <button type="button" wire:click="filterByCategory('{{ $cat ?? 'sin_categoria' }}')" class="card" style="text-align:left;padding:14px 16px;cursor:pointer;border:1px solid var(--line)">
-                <div class="t-mut" style="font-size:12px;text-transform:capitalize">{{ $cat ? str_replace('_', ' ', $cat) : __('Sin categoría') }}</div>
-                <div class="t-strong" style="font-size:24px">{{ $count }}</div>
-            </button>
-        @endforeach
-    </div>
-
-    {{-- 3/6) Subida + Sincronizar --}}
-    <div class="card" style="padding:16px 18px;margin-bottom:16px">
-        <div class="mca-toolbar" style="align-items:center">
+    <div class="mca-panel kc">
+        {{-- Cabecera --}}
+        <div class="kc-header">
             <div>
-                <div class="t-strong">{{ __('Subir conocimiento (.md)') }}</div>
-                <div class="t-mut" style="font-size:12.5px">{{ __('Cada archivo requiere comentario con «Codigo», título «# » y al menos una sección «## ». Máx. 512 KB.') }}</div>
+                <h1 class="kc-title">{{ __('Centro de Conocimiento') }}</h1>
+                <p class="kc-sub">{{ __('Biblioteca central de fuentes, compartida entre todos los agentes.') }}</p>
             </div>
-            <div class="sp"></div>
-            <button type="button" wire:click="syncLibrary" wire:loading.attr="disabled" class="btn btn-sm">
-                <span wire:loading.remove wire:target="syncLibrary"><x-ui.icon name="refresh" class="ic" style="width:15px;height:15px" /> {{ __('Sincronizar biblioteca') }}</span>
-                <span wire:loading wire:target="syncLibrary"><span class="mca-spin"></span> {{ __('Sincronizando…') }}</span>
+            <button type="button" wire:click="syncLibrary" wire:loading.attr="disabled" wire:target="syncLibrary" class="kc-btn kc-btn-ghost">
+                <span wire:loading.remove wire:target="syncLibrary" class="kc-inl"><x-ui.icon name="refresh" /> {{ __('Sincronizar biblioteca') }}</span>
+                <span wire:loading.inline-flex wire:target="syncLibrary" class="kc-gap"><span class="mca-spin"></span> {{ __('Sincronizando…') }}</span>
             </button>
         </div>
 
-        <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
-            <input type="file" wire:model="docs" accept=".md" multiple
-                style="font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:#fff">
-            <button type="button" wire:click="uploadDocs" wire:loading.attr="disabled" wire:target="uploadDocs,docs" class="btn btn-primary btn-sm" @disabled(empty($docs))>
-                <span wire:loading.remove wire:target="uploadDocs"><x-ui.icon name="upload" class="ic" style="width:15px;height:15px" /> {{ __('Subir y sincronizar') }}</span>
-                <span wire:loading wire:target="uploadDocs"><span class="mca-spin"></span> {{ __('Procesando…') }}</span>
-            </button>
-            <span wire:loading wire:target="docs" class="t-mut" style="font-size:12px">{{ __('Cargando archivos…') }}</span>
-        </div>
-        @error('docs') <div class="t-mut" style="color:#b42318;font-size:12.5px;margin-top:8px">{{ $message }}</div> @enderror
+        @include('ai::livewire.knowledge._tabs')
 
-        {{-- Resultado por archivo --}}
-        @if ($uploadResults !== [])
-            <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
-                <div class="t-strong" style="font-size:13px;margin-bottom:8px">{{ __('Resultado de la subida') }}</div>
-                @foreach ($uploadResults as $r)
-                    @php $ok = $r['result'] !== 'Rechazado'; @endphp
-                    <div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;font-size:13px">
-                        <x-ui.icon name="{{ $ok ? 'check' : 'alert-triangle' }}" class="ic" style="width:15px;height:15px;margin-top:2px;color:{{ $ok ? '#1a7f4b' : '#b42318' }}" />
-                        <div>
-                            <span style="font-family:ui-monospace,monospace">{{ $r['file'] }}</span>
-                            — <strong style="color:{{ $ok ? '#1a7f4b' : '#b42318' }}">{{ $r['result'] }}</strong>
-                            <span class="t-mut">· {{ $r['reason'] }}</span>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
+        @if (session('status'))
+            <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
         @endif
-    </div>
 
-    {{-- 2) Filtros + búsqueda --}}
-    <div class="mca-toolbar" style="margin-bottom:10px;gap:8px;flex-wrap:wrap">
-        <div style="position:relative">
-            <input type="text" wire:model.live.debounce.350ms="search" placeholder="{{ __('Buscar por código o nombre…') }}"
-                style="font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 10px 8px 30px;min-width:240px">
-            <x-ui.icon name="search" class="ic" style="width:15px;height:15px;position:absolute;left:9px;top:9px;color:var(--muted)" />
+        {{-- 1) Tarjetas de resumen (clic = filtrar) --}}
+        <div class="kc-stats">
+            <button type="button" wire:click="clearFilters" @class(['kc-stat', 'on' => $search === '' && $filterCategory === '' && $filterStatus === ''])>
+                <div class="kc-stat-top">
+                    <span class="kc-stat-label">{{ __('Total de fuentes') }}</span>
+                    <span class="kc-ic t-blue"><x-ui.icon name="book-open" /></span>
+                </div>
+                <div class="kc-stat-num">{{ $summary['total'] }}</div>
+            </button>
+            <button type="button" wire:click="$set('filterStatus', 'active')" @class(['kc-stat', 'on' => $filterStatus === 'active'])>
+                <div class="kc-stat-top">
+                    <span class="kc-stat-label">{{ __('Activas') }}</span>
+                    <span class="kc-ic t-green"><x-ui.icon name="check" /></span>
+                </div>
+                <div class="kc-stat-num c-green">{{ $summary['active'] }}</div>
+            </button>
+            <button type="button" wire:click="$set('filterStatus', 'inactive')" @class(['kc-stat', 'on' => $filterStatus === 'inactive'])>
+                <div class="kc-stat-top">
+                    <span class="kc-stat-label">{{ __('Inactivas') }}</span>
+                    <span class="kc-ic t-gray">
+                        {{-- Lucide "ban" (círculo tachado) --}}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+                    </span>
+                </div>
+                <div class="kc-stat-num c-gray">{{ $summary['inactive'] }}</div>
+            </button>
+            <button type="button" wire:click="filterByCategory('sin_categoria')" @class(['kc-stat', 'on' => $filterCategory === 'sin_categoria'])>
+                <div class="kc-stat-top">
+                    <span class="kc-stat-label">{{ __('Sin categoría') }}</span>
+                    <span class="kc-ic t-amber"><x-ui.icon name="alert-triangle" /></span>
+                </div>
+                <div class="kc-stat-num c-amber">{{ $kcNoCat }}</div>
+            </button>
         </div>
-        <select wire:model.live="filterCategory" style="font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 10px">
-            <option value="">{{ __('Todas las categorías') }}</option>
-            @foreach ($byCategory as $cat => $count)
-                <option value="{{ $cat ?? 'sin_categoria' }}">{{ $cat ? str_replace('_', ' ', $cat) : __('Sin categoría') }} ({{ $count }})</option>
+
+        {{-- 2) Chips de categoría --}}
+        <div class="kc-chips">
+            <span class="kc-chips-label">{{ __('Filtrar por categoría:') }}</span>
+            <button type="button" wire:click="filterByCategory('')" @class(['kc-chip', 'on' => $filterCategory === ''])>{{ __('Todas') }} · {{ $summary['total'] }}</button>
+            @foreach ($kcCats as $c)
+                <button type="button" wire:key="chip-{{ $c['key'] }}" wire:click="filterByCategory('{{ $c['key'] }}')" @class(['kc-chip', 'on' => $filterCategory === $c['key']])>{{ $c['label'] }} · {{ $c['count'] }}</button>
             @endforeach
-        </select>
-        <select wire:model.live="filterStatus" style="font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 10px">
-            <option value="">{{ __('Todos los estados') }}</option>
-            <option value="active">{{ __('Activas') }}</option>
-            <option value="inactive">{{ __('Inactivas') }}</option>
-        </select>
-        @if ($search !== '' || $filterCategory !== '' || $filterStatus !== '')
-            <button type="button" wire:click="clearFilters" class="btn btn-sm"><x-ui.icon name="x" class="ic" style="width:14px;height:14px" /> {{ __('Limpiar') }}</button>
-        @endif
-    </div>
-
-    {{-- 2) Tabla --}}
-    <div class="card" style="overflow:hidden">
-        <div style="overflow-x:auto">
-            <table>
-                <thead>
-                    <tr>
-                        <th>{{ __('Código') }}</th>
-                        <th>{{ __('Nombre') }}</th>
-                        <th>{{ __('Categoría') }}</th>
-                        <th>{{ __('Prioridad') }}</th>
-                        <th>{{ __('Secciones') }}</th>
-                        <th>{{ __('Agentes') }}</th>
-                        <th>{{ __('Estado') }}</th>
-                        <th>{{ __('Sincronizado') }}</th>
-                        <th style="text-align:right">{{ __('Acciones') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($sources as $s)
-                        <tr wire:key="ks-{{ $s['id'] }}">
-                            <td style="font-family:ui-monospace,monospace;font-size:12px">{{ $s['code'] }}</td>
-                            <td class="t-strong">{{ $s['name'] }}</td>
-                            <td class="t-mut" style="text-transform:capitalize">{{ $s['category'] ? str_replace('_', ' ', $s['category']) : __('Sin categoría') }}</td>
-                            <td class="t-mut">{{ $s['priority'] }}</td>
-                            <td class="t-mut">{{ $s['sections'] }}</td>
-                            <td class="t-mut" title="{{ $s['agents'] ? implode(', ', $s['agents']) : __('Sin agentes') }}">
-                                <x-ui.icon name="users" class="ic" style="width:14px;height:14px;vertical-align:-2px" /> {{ $s['agents_count'] }}
-                                @if ($s['agents'] !== [])
-                                    <span style="font-size:12px"> · {{ implode(', ', array_slice($s['agents'], 0, 2)) }}@if (count($s['agents']) > 2) +{{ count($s['agents']) - 2 }}@endif</span>
-                                @endif
-                            </td>
-                            <td><span class="badge {{ $s['status'] === 'active' ? 'badge-on' : 'badge-off' }}">{{ __($s['status']) }}</span></td>
-                            <td class="t-mut">{{ $s['last_synced_at'] ? $s['last_synced_at']->diffForHumans() : __('nunca') }}</td>
-                            <td style="text-align:right;white-space:nowrap">
-                                <button type="button" wire:click="view({{ $s['id'] }})" class="btn btn-sm" title="{{ __('Ver contenido') }}"><x-ui.icon name="eye" class="ic" style="width:14px;height:14px" /></button>
-                                <button type="button" wire:click="toggleStatus({{ $s['id'] }})" class="btn btn-sm" title="{{ $s['status'] === 'active' ? __('Desactivar') : __('Activar') }}">
-                                    <x-ui.icon name="{{ $s['status'] === 'active' ? 'power' : 'check' }}" class="ic" style="width:14px;height:14px" />
-                                </button>
-                                <button type="button" wire:click="confirmDelete({{ $s['id'] }})" class="btn btn-sm" title="{{ __('Borrar') }}"><x-ui.icon name="trash" class="ic" style="width:14px;height:14px;color:#b42318" /></button>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="9" class="t-empty">{{ __('No hay fuentes que coincidan. Sube archivos .md o ajusta los filtros.') }}</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
         </div>
-    </div>
 
-    {{-- 4) Drawer de contenido --}}
-    @if ($viewingId !== null)
-        <div style="position:fixed;inset:0;background:rgba(19,37,61,.35);z-index:50" wire:click="closeDrawer"></div>
-        <aside style="position:fixed;top:0;right:0;bottom:0;width:min(680px,94vw);background:#fff;z-index:51;box-shadow:-8px 0 30px rgba(0,0,0,.18);display:flex;flex-direction:column">
-            <div style="display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line)">
-                <x-ui.icon name="file-text" class="ic" style="width:18px;height:18px;color:var(--mca,#1E5AA8)" />
-                <strong style="flex:1">{{ $viewingName }}</strong>
-                <button type="button" wire:click="closeDrawer" class="btn btn-sm"><x-ui.icon name="x" class="ic" style="width:15px;height:15px" /></button>
+        {{-- 3) Zona de subida --}}
+        <div class="kc-card kc-upload">
+            <div class="kc-upload-row">
+                <div class="kc-upload-ic"><x-ui.icon name="upload" /></div>
+                <div class="kc-upload-text">
+                    <h3>{{ __('Subir conocimiento (.md)') }}</h3>
+                    <p>{{ __('Cada archivo requiere comentario con «Codigo», título «# » y al menos una sección «## ». Máx. 512 KB por archivo.') }}</p>
+                </div>
+                <label class="kc-btn kc-btn-primary" style="flex:none">
+                    <x-ui.icon name="upload" /> {{ __('Elegir archivos') }}
+                    <input type="file" wire:model="docs" accept=".md" multiple class="kc-file">
+                </label>
             </div>
-            <div style="display:flex;gap:0;flex:1;min-height:0">
-                @if ($viewingSections !== [])
-                    <nav style="width:210px;border-right:1px solid var(--line);padding:14px;overflow:auto;background:#f8fafc">
-                        <div class="t-mut" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">{{ __('Secciones') }}</div>
-                        @foreach ($viewingSections as $sec)
-                            <div class="t-mut" style="font-size:12.5px;padding:4px 0;border-bottom:1px dashed var(--line)">{{ $sec }}</div>
+
+            <div wire:loading wire:target="docs" class="kc-meta" style="margin-top:12px"><span class="mca-spin"></span> {{ __('Cargando archivos…') }}</div>
+            @error('docs') <div class="kc-err">{{ $message }}</div> @enderror
+
+            @if (! empty($docs))
+                <div class="kc-picked">
+                    <div class="kc-picked-files">
+                        @foreach ($docs as $d)
+                            <span class="kc-file-tag"><x-ui.icon name="file-text" /> {{ method_exists($d, 'getClientOriginalName') ? $d->getClientOriginalName() : '' }}</span>
                         @endforeach
-                    </nav>
-                @endif
-                <div class="prose" style="flex:1;overflow:auto;padding:18px 22px;font-size:14px;line-height:1.6">
-                    {!! $viewingHtml !!}
-                </div>
-            </div>
-        </aside>
-    @endif
-
-    {{-- 5) Modal de borrado --}}
-    @if ($deletingId !== null)
-        <div style="position:fixed;inset:0;background:rgba(19,37,61,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px" wire:click="cancelDelete">
-            <div style="background:#fff;border-radius:14px;max-width:460px;width:100%;padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.25)" wire:click.stop>
-                <div style="display:flex;gap:10px;align-items:flex-start">
-                    <x-ui.icon name="alert-triangle" class="ic" style="width:22px;height:22px;color:#b42318;flex:none;margin-top:2px" />
-                    <div>
-                        <h2 style="margin:0 0 6px;font-size:16px;font-weight:700">{{ __('Borrar fuente de conocimiento') }}</h2>
-                        <p class="t-mut" style="margin:0 0 10px;font-size:13.5px">
-                            {{ __('Vas a eliminar «:name». Se borrará la fila, sus asignaciones a agentes y su archivo .md. Esta acción no se puede deshacer.', ['name' => $deletingName]) }}
-                        </p>
-                        @if ($deletingAgents !== [])
-                            <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px;font-size:13px">
-                                <strong>{{ __('La usan :n agente(s):', ['n' => count($deletingAgents)]) }}</strong>
-                                {{ implode(', ', $deletingAgents) }}
-                            </div>
-                        @else
-                            <div class="t-mut" style="font-size:13px">{{ __('Ningún agente la tiene asignada.') }}</div>
-                        @endif
                     </div>
-                </div>
-                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
-                    <button type="button" wire:click="cancelDelete" class="btn btn-sm">{{ __('Cancelar') }}</button>
-                    <button type="button" wire:click="delete" wire:loading.attr="disabled" class="btn btn-sm" style="background:#b42318;color:#fff;border-color:#b42318">
-                        <span wire:loading.remove wire:target="delete"><x-ui.icon name="trash" class="ic" style="width:14px;height:14px" /> {{ __('Borrar definitivamente') }}</span>
-                        <span wire:loading wire:target="delete"><span class="mca-spin"></span> {{ __('Borrando…') }}</span>
+                    <button type="button" wire:click="uploadDocs" wire:loading.attr="disabled" wire:target="uploadDocs,docs" class="kc-btn kc-btn-primary">
+                        <span wire:loading.remove wire:target="uploadDocs" class="kc-inl"><x-ui.icon name="check" /> {{ __('Subir y sincronizar') }}</span>
+                        <span wire:loading.inline-flex wire:target="uploadDocs" class="kc-gap"><span class="mca-spin"></span> {{ __('Procesando…') }}</span>
                     </button>
                 </div>
+            @endif
+
+            @if ($uploadResults !== [])
+                <div class="kc-results">
+                    <h4>{{ __('Resultado de la subida') }}</h4>
+                    @foreach ($uploadResults as $r)
+                        @php $tone = match ($r['result']) { 'Nuevo' => 't-green', 'Actualizado' => 't-blue', default => 't-red' }; @endphp
+                        <div class="kc-result">
+                            <span class="kc-badge {{ $tone }}"><span class="kc-dot"></span>{{ $r['result'] }}</span>
+                            <span class="kc-code">{{ $r['file'] }}</span>
+                            <span class="kc-meta" style="margin:0">{{ $r['reason'] }}</span>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+        </div>
+
+        {{-- 4) Barra de herramientas --}}
+        <div class="kc-toolbar">
+            <div class="kc-search">
+                <x-ui.icon name="search" />
+                <input type="text" wire:model.live.debounce.350ms="search" placeholder="{{ __('Buscar por código o nombre…') }}" aria-label="{{ __('Buscar por código o nombre') }}">
+            </div>
+            <label class="kc-pill">
+                {{ __('Categoría:') }}
+                <select wire:model.live="filterCategory" aria-label="{{ __('Filtrar por categoría') }}">
+                    <option value="">{{ __('Todas') }}</option>
+                    @foreach ($kcCats as $c)
+                        <option value="{{ $c['key'] }}">{{ $c['label'] }}</option>
+                    @endforeach
+                </select>
+                <x-ui.icon name="chevron-down" />
+            </label>
+            <label class="kc-pill">
+                {{ __('Estado:') }}
+                <select wire:model.live="filterStatus" aria-label="{{ __('Filtrar por estado') }}">
+                    <option value="">{{ __('Todos') }}</option>
+                    <option value="active">{{ __('Activas') }}</option>
+                    <option value="inactive">{{ __('Inactivas') }}</option>
+                </select>
+                <x-ui.icon name="chevron-down" />
+            </label>
+            @if ($search !== '' || $filterCategory !== '' || $filterStatus !== '')
+                <button type="button" wire:click="clearFilters" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="x" /> {{ __('Limpiar') }}</button>
+            @endif
+        </div>
+
+        {{-- 5) Tabla --}}
+        <div class="kc-card kc-table-card">
+            <div class="kc-table-scroll">
+                <table class="kc-table">
+                    <thead>
+                        <tr>
+                            <th class="kc-fit">{{ __('Código') }}</th>
+                            <th class="kc-col-name">{{ __('Nombre') }}</th>
+                            <th class="kc-fit">{{ __('Categoría') }}</th>
+                            <th class="kc-col-num kc-fit">{{ __('Prior.') }}</th>
+                            <th class="kc-col-num kc-fit">{{ __('Secc.') }}</th>
+                            <th class="kc-fit">{{ __('Agentes') }}</th>
+                            <th class="kc-fit">{{ __('Estado') }}</th>
+                            <th class="kc-fit" style="text-align:right">{{ __('Acciones') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($sources as $s)
+                            @php $active = $s['status'] === 'active'; @endphp
+                            <tr wire:key="ks-{{ $s['id'] }}" @class(['is-off' => ! $active])>
+                                <td><span class="kc-code">{{ $s['code'] }}</span></td>
+                                <td title="{{ $s['last_synced_at'] ? __('Sincronizado :t', ['t' => $s['last_synced_at']->diffForHumans()]) : __('Sin sincronizar') }}">
+                                    <div class="kc-name">{{ $s['name'] }}</div>
+                                    <div class="kc-meta kc-meta-num">{{ __('Prior. :p · :n secc.', ['p' => $s['priority'], 'n' => $s['sections']]) }}</div>
+                                </td>
+                                <td>
+                                    @php $catLabel = $s['category'] ? Str::title(str_replace('_', ' ', $s['category'])) : null; @endphp
+                                    @if ($catLabel)
+                                        <span class="kc-badge t-blue kc-cat" title="{{ $catLabel }}">{{ $catLabel }}</span>
+                                    @else
+                                        <span class="kc-badge t-amber">{{ __('Sin categoría') }}</span>
+                                    @endif
+                                </td>
+                                <td class="kc-num kc-col-num">{{ $s['priority'] }}</td>
+                                <td class="kc-col-num"><span class="kc-sec"><x-ui.icon name="book-open" /> {{ $s['sections'] }}</span></td>
+                                <td>
+                                    @if ($s['agents'] !== [])
+                                        <span class="kc-avatars" title="{{ implode(', ', $s['agents']) }}">
+                                            @foreach (array_slice($s['agents'], 0, 3) as $agentName)
+                                                @php $col = $kcAvatar($agentName); @endphp
+                                                <span class="kc-av" style="background:{{ $col['bg'] }};color:{{ $col['fg'] }}">{{ Str::upper(Str::substr($agentName, 0, 1)) }}</span>
+                                            @endforeach
+                                            @if (count($s['agents']) > 3)
+                                                <span class="kc-av kc-av-more">+{{ count($s['agents']) - 3 }}</span>
+                                            @endif
+                                        </span>
+                                    @else
+                                        <span class="kc-none">— {{ __('Ninguno') }} —</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if ($active)
+                                        <span class="kc-badge t-green"><span class="kc-dot"></span>{{ __('Activa') }}</span>
+                                    @else
+                                        <span class="kc-badge t-gray"><span class="kc-dot"></span>{{ __('Inactiva') }}</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    <div class="kc-actions">
+                                        <button type="button" wire:click="view({{ $s['id'] }})" class="kc-icon-btn" title="{{ __('Ver contenido') }}" aria-label="{{ __('Ver contenido') }}"><x-ui.icon name="eye" /></button>
+                                        <button type="button" wire:click="toggleStatus({{ $s['id'] }})" @class(['kc-icon-btn', 'go' => ! $active]) title="{{ $active ? __('Desactivar') : __('Activar') }}" aria-label="{{ $active ? __('Desactivar') : __('Activar') }}"><x-ui.icon name="power" /></button>
+                                        <button type="button" wire:click="confirmDelete({{ $s['id'] }})" class="kc-icon-btn danger" title="{{ __('Borrar') }}" aria-label="{{ __('Borrar') }}"><x-ui.icon name="trash" /></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="8">
+                                    <div class="kc-empty">
+                                        <span class="kc-ic t-blue"><x-ui.icon name="book-open" /></span>
+                                        <p>{{ __('No hay fuentes que coincidan. Sube archivos .md o ajusta los filtros.') }}</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
         </div>
-    @endif
+        <div class="kc-foot">{{ __('Mostrando :n de :t fuentes', ['n' => count($sources), 't' => $summary['total']]) }}</div>
+
+        {{-- Drawer de contenido --}}
+        @if ($viewingId !== null)
+            <div class="kc-overlay" wire:click="closeDrawer"></div>
+            <aside class="kc-drawer" aria-label="{{ __('Contenido de la fuente') }}">
+                <div class="kc-drawer-head">
+                    <span class="kc-ic t-blue"><x-ui.icon name="file-text" /></span>
+                    <strong>{{ $viewingName }}</strong>
+                    <button type="button" wire:click="closeDrawer" class="kc-icon-btn" aria-label="{{ __('Cerrar') }}"><x-ui.icon name="x" /></button>
+                </div>
+                <div class="kc-drawer-body">
+                    @if ($viewingSections !== [])
+                        <nav class="kc-drawer-nav">
+                            <h5>{{ __('Secciones') }}</h5>
+                            @foreach ($viewingSections as $sec)
+                                <div>{{ $sec }}</div>
+                            @endforeach
+                        </nav>
+                    @endif
+                    <div class="kc-prose">{!! $viewingHtml !!}</div>
+                </div>
+            </aside>
+        @endif
+
+        {{-- Modal de borrado --}}
+        @if ($deletingId !== null)
+            <div class="kc-modal-wrap" wire:click="cancelDelete">
+                <div class="kc-modal" wire:click.stop role="dialog" aria-modal="true">
+                    <div style="display:flex;gap:12px;align-items:flex-start">
+                        <span class="kc-ic t-red"><x-ui.icon name="alert-triangle" /></span>
+                        <div>
+                            <h2>{{ __('Borrar fuente de conocimiento') }}</h2>
+                            <p>{{ __('Vas a eliminar «:name». Se borrará la fila, sus asignaciones a agentes y su archivo .md. Esta acción no se puede deshacer.', ['name' => $deletingName]) }}</p>
+                            @if ($deletingAgents !== [])
+                                <div class="kc-modal-note"><strong>{{ __('La usan :n agente(s):', ['n' => count($deletingAgents)]) }}</strong> {{ implode(', ', $deletingAgents) }}</div>
+                            @else
+                                <p style="margin:0">{{ __('Ningún agente la tiene asignada.') }}</p>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="kc-modal-foot">
+                        <button type="button" wire:click="cancelDelete" class="kc-btn kc-btn-ghost kc-btn-sm">{{ __('Cancelar') }}</button>
+                        <button type="button" wire:click="delete" wire:loading.attr="disabled" class="kc-btn kc-btn-danger kc-btn-sm">
+                            <span wire:loading.remove wire:target="delete" class="kc-inl"><x-ui.icon name="trash" /> {{ __('Borrar definitivamente') }}</span>
+                            <span wire:loading.inline-flex wire:target="delete" class="kc-gap"><span class="mca-spin"></span> {{ __('Borrando…') }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        @endif
+    </div>
 </div>

@@ -1,91 +1,120 @@
+@php
+    use Illuminate\Support\Str;
+
+    // Color de avatar estable por agente (misma paleta que la Biblioteca).
+    $kcPalette = [
+        ['bg' => 'var(--mca-gold-soft)', 'fg' => 'var(--mca-gold)'],
+        ['bg' => 'var(--mca-blue-soft)', 'fg' => 'var(--mca-blue)'],
+        ['bg' => 'var(--mca-ok-soft)', 'fg' => 'var(--mca-ok)'],
+        ['bg' => 'var(--mca-warn-soft)', 'fg' => 'var(--mca-warn)'],
+        ['bg' => '#F1EEF9', 'fg' => '#6D5AB8'],
+    ];
+    $kcAvatar = fn (string $name): array => $kcPalette[abs(crc32($name)) % count($kcPalette)];
+    $kcTotalActive = $groups->sum('active_count');
+@endphp
+
 <div>
     <x-ui.styles />
+    @include('ai::livewire.knowledge._styles')
 
-    <div class="mca-head">
-        <div>
-            <h1 class="mca-h1">{{ __('Centro de Conocimiento') }}</h1>
-            <p class="mca-sub">{{ __('Elige un agente y decide qué fuentes de la biblioteca usa.') }}</p>
+    <div class="mca-panel kc">
+        <div class="kc-header">
+            <div>
+                <h1 class="kc-title">{{ __('Centro de Conocimiento') }}</h1>
+                <p class="kc-sub">{{ __('Elige un agente y decide qué fuentes de la biblioteca usa.') }}</p>
+            </div>
         </div>
-    </div>
 
-    @include('ai::livewire.knowledge._tabs')
+        @include('ai::livewire.knowledge._tabs')
 
-    <div class="mca-toolbar" style="margin-bottom:14px">
-        <livewire:ai.advisor-selector />
-        <div class="sp"></div>
-        @if ($bot)
-            <span class="t-mut" style="font-size:12.5px">{{ __('Las fuentes se gestionan en la pestaña Biblioteca; aquí solo se asignan.') }}</span>
+        {{-- Selector de agente --}}
+        <div class="kc-card kc-picker">
+            @if ($bot)
+                @php $col = $kcAvatar((string) $bot->assistant_name); @endphp
+                <span class="kc-picker-av" style="background:{{ $col['bg'] }};color:{{ $col['fg'] }}">{{ Str::upper(Str::substr((string) $bot->assistant_name, 0, 1)) }}</span>
+            @endif
+            <livewire:ai.advisor-selector />
+            @if ($bot)
+                <span class="kc-badge t-blue"><span class="kc-dot"></span>{{ __(':n fuentes activas', ['n' => $kcTotalActive]) }}</span>
+                <span class="kc-picker-hint">{{ __('Las fuentes se gestionan en la pestaña Biblioteca; aquí solo se asignan.') }}</span>
+            @endif
+        </div>
+
+        @if (session('status'))
+            <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
+        @endif
+
+        @if ($bot === null)
+            <div class="kc-card kc-empty">
+                <span class="kc-ic t-blue"><x-ui.icon name="bot" /></span>
+                <p>{{ __('No hay agentes activos. Crea o activa un asesor en «Asesores Inteligentes».') }}</p>
+            </div>
+        @elseif ($groups->isEmpty())
+            <div class="kc-card kc-empty">
+                <span class="kc-ic t-blue"><x-ui.icon name="book-open" /></span>
+                <p>{{ __('La biblioteca está vacía. Sube fuentes .md en la pestaña Biblioteca.') }}</p>
+            </div>
+        @else
+            @foreach ($groups as $g)
+                @php $noCat = $g['key'] === 'sin_categoria'; @endphp
+                <div class="kc-card kc-group" wire:key="grp-{{ $g['key'] }}">
+                    <div class="kc-group-head">
+                        <span @class(['kc-ic', 't-amber' => $noCat, 't-blue' => ! $noCat])><x-ui.icon name="{{ $noCat ? 'alert-triangle' : 'layers' }}" /></span>
+                        <span class="kc-group-title">{{ $noCat ? __('Sin categoría') : Str::title($g['label']) }}</span>
+                        <span @class(['kc-badge', 't-green' => $g['active_count'] > 0, 't-gray' => $g['active_count'] === 0])>
+                            {{ __(':a de :t activas para :bot', ['a' => $g['active_count'], 't' => count($g['rows']), 'bot' => $bot->assistant_name]) }}
+                        </span>
+                        <button type="button" wire:click="toggleCategory('{{ $g['key'] }}')" wire:loading.attr="disabled"
+                            class="kc-switch-btn" role="switch" aria-checked="{{ $g['full'] ? 'true' : 'false' }}">
+                            <span @class(['kc-switch', 'on' => $g['full']])></span>
+                            {{ __('Usar toda la categoría') }}
+                        </button>
+                    </div>
+
+                    @foreach ($g['rows'] as $r)
+                        <div class="kc-src" wire:key="src-{{ $r['id'] }}">
+                            <button type="button" wire:click="toggleSource({{ $r['id'] }})" class="kc-switch-btn"
+                                role="switch" aria-checked="{{ $r['assigned'] === true ? 'true' : 'false' }}"
+                                title="{{ $r['assigned'] === true ? __('Pausar para este agente') : __('Activar para este agente') }}"
+                                aria-label="{{ $r['assigned'] === true ? __('Pausar para este agente') : __('Activar para este agente') }}">
+                                <span @class(['kc-switch', 'on' => $r['assigned'] === true])></span>
+                            </button>
+                            <div class="kc-src-main">
+                                <div class="kc-name">{{ $r['name'] }}</div>
+                                <div class="kc-code" style="font-weight:500;margin-top:2px">{{ $r['code'] }}</div>
+                            </div>
+                            <div class="kc-src-tags">
+                                @if ($r['assigned'] === true)
+                                    <span class="kc-badge t-green"><span class="kc-dot"></span>{{ __('Activa para :bot', ['bot' => $bot->assistant_name]) }}</span>
+                                @elseif ($r['assigned'] === false)
+                                    <span class="kc-badge t-amber"><span class="kc-dot"></span>{{ __('Pausada') }}</span>
+                                @else
+                                    <span class="kc-badge t-gray"><span class="kc-dot"></span>{{ __('No asignada') }}</span>
+                                @endif
+                                @if (! $r['global_active'])
+                                    <span class="kc-badge t-red" title="{{ __('Desactivada en la Biblioteca: ningún agente la usa') }}">{{ __('Inactiva global') }}</span>
+                                @endif
+                                @if ($r['shared_with'] !== [])
+                                    <span class="kc-shared" title="{{ implode(', ', $r['shared_with']) }}">
+                                        <span class="kc-avatars">
+                                            @foreach (array_slice($r['shared_with'], 0, 3) as $agentName)
+                                                @php $col = $kcAvatar($agentName); @endphp
+                                                <span class="kc-av" style="background:{{ $col['bg'] }};color:{{ $col['fg'] }}">{{ Str::upper(Str::substr($agentName, 0, 1)) }}</span>
+                                            @endforeach
+                                        </span>
+                                        {{ __('Compartida con: :names', ['names' => implode(', ', $r['shared_with'])]) }}
+                                    </span>
+                                @endif
+                                @if ($r['assigned'] !== null)
+                                    <button type="button" wire:click="detachSource({{ $r['id'] }})" class="kc-btn kc-btn-ghost kc-btn-sm" title="{{ __('Quitar solo de este agente') }}">
+                                        <x-ui.icon name="x" /> {{ __('Quitar') }}
+                                    </button>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @endforeach
         @endif
     </div>
-
-    @if (session('status'))
-        <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
-    @endif
-
-    @if ($bot === null)
-        <div class="card" style="padding:28px;text-align:center">
-            <x-ui.icon name="bot" class="ic" style="width:28px;height:28px;color:var(--muted)" />
-            <p class="t-mut" style="margin:8px 0 0">{{ __('No hay agentes activos. Crea o activa un asesor en «Asesores Inteligentes».') }}</p>
-        </div>
-    @elseif ($groups->isEmpty())
-        <div class="card" style="padding:28px;text-align:center">
-            <x-ui.icon name="book-open" class="ic" style="width:28px;height:28px;color:var(--muted)" />
-            <p class="t-mut" style="margin:8px 0 0">{{ __('La biblioteca está vacía. Sube fuentes .md en la pestaña Biblioteca.') }}</p>
-        </div>
-    @else
-        @foreach ($groups as $g)
-            <div class="card" style="margin-bottom:14px;overflow:hidden" wire:key="grp-{{ $g['key'] }}">
-                <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:#f8fafc">
-                    <x-ui.icon name="layers" class="ic" style="width:16px;height:16px;color:var(--mca,#1E5AA8)" />
-                    <strong style="text-transform:capitalize">{{ $g['label'] }}</strong>
-                    <span class="t-mut" style="font-size:12.5px">{{ __(':a de :t activas para :bot', ['a' => $g['active_count'], 't' => count($g['rows']), 'bot' => $bot->assistant_name]) }}</span>
-                    <div class="sp" style="flex:1"></div>
-                    <button type="button" wire:click="toggleCategory('{{ $g['key'] }}')" wire:loading.attr="disabled"
-                        role="switch" aria-checked="{{ $g['full'] ? 'true' : 'false' }}"
-                        style="display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink,#13253D)">
-                        <span style="position:relative;width:36px;height:20px;border-radius:999px;background:{{ $g['full'] ? '#1E5AA8' : '#cbd5e1' }};transition:background .15s">
-                            <span style="position:absolute;top:2px;left:{{ $g['full'] ? '18px' : '2px' }};width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s"></span>
-                        </span>
-                        {{ __('Usar toda la categoría') }}
-                    </button>
-                </div>
-
-                @foreach ($g['rows'] as $r)
-                    <div wire:key="src-{{ $r['id'] }}" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line)">
-                        <button type="button" wire:click="toggleSource({{ $r['id'] }})" role="switch" aria-checked="{{ $r['assigned'] === true ? 'true' : 'false' }}"
-                            title="{{ $r['assigned'] === true ? __('Pausar para este agente') : __('Activar para este agente') }}"
-                            style="border:0;background:transparent;cursor:pointer;padding:0">
-                            <span style="display:inline-block;position:relative;width:32px;height:18px;border-radius:999px;background:{{ $r['assigned'] === true ? '#1E5AA8' : '#cbd5e1' }}">
-                                <span style="position:absolute;top:2px;left:{{ $r['assigned'] === true ? '16px' : '2px' }};width:14px;height:14px;border-radius:50%;background:#fff"></span>
-                            </span>
-                        </button>
-                        <div style="flex:1;min-width:0">
-                            <div class="t-strong" style="font-size:13.5px">{{ $r['name'] }}</div>
-                            <div class="t-mut" style="font-size:12px;font-family:ui-monospace,monospace">{{ $r['code'] }}</div>
-                        </div>
-                        @if ($r['assigned'] === true)
-                            <span class="badge badge-on">{{ __('Activa para :bot', ['bot' => $bot->assistant_name]) }}</span>
-                        @elseif ($r['assigned'] === false)
-                            <span class="badge" style="background:#fff7ed;color:#9a6b00">{{ __('Pausada') }}</span>
-                        @else
-                            <span class="badge badge-off">{{ __('No asignada') }}</span>
-                        @endif
-                        @if (! $r['global_active'])
-                            <span class="badge" style="background:#fef3f2;color:#b42318" title="{{ __('Desactivada en la Biblioteca: ningún agente la usa') }}">{{ __('Inactiva global') }}</span>
-                        @endif
-                        @if ($r['shared_with'] !== [])
-                            <span class="t-mut" style="font-size:12px" title="{{ implode(', ', $r['shared_with']) }}">
-                                <x-ui.icon name="users" class="ic" style="width:13px;height:13px;vertical-align:-2px" /> {{ __('Compartida con: :names', ['names' => implode(', ', $r['shared_with'])]) }}
-                            </span>
-                        @endif
-                        @if ($r['assigned'] !== null)
-                            <button type="button" wire:click="detachSource({{ $r['id'] }})" class="btn btn-sm" title="{{ __('Quitar solo de este agente') }}">
-                                <x-ui.icon name="x" class="ic" style="width:13px;height:13px" /> {{ __('Quitar') }}
-                            </button>
-                        @endif
-                    </div>
-                @endforeach
-            </div>
-        @endforeach
-    @endif
 </div>
