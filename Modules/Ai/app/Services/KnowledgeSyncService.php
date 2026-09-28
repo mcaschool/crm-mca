@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Modules\Ai\Models\KnowledgeSource;
+use Modules\Ai\Support\KnowledgeTaxonomy;
 
 /**
  * Sincroniza archivos .md del disco 'knowledge' con la tabla knowledge_sources (biblioteca
@@ -68,8 +69,7 @@ class KnowledgeSyncService
             $source->code = $parsed['code'];
             $source->source_file = basename($file);
             $source->name = $parsed['name'];
-            $source->type = 'general';
-            $source->category = $parsed['category'];
+            $this->applyTaxonomy($source, $existing === null, [$parsed['category']]);
             $source->priority = $parsed['priority'];
             if ($existing === null) {
                 $source->status = 'active'; // fuentes existentes conservan su estado
@@ -98,8 +98,8 @@ class KnowledgeSyncService
     /**
      * Biblioteca CENTRAL: recorre 'biblioteca/{categoria}/*.md' y hace upsert por
      * (institution_id, code). NO asigna a bots (eso es KnowledgeAssignmentService). La
-     * categoría se resuelve por precedencia (Precisión B): meta "Categoria" → carpeta →
-     * null, normalizada a slug en minúsculas sin acentos.
+     * categoría (línea) se resuelve por precedencia (Precisión B): meta "Categoria" →
+     * carpeta, normalizada a slug y validada contra la lista fija (ver applyTaxonomy()).
      *
      * @return array{created: int, updated: int, skipped: int, files: array<int, array{file: string, code: string, action: string, category: ?string}>}
      */
@@ -126,9 +126,6 @@ class KnowledgeSyncService
             }
 
             $parsed = $this->parse($raw, basename($file));
-            // Precedencia de categoría: meta Categoria → carpeta biblioteca/{categoria}/ → null.
-            $category = $parsed['category'] ?? $this->folderCategory($file);
-            $category = $category !== null ? $this->normalizeCategory($category) : null;
 
             $existing = KnowledgeSource::query()->where('code', $parsed['code'])->first();
 
@@ -136,8 +133,10 @@ class KnowledgeSyncService
             $source->code = $parsed['code'];
             $source->source_file = basename($file);
             $source->name = $parsed['name'];
-            $source->type = 'general';
-            $source->category = $category;
+            // Precedencia de línea: meta Categoria → carpeta biblioteca/{linea}/ (la primera
+            // que esté en la lista fija); si ninguna lo está, la fila conserva la suya.
+            $this->applyTaxonomy($source, $existing === null, [$parsed['category'], $this->folderCategory($file)]);
+            $category = $source->category;
             $source->priority = $parsed['priority'];
             if ($existing === null) {
                 $source->status = 'active';
@@ -213,6 +212,36 @@ class KnowledgeSyncService
             'has_title' => $hasTitle,
             'sections' => is_int($sections) ? $sections : 0,
         ];
+    }
+
+    /**
+     * Taxonomía en el upsert (Bloque 4a):
+     *  - type: solo se fija al CREAR (base_conocimiento por defecto); al actualizar NUNCA se
+     *    sobrescribe, para no pisar el tipo elegido al subir (ni el de filas antiguas).
+     *  - category: la primera candidata (ya normalizada) que esté en la lista fija de líneas.
+     *    Si ninguna lo está, la fila conserva su valor (null si es nueva): el texto libre ya no
+     *    entra como línea.
+     *
+     * @param  array<int, ?string>  $candidates  en orden de precedencia
+     */
+    private function applyTaxonomy(KnowledgeSource $source, bool $isNew, array $candidates): void
+    {
+        if ($isNew) {
+            $source->type = KnowledgeTaxonomy::TYPE_KNOWLEDGE;
+        }
+
+        foreach ($candidates as $candidate) {
+            $line = $candidate !== null ? $this->normalizeCategory($candidate) : null;
+            if (KnowledgeTaxonomy::isLine($line)) {
+                $source->category = $line;
+
+                return;
+            }
+        }
+
+        if ($isNew) {
+            $source->category = null;
+        }
     }
 
     /** Primer segmento de carpeta bajo 'biblioteca/' (la categoría), o null si está en la raíz. */

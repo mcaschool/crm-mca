@@ -319,6 +319,35 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Taxonomia del Centro de Conocimiento (Bloque 4a)
+    |--------------------------------------------------------------------------
+    | knowledge_sources.category se valida contra esta lista FIJA de lineas
+    | (slug => etiqueta). Los slugs coinciden con program_lines.slug para poder
+    | unir ambos ejes mas adelante sin migrar datos. 'general_institucional' solo
+    | aplica a Base de Conocimiento (no hay programas del catalogo en esa linea).
+    | knowledge_sources.type distingue el contenido de un programa concreto
+    | (programa_academico, con program_id) del transversal de una linea
+    | (base_conocimiento, sin program_id).
+    */
+    'knowledge' => [
+        'lines' => [
+            'microcredenciales' => 'Microcredenciales',
+            'programas_ejecutivos' => 'Programas Ejecutivos',
+            'diplomas_avanzados' => 'Diplomas Avanzados',
+            'micro_mba' => 'Micro MBA',
+            'maestrias' => 'Maestrías',
+            'doctorados' => 'Doctorados',
+            'general_institucional' => 'General institucional',
+        ],
+        'institutional_line' => 'general_institucional',
+        'types' => [
+            'programa_academico' => 'Programa Académico',
+            'base_conocimiento' => 'Base de Conocimiento',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Emparejador (Opcion B — 5 preguntas, determinista, sin IA)
     |--------------------------------------------------------------------------
     | area y meta se derivan del catalogo real (categorias y goals). Aqui van las

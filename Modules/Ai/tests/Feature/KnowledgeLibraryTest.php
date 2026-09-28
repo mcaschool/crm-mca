@@ -59,6 +59,7 @@ it('sube un .md válido: crea la fuente en biblioteca/{categoria}/ y reporta Nue
     Storage::fake('knowledge');
 
     Livewire::actingAs(libAdmin($inst->id))->test(Library::class)
+        ->set('kbLine', 'programas_ejecutivos') // Bloque 4a: la línea es obligatoria al subir
         ->set('docs', [UploadedFile::fake()->createWithContent('PE-001.md', md('PE-001'))])
         ->call('uploadDocs')
         ->assertHasNoErrors()
@@ -76,6 +77,7 @@ it('rechaza un archivo sin comentario Codigo', function () {
     Storage::fake('knowledge');
 
     Livewire::actingAs(libAdmin($inst->id))->test(Library::class)
+        ->set('kbLine', 'programas_ejecutivos') // Bloque 4a: la línea es obligatoria al subir
         ->set('docs', [UploadedFile::fake()->createWithContent('x.md', "# Sin codigo\n\n## Sec\nTexto.")])
         ->call('uploadDocs')
         ->assertSee('Rechazado')
@@ -89,6 +91,7 @@ it('rechaza un archivo sin ninguna sección "##"', function () {
     Storage::fake('knowledge');
 
     Livewire::actingAs(libAdmin($inst->id))->test(Library::class)
+        ->set('kbLine', 'programas_ejecutivos') // Bloque 4a: la línea es obligatoria al subir
         ->set('docs', [UploadedFile::fake()->createWithContent('y.md', "# Titulo\n<!-- Codigo: NO-SEC · Idioma: es -->\n\nTexto sin secciones.")])
         ->call('uploadDocs')
         ->assertSee('Rechazado');
@@ -101,6 +104,7 @@ it('rechaza un archivo que no es .md', function () {
     Storage::fake('knowledge');
 
     Livewire::actingAs(libAdmin($inst->id))->test(Library::class)
+        ->set('kbLine', 'programas_ejecutivos') // Bloque 4a: la línea es obligatoria al subir
         ->set('docs', [UploadedFile::fake()->createWithContent('nota.txt', md('TXT-1'))])
         ->call('uploadDocs')
         ->assertSee('Rechazado')
@@ -117,9 +121,11 @@ it('mismo código con otro nombre de archivo: una sola fila y un solo archivo en
     $admin = libAdmin($inst->id);
 
     Livewire::actingAs($admin)->test(Library::class)
+        ->set('kbLine', 'programas_ejecutivos') // Bloque 4a: la línea es obligatoria al subir
         ->set('docs', [UploadedFile::fake()->createWithContent('pe-001-v1.md', md('PE-001'))])
         ->call('uploadDocs');
     Livewire::actingAs($admin)->test(Library::class)
+        ->set('kbLine', 'programas_ejecutivos') // Bloque 4a: la línea es obligatoria al subir
         ->set('docs', [UploadedFile::fake()->createWithContent('pe-001-v2.md', md('PE-001', 'Programa v2'))])
         ->call('uploadDocs')
         ->assertSee('Actualizado');

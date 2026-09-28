@@ -82,15 +82,45 @@
     .kc-result:first-of-type{border-top:0}
     .kc-err{margin-top:10px;font-size:12.5px;color:var(--kc-red)}
 
+    /* Espacios de subida (Programa Académico | Base de Conocimiento) */
+    .kc-spaces{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-bottom:10px}
+    .kc-space{padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+    .kc-space-head{display:flex;align-items:center;gap:14px}
+    .kc-space-head .kc-upload-ic{width:44px;height:44px;border-radius:12px}
+    .kc-space-head .kc-upload-ic svg{width:21px;height:21px}
+    .kc-upload-ic.t-gold{background:var(--mca-gold-soft);color:var(--mca-gold)}
+    .kc-field{display:flex;flex-direction:column;gap:6px;margin:0}
+    .kc-field-label{font-size:11.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--mca-ink-2)}
+    .kc-field select,.kc-field-search input{width:100%;height:40px;border:1px solid var(--mca-card-border);border-radius:10px;background:#fff;font:inherit;font-size:13.5px;color:var(--mca-ink);transition:border-color .14s,box-shadow .14s}
+    .kc-field select{appearance:none;-webkit-appearance:none;padding:0 34px 0 12px;cursor:pointer;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238A99B2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center}
+    .kc-field select:focus,.kc-field-search input:focus{outline:none;border-color:var(--mca-blue);box-shadow:0 0 0 3px rgba(30,90,168,.12)}
+    .kc-field-search{position:relative}
+    .kc-field-search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--mca-ink-3);pointer-events:none}
+    .kc-field-search input{padding:0 12px 0 34px}
+    .kc-field-search input::placeholder{color:var(--mca-ink-3)}
+    .kc-field .kc-err{margin-top:0}
+    .kc-space-foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--kc-line-soft);display:flex;flex-direction:column;gap:10px}
+    .kc-space-foot .kc-err{margin-top:0}
+    .kc-space-actions{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .kc-upload-note{font-size:12px;color:var(--mca-ink-3);margin:0 0 20px}
+
+    /* Programa vinculado y tipo (tabla) */
+    .kc-prog{display:flex;align-items:center;gap:4px;margin-top:3px;font-size:11.5px;font-weight:500;color:var(--mca-blue);max-width:150px}
+    .kc-prog svg{width:12px;height:12px;flex:none}
+    .kc-prog span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .kc-prog.gone{color:var(--mca-ink-3);text-decoration:line-through}
+    .kc-type{margin-top:5px;font-size:11.5px;color:var(--mca-ink-2);white-space:nowrap}
+    .kc-type.unknown{color:var(--mca-warn)}
+
     /* Barra de herramientas */
     .kc-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
-    .kc-search{position:relative;flex:1;min-width:240px}
+    .kc-search{position:relative;flex:1;min-width:180px}
     .kc-search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--mca-ink-3);pointer-events:none}
     .kc-search input{width:100%;padding:10px 14px 10px 38px;border-radius:10px;border:1px solid var(--mca-card-border);background:#fff;font:inherit;font-size:13.5px;color:var(--mca-ink);transition:border-color .14s,box-shadow .14s}
     .kc-search input::placeholder{color:var(--mca-ink-3)}
     .kc-search input:focus,.kc-pill:focus-within{outline:none;border-color:var(--mca-blue);box-shadow:0 0 0 3px rgba(30,90,168,.12)}
     .kc-pill{position:relative;display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 12px 0 14px;border-radius:10px;border:1px solid var(--mca-card-border);background:#fff;font-size:13px;font-weight:500;color:var(--mca-ink-2);transition:border-color .14s,box-shadow .14s}
-    .kc-pill select{appearance:none;-webkit-appearance:none;border:0;background:transparent;font:inherit;font-weight:600;color:var(--mca-ink);padding:0 22px 0 0;cursor:pointer;outline:none}
+    .kc-pill select{appearance:none;-webkit-appearance:none;border:0;background:transparent;font:inherit;font-weight:600;color:var(--mca-ink);padding:0 22px 0 0;cursor:pointer;outline:none;max-width:124px;text-overflow:ellipsis}
     .kc-pill svg{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--mca-ink-3);pointer-events:none}
 
     /* Contenedores de texto+icono (estados de carga). OJO: los elementos con wire:loading no

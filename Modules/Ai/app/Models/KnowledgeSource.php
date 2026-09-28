@@ -78,6 +78,17 @@ class KnowledgeSource extends Model
             ->withTimestamps();
     }
 
+    /**
+     * Programa del catálogo (solo type = programa_academico). Incluye borrados en blando:
+     * nullOnDelete solo actúa en borrado físico, así que el vínculo histórico se muestra.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Modules\Catalog\Models\Program, $this>
+     */
+    public function program(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(\Modules\Catalog\Models\Program::class)->withTrashed();
+    }
+
     protected static function newFactory(): KnowledgeSourceFactory
     {
         return KnowledgeSourceFactory::new();

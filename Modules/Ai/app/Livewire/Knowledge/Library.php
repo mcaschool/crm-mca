@@ -6,12 +6,16 @@ namespace Modules\Ai\Livewire\Knowledge;
 
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Services\KnowledgeIngestService;
 use Modules\Ai\Services\KnowledgeSyncService;
+use Modules\Ai\Support\KnowledgeTaxonomy;
+use Modules\Catalog\Models\Program;
 
 /**
  * Centro de Conocimiento — pestaña BIBLIOTECA (solo Admin, KnowledgeSourcePolicy).
@@ -33,8 +37,26 @@ class Library extends Component
 
     public string $filterStatus = '';
 
-    /** @var array<int, mixed> Archivos .md en tránsito. */
+    /** '' = todos · programa_academico · base_conocimiento · sin_tipo (valores antiguos). */
+    public string $filterType = '';
+
+    /** @var array<int, mixed> Archivos .md en tránsito — espacio «Base de Conocimiento». */
     public array $docs = [];
+
+    /** Línea elegida en «Base de Conocimiento». */
+    public string $kbLine = '';
+
+    /** @var array<int, mixed> Archivos .md en tránsito — espacio «Programa Académico». */
+    public array $programDocs = [];
+
+    /** Línea elegida en «Programa Académico» (sin la institucional). */
+    public string $programLine = '';
+
+    /** Programa del catálogo elegido (id como texto, por el <select>). */
+    public string $programId = '';
+
+    /** Filtro de texto del desplegable de programas. */
+    public string $programSearch = '';
 
     /** @var array<int, array{file: string, result: string, reason: string}> */
     public array $uploadResults = [];
@@ -72,9 +94,13 @@ class Library extends Component
         $this->search = '';
         $this->filterCategory = '';
         $this->filterStatus = '';
+        $this->filterType = '';
     }
 
-    /** Sube y valida .md vía el pipeline único de la biblioteca (KnowledgeIngestService). */
+    /**
+     * Espacio «Base de Conocimiento»: sube y valida .md vía el pipeline único de la biblioteca
+     * (KnowledgeIngestService), etiquetados con la línea elegida y sin programa.
+     */
     public function uploadDocs(KnowledgeIngestService $ingest): void
     {
         $this->authorize('sync', KnowledgeSource::class);
@@ -83,9 +109,56 @@ class Library extends Component
             return;
         }
 
-        $this->uploadResults = $ingest->ingest($this->docs)['results'];
+        $this->validate(
+            ['kbLine' => ['required', Rule::in(array_keys(KnowledgeTaxonomy::lines()))]],
+            ['kbLine.required' => __('Elige la línea.'), 'kbLine.in' => __('Línea no válida.')],
+        );
+
+        $this->runIngest($ingest, $this->docs, [
+            'type' => KnowledgeTaxonomy::TYPE_KNOWLEDGE,
+            'line' => $this->kbLine,
+            'program_id' => null,
+        ], 'docs');
         $this->docs = [];
-        session()->flash('status', __(':n archivo(s) procesado(s).', ['n' => count($this->uploadResults)]));
+    }
+
+    /**
+     * Espacio «Programa Académico»: exige línea (sin la institucional) y un programa ACTIVO del
+     * catálogo; las fuentes quedan vinculadas a ese programa (program_id).
+     */
+    public function uploadProgramDocs(KnowledgeIngestService $ingest): void
+    {
+        $this->authorize('sync', KnowledgeSource::class);
+
+        if ($this->programDocs === []) {
+            return;
+        }
+
+        $this->validate(
+            [
+                'programLine' => ['required', Rule::in(array_keys(KnowledgeTaxonomy::programLines()))],
+                'programId' => ['required', 'integer'],
+            ],
+            [
+                'programLine.required' => __('Elige la línea.'),
+                'programLine.in' => __('Línea no válida para un Programa Académico.'),
+                'programId.required' => __('Elige el programa del catálogo.'),
+                'programId.integer' => __('Elige el programa del catálogo.'),
+            ],
+        );
+
+        if (! Program::query()->whereKey((int) $this->programId)->where('status', 'active')->exists()) {
+            $this->addError('programId', __('El programa no existe o no está activo.'));
+
+            return;
+        }
+
+        $this->runIngest($ingest, $this->programDocs, [
+            'type' => KnowledgeTaxonomy::TYPE_PROGRAM,
+            'line' => $this->programLine,
+            'program_id' => (int) $this->programId,
+        ], 'programDocs');
+        $this->programDocs = [];
     }
 
     /** Re-sincroniza la biblioteca central (biblioteca/**\/*.md). */
@@ -164,7 +237,9 @@ class Library extends Component
 
     public function render(): View
     {
-        $query = KnowledgeSource::query()->with('bots:id,assistant_name')->withCount('bots');
+        $query = KnowledgeSource::query()
+            ->with(['bots:id,assistant_name', 'program:id,code,name_es,status,deleted_at'])
+            ->withCount('bots');
 
         if (trim($this->search) !== '') {
             $term = '%'.trim($this->search).'%';
@@ -180,6 +255,11 @@ class Library extends Component
         if ($this->filterStatus !== '') {
             $query->where('status', $this->filterStatus);
         }
+        if ($this->filterType !== '') {
+            $this->filterType === 'sin_tipo'
+                ? $query->whereNotIn('type', array_keys(KnowledgeTaxonomy::types()))
+                : $query->where('type', $this->filterType);
+        }
 
         $sources = $query
             ->orderByRaw('category is null, category asc')
@@ -191,6 +271,10 @@ class Library extends Component
                 'code' => $s->code,
                 'name' => $s->name,
                 'category' => $s->category,
+                'type' => $s->type,
+                'program' => $s->program !== null
+                    ? ['name' => (string) $s->program->name_es, 'gone' => $s->program->trashed() || $s->program->status !== 'active']
+                    : null,
                 'priority' => $s->priority,
                 'sections' => $this->countSections((string) ($s->content_es ?? $s->content_en ?? '')),
                 'agents_count' => $s->bots_count,
@@ -207,11 +291,49 @@ class Library extends Component
             ->groupBy('category')
             ->pluck('c', 'category');
 
+        // Desplegable de «Programa Académico»: solo programas ACTIVOS (SoftDeletes ya excluye
+        // los borrados). El elegido se mantiene aunque el filtro de texto no lo incluya.
+        $programs = Program::query()
+            ->where('status', 'active')
+            ->when(trim($this->programSearch) !== '', function ($q): void {
+                $term = '%'.trim($this->programSearch).'%';
+                $q->where(fn ($w) => $w->where('name_es', 'like', $term)->orWhere('code', 'like', $term));
+            })
+            ->orderBy('name_es')
+            ->get(['id', 'code', 'name_es']);
+        if ($this->programId !== '' && ! $programs->contains('id', (int) $this->programId)) {
+            $selected = Program::query()->where('status', 'active')->find((int) $this->programId, ['id', 'code', 'name_es']);
+            if ($selected !== null) {
+                $programs->prepend($selected);
+            }
+        }
+
         return view('ai::livewire.knowledge.library', [
             'sources' => $sources,
             'summary' => ['total' => $total, 'active' => $active, 'inactive' => $total - $active],
             'byCategory' => $byCategory,
+            'lines' => KnowledgeTaxonomy::lines(),
+            'programLines' => KnowledgeTaxonomy::programLines(),
+            'types' => KnowledgeTaxonomy::types(),
+            'programs' => $programs,
         ]);
+    }
+
+    /**
+     * @param  array<int, mixed>  $files
+     * @param  array{type: string, line: string, program_id: ?int}  $classification
+     */
+    private function runIngest(KnowledgeIngestService $ingest, array $files, array $classification, string $errorKey): void
+    {
+        try {
+            $this->uploadResults = $ingest->ingest($files, $classification)['results'];
+        } catch (InvalidArgumentException $e) {
+            $this->addError($errorKey, $e->getMessage());
+
+            return;
+        }
+
+        session()->flash('status', __(':n archivo(s) procesado(s).', ['n' => count($this->uploadResults)]));
     }
 
     private function countSections(string $content): int

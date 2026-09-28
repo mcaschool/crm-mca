@@ -117,9 +117,9 @@ it('syncLibrary lee Categoria y Prioridad del comentario y respeta la precedenci
         'biblioteca/programas_ejecutivos/pe_001.md',
         "# Micro MBA\n<!-- Codigo: PE-001 · Idioma: es · Categoria: Programas Ejecutivos · Prioridad: 7 -->\n\n## Resumen\nContenido PE."
     );
-    // Sin meta Categoria: cae al nombre de la carpeta.
+    // Sin meta Categoria: cae al nombre de la carpeta (Bloque 4a: una línea de la lista fija).
     Storage::disk('knowledge')->put(
-        'biblioteca/estancias/est_001.md',
+        'biblioteca/maestrias/est_001.md',
         "# Estancia\n<!-- Codigo: EST-001 · Idioma: es -->\n\n## Resumen\nContenido estancia."
     );
 
@@ -132,7 +132,7 @@ it('syncLibrary lee Categoria y Prioridad del comentario y respeta la precedenci
     expect($pe->bot_id)->toBeNull();                      // biblioteca central: sin bot
 
     $est = KnowledgeSource::query()->where('code', 'EST-001')->firstOrFail();
-    expect($est->category)->toBe('estancias');            // del nombre de la carpeta
+    expect($est->category)->toBe('maestrias');            // del nombre de la carpeta
 });
 
 // 6) sync() legado sigue funcionando y adjunta al pivote del bot.

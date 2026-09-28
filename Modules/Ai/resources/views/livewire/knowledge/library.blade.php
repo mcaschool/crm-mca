@@ -1,16 +1,22 @@
 @php
     use Illuminate\Support\Str;
+    use Modules\Ai\Support\KnowledgeTaxonomy;
 
-    // Categorías normalizadas para chips y filtros ('' = sin categoría → clave sin_categoria).
+    // Líneas presentes para chips ('' = sin línea → clave sin_categoria). Las de la lista fija
+    // usan su etiqueta; un valor antiguo fuera de la lista se muestra tal cual.
     $kcCats = collect($byCategory)
         ->map(fn ($count, $key) => [
             'key' => ($key === '' || $key === null) ? 'sin_categoria' : (string) $key,
-            'label' => ($key === '' || $key === null) ? __('Sin categoría') : Str::title(str_replace('_', ' ', (string) $key)),
+            'label' => ($key === '' || $key === null) ? __('Sin línea') : (string) KnowledgeTaxonomy::lineLabel((string) $key),
             'count' => (int) $count,
         ])
         ->sortBy(fn ($c) => $c['key'] === 'sin_categoria' ? 1 : 0)
         ->values();
     $kcNoCat = (int) ($kcCats->firstWhere('key', 'sin_categoria')['count'] ?? 0);
+    // Opciones del filtro de línea: la lista fija + valores antiguos que existan fuera de ella.
+    $kcLineOptions = collect($lines)
+        ->union($kcCats->reject(fn ($c) => $c['key'] === 'sin_categoria' || isset($lines[$c['key']]))->pluck('label', 'key'))
+        ->put('sin_categoria', __('Sin línea'));
 
     // Color de avatar estable por agente (hash del nombre sobre una paleta fija de tokens v4).
     $kcPalette = [
@@ -48,7 +54,7 @@
 
         {{-- 1) Tarjetas de resumen (clic = filtrar) --}}
         <div class="kc-stats">
-            <button type="button" wire:click="clearFilters" @class(['kc-stat', 'on' => $search === '' && $filterCategory === '' && $filterStatus === ''])>
+            <button type="button" wire:click="clearFilters" @class(['kc-stat', 'on' => $search === '' && $filterCategory === '' && $filterStatus === '' && $filterType === ''])>
                 <div class="kc-stat-top">
                     <span class="kc-stat-label">{{ __('Total de fuentes') }}</span>
                     <span class="kc-ic t-blue"><x-ui.icon name="book-open" /></span>
@@ -74,55 +80,132 @@
             </button>
             <button type="button" wire:click="filterByCategory('sin_categoria')" @class(['kc-stat', 'on' => $filterCategory === 'sin_categoria'])>
                 <div class="kc-stat-top">
-                    <span class="kc-stat-label">{{ __('Sin categoría') }}</span>
+                    <span class="kc-stat-label">{{ __('Sin línea') }}</span>
                     <span class="kc-ic t-amber"><x-ui.icon name="alert-triangle" /></span>
                 </div>
                 <div class="kc-stat-num c-amber">{{ $kcNoCat }}</div>
             </button>
         </div>
 
-        {{-- 2) Chips de categoría --}}
+        {{-- 2) Chips de línea --}}
         <div class="kc-chips">
-            <span class="kc-chips-label">{{ __('Filtrar por categoría:') }}</span>
+            <span class="kc-chips-label">{{ __('Filtrar por línea:') }}</span>
             <button type="button" wire:click="filterByCategory('')" @class(['kc-chip', 'on' => $filterCategory === ''])>{{ __('Todas') }} · {{ $summary['total'] }}</button>
             @foreach ($kcCats as $c)
                 <button type="button" wire:key="chip-{{ $c['key'] }}" wire:click="filterByCategory('{{ $c['key'] }}')" @class(['kc-chip', 'on' => $filterCategory === $c['key']])>{{ $c['label'] }} · {{ $c['count'] }}</button>
             @endforeach
         </div>
 
-        {{-- 3) Zona de subida --}}
-        <div class="kc-card kc-upload">
-            <div class="kc-upload-row">
-                <div class="kc-upload-ic"><x-ui.icon name="upload" /></div>
-                <div class="kc-upload-text">
-                    <h3>{{ __('Subir conocimiento (.md)') }}</h3>
-                    <p>{{ __('Cada archivo requiere comentario con «Codigo», título «# » y al menos una sección «## ». Máx. 512 KB por archivo.') }}</p>
+        {{-- 3) Espacios de subida: Programa Académico | Base de Conocimiento --}}
+        <div class="kc-spaces">
+            {{-- Programa Académico: línea (sin la institucional) + programa del catálogo --}}
+            <div class="kc-card kc-space">
+                <div class="kc-space-head">
+                    <div class="kc-upload-ic"><x-ui.icon name="book-open" /></div>
+                    <div class="kc-upload-text">
+                        <h3>{{ __('Programa Académico') }}</h3>
+                        <p>{{ __('Contenido de un programa concreto del catálogo.') }}</p>
+                    </div>
                 </div>
-                <label class="kc-btn kc-btn-primary" style="flex:none">
-                    <x-ui.icon name="upload" /> {{ __('Elegir archivos') }}
-                    <input type="file" wire:model="docs" accept=".md" multiple class="kc-file">
+
+                <label class="kc-field">
+                    <span class="kc-field-label">{{ __('Línea') }}</span>
+                    <select wire:model="programLine" aria-label="{{ __('Línea del programa') }}">
+                        <option value="">{{ __('Elige la línea…') }}</option>
+                        @foreach ($programLines as $slug => $label)
+                            <option value="{{ $slug }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                    @error('programLine') <span class="kc-err">{{ $message }}</span> @enderror
                 </label>
+
+                <div class="kc-field">
+                    <span class="kc-field-label">{{ __('Programa del catálogo') }}</span>
+                    <div class="kc-field-search">
+                        <x-ui.icon name="search" />
+                        <input type="text" wire:model.live.debounce.300ms="programSearch" placeholder="{{ __('Buscar por nombre o código…') }}" aria-label="{{ __('Buscar programa') }}">
+                    </div>
+                    <select wire:model="programId" aria-label="{{ __('Programa del catálogo') }}">
+                        <option value="">{{ $programs->isEmpty() ? __('Sin resultados') : __('Elige un programa (:n)', ['n' => $programs->count()]) }}</option>
+                        @foreach ($programs as $p)
+                            <option value="{{ $p->id }}" wire:key="prog-{{ $p->id }}">{{ $p->code ? $p->code.' · ' : '' }}{{ $p->name_es }}</option>
+                        @endforeach
+                    </select>
+                    @error('programId') <span class="kc-err">{{ $message }}</span> @enderror
+                </div>
+
+                <div class="kc-space-foot">
+                    <div wire:loading wire:target="programDocs" class="kc-meta"><span class="mca-spin"></span> {{ __('Cargando archivos…') }}</div>
+                    @error('programDocs') <div class="kc-err">{{ $message }}</div> @enderror
+                    @if (! empty($programDocs))
+                        <div class="kc-picked-files">
+                            @foreach ($programDocs as $d)
+                                <span class="kc-file-tag"><x-ui.icon name="file-text" /> {{ method_exists($d, 'getClientOriginalName') ? $d->getClientOriginalName() : '' }}</span>
+                            @endforeach
+                        </div>
+                    @endif
+                    <div class="kc-space-actions">
+                        <label class="kc-btn kc-btn-ghost">
+                            <x-ui.icon name="upload" /> {{ __('Elegir archivos') }}
+                            <input type="file" wire:model="programDocs" accept=".md" multiple class="kc-file">
+                        </label>
+                        <button type="button" wire:click="uploadProgramDocs" wire:loading.attr="disabled" wire:target="uploadProgramDocs,programDocs" class="kc-btn kc-btn-primary" @disabled(empty($programDocs))>
+                            <span wire:loading.remove wire:target="uploadProgramDocs" class="kc-inl"><x-ui.icon name="check" /> {{ __('Subir') }}</span>
+                            <span wire:loading.inline-flex wire:target="uploadProgramDocs" class="kc-gap"><span class="mca-spin"></span> {{ __('Procesando…') }}</span>
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <div wire:loading wire:target="docs" class="kc-meta" style="margin-top:12px"><span class="mca-spin"></span> {{ __('Cargando archivos…') }}</div>
-            @error('docs') <div class="kc-err">{{ $message }}</div> @enderror
-
-            @if (! empty($docs))
-                <div class="kc-picked">
-                    <div class="kc-picked-files">
-                        @foreach ($docs as $d)
-                            <span class="kc-file-tag"><x-ui.icon name="file-text" /> {{ method_exists($d, 'getClientOriginalName') ? $d->getClientOriginalName() : '' }}</span>
-                        @endforeach
+            {{-- Base de Conocimiento: solo línea (incluida la institucional), sin programa --}}
+            <div class="kc-card kc-space">
+                <div class="kc-space-head">
+                    <div class="kc-upload-ic t-gold"><x-ui.icon name="layers" /></div>
+                    <div class="kc-upload-text">
+                        <h3>{{ __('Base de Conocimiento') }}</h3>
+                        <p>{{ __('Admisiones, titulaciones y FAQs de toda una línea.') }}</p>
                     </div>
-                    <button type="button" wire:click="uploadDocs" wire:loading.attr="disabled" wire:target="uploadDocs,docs" class="kc-btn kc-btn-primary">
-                        <span wire:loading.remove wire:target="uploadDocs" class="kc-inl"><x-ui.icon name="check" /> {{ __('Subir y sincronizar') }}</span>
-                        <span wire:loading.inline-flex wire:target="uploadDocs" class="kc-gap"><span class="mca-spin"></span> {{ __('Procesando…') }}</span>
-                    </button>
                 </div>
-            @endif
 
-            @if ($uploadResults !== [])
-                <div class="kc-results">
+                <label class="kc-field">
+                    <span class="kc-field-label">{{ __('Línea') }}</span>
+                    <select wire:model="kbLine" aria-label="{{ __('Línea de la base de conocimiento') }}">
+                        <option value="">{{ __('Elige la línea…') }}</option>
+                        @foreach ($lines as $slug => $label)
+                            <option value="{{ $slug }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                    @error('kbLine') <span class="kc-err">{{ $message }}</span> @enderror
+                </label>
+
+                <div class="kc-space-foot">
+                    <div wire:loading wire:target="docs" class="kc-meta"><span class="mca-spin"></span> {{ __('Cargando archivos…') }}</div>
+                    @error('docs') <div class="kc-err">{{ $message }}</div> @enderror
+                    @if (! empty($docs))
+                        <div class="kc-picked-files">
+                            @foreach ($docs as $d)
+                                <span class="kc-file-tag"><x-ui.icon name="file-text" /> {{ method_exists($d, 'getClientOriginalName') ? $d->getClientOriginalName() : '' }}</span>
+                            @endforeach
+                        </div>
+                    @endif
+                    <div class="kc-space-actions">
+                        <label class="kc-btn kc-btn-ghost">
+                            <x-ui.icon name="upload" /> {{ __('Elegir archivos') }}
+                            <input type="file" wire:model="docs" accept=".md" multiple class="kc-file">
+                        </label>
+                        <button type="button" wire:click="uploadDocs" wire:loading.attr="disabled" wire:target="uploadDocs,docs" class="kc-btn kc-btn-primary" @disabled(empty($docs))>
+                            <span wire:loading.remove wire:target="uploadDocs" class="kc-inl"><x-ui.icon name="check" /> {{ __('Subir') }}</span>
+                            <span wire:loading.inline-flex wire:target="uploadDocs" class="kc-gap"><span class="mca-spin"></span> {{ __('Procesando…') }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <p class="kc-upload-note">{{ __('Archivos .md: comentario con «Codigo», título «# » y al menos una sección «## ». Máx. 512 KB por archivo. Si el archivo declara «Categoria», debe coincidir con la línea elegida.') }}</p>
+
+        @if ($uploadResults !== [])
+            <div class="kc-card kc-upload">
+                <div class="kc-results" style="margin-top:0;padding-top:0;border-top:0">
                     <h4>{{ __('Resultado de la subida') }}</h4>
                     @foreach ($uploadResults as $r)
                         @php $tone = match ($r['result']) { 'Nuevo' => 't-green', 'Actualizado' => 't-blue', default => 't-red' }; @endphp
@@ -133,8 +216,8 @@
                         </div>
                     @endforeach
                 </div>
-            @endif
-        </div>
+            </div>
+        @endif
 
         {{-- 4) Barra de herramientas --}}
         <div class="kc-toolbar">
@@ -143,12 +226,23 @@
                 <input type="text" wire:model.live.debounce.350ms="search" placeholder="{{ __('Buscar por código o nombre…') }}" aria-label="{{ __('Buscar por código o nombre') }}">
             </div>
             <label class="kc-pill">
-                {{ __('Categoría:') }}
-                <select wire:model.live="filterCategory" aria-label="{{ __('Filtrar por categoría') }}">
+                {{ __('Línea:') }}
+                <select wire:model.live="filterCategory" aria-label="{{ __('Filtrar por línea') }}">
                     <option value="">{{ __('Todas') }}</option>
-                    @foreach ($kcCats as $c)
-                        <option value="{{ $c['key'] }}">{{ $c['label'] }}</option>
+                    @foreach ($kcLineOptions as $key => $label)
+                        <option value="{{ $key }}">{{ $label }}</option>
                     @endforeach
+                </select>
+                <x-ui.icon name="chevron-down" />
+            </label>
+            <label class="kc-pill">
+                {{ __('Tipo:') }}
+                <select wire:model.live="filterType" aria-label="{{ __('Filtrar por tipo') }}">
+                    <option value="">{{ __('Todos') }}</option>
+                    @foreach ($types as $slug => $label)
+                        <option value="{{ $slug }}">{{ $label }}</option>
+                    @endforeach
+                    <option value="sin_tipo">{{ __('Sin tipo') }}</option>
                 </select>
                 <x-ui.icon name="chevron-down" />
             </label>
@@ -161,7 +255,7 @@
                 </select>
                 <x-ui.icon name="chevron-down" />
             </label>
-            @if ($search !== '' || $filterCategory !== '' || $filterStatus !== '')
+            @if ($search !== '' || $filterCategory !== '' || $filterStatus !== '' || $filterType !== '')
                 <button type="button" wire:click="clearFilters" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="x" /> {{ __('Limpiar') }}</button>
             @endif
         </div>
@@ -174,7 +268,7 @@
                         <tr>
                             <th class="kc-fit">{{ __('Código') }}</th>
                             <th class="kc-col-name">{{ __('Nombre') }}</th>
-                            <th class="kc-fit">{{ __('Categoría') }}</th>
+                            <th class="kc-fit">{{ __('Línea / tipo') }}</th>
                             <th class="kc-col-num kc-fit">{{ __('Prior.') }}</th>
                             <th class="kc-col-num kc-fit">{{ __('Secc.') }}</th>
                             <th class="kc-fit">{{ __('Agentes') }}</th>
@@ -189,15 +283,25 @@
                                 <td><span class="kc-code">{{ $s['code'] }}</span></td>
                                 <td title="{{ $s['last_synced_at'] ? __('Sincronizado :t', ['t' => $s['last_synced_at']->diffForHumans()]) : __('Sin sincronizar') }}">
                                     <div class="kc-name">{{ $s['name'] }}</div>
+                                    @if ($s['program'])
+                                        <div @class(['kc-prog', 'gone' => $s['program']['gone']]) title="{{ $s['program']['name'] }}{{ $s['program']['gone'] ? ' — '.__('ya no está activo en el catálogo') : '' }}">
+                                            <x-ui.icon name="book-open" /><span>{{ $s['program']['name'] }}</span>
+                                        </div>
+                                    @endif
                                     <div class="kc-meta kc-meta-num">{{ __('Prior. :p · :n secc.', ['p' => $s['priority'], 'n' => $s['sections']]) }}</div>
                                 </td>
                                 <td>
-                                    @php $catLabel = $s['category'] ? Str::title(str_replace('_', ' ', $s['category'])) : null; @endphp
+                                    @php
+                                        $catLabel = KnowledgeTaxonomy::lineLabel($s['category']);
+                                        $catKnown = KnowledgeTaxonomy::isLine($s['category']);
+                                        $typeLabel = KnowledgeTaxonomy::typeLabel($s['type']);
+                                    @endphp
                                     @if ($catLabel)
-                                        <span class="kc-badge t-blue kc-cat" title="{{ $catLabel }}">{{ $catLabel }}</span>
+                                        <span @class(['kc-badge', 'kc-cat', 't-blue' => $catKnown, 't-amber' => ! $catKnown]) title="{{ $catKnown ? $catLabel : __(':v — fuera de la lista de líneas', ['v' => $catLabel]) }}">{{ $catLabel }}</span>
                                     @else
-                                        <span class="kc-badge t-amber">{{ __('Sin categoría') }}</span>
+                                        <span class="kc-badge t-amber">{{ __('Sin línea') }}</span>
                                     @endif
+                                    <div @class(['kc-type', 'unknown' => $typeLabel === null])>{{ $typeLabel ?? __('Sin tipo') }}</div>
                                 </td>
                                 <td class="kc-num kc-col-num">{{ $s['priority'] }}</td>
                                 <td class="kc-col-num"><span class="kc-sec"><x-ui.icon name="book-open" /> {{ $s['sections'] }}</span></td>
