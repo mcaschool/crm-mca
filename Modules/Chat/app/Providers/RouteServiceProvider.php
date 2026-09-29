@@ -28,6 +28,18 @@ class RouteServiceProvider extends ServiceProvider
     {
         $this->mapApiRoutes();
         $this->mapWebRoutes();
+        $this->mapLegacyWidgetScript();
+    }
+
+    /**
+     * /widget/celia.js (nombre antiguo, incrustado en webs en producción) → mismo archivo que
+     * public/widget/chat-widget.js. SIN middleware: es un recurso público (no abre sesión ni
+     * pone cookies). Solo llega aquí porque celia.js ya no existe como archivo en public/.
+     */
+    protected function mapLegacyWidgetScript(): void
+    {
+        Route::get('widget/celia.js', \Modules\Chat\Http\Controllers\WidgetScriptController::class)
+            ->name('widget.script.legacy');
     }
 
     /**

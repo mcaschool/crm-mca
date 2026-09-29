@@ -7,14 +7,14 @@
     $kcCats = collect($byCategory)
         ->map(fn ($count, $key) => [
             'key' => ($key === '' || $key === null) ? 'sin_categoria' : (string) $key,
-            'label' => ($key === '' || $key === null) ? __('Sin línea') : (string) KnowledgeTaxonomy::lineLabel((string) $key),
+            'label' => ($key === '' || $key === null) ? __('Sin línea') : __((string) KnowledgeTaxonomy::lineLabel((string) $key)),
             'count' => (int) $count,
         ])
         ->sortBy(fn ($c) => $c['key'] === 'sin_categoria' ? 1 : 0)
         ->values();
     $kcNoCat = (int) ($kcCats->firstWhere('key', 'sin_categoria')['count'] ?? 0);
     // Opciones del filtro de línea: la lista fija + valores antiguos que existan fuera de ella.
-    $kcLineOptions = collect($lines)
+    $kcLineOptions = collect($lines)->map(fn ($l) => __($l))
         ->union($kcCats->reject(fn ($c) => $c['key'] === 'sin_categoria' || isset($lines[$c['key']]))->pluck('label', 'key'))
         ->put('sin_categoria', __('Sin línea'));
 
@@ -108,16 +108,15 @@
                     </div>
                 </div>
 
-                <label class="kc-field">
+                <div class="kc-field">
                     <span class="kc-field-label">{{ __('Línea') }}</span>
-                    <select wire:model="programLine" aria-label="{{ __('Línea del programa') }}">
-                        <option value="">{{ __('Elige la línea…') }}</option>
-                        @foreach ($programLines as $slug => $label)
-                            <option value="{{ $slug }}">{{ $label }}</option>
-                        @endforeach
-                    </select>
+                    @include('ai::livewire.knowledge._dropdown', [
+                        'model' => 'programLine', 'live' => false, 'field' => true,
+                        'options' => collect($programLines)->map(fn ($l) => __($l))->all(),
+                        'placeholder' => __('Elige la línea…'), 'aria' => __('Línea del programa'),
+                    ])
                     @error('programLine') <span class="kc-err">{{ $message }}</span> @enderror
-                </label>
+                </div>
 
                 <div class="kc-field">
                     <span class="kc-field-label">{{ __('Programa del catálogo') }}</span>
@@ -125,12 +124,11 @@
                         <x-ui.icon name="search" />
                         <input type="text" wire:model.live.debounce.300ms="programSearch" placeholder="{{ __('Buscar por nombre o código…') }}" aria-label="{{ __('Buscar programa') }}">
                     </div>
-                    <select wire:model="programId" aria-label="{{ __('Programa del catálogo') }}">
-                        <option value="">{{ $programs->isEmpty() ? __('Sin resultados') : __('Elige un programa (:n)', ['n' => $programs->count()]) }}</option>
-                        @foreach ($programs as $p)
-                            <option value="{{ $p->id }}" wire:key="prog-{{ $p->id }}">{{ $p->code ? $p->code.' · ' : '' }}{{ $p->name_es }}</option>
-                        @endforeach
-                    </select>
+                    @include('ai::livewire.knowledge._dropdown', [
+                        'model' => 'programId', 'live' => false, 'field' => true,
+                        'options' => $programs->mapWithKeys(fn ($p) => [$p->id => ($p->code ? $p->code.' · ' : '').$p->name_es])->all(),
+                        'placeholder' => __('Elige un programa…'), 'aria' => __('Programa del catálogo'),
+                    ])
                     @error('programId') <span class="kc-err">{{ $message }}</span> @enderror
                 </div>
 
@@ -149,7 +147,7 @@
                             <x-ui.icon name="upload" /> {{ __('Elegir archivos') }}
                             <input type="file" wire:model="programDocs" accept=".md" multiple class="kc-file">
                         </label>
-                        <button type="button" wire:click="uploadProgramDocs" wire:loading.attr="disabled" wire:target="uploadProgramDocs,programDocs" class="kc-btn kc-btn-primary" @disabled(empty($programDocs))>
+                        <button type="button" wire:click="uploadProgramDocs" wire:loading.attr="disabled" wire:target="uploadProgramDocs,programDocs" class="kc-btn kc-btn-primary">
                             <span wire:loading.remove wire:target="uploadProgramDocs" class="kc-inl"><x-ui.icon name="check" /> {{ __('Subir') }}</span>
                             <span wire:loading.inline-flex wire:target="uploadProgramDocs" class="kc-gap"><span class="mca-spin"></span> {{ __('Procesando…') }}</span>
                         </button>
@@ -167,16 +165,15 @@
                     </div>
                 </div>
 
-                <label class="kc-field">
+                <div class="kc-field">
                     <span class="kc-field-label">{{ __('Línea') }}</span>
-                    <select wire:model="kbLine" aria-label="{{ __('Línea de la base de conocimiento') }}">
-                        <option value="">{{ __('Elige la línea…') }}</option>
-                        @foreach ($lines as $slug => $label)
-                            <option value="{{ $slug }}">{{ $label }}</option>
-                        @endforeach
-                    </select>
+                    @include('ai::livewire.knowledge._dropdown', [
+                        'model' => 'kbLine', 'live' => false, 'field' => true,
+                        'options' => collect($lines)->map(fn ($l) => __($l))->all(),
+                        'placeholder' => __('Elige la línea…'), 'aria' => __('Línea de la base de conocimiento'),
+                    ])
                     @error('kbLine') <span class="kc-err">{{ $message }}</span> @enderror
-                </label>
+                </div>
 
                 <div class="kc-space-foot">
                     <div wire:loading wire:target="docs" class="kc-meta"><span class="mca-spin"></span> {{ __('Cargando archivos…') }}</div>
@@ -193,7 +190,7 @@
                             <x-ui.icon name="upload" /> {{ __('Elegir archivos') }}
                             <input type="file" wire:model="docs" accept=".md" multiple class="kc-file">
                         </label>
-                        <button type="button" wire:click="uploadDocs" wire:loading.attr="disabled" wire:target="uploadDocs,docs" class="kc-btn kc-btn-primary" @disabled(empty($docs))>
+                        <button type="button" wire:click="uploadDocs" wire:loading.attr="disabled" wire:target="uploadDocs,docs" class="kc-btn kc-btn-primary">
                             <span wire:loading.remove wire:target="uploadDocs" class="kc-inl"><x-ui.icon name="check" /> {{ __('Subir') }}</span>
                             <span wire:loading.inline-flex wire:target="uploadDocs" class="kc-gap"><span class="mca-spin"></span> {{ __('Procesando…') }}</span>
                         </button>
@@ -210,7 +207,7 @@
                     @foreach ($uploadResults as $r)
                         @php $tone = match ($r['result']) { 'Nuevo' => 't-green', 'Actualizado' => 't-blue', default => 't-red' }; @endphp
                         <div class="kc-result">
-                            <span class="kc-badge {{ $tone }}"><span class="kc-dot"></span>{{ $r['result'] }}</span>
+                            <span class="kc-badge {{ $tone }}"><span class="kc-dot"></span>{{ __($r['result']) }}</span>
                             <span class="kc-code">{{ $r['file'] }}</span>
                             <span class="kc-meta" style="margin:0">{{ $r['reason'] }}</span>
                         </div>
@@ -225,36 +222,21 @@
                 <x-ui.icon name="search" />
                 <input type="text" wire:model.live.debounce.350ms="search" placeholder="{{ __('Buscar por código o nombre…') }}" aria-label="{{ __('Buscar por código o nombre') }}">
             </div>
-            <label class="kc-pill">
-                {{ __('Línea:') }}
-                <select wire:model.live="filterCategory" aria-label="{{ __('Filtrar por línea') }}">
-                    <option value="">{{ __('Todas') }}</option>
-                    @foreach ($kcLineOptions as $key => $label)
-                        <option value="{{ $key }}">{{ $label }}</option>
-                    @endforeach
-                </select>
-                <x-ui.icon name="chevron-down" />
-            </label>
-            <label class="kc-pill">
-                {{ __('Tipo:') }}
-                <select wire:model.live="filterType" aria-label="{{ __('Filtrar por tipo') }}">
-                    <option value="">{{ __('Todos') }}</option>
-                    @foreach ($types as $slug => $label)
-                        <option value="{{ $slug }}">{{ $label }}</option>
-                    @endforeach
-                    <option value="sin_tipo">{{ __('Sin tipo') }}</option>
-                </select>
-                <x-ui.icon name="chevron-down" />
-            </label>
-            <label class="kc-pill">
-                {{ __('Estado:') }}
-                <select wire:model.live="filterStatus" aria-label="{{ __('Filtrar por estado') }}">
-                    <option value="">{{ __('Todos') }}</option>
-                    <option value="active">{{ __('Activas') }}</option>
-                    <option value="inactive">{{ __('Inactivas') }}</option>
-                </select>
-                <x-ui.icon name="chevron-down" />
-            </label>
+            @include('ai::livewire.knowledge._dropdown', [
+                'model' => 'filterCategory', 'live' => true, 'emptyOption' => true,
+                'options' => $kcLineOptions->all(),
+                'placeholder' => __('Todas'), 'label' => __('Línea:'), 'aria' => __('Filtrar por línea'),
+            ])
+            @include('ai::livewire.knowledge._dropdown', [
+                'model' => 'filterType', 'live' => true, 'emptyOption' => true,
+                'options' => collect($types)->map(fn ($l) => __($l))->put('sin_tipo', __('Sin tipo'))->all(),
+                'placeholder' => __('Todos'), 'label' => __('Tipo:'), 'aria' => __('Filtrar por tipo'),
+            ])
+            @include('ai::livewire.knowledge._dropdown', [
+                'model' => 'filterStatus', 'live' => true, 'emptyOption' => true,
+                'options' => ['active' => __('Activas'), 'inactive' => __('Inactivas')],
+                'placeholder' => __('Todos'), 'label' => __('Estado:'), 'aria' => __('Filtrar por estado'),
+            ])
             @if ($search !== '' || $filterCategory !== '' || $filterStatus !== '' || $filterType !== '')
                 <button type="button" wire:click="clearFilters" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="x" /> {{ __('Limpiar') }}</button>
             @endif
@@ -292,9 +274,10 @@
                                 </td>
                                 <td>
                                     @php
-                                        $catLabel = KnowledgeTaxonomy::lineLabel($s['category']);
                                         $catKnown = KnowledgeTaxonomy::isLine($s['category']);
+                                        $catLabel = $s['category'] === null ? null : ($catKnown ? __((string) KnowledgeTaxonomy::lineLabel($s['category'])) : $s['category']);
                                         $typeLabel = KnowledgeTaxonomy::typeLabel($s['type']);
+                                        $typeLabel = $typeLabel !== null ? __($typeLabel) : null;
                                     @endphp
                                     @if ($catLabel)
                                         <span @class(['kc-badge', 'kc-cat', 't-blue' => $catKnown, 't-amber' => ! $catKnown]) title="{{ $catKnown ? $catLabel : __(':v — fuera de la lista de líneas', ['v' => $catLabel]) }}">{{ $catLabel }}</span>

@@ -19,18 +19,19 @@
     .kc-seg a:hover{color:var(--mca-ink);background:rgba(255,255,255,.75)}
     .kc-seg a.on{background:var(--mca-blue);color:#fff;box-shadow:0 1px 2px rgba(19,37,61,.12),0 2px 8px rgba(30,90,168,.22)}
 
-    /* Botones */
-    .kc-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:inherit;font-size:13.5px;font-weight:600;line-height:1;padding:10px 18px;border-radius:10px;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none;transition:background .14s,border-color .14s,box-shadow .14s,color .14s,transform .08s}
-    .kc-btn svg{width:15px;height:15px}
+    /* Botones: TODOS con el mismo alto (40px), radio (10px) y padding. Primario = azul sólido
+       que nunca se ve desvaído; secundario = borde gris claro y texto oscuro. */
+    .kc-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;font:inherit;font-size:13.5px;font-weight:600;line-height:1;border-radius:10px;border:1px solid transparent;cursor:pointer;white-space:nowrap;text-decoration:none;transition:background .14s,border-color .14s,box-shadow .14s,color .14s,transform .08s}
+    .kc-btn svg{width:15px;height:15px;flex:none}
     .kc-btn:active{transform:translateY(1px)}
     .kc-btn:focus-visible{outline:2px solid rgba(30,90,168,.35);outline-offset:2px}
     .kc-btn:disabled{opacity:.55;cursor:default;transform:none}
-    .kc-btn-primary{background:var(--mca-blue);color:#fff;box-shadow:0 1px 2px rgba(19,37,61,.12),0 2px 8px rgba(30,90,168,.20)}
-    .kc-btn-primary:hover{background:var(--mca-blue-hover)}
-    .kc-btn-ghost{background:#fff;border-color:var(--mca-card-border);color:var(--mca-ink-2);box-shadow:var(--mca-shadow-sm)}
-    .kc-btn-ghost:hover{border-color:#CBD6E6;color:var(--mca-ink);background:#FBFDFF}
-    .kc-btn-sm{padding:7px 12px;font-size:12.5px;border-radius:9px}
-    .kc-btn-sm svg{width:13px;height:13px}
+    .kc-btn-primary{background:#1E5AA8;border-color:#1E5AA8;color:#fff;box-shadow:0 1px 2px rgba(19,37,61,.12)}
+    .kc-btn-primary:hover{background:#174A8C;border-color:#174A8C}
+    .kc-btn-primary:disabled{opacity:1;cursor:progress} /* solo mientras procesa: sin desvaído */
+    .kc-btn-ghost{background:#fff;border-color:#E4E7EE;color:var(--mca-ink)}
+    .kc-btn-ghost:hover{border-color:#CBD3E1;background:#F8FAFC}
+    .kc-btn-sm{font-size:13.5px}
     .kc-btn-danger{background:var(--kc-red);color:#fff}
     .kc-btn-danger:hover{filter:brightness(1.08)}
 
@@ -112,9 +113,34 @@
     .kc-type{margin-top:5px;font-size:11.5px;color:var(--mca-ink-2);white-space:nowrap}
     .kc-type.unknown{color:var(--mca-warn)}
 
-    /* Barra de herramientas */
-    .kc-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+    /* Barra de herramientas: controles de 40px, centrados y a 12px */
+    .kc-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
     .kc-search{position:relative;flex:1;min-width:180px}
+    .kc-search input{height:40px}
+
+    /* Desplegable propio (Alpine) — ver _dropdown.blade.php */
+    .kc-native{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);pointer-events:none}
+    .kc-dd{position:relative;flex:none}
+    .kc-dd-btn{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 36px 0 14px;border:1px solid #E4E7EE;border-radius:10px;background:#fff;font:inherit;font-size:13.5px;color:var(--mca-ink);cursor:pointer;position:relative;max-width:230px;transition:border-color .14s,box-shadow .14s}
+    .kc-dd-btn:hover{border-color:#CBD3E1}
+    .kc-dd-btn:focus-visible,.kc-dd-btn[aria-expanded="true"]{outline:none;border-color:var(--mca-blue);box-shadow:0 0 0 3px rgba(30,90,168,.12)}
+    .kc-dd-lbl{color:var(--mca-ink-2);font-weight:500;flex:none}
+    .kc-dd-val{font-weight:600;color:var(--mca-ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .kc-dd-chev{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--mca-ink-3);transition:transform .15s}
+    .kc-dd-btn[aria-expanded="true"] .kc-dd-chev{transform:translateY(-50%) rotate(180deg)}
+    .kc-dd-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:60;min-width:100%;width:max-content;max-width:340px;max-height:280px;overflow-y:auto;padding:6px;background:#fff;border:1px solid #E4E7EE;border-radius:10px;box-shadow:0 10px 28px rgba(19,37,61,.12),0 2px 6px rgba(19,37,61,.06)}
+    .kc-dd-opt{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:36px;padding:0 12px;border:0;border-radius:7px;background:transparent;font:inherit;font-size:13.5px;color:var(--mca-ink);text-align:left;cursor:pointer}
+    .kc-dd-opt span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .kc-dd-opt:hover,.kc-dd-opt:focus-visible{background:#F2F4F8;outline:none}
+    .kc-dd-opt.on{background:var(--mca-blue-soft);color:var(--mca-blue);font-weight:600}
+    .kc-dd-check{width:15px;height:15px;flex:none;visibility:hidden}
+    .kc-dd-opt.on .kc-dd-check{visibility:visible}
+    .kc-dd-none{padding:10px 12px;font-size:13px;color:var(--mca-ink-3)}
+    /* Variante de formulario (tarjetas): ancho completo */
+    .kc-dd-field{width:100%}
+    .kc-dd-field .kc-dd-btn{width:100%;max-width:none}
+    .kc-dd-field .kc-dd-panel{min-width:100%;width:max-content;max-width:460px}
+    .kc-dd-val.is-ph{color:var(--mca-ink-3);font-weight:500}
     .kc-search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--mca-ink-3);pointer-events:none}
     .kc-search input{width:100%;padding:10px 14px 10px 38px;border-radius:10px;border:1px solid var(--mca-card-border);background:#fff;font:inherit;font-size:13.5px;color:var(--mca-ink);transition:border-color .14s,box-shadow .14s}
     .kc-search input::placeholder{color:var(--mca-ink-3)}
@@ -198,7 +224,7 @@
     .kc-src-tags{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
     .kc-shared{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--mca-ink-2)}
 
-    /* Secciones de «Por agente» y «Programas que puede recomendar» (Bloque 4c) */
+    /* Secciones de la pestaña de agentes: conocimiento y programas asignables (Bloque 4c) */
     .kc-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:4px 0 12px;flex-wrap:wrap}
     .kc-section-gap{margin-top:30px}
     .kc-section-title{font-size:16px;font-weight:700;color:var(--mca-ink);margin:0}
@@ -211,6 +237,7 @@
     .kc-chev.open{transform:none}
     .kc-chev svg{width:16px;height:16px}
     .kc-area-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+    .kc-area-titles{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
     .kc-prog-row{padding:10px 18px}
     .kc-prog-code{min-width:62px}
     .kc-src.is-off .kc-name,.kc-src.is-off .kc-prog-code{opacity:.6}

@@ -1,5 +1,7 @@
 /*
- * Widget embebible del asesor academico de MCA (Microcredenciales).
+ * Widget de chat embebible de los asesores inteligentes de MCA.
+ * Archivo unico: se sirve como /widget/chat-widget.js y, por compatibilidad con las webs
+ * donde ya esta incrustado, tambien como /widget/celia.js (misma fuente, via ruta).
  * - Aislado con Shadow DOM (no choca con los estilos de la web anfitriona).
  * - Sin secretos ni logica de negocio: solo habla con nuestra API.
  * - Deduce la institucion/bot desde la public_key; nunca envia institution_id.
@@ -12,9 +14,10 @@
 (function () {
   // document.currentScript es null cuando el widget se carga de forma dinamica
   // (p. ej. document.createElement('script') en el "footer scripts" de WordPress).
-  // En ese caso se localiza el <script> por su marcador data-bot-key.
+  // En ese caso se localiza el <script> por su marcador data-bot-key, con el nombre nuevo
+  // (chat-widget.js) o el antiguo (celia.js).
   var script = document.currentScript
-    || document.querySelector('script[data-bot-key][src*="celia"]')
+    || document.querySelector('script[data-bot-key][src*="chat-widget"], script[data-bot-key][src*="celia"]')
     || (function () { var s = document.querySelectorAll('script[data-bot-key]'); return s[s.length - 1]; })();
   if (!script) { return; } // sin script identificable no se arranca (evita romper la web)
   var BOT_KEY = script.getAttribute('data-bot-key');

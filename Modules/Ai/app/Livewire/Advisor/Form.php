@@ -111,7 +111,7 @@ class Form extends Component
             );
         }
 
-        session()->flash('status', $creating ? 'Asesor creado. Completa su foto y conocimiento.' : 'Asesor actualizado.');
+        session()->flash('status', $creating ? __('Asesor creado. Completa su foto y conocimiento.') : __('Asesor actualizado.'));
 
         if ($creating) {
             return redirect()->route('advisors.edit', $bot->getKey());
@@ -141,7 +141,7 @@ class Form extends Component
         $bot->save();
 
         $this->avatar = null;
-        session()->flash('status', 'Foto de perfil actualizada.');
+        session()->flash('status', __('Foto de perfil actualizada.'));
     }
 
     public function removeAvatar(): void
@@ -154,7 +154,7 @@ class Form extends Component
         Storage::disk('public')->delete($bot->avatar_path);
         $bot->avatar_path = null;
         $bot->save();
-        session()->flash('status', 'Foto eliminada; se usa el avatar por defecto.');
+        session()->flash('status', __('Foto eliminada; se usa el avatar por defecto.'));
     }
 
     /**
@@ -186,7 +186,7 @@ class Form extends Component
         }
 
         if ($report['codes'] !== []) {
-            session()->flash('status', count($report['codes'])." documento(s) añadido(s) a la biblioteca y asignado(s) a {$bot->assistant_name}.");
+            session()->flash('status', __(':n documento(s) añadido(s) a la biblioteca y asignado(s) a :bot.', ['n' => count($report['codes']), 'bot' => $bot->assistant_name]));
         }
     }
 
@@ -209,7 +209,7 @@ class Form extends Component
 
         $assign->detach($bot, $source);
 
-        session()->flash('status', 'Documento quitado de este asesor (sigue disponible en la biblioteca).');
+        session()->flash('status', __('Documento quitado de este asesor (sigue disponible en la biblioteca).'));
     }
 
     public function sync(KnowledgeSyncService $sync): void
@@ -220,7 +220,7 @@ class Form extends Component
             return;
         }
         $report = $sync->sync($bot->getKey(), $bot->advisorFolder());
-        session()->flash('status', "Sincronizado: {$report['created']} nuevas, {$report['updated']} actualizadas.");
+        session()->flash('status', __('Sincronizado: :created nuevas, :updated actualizadas.', ['created' => $report['created'], 'updated' => $report['updated']]));
     }
 
     /** Abre el modal de confirmacion (solo si es eliminable). */
@@ -260,7 +260,7 @@ class Form extends Component
 
         // Confirmacion explicita: el nombre tecleado debe coincidir exactamente.
         if (trim($this->deleteConfirmName) !== (string) $bot->assistant_name) {
-            $this->addError('deleteConfirmName', 'Escribe el nombre exacto del asesor para confirmar.');
+            $this->addError('deleteConfirmName', __('Escribe el nombre exacto del asesor para confirmar.'));
 
             return null;
         }
@@ -268,7 +268,7 @@ class Form extends Component
         $name = (string) $bot->assistant_name;
         $guard->delete($bot);
 
-        session()->flash('status', "Asesor \"{$name}\" eliminado permanentemente.");
+        session()->flash('status', __('Asesor «:name» eliminado permanentemente.', ['name' => $name]));
 
         return redirect()->route('advisors.index');
     }
@@ -315,7 +315,7 @@ class Form extends Component
     {
         $base = (string) config('crm.widget_embed_url');
         $offset = (int) config('crm.widget_offset_bottom', 90);
-        $src = $base.'/widget/celia.js?v='.config('crm.widget_asset_version', '1');
+        $src = $base.'/widget/chat-widget.js?v='.config('crm.widget_asset_version', '1');
 
         return '<script src="'.$src.'"'."\n"
             .'        data-bot-key="'.$bot->public_key.'"'."\n"
@@ -326,14 +326,17 @@ class Form extends Component
     /**
      * Variante en JavaScript PURO (sin etiquetas <script>) para campos tipo "Custom
      * Scripts (Footer)" de WordPress/temas que no admiten <script>. Inserta el widget
-     * con document.createElement; celia.js se localiza por data-bot-key (no depende de
+     * con document.createElement; el script se localiza por data-bot-key (no depende de
      * document.currentScript). Mismo dominio, public_key y separacion inferior.
+     *
+     * Ambos snippets usan el nombre NEUTRO chat-widget.js para cualquier asesor (el antiguo
+     * /widget/celia.js sigue sirviéndose por compatibilidad, ver WidgetScriptController).
      */
     private function embedSnippetJs(Bot $bot): string
     {
         $base = (string) config('crm.widget_embed_url');
         $offset = (int) config('crm.widget_offset_bottom', 90);
-        $src = $base.'/widget/celia.js?v='.config('crm.widget_asset_version', '1');
+        $src = $base.'/widget/chat-widget.js?v='.config('crm.widget_asset_version', '1');
 
         return "(function () {\n"
             ."  var s = document.createElement('script');\n"

@@ -36,7 +36,7 @@ it('el Admin ve el snippet de incrustación con la public_key real y el dominio 
         ->assertSee('Incrustar widget')
         ->assertSee('PUBKEYTEST1234567890ABCDEF')                       // public_key REAL del bot
         ->assertSee('https://crm.mcaschool.education')                  // dominio de producción (config default)
-        ->assertSee('/widget/celia.js')
+        ->assertSee('/widget/chat-widget.js')
         ->assertSee('data-offset-bottom', false)                        // separación configurable
         ->assertSee('document.createElement', false);                  // variante JS puro (WordPress)
 });
@@ -63,8 +63,37 @@ it('el snippet apunta al dominio configurado (env-overridable)', function () {
     $this->actingAs($admin);
 
     Livewire::test(Form::class, ['bot' => $bot])
-        ->assertSee('https://otro-dominio.test/widget/celia.js')
+        ->assertSee('https://otro-dominio.test/widget/chat-widget.js')
         ->assertDontSee('crm.mcaschool.education');
+});
+
+it('el snippet de CUALQUIER asesor usa chat-widget.js y no menciona a Celia (ambas variantes)', function () {
+    [$admin, $celia] = embedSetup('admin');
+    $lola = Bot::factory()->create([
+        'status' => 'active', 'assistant_name' => 'Lola', 'type' => 'ia', 'slug' => 'lola',
+        'public_key' => 'LOLAKEYTEST1234567890ABCD',
+    ]);
+
+    $this->actingAs($admin);
+
+    foreach ([$celia, $lola] as $bot) {
+        $component = Livewire::test(Form::class, ['bot' => $bot]);
+        foreach (['embedSnippet', 'embedSnippetJs'] as $variant) {
+            $snippet = (string) $component->viewData($variant);
+            expect($snippet)->toContain('/widget/chat-widget.js?v=')
+                ->and($snippet)->toContain($bot->public_key)
+                ->and(mb_strtolower($snippet))->not->toContain('celia');
+        }
+    }
+});
+
+it('/widget/celia.js sigue sirviendo el MISMO script (JavaScript, sin sesión ni cookies)', function () {
+    $res = $this->get('/widget/celia.js')->assertOk();
+
+    expect((string) $res->headers->get('Content-Type'))->toContain('javascript')
+        ->and($res->headers->getCookies())->toBe([])
+        ->and(file_get_contents($res->baseResponse->getFile()->getPathname()))
+        ->toBe(file_get_contents(public_path('widget/chat-widget.js')));
 });
 
 it('en creación (sin bot todavía) NO se muestra el snippet', function () {

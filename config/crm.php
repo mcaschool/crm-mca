@@ -86,9 +86,9 @@ return [
     // "subir arriba"; el widget acepta cualquier valor via data-offset-bottom.
     'widget_offset_bottom' => (int) env('CRM_WIDGET_OFFSET_BOTTOM', 90),
 
-    // Version del asset del widget: se anexa como ?v= al src de celia.js en el snippet
+    // Version del asset del widget: se anexa como ?v= al src de chat-widget.js en el snippet
     // para forzar recarga tras un redeploy (evita que el navegador/CDN del cliente
-    // sirva un celia.js cacheado). Subir este valor al cambiar el widget.
+    // sirva un script cacheado). Subir este valor al cambiar el widget.
     'widget_asset_version' => (string) env('CRM_WIDGET_ASSET_VERSION', '2'),
 
     /*

@@ -69,7 +69,7 @@
                 <div class="kc-card kc-group" wire:key="grp-{{ $g['key'] }}">
                     <div class="kc-group-head">
                         <span @class(['kc-ic', 't-amber' => $noCat, 't-blue' => ! $noCat])><x-ui.icon name="{{ $noCat ? 'alert-triangle' : 'layers' }}" /></span>
-                        <span class="kc-group-title">{{ $noCat ? __('Sin categoría') : Str::title($g['label']) }}</span>
+                        <span class="kc-group-title">{{ $noCat ? __('Sin categoría') : (\Modules\Ai\Support\KnowledgeTaxonomy::isLine($g['key']) ? __((string) \Modules\Ai\Support\KnowledgeTaxonomy::lineLabel($g['key'])) : Str::title($g['label'])) }}</span>
                         <span @class(['kc-badge', 't-green' => $g['active_count'] > 0, 't-gray' => $g['active_count'] === 0])>
                             {{ __(':a de :t activas para :bot', ['a' => $g['active_count'], 't' => count($g['rows']), 'bot' => $bot->assistant_name]) }}
                         </span>
@@ -143,12 +143,14 @@
                 </div>
                 @if (trim($programSearch) !== '')
                     <span class="kc-prog-count">{{ trans_choice(':n resultado|:n resultados', $programMatches, ['n' => $programMatches]) }}</span>
-                    <button type="button" wire:click="assignProgramResults" wire:loading.attr="disabled" class="kc-btn kc-btn-primary kc-btn-sm" @disabled($programMatches === 0)>
-                        <x-ui.icon name="check" /> {{ __('Asignar todos los resultados') }}
-                    </button>
-                    <button type="button" wire:click="detachProgramResults" wire:loading.attr="disabled" class="kc-btn kc-btn-ghost kc-btn-sm" @disabled($programMatches === 0)>
-                        <x-ui.icon name="x" /> {{ __('Quitar todos los resultados') }}
-                    </button>
+                    @if ($programMatches > 0)
+                        <button type="button" wire:click="assignProgramResults" wire:loading.attr="disabled" class="kc-btn kc-btn-primary">
+                            <x-ui.icon name="check" /> {{ __('Asignar todos los resultados') }}
+                        </button>
+                        <button type="button" wire:click="detachProgramResults" wire:loading.attr="disabled" class="kc-btn kc-btn-ghost">
+                            <x-ui.icon name="x" /> {{ __('Quitar todos los resultados') }}
+                        </button>
+                    @endif
                 @endif
             </div>
 
@@ -159,13 +161,15 @@
                         <button type="button" wire:click="toggleProgramAreaOpen('{{ $a['key'] }}')" class="kc-area-toggle" aria-expanded="{{ $a['open'] ? 'true' : 'false' }}">
                             <span @class(['kc-chev', 'open' => $a['open']])><x-ui.icon name="chevron-down" /></span>
                             <span @class(['kc-ic', 't-amber' => $noArea, 't-blue' => ! $noArea])><x-ui.icon name="{{ $noArea ? 'alert-triangle' : 'book-open' }}" /></span>
-                            <span class="kc-group-title">{{ $a['label'] }}</span>
+                            <span class="kc-area-titles">
+                                <span class="kc-group-title">{{ $a['label'] }}</span>
+                                <span @class(['kc-badge', 't-green' => $a['assigned_count'] > 0, 't-gray' => $a['assigned_count'] === 0])>
+                                    {{ trim($programSearch) !== ''
+                                        ? __(':a de :t resultados asignados', ['a' => $a['assigned_count'], 't' => $a['total']])
+                                        : __(':a de :t asignados', ['a' => $a['assigned_count'], 't' => $a['total']]) }}
+                                </span>
+                            </span>
                         </button>
-                        <span @class(['kc-badge', 't-green' => $a['assigned_count'] > 0, 't-gray' => $a['assigned_count'] === 0])>
-                            {{ trim($programSearch) !== ''
-                                ? __(':a de :t resultados asignados', ['a' => $a['assigned_count'], 't' => $a['total']])
-                                : __(':a de :t asignados', ['a' => $a['assigned_count'], 't' => $a['total']]) }}
-                        </span>
                         {{-- Con búsqueda, las acciones masivas son las de «resultados» (el área entera
                              incluiría programas que no se están viendo). --}}
                         <div class="kc-area-actions">

@@ -105,13 +105,18 @@ class Library extends Component
     {
         $this->authorize('sync', KnowledgeSource::class);
 
-        if ($this->docs === []) {
-            return;
-        }
-
+        // El botón nunca se deshabilita: al pulsarlo sin línea o sin archivos se explica en la tarjeta.
         $this->validate(
-            ['kbLine' => ['required', Rule::in(array_keys(KnowledgeTaxonomy::lines()))]],
-            ['kbLine.required' => __('Elige la línea.'), 'kbLine.in' => __('Línea no válida.')],
+            [
+                'kbLine' => ['required', Rule::in(array_keys(KnowledgeTaxonomy::lines()))],
+                'docs' => ['required', 'array', 'min:1'],
+            ],
+            [
+                'kbLine.required' => __('Elige la línea.'),
+                'kbLine.in' => __('Línea no válida.'),
+                'docs.required' => __('Elige al menos un archivo .md.'),
+                'docs.min' => __('Elige al menos un archivo .md.'),
+            ],
         );
 
         $this->runIngest($ingest, $this->docs, [
@@ -130,20 +135,19 @@ class Library extends Component
     {
         $this->authorize('sync', KnowledgeSource::class);
 
-        if ($this->programDocs === []) {
-            return;
-        }
-
         $this->validate(
             [
                 'programLine' => ['required', Rule::in(array_keys(KnowledgeTaxonomy::programLines()))],
                 'programId' => ['required', 'integer'],
+                'programDocs' => ['required', 'array', 'min:1'],
             ],
             [
                 'programLine.required' => __('Elige la línea.'),
                 'programLine.in' => __('Línea no válida para un Programa Académico.'),
                 'programId.required' => __('Elige el programa del catálogo.'),
                 'programId.integer' => __('Elige el programa del catálogo.'),
+                'programDocs.required' => __('Elige al menos un archivo .md.'),
+                'programDocs.min' => __('Elige al menos un archivo .md.'),
             ],
         );
 

@@ -50,8 +50,9 @@
         })();
     </script>
 
-    {{-- Embebido del widget: solo public_key (nunca institution_id). --}}
-    <script src="{{ url('/widget/celia.js') }}"
+    {{-- Embebido del widget: solo public_key (nunca institution_id). ?script=celia prueba el
+         nombre antiguo (/widget/celia.js), que sirve el mismo archivo por compatibilidad. --}}
+    <script src="{{ url(request('script') === 'celia' ? '/widget/celia.js' : '/widget/chat-widget.js') }}"
             data-bot-key="{{ $botKey }}"
             data-api-base="{{ url('') }}"></script>
 </body>

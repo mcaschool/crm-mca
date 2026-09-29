@@ -58,12 +58,12 @@ class KnowledgeIngestService
             $original = (string) $doc->getClientOriginalName();
 
             if (strtolower((string) pathinfo($original, PATHINFO_EXTENSION)) !== 'md') {
-                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => 'No es un archivo .md.'];
+                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => __('No es un archivo .md.')];
 
                 continue;
             }
             if ((int) $doc->getSize() > self::MAX_BYTES) {
-                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => 'Supera el límite de 512 KB.'];
+                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => __('Supera el límite de 512 KB.')];
 
                 continue;
             }
@@ -72,17 +72,17 @@ class KnowledgeIngestService
             $info = $this->sync->inspect($raw, $original);
 
             if (! $info['has_code_meta']) {
-                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => 'Falta el comentario HTML con "Codigo".'];
+                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => __('Falta el comentario HTML con "Codigo".')];
 
                 continue;
             }
             if (! $info['has_title']) {
-                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => 'Falta el título "# ".'];
+                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => __('Falta el título "# ".')];
 
                 continue;
             }
             if ($info['sections'] < 1) {
-                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => 'Falta al menos una sección "## ".'];
+                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => __('Falta al menos una sección "## ".')];
 
                 continue;
             }
@@ -93,7 +93,7 @@ class KnowledgeIngestService
             // Con línea elegida: el .md no puede declarar OTRA línea válida (el meta tiene
             // precedencia en el sync y la acabaría cambiando). Sin línea o con texto libre, vale.
             if ($classification !== null && $category !== null && $category !== $classification['line']) {
-                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => 'Su «Categoria» ('.KnowledgeTaxonomy::lineLabel($category).') no coincide con la línea elegida ('.KnowledgeTaxonomy::lineLabel($classification['line']).').'];
+                $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => __('Su «Categoria» (:file) no coincide con la línea elegida (:chosen).', ['file' => __((string) KnowledgeTaxonomy::lineLabel($category)), 'chosen' => __((string) KnowledgeTaxonomy::lineLabel($classification['line']))])];
 
                 continue;
             }
@@ -144,7 +144,7 @@ class KnowledgeIngestService
             $results[] = [
                 'file' => $item['filename'],
                 'result' => $action === 'created' ? 'Nuevo' : 'Actualizado',
-                'reason' => 'Código '.$item['code'].' · categoría '.$item['category'],
+                'reason' => __('Código :code · categoría :line', ['code' => $item['code'], 'line' => $item['category']]),
             ];
         }
 
@@ -166,25 +166,25 @@ class KnowledgeIngestService
         $programId = $classification['program_id'] ?? null;
 
         if (! KnowledgeTaxonomy::isType($type)) {
-            throw new InvalidArgumentException("Tipo de conocimiento no válido: {$type}.");
+            throw new InvalidArgumentException(__('Tipo de conocimiento no válido: :type.', ['type' => $type]));
         }
         if (! KnowledgeTaxonomy::isLine($line)) {
-            throw new InvalidArgumentException("Línea no válida: {$line}.");
+            throw new InvalidArgumentException(__('Línea no válida: :line.', ['line' => $line]));
         }
 
         if ($type === KnowledgeTaxonomy::TYPE_KNOWLEDGE) {
             if ($programId !== null) {
-                throw new InvalidArgumentException('La Base de Conocimiento no admite programa.');
+                throw new InvalidArgumentException(__('La Base de Conocimiento no admite programa.'));
             }
 
             return ['type' => $type, 'line' => $line, 'program_id' => null];
         }
 
         if (! array_key_exists($line, KnowledgeTaxonomy::programLines())) {
-            throw new InvalidArgumentException("La línea {$line} no admite Programa Académico.");
+            throw new InvalidArgumentException(__('La línea :line no admite Programa Académico.', ['line' => $line]));
         }
         if ($programId === null || ! Program::query()->whereKey($programId)->where('status', 'active')->exists()) {
-            throw new InvalidArgumentException('Programa Académico exige un programa activo del catálogo.');
+            throw new InvalidArgumentException(__('Programa Académico exige un programa activo del catálogo.'));
         }
 
         return ['type' => $type, 'line' => $line, 'program_id' => $programId];
