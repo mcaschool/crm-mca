@@ -25,7 +25,7 @@
             </div>
         </div>
 
-        @include('ai::livewire.knowledge._tabs')
+        @include('ai::livewire.knowledge._tabs', ['active' => 'agents'])
 
         {{-- Selector de agente --}}
         <div class="kc-card kc-picker">

@@ -46,7 +46,7 @@
             </button>
         </div>
 
-        @include('ai::livewire.knowledge._tabs')
+        @include('ai::livewire.knowledge._tabs', ['active' => 'library'])
 
         @if (session('status'))
             <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
