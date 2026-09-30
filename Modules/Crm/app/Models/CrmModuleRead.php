@@ -9,8 +9,8 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
 
 /**
  * Marca de "visto" por usuario y módulo del CRM (watermark de los badges del menú:
- * leads | contacts). Una fila por (usuario, módulo); "nuevo" = created_at del
- * registro > last_seen_at. Acotada por institución (regla de esquema del proyecto).
+ * leads | contacts). Una fila por (institución, usuario, módulo); "nuevo" = created_at
+ * del registro > last_seen_at. Acotada por institución (regla de esquema del proyecto).
  *
  * @property int $institution_id
  * @property int $user_id

@@ -170,6 +170,99 @@ it('el notifier de la topbar refresca los contadores en vivo (evento a todo el p
         ->assertDispatched('crm-badges-updated', leads: 3);
 });
 
+// --- Marca de visto POR INSTITUCIÓN (clave única institution_id + user_id + module) ------
+
+it('regresión: un super-admin que cambia de institución carga Leads sin error de clave duplicada', function () {
+    config(['crm.multi_institution' => true]);
+    $instA = Institution::factory()->create();
+    $instB = Institution::factory()->create();
+    $super = User::factory()->create(['institution_id' => $instA->id, 'role' => 'admin', 'is_super_admin' => true]);
+
+    $this->actingAs($super)->get('/crm/leads')->assertOk();      // crea sus marcas en A
+    $this->actingAs($super)->post('/institution/switch', ['institution_id' => $instB->id])->assertRedirect();
+    $this->actingAs($super)->get('/crm/leads')->assertOk();      // y en B, sin 1062
+    $this->actingAs($super)->get('/crm/contacts')->assertOk();
+
+    $rows = app(CurrentInstitution::class)->runGlobally(
+        fn () => CrmModuleRead::query()->where('user_id', $super->id)->where('module', 'leads')->pluck('institution_id')->sort()->values()->all()
+    );
+    expect($rows)->toBe([$instA->id, $instB->id]);
+});
+
+it('markSeen y lastSeenAt están aislados por institución para el mismo usuario', function () {
+    [$instA, $user] = sbCtx();
+    $instB = Institution::factory()->create();
+    $ctx = app(CurrentInstitution::class);
+
+    sbBadges()->counts($user);                       // línea base en A
+    $ctx->set($instB->id);
+    sbBadges()->counts($user);                       // línea base propia en B (antes: 1062)
+
+    $this->travel(1)->minutes();
+    Lead::factory()->count(2)->create();             // 2 leads nuevos en B
+    $ctx->set($instA->id);
+    Lead::factory()->count(3)->create();             // 3 leads nuevos en A
+
+    expect(sbBadges()->counts($user)['leads'])->toBe(3);
+    $ctx->set($instB->id);
+    expect(sbBadges()->counts($user)['leads'])->toBe(2);
+
+    // Marcar visto en B no toca la marca de A.
+    $this->travel(1)->minutes();
+    sbBadges()->markSeen($user, 'leads');
+    expect(sbBadges()->counts($user)['leads'])->toBe(0);
+    $ctx->set($instA->id);
+    expect(sbBadges()->counts($user)['leads'])->toBe(3);
+});
+
+it('migración de la clave única: up permite la misma marca en dos instituciones; down se niega si hay conflicto y restaura la clave si no', function () {
+    // DDL aislado en SQLite en memoria (el DDL en MySQL cerraría la transacción de la prueba).
+    config(['database.connections.reads_mig' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']]);
+    $previous = config('database.default');
+    \Illuminate\Support\Facades\DB::purge('reads_mig');
+    config(['database.default' => 'reads_mig']);
+    $db = fn () => \Illuminate\Support\Facades\DB::table('crm_module_reads');
+    $row = fn (int $inst) => ['institution_id' => $inst, 'user_id' => 7, 'module' => 'leads', 'last_seen_at' => now()];
+
+    try {
+        \Illuminate\Support\Facades\Schema::create('crm_module_reads', function (\Illuminate\Database\Schema\Blueprint $t) {
+            $t->id();
+            $t->unsignedBigInteger('institution_id');
+            $t->unsignedBigInteger('user_id');
+            $t->string('module', 20);
+            $t->timestamp('last_seen_at');
+            $t->timestamps();
+            $t->unique(['user_id', 'module']);
+            $t->index(['institution_id', 'module']);
+        });
+        $db()->insert($row(1));
+        expect(fn () => $db()->insert($row(2)))->toThrow(\Illuminate\Database\QueryException::class); // clave antigua
+
+        $migration = require base_path('Modules/Crm/database/migrations/2026_09_30_120000_scope_crm_module_reads_unique_by_institution.php');
+        $migration->up();
+
+        $db()->insert($row(2));                                                                         // otra institución: permitido
+        expect(fn () => $db()->insert($row(2)))->toThrow(\Illuminate\Database\QueryException::class);  // misma institución: no
+
+        // down con filas que violarían la clave antigua: falla controlado y no cambia nada.
+        $indexes = fn () => collect(\Illuminate\Support\Facades\Schema::getIndexes('crm_module_reads'))->pluck('name')->sort()->values()->all();
+        $before = $indexes();
+        expect(fn () => $migration->down())->toThrow(RuntimeException::class, '1 combinaciones usuario/módulo');
+        expect($indexes())->toBe($before)->and($db()->count())->toBe(2);
+
+        // Sin conflicto: restaura (user_id, module).
+        $db()->where('institution_id', 2)->delete();
+        $migration->down();
+        expect($indexes())->toContain('crm_module_reads_user_id_module_unique')
+            ->not->toContain('crm_module_reads_institution_user_module_unique')
+            ->not->toContain('crm_module_reads_user_id_index');
+        expect(fn () => $db()->insert($row(2)))->toThrow(\Illuminate\Database\QueryException::class);
+    } finally {
+        config(['database.default' => $previous]);
+        \Illuminate\Support\Facades\DB::purge('reads_mig');
+    }
+});
+
 it('el badge de la Bandeja social no se ve afectado por las marcas del CRM', function () {
     [, $user] = sbCtx();
     $channel = \Modules\Social\Models\SocialChannel::factory()->create(['provider' => 'whatsapp']);
