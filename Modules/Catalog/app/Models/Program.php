@@ -21,12 +21,13 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * catalogo; se borra en blando para no romper FKs historicas de leads/intereses).
  *
  * @property int $institution_id
- * @property string $code
+ * @property string|null $code
  * @property string|null $course_idnumber
  * @property string $name_es
  * @property string|null $name_en
  * @property string|null $credential_en
  * @property int|null $category_id
+ * @property int|null $line_id
  * @property string|null $level
  * @property string|null $goal
  * @property string|null $profile
@@ -36,6 +37,8 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * @property string|null $modality_en
  * @property string|null $short_description_es
  * @property string|null $short_description_en
+ * @property string|null $learnings_es
+ * @property string|null $learnings_en
  * @property string $url
  * @property string $status
  * @property int $display_order
@@ -51,7 +54,7 @@ class Program extends Model
     use SoftDeletes;
 
     /** @var array<int,string> */
-    protected array $translatable = ['name', 'duration', 'modality', 'short_description'];
+    protected array $translatable = ['name', 'duration', 'modality', 'short_description', 'learnings'];
 
     protected $fillable = [
         'institution_id',
@@ -61,6 +64,7 @@ class Program extends Model
         'name_en',
         'credential_en',
         'category_id',
+        'line_id',
         'level',
         'goal',
         'profile',
@@ -70,6 +74,8 @@ class Program extends Model
         'modality_en',
         'short_description_es',
         'short_description_en',
+        'learnings_es',
+        'learnings_en',
         'url',
         'status',
         'display_order',
@@ -110,11 +116,24 @@ class Program extends Model
     }
 
     /**
+     * Área temática (nombre heredado "category"). NO confundir con la categoría de
+     * formación (line()).
+     *
      * @return BelongsTo<ProgramCategory, $this>
      */
     public function category(): BelongsTo
     {
         return $this->belongsTo(ProgramCategory::class, 'category_id');
+    }
+
+    /**
+     * Categoría de FORMACIÓN (línea): Microcredenciales, Programas Ejecutivos, etc.
+     *
+     * @return BelongsTo<ProgramLine, $this>
+     */
+    public function line(): BelongsTo
+    {
+        return $this->belongsTo(ProgramLine::class, 'line_id');
     }
 
     /**

@@ -24,8 +24,8 @@ class ProgramFactory extends Factory
             'name_en' => null, // se completa despues; fallback a _es
             'credential_en' => null,
             'category_id' => null,
-            'level' => $this->faker->randomElement(['basico', 'intermedio', 'avanzado']),
-            'goal' => $this->faker->randomElement(['empleo', 'ascenso', 'reconversion']),
+            'level' => $this->faker->randomElement(['inicial', 'intermedio', 'avanzado']),
+            'goal' => $this->faker->randomElement(['actualizar', 'ascenso', 'especializar', 'direccion', 'emprender']),
             'profile' => null,
             'duration_es' => '6 semanas',
             'duration_en' => null,

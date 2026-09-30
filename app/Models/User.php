@@ -182,13 +182,14 @@ class User extends Authenticatable
     }
 
     /**
-     * ¿Puede gestionar el catalogo? Administrador o Marketing (Admisiones no).
+     * ¿Puede gestionar el catalogo (programas + categorias de formacion + areas)?
+     * SOLO Administrador (o super-admin). Ningun otro rol tiene acceso, ni por boton
+     * ni por URL directa (las pantallas autorizan en mount por ProgramPolicy).
      */
     public function canManageCatalog(): bool
     {
         return $this->isSuperAdmin()
-            || $this->role === UserRole::Admin
-            || $this->role === UserRole::Marketing;
+            || $this->role === UserRole::Admin;
     }
 
     /**

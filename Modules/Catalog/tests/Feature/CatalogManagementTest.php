@@ -26,9 +26,10 @@ it('Admisiones NO accede al catalogo', function () {
     $this->actingAs(catalogUser('admissions'))->get('/catalog')->assertForbidden();
 });
 
-it('Administrador y Marketing SI acceden al catalogo', function () {
+it('SOLO Administrador accede al catalogo; Marketing y otros NO (ni por URL directa)', function () {
     $this->actingAs(catalogUser('admin'))->get('/catalog')->assertOk();
-    $this->actingAs(catalogUser('marketing'))->get('/catalog')->assertOk();
+    $this->actingAs(catalogUser('marketing'))->get('/catalog')->assertForbidden();
+    $this->actingAs(catalogUser('admissions'))->get('/catalog')->assertForbidden();
 });
 
 it('abre la edicion de un programa por HTTP (route-model-binding con scope global)', function () {
@@ -46,20 +47,21 @@ it('crea un programa con etiquetas', function () {
     $this->actingAs(catalogUser('admin'));
 
     Livewire::test(Form::class)
-        ->set('code', 'MC-900')
+        ->set('course_idnumber', 'mc-900')
         ->set('name_es', 'Programa Nuevo')
         ->set('url', 'https://x/mc-900')
         ->set('tagsCsv', 'tema-x, dominante-y')
         ->call('save')
         ->assertRedirect(route('catalog.programs.index'));
 
-    $program = Program::query()->where('code', 'MC-900')->first();
+    $program = Program::query()->where('course_idnumber', 'mc-900')->first();
     expect($program)->not->toBeNull();
+    expect($program->code)->toBeNull();   // altas manuales: code NULL
     expect($program->tags()->pluck('tag')->all())->toEqualCanonicalizing(['tema-x', 'dominante-y']);
 });
 
 it('completa el nombre en ingles de un programa (bilingue)', function () {
-    $this->actingAs(catalogUser('marketing'));
+    $this->actingAs(catalogUser('admin'));
     $program = Program::factory()->create(['name_es' => 'Solo Espanol', 'name_en' => null]);
 
     Livewire::test(Form::class, ['program' => $program])

@@ -11,7 +11,9 @@ use Modules\Ai\Livewire\Knowledge\Agents as KnowledgeAgents;
 use Modules\Ai\Livewire\Knowledge\Index as KnowledgeIndex;
 use Modules\Ai\Livewire\Knowledge\Library as KnowledgeLibrary;
 use Modules\Catalog\Livewire\Categories\Manage as CategoriesManage;
+use Modules\Catalog\Livewire\Lines\Manage as LinesManage;
 use Modules\Catalog\Livewire\Programs\Form as ProgramsForm;
+use Modules\Catalog\Livewire\Programs\Import as ProgramsImport;
 use Modules\Catalog\Livewire\Programs\Index as ProgramsIndex;
 use Modules\Crm\Livewire\Contacts\Index as ContactsIndex;
 use Modules\Crm\Livewire\Contacts\Show as ContactsShow;
@@ -95,8 +97,10 @@ $panel->group(function () {
     // Catalogo de programas (Livewire, Admin y Marketing por Policy; Admisiones no).
     Route::get('/catalog', ProgramsIndex::class)->name('catalog.programs.index');
     Route::get('/catalog/create', ProgramsForm::class)->name('catalog.programs.create');
+    Route::get('/catalog/import', ProgramsImport::class)->name('catalog.programs.import');
     Route::get('/catalog/{program}/edit', ProgramsForm::class)->name('catalog.programs.edit');
     Route::get('/catalog/categories', CategoriesManage::class)->name('catalog.categories');
+    Route::get('/catalog/lines', LinesManage::class)->name('catalog.lines');
 
     // CRM Core (Livewire; los tres roles trabajan los prospectos).
     Route::get('/crm/leads', LeadsIndex::class)->name('crm.leads.index');

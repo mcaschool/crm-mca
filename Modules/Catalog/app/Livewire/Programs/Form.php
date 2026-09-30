@@ -5,22 +5,34 @@ declare(strict_types=1);
 namespace Modules\Catalog\Livewire\Programs;
 
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Models\ProgramCategory;
+use Modules\Catalog\Models\ProgramLine;
 
 /**
- * Alta/edicion de un programa del catalogo. Expone AMBOS idiomas (_es/_en) para
- * poder completar el ingles que el importador dejo vacio. Gating por ProgramPolicy.
+ * Alta/edición manual de un programa del catálogo (Fase 4). Formulario COMPLETO: incluye
+ * los campos del recomendador InCompany (nivel/meta/perfil). El identificador es course_id
+ * (course_idnumber): editable+obligatorio al CREAR, BLOQUEADO al editar (cambiarlo rompería
+ * el vínculo con Moodle y con los leads InCompany). `code` (MC-XXX) no se usa ni se pide:
+ * queda NULL en altas manuales. Dos ejes separados: categoría de formación (line_id) y área
+ * temática (category_id). Gating por ProgramPolicy (solo Admin).
  */
 #[Layout('layouts.app')]
 class Form extends Component
 {
+    /** @var array<int,string> */
+    private const LEVELS = ['inicial', 'intermedio', 'avanzado'];
+
+    /** @var array<int,string> */
+    private const GOALS = ['actualizar', 'ascenso', 'especializar', 'direccion', 'emprender'];
+
     public ?int $programId = null;
 
-    public string $code = '';
+    public string $course_idnumber = '';
 
     public string $name_es = '';
 
@@ -29,6 +41,12 @@ class Form extends Component
     public string $credential_en = '';
 
     public ?int $category_id = null;
+
+    /** Categoría de FORMACIÓN (línea). */
+    public ?int $line_id = null;
+
+    /** Crear una categoría de formación nueva al vuelo (opcional; si viene, prevalece). */
+    public string $newLineName = '';
 
     public string $level = '';
 
@@ -47,6 +65,10 @@ class Form extends Component
     public string $short_description_es = '';
 
     public string $short_description_en = '';
+
+    public string $learnings_es = '';
+
+    public string $learnings_en = '';
 
     public string $url = '';
 
@@ -71,11 +93,12 @@ class Form extends Component
     private function fillFrom(Program $program): void
     {
         $this->programId = $program->getKey();
-        $this->code = $program->code;
+        $this->course_idnumber = (string) $program->course_idnumber;
         $this->name_es = (string) $program->name_es;
         $this->name_en = (string) $program->name_en;
         $this->credential_en = (string) $program->credential_en;
         $this->category_id = $program->category_id;
+        $this->line_id = $program->line_id;
         $this->level = (string) $program->level;
         $this->goal = (string) $program->goal;
         $this->profile = (string) $program->profile;
@@ -85,7 +108,9 @@ class Form extends Component
         $this->modality_en = (string) $program->modality_en;
         $this->short_description_es = (string) $program->short_description_es;
         $this->short_description_en = (string) $program->short_description_en;
-        $this->url = $program->url;
+        $this->learnings_es = (string) $program->learnings_es;
+        $this->learnings_en = (string) $program->learnings_en;
+        $this->url = (string) $program->url;
         $this->status = $program->status;
         $this->display_order = $program->display_order;
         $this->tagsCsv = $program->tags()->pluck('tag')->implode(', ');
@@ -95,17 +120,17 @@ class Form extends Component
     {
         $editing = $this->programId !== null;
         $program = $editing ? Program::query()->findOrFail($this->programId) : new Program;
-
         $this->authorize($editing ? 'update' : 'create', $editing ? $program : Program::class);
 
-        $validated = $this->validate([
-            'code' => ['required', 'string', 'max:40', Rule::unique('programs', 'code')->ignore($this->programId)],
+        $rules = [
             'name_es' => ['required', 'string', 'max:200'],
             'name_en' => ['nullable', 'string', 'max:200'],
             'credential_en' => ['nullable', 'string', 'max:200'],
             'category_id' => ['nullable', 'integer', Rule::exists('program_categories', 'id')],
-            'level' => ['nullable', 'string', 'max:40'],
-            'goal' => ['nullable', 'string', 'max:80'],
+            'line_id' => ['nullable', 'integer', Rule::exists('program_lines', 'id')],
+            'newLineName' => ['nullable', 'string', 'max:120'],
+            'level' => ['nullable', Rule::in(self::LEVELS)],
+            'goal' => ['nullable', Rule::in(self::GOALS)],
             'profile' => ['nullable', 'string', 'max:120'],
             'duration_es' => ['nullable', 'string', 'max:80'],
             'duration_en' => ['nullable', 'string', 'max:80'],
@@ -113,17 +138,51 @@ class Form extends Component
             'modality_en' => ['nullable', 'string', 'max:80'],
             'short_description_es' => ['nullable', 'string'],
             'short_description_en' => ['nullable', 'string'],
-            'url' => ['required', 'string', 'max:500'],
+            'learnings_es' => ['nullable', 'string'],
+            'learnings_en' => ['nullable', 'string'],
+            'url' => ['nullable', 'string', 'max:500'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'display_order' => ['integer'],
-        ]);
+        ];
 
-        foreach ($validated as $key => $value) {
-            $program->{$key} = $value === '' ? null : $value;
+        // course_id: obligatorio y único SOLO al crear; al editar está bloqueado (no cambia).
+        if (! $editing) {
+            $rules['course_idnumber'] = ['required', 'string', 'max:100', Rule::unique('programs', 'course_idnumber')];
         }
-        // code y url no son nullable.
-        $program->code = $this->code;
-        $program->url = $this->url;
+
+        $this->validate($rules);
+
+        // Categoría de formación nueva al vuelo (prevalece sobre el selector).
+        if (trim($this->newLineName) !== '') {
+            $line = ProgramLine::query()->create([
+                'name_es' => trim($this->newLineName),
+                'slug' => Str::slug($this->newLineName).'-'.Str::lower(Str::random(4)),
+            ]);
+            $this->line_id = $line->getKey();
+        }
+
+        if (! $editing) {
+            $program->course_idnumber = trim($this->course_idnumber);
+            $program->code = null; // no se inventa MC-XXX
+        }
+
+        $program->name_es = $this->name_es;
+        $program->name_en = $this->name_en ?: null;
+        $program->credential_en = $this->credential_en ?: null;
+        $program->category_id = $this->category_id;   // área temática (eje separado)
+        $program->line_id = $this->line_id;            // categoría de formación (eje separado)
+        $program->level = $this->level ?: null;
+        $program->goal = $this->goal ?: null;
+        $program->profile = $this->profile ?: null;
+        $program->duration_es = $this->duration_es ?: null;
+        $program->duration_en = $this->duration_en ?: null;
+        $program->modality_es = $this->modality_es ?: null;
+        $program->modality_en = $this->modality_en ?: null;
+        $program->short_description_es = $this->short_description_es ?: null;
+        $program->short_description_en = $this->short_description_en ?: null;
+        $program->learnings_es = $this->learnings_es ?: null;
+        $program->learnings_en = $this->learnings_en ?: null;
+        $program->url = $this->url;   // NOT NULL: '' si viene vacío (se completa luego)
         $program->status = $this->status;
         $program->display_order = $this->display_order;
         $program->save();
@@ -152,6 +211,9 @@ class Form extends Component
     {
         return view('catalog::livewire.programs.form', [
             'categories' => ProgramCategory::query()->orderBy('name_es')->get(),
+            'lines' => ProgramLine::query()->where('status', 'active')->orderBy('display_order')->orderBy('name_es')->get(),
+            'levels' => self::LEVELS,
+            'goals' => self::GOALS,
             'editing' => $this->programId !== null,
         ]);
     }

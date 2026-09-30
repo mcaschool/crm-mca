@@ -7,10 +7,13 @@ namespace Modules\Catalog\Providers;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
+use Modules\Catalog\Console\BackfillLinesCommand;
 use Modules\Catalog\Console\ImportCatalogCommand;
 use Modules\Catalog\Console\SetCourseIdnumbersCommand;
 use Modules\Catalog\Livewire\Categories\Manage as CategoriesManage;
+use Modules\Catalog\Livewire\Lines\Manage as LinesManage;
 use Modules\Catalog\Livewire\Programs\Form as ProgramsForm;
+use Modules\Catalog\Livewire\Programs\Import as ProgramsImport;
 use Modules\Catalog\Livewire\Programs\Index as ProgramsIndex;
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Policies\ProgramPolicy;
@@ -34,6 +37,7 @@ class CatalogServiceProvider extends ModuleServiceProvider
      * @var string[]
      */
     protected array $commands = [
+        BackfillLinesCommand::class,
         ImportCatalogCommand::class,
         SetCourseIdnumbersCommand::class,
     ];
@@ -49,7 +53,9 @@ class CatalogServiceProvider extends ModuleServiceProvider
 
         Livewire::component('catalog.programs.index', ProgramsIndex::class);
         Livewire::component('catalog.programs.form', ProgramsForm::class);
+        Livewire::component('catalog.programs.import', ProgramsImport::class);
         Livewire::component('catalog.categories.manage', CategoriesManage::class);
+        Livewire::component('catalog.lines.manage', LinesManage::class);
     }
 
     /**

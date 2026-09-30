@@ -12,18 +12,43 @@
             <form wire:submit="save">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
                     <div class="field" style="margin-bottom:0">
-                        <label>{{ __('Código') }}</label>
-                        <input type="text" wire:model="code">
-                        @error('code') <span class="mca-err">{{ $message }}</span> @enderror
+                        <label>{{ __('course_id (Moodle)') }} @if (! $editing)<span style="color:#B23B3B">*</span>@endif</label>
+                        @if ($editing)
+                            <input type="text" value="{{ $course_idnumber }}" disabled style="background:#F2F5F9;color:var(--mca-ink-2,#5A6B84)">
+                            <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);margin-top:5px">
+                                <x-ui.icon name="lock" class="ic" style="width:12px;height:12px" /> {{ __('Bloqueado: cambiarlo rompería el vínculo con Moodle y los leads InCompany.') }}
+                            </span>
+                        @else
+                            <input type="text" wire:model="course_idnumber" placeholder="{{ __('p. ej. mgecc') }}">
+                            @error('course_idnumber') <span class="mca-err">{{ $message }}</span> @enderror
+                        @endif
                     </div>
                     <div class="field" style="margin-bottom:0">
-                        <label>{{ __('Área / Categoría') }}</label>
+                        <label>{{ __('Área temática') }}</label>
                         <select wire:model="category_id">
-                            <option value="">{{ __('— sin categoría —') }}</option>
+                            <option value="">{{ __('— sin área —') }}</option>
                             @foreach ($categories as $category)
                                 <option value="{{ $category->id }}">{{ $category->name_es }}</option>
                             @endforeach
                         </select>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+                    <div class="field" style="margin-bottom:0">
+                        <label>{{ __('Categoría de formación') }}</label>
+                        <select wire:model="line_id">
+                            <option value="">{{ __('— sin categoría de formación —') }}</option>
+                            @foreach ($lines as $line)
+                                <option value="{{ $line->id }}">{{ $line->name_es }}</option>
+                            @endforeach
+                        </select>
+                        @error('line_id') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label>{{ __('… o crear una categoría de formación nueva') }}</label>
+                        <input type="text" wire:model="newLineName" placeholder="{{ __('opcional; p. ej. Diplomas Avanzados') }}">
+                        @error('newLineName') <span class="mca-err">{{ $message }}</span> @enderror
                     </div>
                 </div>
 
@@ -46,15 +71,27 @@
 
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
                     <div class="field" style="margin-bottom:0">
-                        <label>{{ __('Nivel') }}</label>
-                        <input type="text" wire:model="level" placeholder="inicial/intermedio/avanzado">
+                        <label>{{ __('Nivel') }} <span style="color:var(--muted);font-weight:400">({{ __('recomendador') }})</span></label>
+                        <select wire:model="level">
+                            <option value="">{{ __('— sin nivel —') }}</option>
+                            @foreach ($levels as $lvl)
+                                <option value="{{ $lvl }}">{{ ucfirst($lvl) }}</option>
+                            @endforeach
+                        </select>
+                        @error('level') <span class="mca-err">{{ $message }}</span> @enderror
                     </div>
                     <div class="field" style="margin-bottom:0">
-                        <label>{{ __('Meta') }}</label>
-                        <input type="text" wire:model="goal">
+                        <label>{{ __('Meta') }} <span style="color:var(--muted);font-weight:400">({{ __('recomendador') }})</span></label>
+                        <select wire:model="goal">
+                            <option value="">{{ __('— sin meta —') }}</option>
+                            @foreach ($goals as $g)
+                                <option value="{{ $g }}">{{ ucfirst($g) }}</option>
+                            @endforeach
+                        </select>
+                        @error('goal') <span class="mca-err">{{ $message }}</span> @enderror
                     </div>
                     <div class="field" style="margin-bottom:0">
-                        <label>{{ __('Perfil') }}</label>
+                        <label>{{ __('Perfil') }} <span style="color:var(--muted);font-weight:400">({{ __('recomendador') }})</span></label>
                         <input type="text" wire:model="profile">
                     </div>
                 </div>
@@ -86,6 +123,17 @@
                     <div class="field" style="margin-bottom:0">
                         <label>{{ __('Descripción corta (EN)') }}</label>
                         <textarea wire:model="short_description_en" rows="3" placeholder="{{ __('completar en inglés') }}"></textarea>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+                    <div class="field" style="margin-bottom:0">
+                        <label>{{ __('Aprendizajes (ES)') }}</label>
+                        <textarea wire:model="learnings_es" rows="3"></textarea>
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label>{{ __('Aprendizajes (EN)') }}</label>
+                        <textarea wire:model="learnings_en" rows="3" placeholder="{{ __('completar en inglés') }}"></textarea>
                     </div>
                 </div>
 
