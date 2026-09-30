@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use InvalidArgumentException;
+use Modules\Ai\Support\KnowledgeTaxonomy;
 use Modules\Catalog\Database\Factories\ProgramFactory;
 use Modules\Core\Concerns\HasTranslatedColumns;
 use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
@@ -27,6 +29,7 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * @property string|null $name_en
  * @property string|null $credential_en
  * @property int|null $category_id
+ * @property string|null $line Línea de formación (slug de config crm.knowledge.lines)
  * @property string|null $level
  * @property string|null $goal
  * @property string|null $profile
@@ -61,6 +64,7 @@ class Program extends Model
         'name_en',
         'credential_en',
         'category_id',
+        'line',
         'level',
         'goal',
         'profile',
@@ -74,6 +78,19 @@ class Program extends Model
         'status',
         'display_order',
     ];
+
+    /**
+     * programs.line solo admite los slugs de config crm.knowledge.lines (mismo helper que el
+     * Centro de Conocimiento) o NULL. Cualquier otro valor se rechaza al guardar.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Program $program): void {
+            if ($program->line !== null && ! KnowledgeTaxonomy::isLine($program->line)) {
+                throw new InvalidArgumentException("Línea de programa no válida: {$program->line}.");
+            }
+        });
+    }
 
     /**
      * Busca un programa por su idnumber de Moodle (`course_idnumber`), acotado a la

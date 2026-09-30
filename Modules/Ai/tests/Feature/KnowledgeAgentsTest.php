@@ -180,6 +180,7 @@ it('pestaña Agentes: Quitar desasigna solo del agente actual, sin borrar la fue
     SelectedAdvisor::set($lola->id);
 
     Livewire::actingAs($admin)->test(Agents::class)
+        ->call('toggleDocsOpen', 'programas_ejecutivos') // los documentos van plegados por defecto
         ->assertSee('Compartida con: Celia')
         ->call('detachSource', $shared->id)->assertHasNoErrors();
 

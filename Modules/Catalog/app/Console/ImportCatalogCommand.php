@@ -83,6 +83,7 @@ class ImportCatalogCommand extends Command
         $this->line("  Actualizados: {$report->updated}");
         $this->line('  Incompletos (importados, marcados para revision): '.count($report->incomplete));
         $this->line('  Omitidos (no importados): '.count($report->skipped));
+        $this->line('  Tipo desconocido (sin línea): '.count($report->unknownTypes));
 
         if ($report->incomplete !== []) {
             $this->newLine();
@@ -97,6 +98,14 @@ class ImportCatalogCommand extends Command
             $this->line('<comment>Omitidos:</comment>');
             foreach ($report->skipped as $item) {
                 $this->line("  - fila {$item['row']}: {$item['reason']}");
+            }
+        }
+
+        if ($report->unknownTypes !== []) {
+            $this->newLine();
+            $this->line('<comment>Tipo desconocido (importados sin línea):</comment>');
+            foreach ($report->unknownTypes as $item) {
+                $this->line("  - {$item['code']}: «{$item['type']}»");
             }
         }
 

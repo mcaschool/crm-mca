@@ -10,7 +10,7 @@
         ['bg' => '#F1EEF9', 'fg' => '#6D5AB8'],
     ];
     $kcAvatar = fn (string $name): array => $kcPalette[abs(crc32($name)) % count($kcPalette)];
-    $kcTotalActive = $groups->sum('active_count');
+    $kcTotalActive = collect($lineBlocks)->sum('docs_active');
 @endphp
 
 <div>
@@ -44,43 +44,94 @@
             <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
         @endif
 
-        @if ($bot !== null)
-            <div class="kc-section-head">
-                <div>
-                    <h2 class="kc-section-title">{{ __('Conocimiento') }}</h2>
-                    <p class="kc-section-sub">{{ __('Fuentes de la biblioteca que :bot usa para responder.', ['bot' => $bot->assistant_name]) }}</p>
-                </div>
-            </div>
-        @endif
-
         @if ($bot === null)
             <div class="kc-card kc-empty">
                 <span class="kc-ic t-blue"><x-ui.icon name="bot" /></span>
                 <p>{{ __('No hay agentes activos. Crea o activa un asesor en «Asesores Inteligentes».') }}</p>
             </div>
-        @elseif ($groups->isEmpty())
+        @elseif ($libraryEmpty)
             <div class="kc-card kc-empty">
                 <span class="kc-ic t-blue"><x-ui.icon name="book-open" /></span>
                 <p>{{ __('La biblioteca está vacía. Sube fuentes .md en la pestaña Biblioteca.') }}</p>
             </div>
         @else
-            @foreach ($groups as $g)
-                @php $noCat = $g['key'] === 'sin_categoria'; @endphp
-                <div class="kc-card kc-group" wire:key="grp-{{ $g['key'] }}">
-                    <div class="kc-group-head">
-                        <span @class(['kc-ic', 't-amber' => $noCat, 't-blue' => ! $noCat])><x-ui.icon name="{{ $noCat ? 'alert-triangle' : 'layers' }}" /></span>
-                        <span class="kc-group-title">{{ $noCat ? __('Sin categoría') : (\Modules\Ai\Support\KnowledgeTaxonomy::isLine($g['key']) ? __((string) \Modules\Ai\Support\KnowledgeTaxonomy::lineLabel($g['key'])) : Str::title($g['label'])) }}</span>
-                        <span @class(['kc-badge', 't-green' => $g['active_count'] > 0, 't-gray' => $g['active_count'] === 0])>
-                            {{ __(':a de :t activas para :bot', ['a' => $g['active_count'], 't' => count($g['rows']), 'bot' => $bot->assistant_name]) }}
-                        </span>
-                        <button type="button" wire:click="toggleCategory('{{ $g['key'] }}')" wire:loading.attr="disabled"
-                            class="kc-switch-btn" role="switch" aria-checked="{{ $g['full'] ? 'true' : 'false' }}">
-                            <span @class(['kc-switch', 'on' => $g['full']])></span>
-                            {{ __('Usar toda la categoría') }}
+            {{-- Líneas de formación: por cada línea, las dos capas del agente (documentos de
+                 conocimiento + programas que puede recomendar, con el área como subgrupo). --}}
+            <div class="kc-section-head">
+                <div>
+                    <h2 class="kc-section-title">{{ __('Líneas de formación') }}</h2>
+                    <p class="kc-section-sub">{{ __('Por cada línea: los documentos que :bot usa para responder y los programas que puede recomendar (su emparejador solo recomienda los asignados y activos).', ['bot' => $bot->assistant_name]) }}</p>
+                </div>
+                <span class="kc-badge t-blue"><span class="kc-dot"></span>{{ __(':n asignados', ['n' => $programAssignedTotal]) }}</span>
+            </div>
+
+            <div class="kc-toolbar kc-prog-tools">
+                <div class="kc-search">
+                    <x-ui.icon name="search" />
+                    <input type="text" wire:model.live.debounce.350ms="programSearch" placeholder="{{ __('Buscar programa por nombre o código (ej. PE-)…') }}" aria-label="{{ __('Buscar programa por nombre o código') }}">
+                </div>
+                @if (trim($programSearch) !== '')
+                    <span class="kc-prog-count">{{ trans_choice(':n resultado|:n resultados', $programMatches, ['n' => $programMatches]) }}</span>
+                    @if ($programMatches > 0)
+                        <button type="button" wire:click="assignProgramResults" wire:loading.attr="disabled" class="kc-btn kc-btn-primary">
+                            <x-ui.icon name="check" /> {{ __('Asignar todos los resultados') }}
                         </button>
+                        <button type="button" wire:click="detachProgramResults" wire:loading.attr="disabled" class="kc-btn kc-btn-ghost">
+                            <x-ui.icon name="x" /> {{ __('Quitar todos los resultados') }}
+                        </button>
+                    @endif
+                @endif
+            </div>
+
+            @foreach ($lineBlocks as $b)
+                @php $noLine = $b['key'] === 'sin_linea'; @endphp
+                <div class="kc-card kc-line" wire:key="line-{{ $b['key'] }}">
+                    <div class="kc-line-head">
+                        <span @class(['kc-ic', 't-amber' => $noLine, 't-blue' => ! $noLine])><x-ui.icon name="{{ $noLine ? 'alert-triangle' : 'layers' }}" /></span>
+                        <div class="kc-line-titles">
+                            <span class="kc-line-title">{{ $b['label'] }}</span>
+                            <span class="kc-line-counters">
+                                <span @class(['kc-badge', 't-green' => $b['docs_active'] > 0, 't-gray' => $b['docs_active'] === 0])>
+                                    <x-ui.icon name="file-text" /> {{ __('Documentos :a/:t', ['a' => $b['docs_active'], 't' => $b['docs_total']]) }}
+                                </span>
+                                <span @class(['kc-badge', 't-green' => $b['programs_assigned'] > 0, 't-gray' => $b['programs_assigned'] === 0])>
+                                    <x-ui.icon name="book-open" /> {{ __('Programas :a/:t', ['a' => $b['programs_assigned'], 't' => $b['programs_total']]) }}
+                                </span>
+                            </span>
+                        </div>
+                        @if ($b['is_line'])
+                            <div class="kc-line-actions">
+                                <button type="button" wire:click="assignLine('{{ $b['key'] }}')" wire:loading.attr="disabled"
+                                        wire:confirm="{{ __('¿Asignar a :bot la línea «:line» completa? Se activan todos sus documentos activos y se asignan todos sus programas activos.', ['bot' => $bot->assistant_name, 'line' => $b['label']]) }}"
+                                        class="kc-btn kc-btn-primary">
+                                    <x-ui.icon name="check" /> {{ __('Asignar línea completa') }}
+                                </button>
+                                <button type="button" wire:click="detachLine('{{ $b['key'] }}')" wire:loading.attr="disabled"
+                                        wire:confirm="{{ __('¿Quitar a :bot la línea «:line» completa? Se quitan sus documentos activos y sus programas activos (no se borra nada de la biblioteca ni del catálogo).', ['bot' => $bot->assistant_name, 'line' => $b['label']]) }}"
+                                        class="kc-btn kc-btn-ghost">
+                                    <x-ui.icon name="x" /> {{ __('Quitar línea completa') }}
+                                </button>
+                            </div>
+                        @endif
                     </div>
 
-                    @foreach ($g['rows'] as $r)
+                    {{-- Capa 1: documentos de conocimiento de la línea (plegados por defecto) --}}
+                    <div class="kc-line-sub">
+                        <button type="button" wire:click="toggleDocsOpen('{{ $b['key'] }}')" class="kc-area-toggle" aria-expanded="{{ $b['docs_open'] ? 'true' : 'false' }}">
+                            <span @class(['kc-chev', 'open' => $b['docs_open']])><x-ui.icon name="chevron-down" /></span>
+                            <span class="kc-line-sub-title">{{ __('Documentos de conocimiento') }}</span>
+                            <span @class(['kc-badge', 't-green' => $b['docs_active'] > 0, 't-gray' => $b['docs_active'] === 0])>{{ __('Documentos :a/:t', ['a' => $b['docs_active'], 't' => $b['docs_total']]) }}</span>
+                        </button>
+                        @if ($b['docs_open'] && $b['docs'] !== [])
+                            <button type="button" wire:click="toggleCategory('{{ $b['category_key'] }}')" wire:loading.attr="disabled"
+                                class="kc-switch-btn" role="switch" aria-checked="{{ $b['docs_full'] ? 'true' : 'false' }}">
+                                <span @class(['kc-switch', 'on' => $b['docs_full']])></span>
+                                {{ __('Usar toda la categoría') }}
+                            </button>
+                        @endif
+                    </div>
+                    @if ($b['docs_open'])
+                    @forelse ($b['docs'] as $r)
                         <div class="kc-src" wire:key="src-{{ $r['id'] }}">
                             <button type="button" wire:click="toggleSource({{ $r['id'] }})" class="kc-switch-btn"
                                 role="switch" aria-checked="{{ $r['assigned'] === true ? 'true' : 'false' }}"
@@ -121,95 +172,70 @@
                                 @endif
                             </div>
                         </div>
-                    @endforeach
-                </div>
-            @endforeach
-        @endif
-
-        {{-- Programas que puede recomendar (Bloque 4c) --}}
-        @if ($bot !== null)
-            <div class="kc-section-head kc-section-gap">
-                <div>
-                    <h2 class="kc-section-title">{{ __('Programas que puede recomendar') }}</h2>
-                    <p class="kc-section-sub">{{ __('El emparejador de :bot solo recomienda los programas asignados y activos.', ['bot' => $bot->assistant_name]) }}</p>
-                </div>
-                <span class="kc-badge t-blue"><span class="kc-dot"></span>{{ __(':n asignados', ['n' => $programAssignedTotal]) }}</span>
-            </div>
-
-            <div class="kc-toolbar kc-prog-tools">
-                <div class="kc-search">
-                    <x-ui.icon name="search" />
-                    <input type="text" wire:model.live.debounce.350ms="programSearch" placeholder="{{ __('Buscar programa por nombre o código (ej. PE-)…') }}" aria-label="{{ __('Buscar programa por nombre o código') }}">
-                </div>
-                @if (trim($programSearch) !== '')
-                    <span class="kc-prog-count">{{ trans_choice(':n resultado|:n resultados', $programMatches, ['n' => $programMatches]) }}</span>
-                    @if ($programMatches > 0)
-                        <button type="button" wire:click="assignProgramResults" wire:loading.attr="disabled" class="kc-btn kc-btn-primary">
-                            <x-ui.icon name="check" /> {{ __('Asignar todos los resultados') }}
-                        </button>
-                        <button type="button" wire:click="detachProgramResults" wire:loading.attr="disabled" class="kc-btn kc-btn-ghost">
-                            <x-ui.icon name="x" /> {{ __('Quitar todos los resultados') }}
-                        </button>
+                    @empty
+                        <div class="kc-line-empty">{{ __('Sin documentos en esta línea.') }}</div>
+                    @endforelse
                     @endif
-                @endif
-            </div>
 
-            @forelse ($programAreas as $a)
-                @php $noArea = $a['key'] === 'sin_area'; @endphp
-                <div class="kc-card kc-group" wire:key="parea-{{ $a['key'] }}">
-                    <div class="kc-group-head">
-                        <button type="button" wire:click="toggleProgramAreaOpen('{{ $a['key'] }}')" class="kc-area-toggle" aria-expanded="{{ $a['open'] ? 'true' : 'false' }}">
-                            <span @class(['kc-chev', 'open' => $a['open']])><x-ui.icon name="chevron-down" /></span>
-                            <span @class(['kc-ic', 't-amber' => $noArea, 't-blue' => ! $noArea])><x-ui.icon name="{{ $noArea ? 'alert-triangle' : 'book-open' }}" /></span>
-                            <span class="kc-area-titles">
-                                <span class="kc-group-title">{{ $a['label'] }}</span>
-                                <span @class(['kc-badge', 't-green' => $a['assigned_count'] > 0, 't-gray' => $a['assigned_count'] === 0])>
-                                    {{ trim($programSearch) !== ''
-                                        ? __(':a de :t resultados asignados', ['a' => $a['assigned_count'], 't' => $a['total']])
-                                        : __(':a de :t asignados', ['a' => $a['assigned_count'], 't' => $a['total']]) }}
-                                </span>
-                            </span>
-                        </button>
-                        {{-- Con búsqueda, las acciones masivas son las de «resultados» (el área entera
-                             incluiría programas que no se están viendo). --}}
-                        <div class="kc-area-actions">
-                            @if (trim($programSearch) === '' && $a['assigned_count'] < $a['total'])
-                                <button type="button" wire:click="assignProgramArea('{{ $a['key'] }}')" wire:loading.attr="disabled" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="check" /> {{ __('Asignar toda el área') }}</button>
-                            @endif
-                            @if (trim($programSearch) === '' && $a['assigned_count'] > 0)
-                                <button type="button" wire:click="detachProgramArea('{{ $a['key'] }}')" wire:loading.attr="disabled" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="x" /> {{ __('Quitar toda el área') }}</button>
-                            @endif
-                        </div>
+                    {{-- Capa 2: programas que puede recomendar, con el área como subgrupo --}}
+                    <div class="kc-line-sub">
+                        <span class="kc-line-sub-title">{{ __('Programas que puede recomendar') }}</span>
                     </div>
-
-                    @if ($a['open'])
-                        @foreach ($a['rows'] as $p)
-                            <div @class(['kc-src', 'kc-prog-row', 'is-off' => ! $p['active']]) wire:key="prog-{{ $p['id'] }}">
-                                <button type="button" wire:click="toggleProgram({{ $p['id'] }})" class="kc-switch-btn"
-                                    role="switch" aria-checked="{{ $p['assigned'] ? 'true' : 'false' }}"
-                                    title="{{ $p['assigned'] ? __('Quitar de :bot', ['bot' => $bot->assistant_name]) : __('Asignar a :bot', ['bot' => $bot->assistant_name]) }}"
-                                    aria-label="{{ $p['assigned'] ? __('Quitar de :bot', ['bot' => $bot->assistant_name]) : __('Asignar a :bot', ['bot' => $bot->assistant_name]) }}">
-                                    <span @class(['kc-switch', 'on' => $p['assigned']])></span>
+                    @forelse ($b['areas'] as $a)
+                        @php $noArea = $a['key'] === 'sin_area'; @endphp
+                        <div class="kc-area" wire:key="parea-{{ $b['key'] }}-{{ $a['key'] }}">
+                            <div class="kc-area-head">
+                                <button type="button" wire:click="toggleProgramAreaOpen('{{ $a['open_key'] }}')" class="kc-area-toggle" aria-expanded="{{ $a['open'] ? 'true' : 'false' }}">
+                                    <span @class(['kc-chev', 'open' => $a['open']])><x-ui.icon name="chevron-down" /></span>
+                                    <span class="kc-area-titles">
+                                        <span class="kc-area-title">{{ $a['label'] }}</span>
+                                        <span @class(['kc-badge', 't-green' => $a['assigned_count'] > 0, 't-gray' => $a['assigned_count'] === 0])>
+                                            {{ trim($programSearch) !== ''
+                                                ? __(':a de :t resultados asignados', ['a' => $a['assigned_count'], 't' => $a['total']])
+                                                : __(':a de :t asignados', ['a' => $a['assigned_count'], 't' => $a['total']]) }}
+                                        </span>
+                                    </span>
                                 </button>
-                                <span class="kc-code kc-prog-code">{{ $p['code'] !== '' ? $p['code'] : '—' }}</span>
-                                <div class="kc-src-main"><div class="kc-name">{{ $p['name'] }}</div></div>
-                                <div class="kc-src-tags">
-                                    @if ($p['active'])
-                                        <span class="kc-badge t-green"><span class="kc-dot"></span>{{ __('Activo') }}</span>
-                                    @else
-                                        <span class="kc-badge t-gray" title="{{ __('Inactivo en el catálogo: el emparejador no lo recomienda aunque esté asignado.') }}"><span class="kc-dot"></span>{{ __('Inactivo') }}</span>
+                                {{-- Con búsqueda, las acciones masivas son las de «resultados». --}}
+                                <div class="kc-area-actions">
+                                    @if (trim($programSearch) === '' && $a['assigned_count'] < $a['total'])
+                                        <button type="button" wire:click="assignProgramArea('{{ $a['key'] }}', '{{ $b['key'] }}')" wire:loading.attr="disabled" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="check" /> {{ __('Asignar toda el área') }}</button>
+                                    @endif
+                                    @if (trim($programSearch) === '' && $a['assigned_count'] > 0)
+                                        <button type="button" wire:click="detachProgramArea('{{ $a['key'] }}', '{{ $b['key'] }}')" wire:loading.attr="disabled" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="x" /> {{ __('Quitar toda el área') }}</button>
                                     @endif
                                 </div>
                             </div>
-                        @endforeach
-                    @endif
+
+                            @if ($a['open'])
+                                @foreach ($a['rows'] as $p)
+                                    <div @class(['kc-src', 'kc-prog-row', 'is-off' => ! $p['active']]) wire:key="prog-{{ $p['id'] }}">
+                                        <button type="button" wire:click="toggleProgram({{ $p['id'] }})" class="kc-switch-btn"
+                                            role="switch" aria-checked="{{ $p['assigned'] ? 'true' : 'false' }}"
+                                            title="{{ $p['assigned'] ? __('Quitar de :bot', ['bot' => $bot->assistant_name]) : __('Asignar a :bot', ['bot' => $bot->assistant_name]) }}"
+                                            aria-label="{{ $p['assigned'] ? __('Quitar de :bot', ['bot' => $bot->assistant_name]) : __('Asignar a :bot', ['bot' => $bot->assistant_name]) }}">
+                                            <span @class(['kc-switch', 'on' => $p['assigned']])></span>
+                                        </button>
+                                        <span class="kc-code kc-prog-code">{{ $p['code'] !== '' ? $p['code'] : '—' }}</span>
+                                        <div class="kc-src-main"><div class="kc-name">{{ $p['name'] }}</div></div>
+                                        <div class="kc-src-tags">
+                                            @if ($p['active'])
+                                                <span class="kc-badge t-green"><span class="kc-dot"></span>{{ __('Activo') }}</span>
+                                            @else
+                                                <span class="kc-badge t-gray" title="{{ __('Inactivo en el catálogo: el emparejador no lo recomienda aunque esté asignado.') }}"><span class="kc-dot"></span>{{ __('Inactivo') }}</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endforeach
+                            @endif
+                        </div>
+                    @empty
+                        <div class="kc-line-empty">
+                            {{ trim($programSearch) !== '' && $b['programs_total'] > 0 ? __('Ningún programa de esta línea coincide con la búsqueda.') : __('Sin programas en esta línea.') }}
+                        </div>
+                    @endforelse
                 </div>
-            @empty
-                <div class="kc-card kc-empty">
-                    <span class="kc-ic t-blue"><x-ui.icon name="search" /></span>
-                    <p>{{ trim($programSearch) !== '' ? __('Ningún programa coincide con la búsqueda.') : __('El catálogo no tiene programas.') }}</p>
-                </div>
-            @endforelse
+            @endforeach
         @endif
     </div>
 </div>

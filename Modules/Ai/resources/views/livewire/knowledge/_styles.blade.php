@@ -252,6 +252,25 @@
     .kc-chev svg{width:16px;height:16px}
     .kc-area-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
     .kc-area-titles{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+
+    /* Bloques por LÍNEA en «Por agente»: documentos + programas (área como subgrupo) */
+    .kc-line{margin-bottom:18px;overflow:hidden}
+    .kc-line-head{display:flex;align-items:center;gap:12px;padding:16px 18px;background:var(--kc-head);border-bottom:1px solid var(--kc-line-soft);flex-wrap:wrap}
+    .kc-line-titles{display:flex;flex-direction:column;gap:6px;min-width:0}
+    .kc-line-title{font-size:15.5px;font-weight:700;color:var(--mca-ink)}
+    .kc-line-counters{display:flex;gap:6px;flex-wrap:wrap}
+    .kc-line-counters .kc-badge{display:inline-flex;align-items:center;gap:5px}
+    .kc-line-counters .kc-badge svg{width:12px;height:12px}
+    .kc-line-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+    .kc-line-sub{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px 8px;border-top:1px solid var(--kc-line-soft)}
+    .kc-line-head + .kc-line-sub{border-top:0}
+    .kc-line-sub-title{font-size:11.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--mca-ink-2)}
+    .kc-line-empty{padding:4px 18px 14px;font-size:12.5px;color:var(--mca-ink-3)}
+    .kc-area{margin:0 12px 10px;border:1px solid var(--kc-line-soft);border-radius:12px;overflow:hidden}
+    .kc-area-head{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#FBFCFE;flex-wrap:wrap}
+    .kc-area-head:only-child{border-bottom:0}
+    .kc-area-title{font-size:13.5px;font-weight:600;color:var(--mca-ink)}
+    .kc-area .kc-src{border-top:1px solid var(--kc-line-soft)}
     .kc-prog-row{padding:10px 18px}
     .kc-prog-code{min-width:62px}
     .kc-src.is-off .kc-name,.kc-src.is-off .kc-prog-code{opacity:.6}

@@ -22,6 +22,8 @@ function i18nCtx(): array
     $inst = Institution::factory()->create();
     app(CurrentInstitution::class)->set($inst->id);
     $bot = Bot::factory()->create(['status' => 'active', 'assistant_name' => 'Lola', 'type' => 'ia', 'slug' => 'lola']);
+    // «Por agente» agrupa por línea: con un programa hay un bloque que pintar.
+    \Modules\Catalog\Models\Program::factory()->create(['line' => 'microcredenciales']);
 
     return [User::factory()->create(['institution_id' => $inst->id, 'role' => 'admin']), $bot];
 }

@@ -22,6 +22,9 @@ class ProgramAssignmentService
 {
     public const NO_AREA = 'sin_area';
 
+    /** Bloque de «Por agente» para programas/fuentes sin línea. */
+    public const NO_LINE = 'sin_linea';
+
     /**
      * Subconsulta de ids de programa asignados a un bot, para `whereIn('programs.id', …)`.
      * Si el bot no tiene asignaciones, el filtro no deja pasar ninguno.
@@ -56,16 +59,19 @@ class ProgramAssignmentService
         return true;
     }
 
-    /** Asigna todos los programas de un área (activos o no). Devuelve cuántos se consideraron. */
-    public function assignArea(Bot $bot, string $area): int
+    /**
+     * Asigna todos los programas de un área (activos o no). Con $line, solo los de esa línea
+     * (el área es un subgrupo de la línea en «Por agente»). Devuelve cuántos se consideraron.
+     */
+    public function assignArea(Bot $bot, string $area, ?string $line = null): int
     {
-        return $this->assignIds($bot, $this->inArea($area)->pluck('id')->all());
+        return $this->assignIds($bot, $this->inArea($area, $line)->pluck('id')->all());
     }
 
-    /** Quita del bot todos los programas de un área. Devuelve cuántos se quitaron. */
-    public function detachArea(Bot $bot, string $area): int
+    /** Quita del bot todos los programas de un área (y, con $line, solo de esa línea). */
+    public function detachArea(Bot $bot, string $area, ?string $line = null): int
     {
-        return $this->detachIds($bot, $this->inArea($area)->pluck('id')->all());
+        return $this->detachIds($bot, $this->inArea($area, $line)->pluck('id')->all());
     }
 
     /** Asigna todos los programas que coinciden con la búsqueda (nombre o código). */
@@ -116,10 +122,16 @@ class ProgramAssignmentService
     }
 
     /** @return Builder<Program> */
-    private function inArea(string $area): Builder
+    private function inArea(string $area, ?string $line = null): Builder
     {
-        return $area === self::NO_AREA
+        $query = $area === self::NO_AREA
             ? Program::query()->whereNull('category_id')
             : Program::query()->where('category_id', (int) $area);
+
+        if ($line !== null && $line !== '') {
+            $line === self::NO_LINE ? $query->whereNull('line') : $query->where('line', $line);
+        }
+
+        return $query;
     }
 }

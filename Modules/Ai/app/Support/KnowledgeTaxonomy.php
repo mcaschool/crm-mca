@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Modules\Ai\Support;
 
+use Illuminate\Support\Str;
+
 /**
  * Taxonomía FIJA del Centro de Conocimiento (config crm.knowledge): la línea
  * (knowledge_sources.category) y el tipo (knowledge_sources.type). Punto único de lectura
@@ -42,6 +44,41 @@ final class KnowledgeTaxonomy
     public static function isLine(?string $slug): bool
     {
         return $slug !== null && array_key_exists($slug, self::lines());
+    }
+
+    /**
+     * Slug de línea a partir de un texto libre («Tipo» del Excel del catálogo): acepta el
+     * slug, la etiqueta o su singular, sin distinguir mayúsculas ni tildes
+     * («Programa Ejecutivo» → programas_ejecutivos, «Maestría» → maestrias). Null si no
+     * corresponde a ninguna línea de la lista fija.
+     */
+    public static function lineFromLabel(?string $text): ?string
+    {
+        $wanted = self::normalizeText($text);
+        if ($wanted === '') {
+            return null;
+        }
+
+        foreach (self::lines() as $slug => $label) {
+            $label = self::normalizeText($label);
+            $candidates = [str_replace('_', ' ', $slug), $label, self::singular($label)];
+            if (in_array($wanted, $candidates, true) || self::singular($wanted) === self::singular($label)) {
+                return $slug;
+            }
+        }
+
+        return null;
+    }
+
+    private static function normalizeText(?string $text): string
+    {
+        return trim((string) preg_replace('/\s+/', ' ', Str::ascii(mb_strtolower((string) $text))));
+    }
+
+    /** Singular aproximado palabra a palabra (quita «es»/«s» final): basta para las etiquetas fijas. */
+    private static function singular(string $text): string
+    {
+        return implode(' ', array_map(fn (string $w): string => (string) preg_replace('/(es|s)$/', '', $w), explode(' ', $text)));
     }
 
     public static function isType(?string $type): bool

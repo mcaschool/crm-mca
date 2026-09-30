@@ -20,6 +20,9 @@ final class ImportReport
     /** @var array<int, array{row: int, reason: string}> Filas que no se pudieron importar. */
     public array $skipped = [];
 
+    /** @var array<int, array{code: string, type: string}> «Tipo» sin línea conocida (importadas con line NULL). */
+    public array $unknownTypes = [];
+
     public function created(): void
     {
         $this->created++;
@@ -38,6 +41,11 @@ final class ImportReport
     public function skipped(int $row, string $reason): void
     {
         $this->skipped[] = ['row' => $row, 'reason' => $reason];
+    }
+
+    public function unknownType(string $code, string $type): void
+    {
+        $this->unknownTypes[] = ['code' => $code, 'type' => $type];
     }
 
     public function totalProcessed(): int

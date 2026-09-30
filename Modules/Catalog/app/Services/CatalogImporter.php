@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Catalog\Services;
 
 use Illuminate\Support\Str;
+use Modules\Ai\Support\KnowledgeTaxonomy;
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Models\ProgramCategory;
 use Modules\Catalog\Support\TagParser;
@@ -31,6 +32,8 @@ class CatalogImporter
         'name_es' => ['nombre del programa', 'nombre'],
         'credential_en' => ['microcredencial que otorga', 'microcredencial', 'credencial'],
         'category' => ['area'],
+        // Línea de formación (programs.line): «Microcredencial», «Programa Ejecutivo», …
+        'line' => ['tipo', 'linea', 'linea de formacion'],
         'duration' => ['duracion'],
         'modality' => ['modalidad'],
         'description' => ['descripcion'],
@@ -184,6 +187,16 @@ class CatalogImporter
         // queda como punto de partida disponible para ese trabajo.
         $program->credential_en = $this->cell($cells, $map, 'credential_en') ?: null;
         $program->category_id = $this->resolveCategory($this->cell($cells, $map, 'category'));
+
+        // Línea desde «Tipo» (solo si la celda trae algo; vacía = no se toca). Un tipo que no
+        // corresponde a ninguna línea de la lista fija se importa con line NULL y se reporta.
+        $type = $this->cell($cells, $map, 'line');
+        if ($type !== '') {
+            $program->line = KnowledgeTaxonomy::lineFromLabel($type);
+            if ($program->line === null) {
+                $report->unknownType($code, $type);
+            }
+        }
         $program->level = $parsed['level'];
         $program->goal = $parsed['goal'];
         $program->profile = $parsed['profile'];

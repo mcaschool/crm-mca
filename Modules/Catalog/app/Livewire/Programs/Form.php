@@ -8,6 +8,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Modules\Ai\Support\KnowledgeTaxonomy;
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Models\ProgramCategory;
 
@@ -29,6 +30,9 @@ class Form extends Component
     public string $credential_en = '';
 
     public ?int $category_id = null;
+
+    /** Línea de formación (slug de config crm.knowledge.lines) o '' = sin línea. */
+    public string $line = '';
 
     public string $level = '';
 
@@ -76,6 +80,7 @@ class Form extends Component
         $this->name_en = (string) $program->name_en;
         $this->credential_en = (string) $program->credential_en;
         $this->category_id = $program->category_id;
+        $this->line = (string) $program->line;
         $this->level = (string) $program->level;
         $this->goal = (string) $program->goal;
         $this->profile = (string) $program->profile;
@@ -104,6 +109,7 @@ class Form extends Component
             'name_en' => ['nullable', 'string', 'max:200'],
             'credential_en' => ['nullable', 'string', 'max:200'],
             'category_id' => ['nullable', 'integer', Rule::exists('program_categories', 'id')],
+            'line' => ['nullable', Rule::in(array_keys(KnowledgeTaxonomy::lines()))],
             'level' => ['nullable', 'string', 'max:40'],
             'goal' => ['nullable', 'string', 'max:80'],
             'profile' => ['nullable', 'string', 'max:120'],
@@ -152,6 +158,7 @@ class Form extends Component
     {
         return view('catalog::livewire.programs.form', [
             'categories' => ProgramCategory::query()->orderBy('name_es')->get(),
+            'lines' => KnowledgeTaxonomy::lines(),
             'editing' => $this->programId !== null,
         ]);
     }

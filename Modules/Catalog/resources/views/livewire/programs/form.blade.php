@@ -29,6 +29,20 @@
 
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
                     <div class="field" style="margin-bottom:0">
+                        <label>{{ __('Línea') }}</label>
+                        <select wire:model="line">
+                            <option value="">{{ __('— sin línea —') }}</option>
+                            @foreach ($lines as $slug => $label)
+                                <option value="{{ $slug }}">{{ __($label) }}</option>
+                            @endforeach
+                        </select>
+                        @error('line') <span class="mca-err">{{ $message }}</span> @enderror
+                        <div class="mca-help">{{ __('La misma línea que el Centro de Conocimiento: agrupa sus programas y su conocimiento en «Por agente».') }}</div>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+                    <div class="field" style="margin-bottom:0">
                         <label>{{ __('Nombre (ES)') }}</label>
                         <input type="text" wire:model="name_es">
                         @error('name_es') <span class="mca-err">{{ $message }}</span> @enderror
