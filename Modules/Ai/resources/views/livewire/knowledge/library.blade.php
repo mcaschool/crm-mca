@@ -118,19 +118,30 @@
                     @error('programLine') <span class="kc-err">{{ $message }}</span> @enderror
                 </div>
 
-                <div class="kc-field">
-                    <span class="kc-field-label">{{ __('Programa del catálogo') }}</span>
-                    <div class="kc-field-search">
-                        <x-ui.icon name="search" />
-                        <input type="text" wire:model.live.debounce.300ms="programSearch" placeholder="{{ __('Buscar por nombre o código…') }}" aria-label="{{ __('Buscar programa') }}">
+                {{-- Carga masiva por línea: el programa sale de cada archivo --}}
+                <button type="button" wire:click="$toggle('programAuto')" class="kc-switch-btn kc-auto"
+                        role="switch" aria-checked="{{ $programAuto ? 'true' : 'false' }}">
+                    <span @class(['kc-switch', 'on' => $programAuto])></span>
+                    {{ __('Asignar programa automáticamente desde cada archivo') }}
+                </button>
+
+                @if ($programAuto)
+                    <p class="kc-auto-help">{!! __('Cada archivo indica su programa con <code>Programa: CÓDIGO</code> en el comentario de metadatos; si no lo trae, se busca por la URL de la ficha del programa. Los archivos que no se puedan asignar se rechazan con el motivo y el resto se sube.') !!}</p>
+                @else
+                    <div class="kc-field">
+                        <span class="kc-field-label">{{ __('Programa del catálogo') }}</span>
+                        <div class="kc-field-search">
+                            <x-ui.icon name="search" />
+                            <input type="text" wire:model.live.debounce.300ms="programSearch" placeholder="{{ __('Buscar por nombre o código…') }}" aria-label="{{ __('Buscar programa') }}">
+                        </div>
+                        @include('ai::livewire.knowledge._dropdown', [
+                            'model' => 'programId', 'live' => false, 'field' => true,
+                            'options' => $programs->mapWithKeys(fn ($p) => [$p->id => ($p->code ? $p->code.' · ' : '').$p->name_es])->all(),
+                            'placeholder' => __('Elige un programa…'), 'aria' => __('Programa del catálogo'),
+                        ])
+                        @error('programId') <span class="kc-err">{{ $message }}</span> @enderror
                     </div>
-                    @include('ai::livewire.knowledge._dropdown', [
-                        'model' => 'programId', 'live' => false, 'field' => true,
-                        'options' => $programs->mapWithKeys(fn ($p) => [$p->id => ($p->code ? $p->code.' · ' : '').$p->name_es])->all(),
-                        'placeholder' => __('Elige un programa…'), 'aria' => __('Programa del catálogo'),
-                    ])
-                    @error('programId') <span class="kc-err">{{ $message }}</span> @enderror
-                </div>
+                @endif
 
                 <div class="kc-space-foot">
                     <div wire:loading wire:target="programDocs" class="kc-meta"><span class="mca-spin"></span> {{ __('Cargando archivos…') }}</div>
@@ -203,15 +214,31 @@
         @if ($uploadResults !== [])
             <div class="kc-card kc-upload">
                 <div class="kc-results" style="margin-top:0;padding-top:0;border-top:0">
-                    <h4>{{ __('Resultado de la subida') }}</h4>
-                    @foreach ($uploadResults as $r)
-                        @php $tone = match ($r['result']) { 'Nuevo' => 't-green', 'Actualizado' => 't-blue', default => 't-red' }; @endphp
-                        <div class="kc-result">
-                            <span class="kc-badge {{ $tone }}"><span class="kc-dot"></span>{{ __($r['result']) }}</span>
-                            <span class="kc-code">{{ $r['file'] }}</span>
-                            <span class="kc-meta" style="margin:0">{{ $r['reason'] }}</span>
-                        </div>
-                    @endforeach
+                    @php $kcCount = collect($uploadResults)->countBy('result'); @endphp
+                    <h4>{{ __('Resultado de la subida') }}
+                        <span class="kc-report-sum">{{ __(':new nuevos · :upd actualizados · :rej rechazados', ['new' => $kcCount['Nuevo'] ?? 0, 'upd' => $kcCount['Actualizado'] ?? 0, 'rej' => $kcCount['Rechazado'] ?? 0]) }}</span>
+                    </h4>
+                    <table class="kc-report">
+                        <thead>
+                            <tr>
+                                <th>{{ __('Archivo') }}</th>
+                                <th>{{ __('Programa asignado') }}</th>
+                                <th>{{ __('Resultado') }}</th>
+                                <th>{{ __('Motivo') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($uploadResults as $r)
+                                @php $tone = match ($r['result']) { 'Nuevo' => 't-green', 'Actualizado' => 't-blue', default => 't-red' }; @endphp
+                                <tr>
+                                    <td><span class="kc-code">{{ $r['file'] }}</span></td>
+                                    <td>{{ $r['program'] ?? '—' }}</td>
+                                    <td><span class="kc-badge {{ $tone }}"><span class="kc-dot"></span>{{ __($r['result']) }}</span></td>
+                                    <td class="kc-meta">{{ $r['reason'] }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
             </div>
         @endif

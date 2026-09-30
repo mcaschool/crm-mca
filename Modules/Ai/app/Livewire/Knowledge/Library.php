@@ -58,7 +58,13 @@ class Library extends Component
     /** Filtro de texto del desplegable de programas. */
     public string $programSearch = '';
 
-    /** @var array<int, array{file: string, result: string, reason: string}> */
+    /**
+     * Carga masiva por línea: el programa sale de CADA archivo («Programa: CÓDIGO» o la URL de
+     * la ficha) en lugar de elegirse a mano. Con false, la subida es la de siempre.
+     */
+    public bool $programAuto = false;
+
+    /** @var array<int, array{file: string, result: string, reason: string, program?: ?string}> */
     public array $uploadResults = [];
 
     // Drawer de contenido.
@@ -129,27 +135,41 @@ class Library extends Component
 
     /**
      * Espacio «Programa Académico»: exige línea (sin la institucional) y un programa ACTIVO del
-     * catálogo; las fuentes quedan vinculadas a ese programa (program_id).
+     * catálogo; las fuentes quedan vinculadas a ese programa (program_id). Con la carga masiva
+     * ($programAuto) no se elige programa: cada archivo resuelve el suyo en el servicio.
      */
     public function uploadProgramDocs(KnowledgeIngestService $ingest): void
     {
         $this->authorize('sync', KnowledgeSource::class);
 
-        $this->validate(
-            [
-                'programLine' => ['required', Rule::in(array_keys(KnowledgeTaxonomy::programLines()))],
-                'programId' => ['required', 'integer'],
-                'programDocs' => ['required', 'array', 'min:1'],
-            ],
-            [
-                'programLine.required' => __('Elige la línea.'),
-                'programLine.in' => __('Línea no válida para un Programa Académico.'),
-                'programId.required' => __('Elige el programa del catálogo.'),
-                'programId.integer' => __('Elige el programa del catálogo.'),
-                'programDocs.required' => __('Elige al menos un archivo .md.'),
-                'programDocs.min' => __('Elige al menos un archivo .md.'),
-            ],
-        );
+        $rules = [
+            'programLine' => ['required', Rule::in(array_keys(KnowledgeTaxonomy::programLines()))],
+            'programDocs' => ['required', 'array', 'min:1'],
+        ];
+        if (! $this->programAuto) {
+            $rules['programId'] = ['required', 'integer'];
+        }
+
+        $this->validate($rules, [
+            'programLine.required' => __('Elige la línea.'),
+            'programLine.in' => __('Línea no válida para un Programa Académico.'),
+            'programId.required' => __('Elige el programa del catálogo.'),
+            'programId.integer' => __('Elige el programa del catálogo.'),
+            'programDocs.required' => __('Elige al menos un archivo .md.'),
+            'programDocs.min' => __('Elige al menos un archivo .md.'),
+        ]);
+
+        if ($this->programAuto) {
+            $this->runIngest($ingest, $this->programDocs, [
+                'type' => KnowledgeTaxonomy::TYPE_PROGRAM,
+                'line' => $this->programLine,
+                'program_id' => null,
+                'auto_program' => true,
+            ], 'programDocs');
+            $this->programDocs = [];
+
+            return;
+        }
 
         if (! Program::query()->whereKey((int) $this->programId)->where('status', 'active')->exists()) {
             $this->addError('programId', __('El programa no existe o no está activo.'));
@@ -325,7 +345,7 @@ class Library extends Component
 
     /**
      * @param  array<int, mixed>  $files
-     * @param  array{type: string, line: string, program_id: ?int}  $classification
+     * @param  array{type: string, line: string, program_id: ?int, auto_program?: bool}  $classification
      */
     private function runIngest(KnowledgeIngestService $ingest, array $files, array $classification, string $errorKey): void
     {

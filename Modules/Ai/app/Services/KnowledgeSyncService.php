@@ -192,12 +192,15 @@ class KnowledgeSyncService
     /**
      * Inspecciona un .md subido para VALIDARLO antes de guardarlo. Devuelve los metadatos y
      * las banderas de validez (comentario con Codigo, título "# ", al menos una sección "## ").
+     * «Programa» (opcional) es el código del programa del catálogo para la carga masiva por
+     * línea; cualquier otro campo del comentario se ignora (no provoca rechazo).
      *
-     * @return array{code: ?string, category: ?string, name: string, priority: int, language: string, has_code_meta: bool, has_title: bool, sections: int}
+     * @return array{code: ?string, category: ?string, program: ?string, name: string, priority: int, language: string, has_code_meta: bool, has_title: bool, sections: int}
      */
     public function inspect(string $raw, string $filename): array
     {
         $codeMeta = $this->metaValue($raw, 'Codigo') ?? $this->metaValue($raw, 'Código');
+        $programMeta = $this->metaValue($raw, 'Programa');
         $hasTitle = preg_match('/^\#\s+.+$/m', $raw) === 1;
         $sections = preg_match_all('/^\#\#\s+.+$/m', $raw);
         $parsed = $this->parse($raw, $filename);
@@ -205,6 +208,7 @@ class KnowledgeSyncService
         return [
             'code' => $codeMeta !== null && $codeMeta !== '' ? $codeMeta : null,
             'category' => $parsed['category'],
+            'program' => $programMeta !== null && $programMeta !== '' ? $programMeta : null,
             'name' => $parsed['name'],
             'priority' => $parsed['priority'],
             'language' => $parsed['language'],

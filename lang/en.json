@@ -622,5 +622,15 @@
     "General institucional": "Institutional (general)",
     "Nuevo": "New",
     "Actualizado": "Updated",
-    "Rechazado": "Rejected"
+    "Rechazado": "Rejected",
+    "Programa :code no existe": "Program :code does not exist",
+    "Programa :code está inactivo": "Program :code is inactive",
+    "No se encontró programa para este archivo": "No program found for this file",
+    "Varios programas coinciden (:codes)": "Several programs match (:codes)",
+    "La asignación automática no admite un programa elegido.": "Automatic assignment does not accept a chosen program.",
+    "Asignar programa automáticamente desde cada archivo": "Assign the program automatically from each file",
+    "Cada archivo indica su programa con <code>Programa: CÓDIGO</code> en el comentario de metadatos; si no lo trae, se busca por la URL de la ficha del programa. Los archivos que no se puedan asignar se rechazan con el motivo y el resto se sube.": "Each file states its program with <code>Programa: CODE</code> in the metadata comment; if it doesn’t, it is matched by the program page URL. Files that can’t be assigned are rejected with the reason and the rest are uploaded.",
+    ":new nuevos · :upd actualizados · :rej rechazados": ":new new · :upd updated · :rej rejected",
+    "Archivo": "File",
+    "Programa asignado": "Assigned program"
 }

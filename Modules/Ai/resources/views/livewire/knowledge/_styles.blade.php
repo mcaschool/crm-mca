@@ -105,6 +105,20 @@
     .kc-space-actions{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
     .kc-upload-note{font-size:12px;color:var(--mca-ink-3);margin:0 0 20px}
 
+    /* Carga masiva por línea y reporte por archivo */
+    .kc-auto{align-self:flex-start}
+    .kc-auto-help{margin:-4px 0 0;font-size:12.5px;line-height:1.5;color:var(--mca-ink-2)}
+    .kc-auto-help code{font-size:12px;background:var(--mca-page-bg);border:1px solid var(--mca-card-border);border-radius:5px;padding:1px 5px}
+    .kc-report-sum{margin-left:8px;font-weight:500;color:var(--mca-ink-2)}
+    .kc-report{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
+    .kc-report th:nth-child(1){width:30%} .kc-report th:nth-child(2){width:34%} .kc-report th:nth-child(3){width:13%}
+    .kc-report th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--mca-ink-2);padding:6px 10px 6px 0;border-bottom:1px solid var(--kc-line-soft)}
+    .kc-report td{padding:7px 10px 7px 0;border-top:1px dashed var(--kc-line-soft);vertical-align:middle}
+    .kc-report tr:first-child td{border-top:0}
+    .kc-report td{overflow-wrap:anywhere}
+    .kc-report td .kc-code{white-space:normal;font-size:12px}
+    .kc-report td.kc-meta{margin:0;font-size:12px}
+
     /* Programa vinculado y tipo (tabla) */
     .kc-prog{display:flex;align-items:center;gap:4px;margin-top:3px;font-size:11.5px;font-weight:500;color:var(--mca-blue);max-width:150px}
     .kc-prog svg{width:12px;height:12px;flex:none}
