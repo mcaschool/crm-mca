@@ -80,6 +80,17 @@ class Program extends Model
     ];
 
     /**
+     * Única línea con ÁREAS (program_categories). En el resto de líneas el área no se muestra,
+     * no se pide en el formulario y el importador ignora la columna Area.
+     */
+    public const AREA_LINE = 'microcredenciales';
+
+    public static function lineHasAreas(?string $line): bool
+    {
+        return $line === self::AREA_LINE;
+    }
+
+    /**
      * programs.line solo admite los slugs de config crm.knowledge.lines (mismo helper que el
      * Centro de Conocimiento) o NULL. Cualquier otro valor se rechaza al guardar.
      */

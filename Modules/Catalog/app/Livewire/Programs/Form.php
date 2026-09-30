@@ -108,7 +108,8 @@ class Form extends Component
             'name_es' => ['required', 'string', 'max:200'],
             'name_en' => ['nullable', 'string', 'max:200'],
             'credential_en' => ['nullable', 'string', 'max:200'],
-            'category_id' => ['nullable', 'integer', Rule::exists('program_categories', 'id')],
+            // El área solo existe (y es obligatoria) en Microcredenciales.
+            'category_id' => [Rule::requiredIf(Program::lineHasAreas($this->line)), 'nullable', 'integer', Rule::exists('program_categories', 'id')],
             'line' => ['nullable', Rule::in(array_keys(KnowledgeTaxonomy::lines()))],
             'level' => ['nullable', 'string', 'max:40'],
             'goal' => ['nullable', 'string', 'max:80'],
@@ -123,6 +124,12 @@ class Form extends Component
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'display_order' => ['integer'],
         ]);
+
+        // Fuera de Microcredenciales el campo Área no se muestra: el formulario no toca el
+        // category_id guardado (el emparejador de otras líneas aún lo usa).
+        if (! Program::lineHasAreas($this->line)) {
+            unset($validated['category_id']);
+        }
 
         foreach ($validated as $key => $value) {
             $program->{$key} = $value === '' ? null : $value;
@@ -159,6 +166,7 @@ class Form extends Component
         return view('catalog::livewire.programs.form', [
             'categories' => ProgramCategory::query()->orderBy('name_es')->get(),
             'lines' => KnowledgeTaxonomy::lines(),
+            'hasAreas' => Program::lineHasAreas($this->line),
             'editing' => $this->programId !== null,
         ]);
     }

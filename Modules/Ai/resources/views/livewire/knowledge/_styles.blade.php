@@ -272,6 +272,7 @@
     .kc-area-title{font-size:13.5px;font-weight:600;color:var(--mca-ink)}
     .kc-area .kc-src{border-top:1px solid var(--kc-line-soft)}
     .kc-prog-row{padding:10px 18px}
+    .kc-prog-flat > .kc-src:first-child{border-top:0}
     .kc-prog-code{min-width:62px}
     .kc-src.is-off .kc-name,.kc-src.is-off .kc-prog-code{opacity:.6}
 

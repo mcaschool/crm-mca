@@ -63,9 +63,61 @@ it('agrupa ambas capas por línea con contadores explícitos de documentos y pro
         ->assertDontSee('Microcredenciales')                        // sin contenido: no se muestra
         ->html();
 
-    // Orden de la lista fija (PE antes que DA) y el área como subgrupo dentro de la línea.
+    // Orden de la lista fija (PE antes que DA); fuera de Microcredenciales no hay subgrupo de área.
     expect(strpos($html, 'Programas Ejecutivos'))->toBeLessThan(strpos($html, 'Diplomas Avanzados'))
-        ->and($html)->toContain('Liderazgo');
+        ->and($html)->not->toContain('Liderazgo');
+});
+
+it('solo Microcredenciales agrupa por área; el resto de líneas es una lista plana por nombre', function () {
+    [, $admin, $sophia] = linesCtx();
+    $lider = ProgramCategory::factory()->create(['name_es' => 'Liderazgo']);
+    $rh = ProgramCategory::factory()->create(['name_es' => 'Recursos Humanos']);
+    linesProgram('MC-001', 'microcredenciales', ['name_es' => 'Micro Liderazgo', 'category_id' => $lider->id]);
+    linesProgram('MC-002', 'microcredenciales', ['name_es' => 'Micro Talento', 'category_id' => $rh->id]);
+    $pe = linesProgram('PE-001', 'programas_ejecutivos', ['name_es' => 'Zeta Ejecutivo', 'category_id' => $lider->id]);
+    linesProgram('PE-002', 'programas_ejecutivos', ['name_es' => 'Álgebra Ejecutiva', 'category_id' => $rh->id]);
+    linesProgram('PE-003', 'programas_ejecutivos', ['name_es' => 'Mando Ejecutivo']);
+    $sophia->programs()->attach($pe->id);
+
+    $component = Livewire::actingAs($admin)->test(Agents::class);
+    $blocks = collect($component->viewData('lineBlocks'))->keyBy('key');
+
+    // Microcredenciales: subgrupos de área con sus acciones.
+    expect($blocks['microcredenciales']['grouped'])->toBeTrue()
+        ->and(collect($blocks['microcredenciales']['areas'])->pluck('label')->all())->toBe(['Liderazgo', 'Recursos Humanos'])
+        ->and($blocks['microcredenciales']['rows'])->toBe([]);
+
+    // Programas Ejecutivos: lista plana ordenada por nombre (sin acentos), sin áreas; contadores intactos.
+    expect($blocks['programas_ejecutivos']['grouped'])->toBeFalse()
+        ->and($blocks['programas_ejecutivos']['areas'])->toBe([])
+        ->and(collect($blocks['programas_ejecutivos']['rows'])->pluck('code')->all())->toBe(['PE-002', 'PE-003', 'PE-001'])
+        ->and($blocks['programas_ejecutivos']['programs_assigned'])->toBe(1)
+        ->and($blocks['programas_ejecutivos']['programs_total'])->toBe(3);
+
+    // En pantalla: la lista plana se ve sin desplegar nada y las acciones de área solo existen en MC.
+    $html = $component->html();
+    $peBlock = substr($html, (int) strpos($html, 'Programas Ejecutivos'));
+    expect($peBlock)->toContain('Zeta Ejecutivo')->toContain('Álgebra Ejecutiva')
+        ->not->toContain('Asignar toda el área')->not->toContain('toggleProgramAreaOpen')
+        ->toContain('Asignar línea completa');
+    expect(substr_count($html, 'Asignar toda el área'))->toBe(2); // una por área de Microcredenciales
+
+    // El buscador filtra también la lista plana, y el interruptor sigue funcionando.
+    $component->set('programSearch', 'Mando')->assertSee('Mando Ejecutivo')->assertDontSee('Zeta Ejecutivo')
+        ->call('toggleProgram', $pe->id);
+    expect($sophia->programs()->count())->toBe(0);
+});
+
+it('aislamiento: la lista plana de una línea no muestra programas de otra institución', function () {
+    [$inst, $admin] = linesCtx();
+    linesProgram('DA-001', 'diplomas_avanzados', ['name_es' => 'Diploma Propio']);
+    $other = Institution::factory()->create();
+    app(CurrentInstitution::class)->runFor($other->id, fn () => linesProgram('DA-002', 'diplomas_avanzados', ['name_es' => 'Diploma Ajeno']));
+    app(CurrentInstitution::class)->set($inst->id);
+
+    $component = Livewire::actingAs($admin)->test(Agents::class)->assertSee('Diploma Propio')->assertDontSee('Diploma Ajeno');
+    $da = collect($component->viewData('lineBlocks'))->firstWhere('key', 'diplomas_avanzados');
+    expect(collect($da['rows'])->pluck('code')->all())->toBe(['DA-001'])->and($da['programs_total'])->toBe(1);
 });
 
 it('los documentos de cada línea van plegados: se ven contadores y botones, y se despliegan con un clic', function () {
@@ -150,15 +202,15 @@ it('una línea fuera de la lista fija se rechaza', function () {
     expect(fn () => app(LineAssignmentService::class)->assignLine($sophia, 'estancias'))->toThrow(InvalidArgumentException::class);
 });
 
-it('el área dentro de una línea solo asigna los programas de esa línea', function () {
+it('el área dentro de Microcredenciales solo asigna los programas de esa línea', function () {
     [, $admin, $sophia] = linesCtx();
     $area = ProgramCategory::factory()->create(['name_es' => 'Liderazgo']);
-    $pe = linesProgram('PE-001', 'programas_ejecutivos', ['category_id' => $area->id]);
-    linesProgram('DA-001', 'diplomas_avanzados', ['category_id' => $area->id]);
+    $mc = linesProgram('MC-001', 'microcredenciales', ['category_id' => $area->id]);
+    linesProgram('PE-001', 'programas_ejecutivos', ['category_id' => $area->id]); // área heredada fuera de MC
 
-    Livewire::actingAs($admin)->test(Agents::class)->call('assignProgramArea', (string) $area->id, 'programas_ejecutivos');
+    Livewire::actingAs($admin)->test(Agents::class)->call('assignProgramArea', (string) $area->id, 'microcredenciales');
 
-    expect($sophia->programs()->pluck('programs.id')->all())->toBe([$pe->id]);
+    expect($sophia->programs()->pluck('programs.id')->all())->toBe([$mc->id]);
 });
 
 it('un no-Admin no puede asignar ni quitar líneas', function () {

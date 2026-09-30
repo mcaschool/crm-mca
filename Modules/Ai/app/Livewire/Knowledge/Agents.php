@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Ai\Livewire\Knowledge;
 
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Modules\Ai\Models\KnowledgeSource;
@@ -180,8 +181,9 @@ class Agents extends Component
 
     /**
      * Un bloque por LÍNEA con las dos capas del agente: sus documentos de conocimiento
-     * (knowledge_sources.category) y sus programas recomendables (programs.line, con el área
-     * como subgrupo). Orden de la lista fija; al final, «Sin línea». Solo líneas con contenido.
+     * (knowledge_sources.category) y sus programas recomendables (programs.line; el área como
+     * subgrupo solo en Microcredenciales, lista plana por nombre en el resto). Orden de la lista
+     * fija; al final, «Sin línea». Solo líneas con contenido.
      *
      * @param  \Illuminate\Support\Collection<int, Program>  $allPrograms
      * @param  \Illuminate\Support\Collection<int, Program>  $matches
@@ -226,16 +228,26 @@ class Agents extends Component
                 'shared_with' => $sharedWith[$s->getKey()] ?? [],
             ])->values()->all();
 
-            $areas = $matchesByLine->get($key, collect())
+            $toRow = fn (Program $p): array => [
+                'id' => $p->getKey(),
+                'code' => (string) $p->code,
+                'name' => (string) $p->name_es,
+                'active' => $p->status === 'active',
+                'assigned' => isset($assignedPrograms[(int) $p->getKey()]),
+            ];
+            $lineMatches = $matchesByLine->get($key, collect());
+
+            // Las áreas solo existen dentro de Microcredenciales; el resto de líneas es una lista
+            // plana ordenada por nombre (sin subgrupos ni acciones de área).
+            $grouped = Program::lineHasAreas($key);
+            $flatRows = $grouped ? [] : $lineMatches
+                ->sortBy(fn (Program $p): string => Str::lower(Str::ascii((string) $p->name_es)), SORT_NATURAL)
+                ->map($toRow)->values()->all();
+
+            $areas = ! $grouped ? [] : $lineMatches
                 ->groupBy(fn (Program $p): string => $p->category_id !== null ? (string) $p->category_id : ProgramAssignmentService::NO_AREA)
-                ->map(function ($items, string $area) use ($assignedPrograms, $searching, $key): array {
-                    $rows = $items->map(fn (Program $p): array => [
-                        'id' => $p->getKey(),
-                        'code' => (string) $p->code,
-                        'name' => (string) $p->name_es,
-                        'active' => $p->status === 'active',
-                        'assigned' => isset($assignedPrograms[(int) $p->getKey()]),
-                    ])->values()->all();
+                ->map(function ($items, string $area) use ($toRow, $searching, $key): array {
+                    $rows = $items->map($toRow)->values()->all();
                     $openKey = $key.'|'.$area;
 
                     return [
@@ -267,7 +279,9 @@ class Agents extends Component
                 'docs_open' => in_array($key, $this->openDocs, true),
                 'programs_assigned' => count(array_filter($lineProgramIds, fn ($id): bool => isset($assignedPrograms[(int) $id]))),
                 'programs_total' => count($lineProgramIds),
+                'grouped' => $grouped,
                 'areas' => $areas,
+                'rows' => $flatRows,
             ];
         }
 

@@ -186,8 +186,6 @@ class CatalogImporter
         // name_en se deja VACIO a proposito: se completa en el panel. credential_en
         // queda como punto de partida disponible para ese trabajo.
         $program->credential_en = $this->cell($cells, $map, 'credential_en') ?: null;
-        $program->category_id = $this->resolveCategory($this->cell($cells, $map, 'category'));
-
         // Línea desde «Tipo» (solo si la celda trae algo; vacía = no se toca). Un tipo que no
         // corresponde a ninguna línea de la lista fija se importa con line NULL y se reporta.
         $type = $this->cell($cells, $map, 'line');
@@ -196,6 +194,12 @@ class CatalogImporter
             if ($program->line === null) {
                 $report->unknownType($code, $type);
             }
+        }
+
+        // Las áreas solo existen en Microcredenciales: en cualquier otra línea la columna Area
+        // se ignora (ni se asigna ni se crea el área; el category_id guardado no se toca).
+        if (Program::lineHasAreas($program->line)) {
+            $program->category_id = $this->resolveCategory($this->cell($cells, $map, 'category'));
         }
         $program->level = $parsed['level'];
         $program->goal = $parsed['goal'];

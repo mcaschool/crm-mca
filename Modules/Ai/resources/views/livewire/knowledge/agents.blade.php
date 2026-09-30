@@ -177,11 +177,11 @@
                     @endforelse
                     @endif
 
-                    {{-- Capa 2: programas que puede recomendar, con el área como subgrupo --}}
+                    {{-- Capa 2: programas que puede recomendar (área como subgrupo solo en Microcredenciales) --}}
                     <div class="kc-line-sub">
                         <span class="kc-line-sub-title">{{ __('Programas que puede recomendar') }}</span>
                     </div>
-                    @forelse ($b['areas'] as $a)
+                    @foreach ($b['areas'] as $a)
                         @php $noArea = $a['key'] === 'sin_area'; @endphp
                         <div class="kc-area" wire:key="parea-{{ $b['key'] }}-{{ $a['key'] }}">
                             <div class="kc-area-head">
@@ -209,31 +209,26 @@
 
                             @if ($a['open'])
                                 @foreach ($a['rows'] as $p)
-                                    <div @class(['kc-src', 'kc-prog-row', 'is-off' => ! $p['active']]) wire:key="prog-{{ $p['id'] }}">
-                                        <button type="button" wire:click="toggleProgram({{ $p['id'] }})" class="kc-switch-btn"
-                                            role="switch" aria-checked="{{ $p['assigned'] ? 'true' : 'false' }}"
-                                            title="{{ $p['assigned'] ? __('Quitar de :bot', ['bot' => $bot->assistant_name]) : __('Asignar a :bot', ['bot' => $bot->assistant_name]) }}"
-                                            aria-label="{{ $p['assigned'] ? __('Quitar de :bot', ['bot' => $bot->assistant_name]) : __('Asignar a :bot', ['bot' => $bot->assistant_name]) }}">
-                                            <span @class(['kc-switch', 'on' => $p['assigned']])></span>
-                                        </button>
-                                        <span class="kc-code kc-prog-code">{{ $p['code'] !== '' ? $p['code'] : '—' }}</span>
-                                        <div class="kc-src-main"><div class="kc-name">{{ $p['name'] }}</div></div>
-                                        <div class="kc-src-tags">
-                                            @if ($p['active'])
-                                                <span class="kc-badge t-green"><span class="kc-dot"></span>{{ __('Activo') }}</span>
-                                            @else
-                                                <span class="kc-badge t-gray" title="{{ __('Inactivo en el catálogo: el emparejador no lo recomienda aunque esté asignado.') }}"><span class="kc-dot"></span>{{ __('Inactivo') }}</span>
-                                            @endif
-                                        </div>
-                                    </div>
+                                    @include('ai::livewire.knowledge._program-row')
                                 @endforeach
                             @endif
                         </div>
-                    @empty
+                    @endforeach
+
+                    {{-- Resto de líneas: lista plana por nombre, sin subgrupos de área --}}
+                    @if ($b['rows'] !== [])
+                        <div class="kc-area kc-prog-flat">
+                            @foreach ($b['rows'] as $p)
+                                @include('ai::livewire.knowledge._program-row')
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if ($b['areas'] === [] && $b['rows'] === [])
                         <div class="kc-line-empty">
                             {{ trim($programSearch) !== '' && $b['programs_total'] > 0 ? __('Ningún programa de esta línea coincide con la búsqueda.') : __('Sin programas en esta línea.') }}
                         </div>
-                    @endforelse
+                    @endif
                 </div>
             @endforeach
         @endif

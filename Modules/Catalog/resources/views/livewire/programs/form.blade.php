@@ -17,20 +17,8 @@
                         @error('code') <span class="mca-err">{{ $message }}</span> @enderror
                     </div>
                     <div class="field" style="margin-bottom:0">
-                        <label>{{ __('Área / Categoría') }}</label>
-                        <select wire:model="category_id">
-                            <option value="">{{ __('— sin categoría —') }}</option>
-                            @foreach ($categories as $category)
-                                <option value="{{ $category->id }}">{{ $category->name_es }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
-
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
-                    <div class="field" style="margin-bottom:0">
                         <label>{{ __('Línea') }}</label>
-                        <select wire:model="line">
+                        <select wire:model.live="line">
                             <option value="">{{ __('— sin línea —') }}</option>
                             @foreach ($lines as $slug => $label)
                                 <option value="{{ $slug }}">{{ __($label) }}</option>
@@ -40,6 +28,22 @@
                         <div class="mca-help">{{ __('La misma línea que el Centro de Conocimiento: agrupa sus programas y su conocimiento en «Por agente».') }}</div>
                     </div>
                 </div>
+
+                {{-- Las áreas solo existen en Microcredenciales: el campo solo se muestra (y se exige) ahí. --}}
+                @if ($hasAreas)
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+                        <div class="field" style="margin-bottom:0">
+                            <label>{{ __('Área') }}</label>
+                            <select wire:model="category_id">
+                                <option value="">{{ __('— elige un área —') }}</option>
+                                @foreach ($categories as $category)
+                                    <option value="{{ $category->id }}">{{ $category->name_es }}</option>
+                                @endforeach
+                            </select>
+                            @error('category_id') <span class="mca-err">{{ $message }}</span> @enderror
+                        </div>
+                    </div>
+                @endif
 
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
                     <div class="field" style="margin-bottom:0">

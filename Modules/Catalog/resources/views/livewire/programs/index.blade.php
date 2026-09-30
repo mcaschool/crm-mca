@@ -39,7 +39,8 @@
                                 </td>
                                 <td style="font-family:ui-monospace,monospace;font-size:12px">{{ $program->code }}</td>
                                 <td class="t-strong">{{ $program->name_es }}</td>
-                                <td class="t-mut">{{ optional($program->category)->name_es }}</td>
+                                {{-- Las áreas solo existen en Microcredenciales. --}}
+                                <td class="t-mut">{{ \Modules\Catalog\Models\Program::lineHasAreas($program->line) ? optional($program->category)->name_es : '—' }}</td>
                                 <td class="t-mut" style="font-size:12.5px">
                                     {{ $program->level ?: '—' }} / {{ $program->goal ?: '—' }}
                                     @if (! $program->level && ! $program->goal && ! $program->profile)
