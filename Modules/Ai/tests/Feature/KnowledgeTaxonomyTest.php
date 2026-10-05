@@ -10,6 +10,7 @@ use Modules\Ai\Livewire\Knowledge\Library;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Services\KnowledgeIngestService;
 use Modules\Ai\Services\KnowledgeSyncService;
+use Modules\Ai\Support\KnowledgeTaxonomy;
 use Modules\Catalog\Models\Program;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Institutions\Models\Institution;
@@ -45,7 +46,7 @@ function txnFile(string $code, string $category = ''): UploadedFile
 
 it('Programa Académico guarda type, línea y program_id, y coloca el archivo en biblioteca/{linea}/', function () {
     [, $admin] = txnCtx();
-    $program = Program::factory()->create(['status' => 'active']);
+    $program = Program::factory()->create(['status' => 'active', 'line' => 'microcredenciales']);
 
     Livewire::actingAs($admin)->test(Library::class)
         ->set('programLine', 'microcredenciales')
@@ -76,8 +77,8 @@ it('Programa Académico exige un programa del catálogo', function () {
 
 it('Programa Académico rechaza programas inactivos o borrados', function () {
     [, $admin] = txnCtx();
-    $inactive = Program::factory()->create(['status' => 'inactive']);
-    $deleted = Program::factory()->create(['status' => 'active']);
+    $inactive = Program::factory()->create(['status' => 'inactive', 'line' => 'microcredenciales']);
+    $deleted = Program::factory()->create(['status' => 'active', 'line' => 'microcredenciales']);
     $deleted->delete();
 
     foreach ([$inactive, $deleted] as $program) {
@@ -94,7 +95,7 @@ it('Programa Académico rechaza programas inactivos o borrados', function () {
 
 it('Programa Académico no admite la línea General institucional', function () {
     [, $admin] = txnCtx();
-    $program = Program::factory()->create(['status' => 'active']);
+    $program = Program::factory()->create(['status' => 'active', 'line' => 'microcredenciales']);
 
     Livewire::actingAs($admin)->test(Library::class)
         ->set('programLine', 'general_institucional')
@@ -104,6 +105,71 @@ it('Programa Académico no admite la línea General institucional', function () 
         ->assertHasErrors(['programLine' => 'in']);
 
     expect(KnowledgeSource::query()->count())->toBe(0);
+});
+
+// --- Programa Académico: el programa debe ser de la línea indicada (servidor) ---------------
+
+it('programa y línea coincidentes: la ficha se carga', function () {
+    [, $admin] = txnCtx();
+    $program = Program::factory()->create(['code' => 'MMBA-001', 'line' => 'micro_mba', 'status' => 'active']);
+
+    Livewire::actingAs($admin)->test(Library::class)
+        ->set('programLine', 'micro_mba')->set('programId', (string) $program->id)
+        ->set('programDocs', [txnFile('MMBA-FICHA')])->call('uploadProgramDocs')
+        ->assertHasNoErrors();
+
+    expect(KnowledgeSource::query()->where('code', 'MMBA-FICHA')->value('program_id'))->toBe($program->id);
+});
+
+it('programa de OTRA línea: se rechaza antes de guardar el archivo o crear la fuente, aunque el program_id se fuerce en la petición', function () {
+    [, $admin] = txnCtx();
+    $mcProgram = Program::factory()->create(['code' => 'MC-001', 'line' => 'microcredenciales', 'status' => 'active']);
+    $existing = KnowledgeSource::factory()->create(['code' => 'MMBA-FICHA', 'bot_id' => null, 'category' => 'micro_mba', 'type' => 'programa_academico', 'program_id' => null, 'name' => 'Original']);
+
+    // El selector no lo ofrece (otra línea), pero el program_id se envía a mano en la petición.
+    Livewire::actingAs($admin)->test(Library::class)
+        ->set('programLine', 'micro_mba')->set('programId', (string) $mcProgram->id)
+        ->set('programDocs', [txnFile('MMBA-FICHA')])->call('uploadProgramDocs')
+        ->assertHasErrors('programId')
+        ->assertSee('El programa seleccionado no pertenece a la línea académica indicada.');
+
+    // Y por el servicio central (cualquier otra vía de carga), igual.
+    expect(fn () => app(KnowledgeIngestService::class)->ingest([txnFile('MMBA-FICHA')], [
+        'type' => 'programa_academico', 'line' => 'micro_mba', 'program_id' => $mcProgram->id,
+    ]))->toThrow(InvalidArgumentException::class, 'El programa seleccionado no pertenece a la línea académica indicada.');
+
+    // Nada procesado: ni archivo en disco, ni fuente nueva, ni la existente modificada.
+    expect(Storage::disk('knowledge')->allFiles())->toBe([])
+        ->and(KnowledgeSource::query()->count())->toBe(1)
+        ->and($existing->fresh()->only(['name', 'program_id', 'category']))->toBe(['name' => 'Original', 'program_id' => null, 'category' => 'micro_mba']);
+});
+
+it('carga masiva: un archivo cuyo programa es de otra línea se rechaza con el motivo y el resto sigue', function () {
+    [, $admin] = txnCtx();
+    Program::factory()->create(['code' => 'MMBA-001', 'line' => 'micro_mba', 'status' => 'active']);
+    Program::factory()->create(['code' => 'MC-001', 'line' => 'microcredenciales', 'status' => 'active']);
+    $md = fn (string $code, string $program) => UploadedFile::fake()->createWithContent($code.'.md',
+        "<!-- Codigo: {$code} · Programa: {$program} · Idioma: es -->\n# Ficha {$code}\n\n## Resumen\nContenido.");
+
+    Livewire::actingAs($admin)->test(Library::class)
+        ->set('programLine', 'micro_mba')->set('programAuto', true)
+        ->set('programDocs', [$md('F-OK', 'MMBA-001'), $md('F-OTRA', 'MC-001')])
+        ->call('uploadProgramDocs')
+        ->assertSee('El programa MC-001 no pertenece a la línea académica indicada.');
+
+    expect(KnowledgeSource::query()->pluck('code')->all())->toBe(['F-OK'])
+        ->and(Storage::disk('knowledge')->exists('biblioteca/micro_mba/F-OTRA.md'))->toBeFalse();
+});
+
+it('la Base de Conocimiento general sigue sin admitir program_id', function () {
+    txnCtx();
+    $program = Program::factory()->create(['line' => 'microcredenciales', 'status' => 'active']);
+
+    expect(fn () => app(KnowledgeIngestService::class)->ingest([txnFile('KB-GEN')], [
+        'type' => 'base_conocimiento', 'line' => 'general_institucional', 'program_id' => $program->id,
+    ]))->toThrow(InvalidArgumentException::class, 'La Base de Conocimiento no admite programa.');
+
+    expect(KnowledgeSource::query()->count())->toBe(0)->and(Storage::disk('knowledge')->allFiles())->toBe([]);
 });
 
 // --- Base de Conocimiento ----------------------------------------------------
@@ -125,7 +191,7 @@ it('Base de Conocimiento guarda type y línea (incluida la institucional) sin pr
 
 it('Base de Conocimiento NO admite program_id (el servicio lo rechaza)', function () {
     txnCtx();
-    $program = Program::factory()->create(['status' => 'active']);
+    $program = Program::factory()->create(['status' => 'active', 'line' => 'microcredenciales']);
 
     expect(fn () => app(KnowledgeIngestService::class)->ingest([txnFile('KB-X')], [
         'type' => 'base_conocimiento', 'line' => 'microcredenciales', 'program_id' => $program->id,
@@ -136,7 +202,7 @@ it('Base de Conocimiento NO admite program_id (el servicio lo rechaza)', functio
 
 it('re-subir como Base de Conocimiento una fuente de programa la desvincula del programa', function () {
     [, $admin] = txnCtx();
-    $program = Program::factory()->create(['status' => 'active']);
+    $program = Program::factory()->create(['status' => 'active', 'line' => 'microcredenciales']);
 
     Livewire::actingAs($admin)->test(Library::class)
         ->set('programLine', 'microcredenciales')->set('programId', (string) $program->id)
@@ -151,17 +217,68 @@ it('re-subir como Base de Conocimiento una fuente de programa la desvincula del 
 
 // --- Lista fija de líneas ----------------------------------------------------
 
+it('lineFromLabel resuelve el slug exacto, la etiqueta y sus variantes a la misma línea', function () {
+    $cases = [
+        'micro_mba' => 'micro_mba',            // slug con guion bajo (antes no se reconocía)
+        'Micro MBA' => 'micro_mba',            // etiqueta
+        ' MICRO_MBA ' => 'micro_mba',          // mayúsculas y espacios
+        'micro mba' => 'micro_mba',
+        'programas_ejecutivos' => 'programas_ejecutivos',
+        'Programa Ejecutivo' => 'programas_ejecutivos', // singular (ya soportado)
+        'Maestría' => 'maestrias',             // tilde + singular (ya soportado)
+        'microcredenciales' => 'microcredenciales',
+        'Microcredencial' => 'microcredenciales',
+        'estancias' => 'estancias',
+        'Estancias' => 'estancias',
+        'Estancia' => 'estancias',
+        'general_institucional' => 'general_institucional',
+        'Curso libre' => null,
+        'cursos_libres' => null,
+        '' => null,
+    ];
+
+    foreach ($cases as $text => $expected) {
+        expect(KnowledgeTaxonomy::lineFromLabel((string) $text))->toBe($expected, "«{$text}»");
+    }
+    expect(KnowledgeTaxonomy::lineFromLabel(null))->toBeNull();
+});
+
+it('Estancias es una línea válida de programa y de conocimiento', function () {
+    expect(KnowledgeTaxonomy::isLine('estancias'))->toBeTrue()
+        ->and(KnowledgeTaxonomy::lineLabel('estancias'))->toBe('Estancias')
+        ->and(KnowledgeTaxonomy::programLines())->toHaveKey('estancias')
+        ->and(KnowledgeTaxonomy::lines())->toHaveKey('estancias');
+
+    [, $admin] = txnCtx();
+    $program = Program::factory()->create(['code' => 'EST-001', 'line' => 'estancias', 'status' => 'active']);
+    expect($program->fresh()->line)->toBe('estancias'); // el guard de Program::saving la admite
+
+    // Aparece en los selectores administrativos de la Biblioteca (Base de Conocimiento y Programa Académico).
+    $component = Livewire::actingAs($admin)->test(Library::class);
+    expect($component->viewData('lines'))->toHaveKey('estancias')
+        ->and($component->viewData('programLines'))->toHaveKey('estancias');
+
+    // Base de Conocimiento de Estancias y ficha de un programa de Estancias.
+    $component->set('kbLine', 'estancias')->set('docs', [txnFile('KB-EST-1')])->call('uploadDocs')->assertHasNoErrors();
+    Livewire::actingAs($admin)->test(Library::class)
+        ->set('programLine', 'estancias')->set('programId', (string) $program->id)
+        ->set('programDocs', [txnFile('EST-FICHA-1')])->call('uploadProgramDocs')->assertHasNoErrors();
+
+    expect(KnowledgeSource::query()->where('code', 'KB-EST-1')->value('category'))->toBe('estancias')
+        ->and(KnowledgeSource::query()->where('code', 'EST-FICHA-1')->value('program_id'))->toBe($program->id);
+});
+
 it('una línea fuera de la lista fija se rechaza (UI y servicio)', function () {
     [, $admin] = txnCtx();
 
     Livewire::actingAs($admin)->test(Library::class)
-        ->set('kbLine', 'estancias')
+        ->set('kbLine', 'cursos_libres')
         ->set('docs', [txnFile('KB-EST')])
         ->call('uploadDocs')
         ->assertHasErrors(['kbLine' => 'in']);
 
     expect(fn () => app(KnowledgeIngestService::class)->ingest([txnFile('KB-EST')], [
-        'type' => 'base_conocimiento', 'line' => 'estancias',
+        'type' => 'base_conocimiento', 'line' => 'cursos_libres',
     ]))->toThrow(InvalidArgumentException::class);
 
     expect(KnowledgeSource::query()->count())->toBe(0);
@@ -185,16 +302,16 @@ it('rechaza el archivo cuya Categoria declara OTRA línea válida', function () 
 
 it('syncLibrary no sobrescribe el tipo al actualizar y conserva la línea si la del archivo no es válida', function () {
     txnCtx();
-    $program = Program::factory()->create(['status' => 'active']);
+    $program = Program::factory()->create(['status' => 'active', 'line' => 'microcredenciales']);
     app(KnowledgeIngestService::class)->ingest([txnFile('MC-SYNC')], [
         'type' => 'programa_academico', 'line' => 'microcredenciales', 'program_id' => $program->id,
     ]);
 
     // El archivo pasa a declarar una Categoria en texto libre y se mueve a una carpeta no válida.
     Storage::disk('knowledge')->delete('biblioteca/microcredenciales/MC-SYNC.md');
-    Storage::disk('knowledge')->put('biblioteca/estancias/MC-SYNC.md', txnMd('MC-SYNC', 'Estancias cortas'));
+    Storage::disk('knowledge')->put('biblioteca/cursos_libres/MC-SYNC.md', txnMd('MC-SYNC', 'Cursos libres cortos'));
     // Fuente nueva con línea inválida: queda sin línea (no entra texto libre).
-    Storage::disk('knowledge')->put('biblioteca/estancias/NEW-FREE.md', txnMd('NEW-FREE', 'Estancias cortas'));
+    Storage::disk('knowledge')->put('biblioteca/cursos_libres/NEW-FREE.md', txnMd('NEW-FREE', 'Cursos libres cortos'));
 
     app(KnowledgeSyncService::class)->syncLibrary();
 

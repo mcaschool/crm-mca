@@ -11,11 +11,13 @@ use InvalidArgumentException;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use Modules\Ai\Livewire\Knowledge\Concerns\ManagesCatalogPrograms;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Services\KnowledgeIngestService;
 use Modules\Ai\Services\KnowledgeSyncService;
 use Modules\Ai\Support\KnowledgeTaxonomy;
 use Modules\Catalog\Models\Program;
+use Modules\Catalog\Models\ProgramCategory;
 
 /**
  * Centro de Conocimiento — pestaña BIBLIOTECA (solo Admin, KnowledgeSourcePolicy).
@@ -29,6 +31,7 @@ use Modules\Catalog\Models\Program;
 #[Layout('layouts.app')]
 class Library extends Component
 {
+    use ManagesCatalogPrograms;
     use WithFileUploads;
 
     public string $search = '';
@@ -88,6 +91,14 @@ class Library extends Component
     public function mount(): void
     {
         $this->authorize('viewAny', KnowledgeSource::class);
+    }
+
+    /** Al cambiar la línea de «Programa Académico» se suelta el programa elegido si no es de esa línea. */
+    public function updatedProgramLine(): void
+    {
+        if ($this->programId !== '' && ! Program::query()->whereKey((int) $this->programId)->where('line', $this->programLine)->exists()) {
+            $this->programId = '';
+        }
     }
 
     public function filterByCategory(string $category): void
@@ -171,8 +182,15 @@ class Library extends Component
             return;
         }
 
-        if (! Program::query()->whereKey((int) $this->programId)->where('status', 'active')->exists()) {
+        $program = Program::query()->where('status', 'active')->find((int) $this->programId, ['id', 'line']);
+        if ($program === null) {
             $this->addError('programId', __('El programa no existe o no está activo.'));
+
+            return;
+        }
+        // El servicio también lo exige; aquí se rechaza antes con el error junto al selector.
+        if ($program->line !== $this->programLine) {
+            $this->addError('programId', __('El programa seleccionado no pertenece a la línea académica indicada.'));
 
             return;
         }
@@ -315,18 +333,20 @@ class Library extends Component
             ->groupBy('category')
             ->pluck('c', 'category');
 
-        // Desplegable de «Programa Académico»: solo programas ACTIVOS (SoftDeletes ya excluye
-        // los borrados). El elegido se mantiene aunque el filtro de texto no lo incluya.
+        // Desplegable de «Programa Académico»: solo programas ACTIVOS de la LÍNEA elegida (sin
+        // línea, ninguno; SoftDeletes ya excluye los borrados) y el buscador busca dentro de esa
+        // línea. El elegido se mantiene aunque el filtro de texto no lo incluya.
         $programs = Program::query()
             ->where('status', 'active')
+            ->when($this->programLine === '', fn ($q) => $q->whereRaw('1 = 0'), fn ($q) => $q->where('line', $this->programLine))
             ->when(trim($this->programSearch) !== '', function ($q): void {
                 $term = '%'.trim($this->programSearch).'%';
                 $q->where(fn ($w) => $w->where('name_es', 'like', $term)->orWhere('code', 'like', $term));
             })
             ->orderBy('name_es')
             ->get(['id', 'code', 'name_es']);
-        if ($this->programId !== '' && ! $programs->contains('id', (int) $this->programId)) {
-            $selected = Program::query()->where('status', 'active')->find((int) $this->programId, ['id', 'code', 'name_es']);
+        if ($this->programId !== '' && $this->programLine !== '' && ! $programs->contains('id', (int) $this->programId)) {
+            $selected = Program::query()->where('status', 'active')->where('line', $this->programLine)->find((int) $this->programId, ['id', 'code', 'name_es']);
             if ($selected !== null) {
                 $programs->prepend($selected);
             }
@@ -340,6 +360,8 @@ class Library extends Component
             'programLines' => KnowledgeTaxonomy::programLines(),
             'types' => KnowledgeTaxonomy::types(),
             'programs' => $programs,
+            'areas' => $this->showAddProgram ? ProgramCategory::query()->orderBy('name_es')->get(['id', 'name_es']) : collect(),
+            'newProgramHasAreas' => Program::lineHasAreas($this->newProgramLine),
         ]);
     }
 

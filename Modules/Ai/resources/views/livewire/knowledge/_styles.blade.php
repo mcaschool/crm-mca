@@ -292,8 +292,25 @@
     .kc-modal h2{margin:0 0 6px;font-size:16px;font-weight:700}
     .kc-modal p{margin:0 0 12px;font-size:13.5px;color:var(--mca-ink-2)}
     .kc-modal-note{background:var(--mca-warn-soft);border:1px solid #F1DDB4;border-radius:10px;padding:10px 12px;font-size:13px;color:var(--mca-ink)}
-    .kc-modal-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+    .kc-modal-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+    .kc-modal{max-height:calc(100vh - 32px);overflow:auto}
+    .kc-modal-wide{max-width:780px}
+    .kc-modal-form{display:grid;gap:12px}
+    .kc-modal code{font-size:12px;background:var(--mca-page-bg);border:1px solid var(--mca-card-border);border-radius:5px;padding:1px 5px}
+    .kc-input{width:100%;height:40px;padding:0 12px;border:1px solid var(--mca-card-border);border-radius:10px;background:#fff;font:inherit;font-size:13.5px;color:var(--mca-ink)}
+    .kc-input:focus{outline:none;border-color:var(--mca-blue);box-shadow:0 0 0 3px rgba(30,90,168,.12)}
+    textarea.kc-input{height:auto;padding:10px 12px;resize:vertical}
+    .kc-import-text{font-family:ui-monospace,monospace;font-size:12.5px;line-height:1.5}
+    .kc-import-summary{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 10px}
+    .kc-import-table{max-height:280px;overflow:auto;border:1px solid var(--kc-line-soft);border-radius:10px}
+    .kc-import-table table{width:100%;border-collapse:collapse;font-size:12.5px}
+    .kc-import-table th,.kc-import-table td{padding:7px 10px;border-top:1px solid var(--kc-line-soft);text-align:left;vertical-align:top}
+    .kc-import-table thead th{border-top:0;background:#FBFCFE;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--mca-ink-2);position:sticky;top:0}
+    .kc-import-msg{margin-top:4px;color:var(--mca-ink-2);font-size:12px}
+    .kc-prog-pick{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
+    .kc-prog-pick > .kc-dd{flex:1 1 260px;min-width:0}
+    .kc-prog-actions{display:flex;gap:8px;flex-wrap:wrap}
 
     @media (max-width: 1100px){ .kc-stats{grid-template-columns:repeat(2,minmax(0,1fr))} }
-    @media (max-width: 640px){ .kc-stats{grid-template-columns:1fr} .kc-upload-row{flex-wrap:wrap} .kc-src{flex-wrap:wrap} }
+    @media (max-width: 640px){ .kc-stats{grid-template-columns:1fr} .kc-upload-row{flex-wrap:wrap} .kc-src{flex-wrap:wrap} .kc-prog-pick > .kc-dd{flex-basis:100%} }
 </style>

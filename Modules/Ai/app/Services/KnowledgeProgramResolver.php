@@ -91,7 +91,7 @@ class KnowledgeProgramResolver
     /** @return Collection<int, Program> */
     private function catalog(): Collection
     {
-        return $this->catalog ??= Program::query()->get(['id', 'code', 'name_es', 'url', 'status']);
+        return $this->catalog ??= Program::query()->get(['id', 'code', 'name_es', 'url', 'status', 'line']);
     }
 
     /** @return array{program: null, error: string} */

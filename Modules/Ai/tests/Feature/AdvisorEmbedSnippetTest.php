@@ -93,7 +93,7 @@ it('/widget/celia.js sigue sirviendo el MISMO script (JavaScript, sin sesión ni
     expect((string) $res->headers->get('Content-Type'))->toContain('javascript')
         ->and($res->headers->getCookies())->toBe([])
         ->and(file_get_contents($res->baseResponse->getFile()->getPathname()))
-        ->toBe(file_get_contents(public_path('widget/chat-widget.js')));
+        ->toBe(file_get_contents(resource_path('widget/chat-widget.js')));
 });
 
 it('en creación (sin bot todavía) NO se muestra el snippet', function () {

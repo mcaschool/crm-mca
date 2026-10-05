@@ -11,6 +11,7 @@ use Livewire\Component;
 use Modules\Ai\Support\KnowledgeTaxonomy;
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Models\ProgramCategory;
+use Modules\Catalog\Services\ProgramProvisioningService;
 
 /**
  * Alta/edicion de un programa del catalogo. Expone AMBOS idiomas (_es/_en) para
@@ -96,21 +97,29 @@ class Form extends Component
         $this->tagsCsv = $program->tags()->pluck('tag')->implode(', ');
     }
 
-    public function save(): mixed
+    public function save(ProgramProvisioningService $provisioning): mixed
     {
         $editing = $this->programId !== null;
         $program = $editing ? Program::query()->findOrFail($this->programId) : new Program;
 
         $this->authorize($editing ? 'update' : 'create', $editing ? $program : Program::class);
 
+        // Reglas COMUNES de alta/edición (las mismas que «+ Añadir programa» del Centro de
+        // Conocimiento): normalización, formato de código y URL, duplicados por institución y
+        // auditoría del alta, todas en ProgramProvisioningService.
+        $this->code = trim($this->code);
+        $this->name_es = $provisioning->cleanName($this->name_es);
+        $this->url = trim($this->url);
+
         $validated = $this->validate([
-            'code' => ['required', 'string', 'max:40', Rule::unique('programs', 'code')->ignore($this->programId)],
+            'code' => ['required', 'string', 'max:40', 'regex:'.ProgramProvisioningService::CODE_PATTERN],
             'name_es' => ['required', 'string', 'max:200'],
             'name_en' => ['nullable', 'string', 'max:200'],
             'credential_en' => ['nullable', 'string', 'max:200'],
             // El área solo existe (y es obligatoria) en Microcredenciales.
             'category_id' => [Rule::requiredIf(Program::lineHasAreas($this->line)), 'nullable', 'integer', Rule::exists('program_categories', 'id')],
-            'line' => ['nullable', Rule::in(array_keys(KnowledgeTaxonomy::lines()))],
+            // Líneas de programa (sin la institucional); el Catálogo admite además «sin línea».
+            'line' => ['nullable', Rule::in(array_keys(KnowledgeTaxonomy::programLines()))],
             'level' => ['nullable', 'string', 'max:40'],
             'goal' => ['nullable', 'string', 'max:80'],
             'profile' => ['nullable', 'string', 'max:120'],
@@ -120,10 +129,21 @@ class Form extends Component
             'modality_en' => ['nullable', 'string', 'max:80'],
             'short_description_es' => ['nullable', 'string'],
             'short_description_en' => ['nullable', 'string'],
-            'url' => ['required', 'string', 'max:500'],
+            // URL de la ficha opcional (un programa puede existir antes que su landing).
+            'url' => ['nullable', 'string', 'max:500', 'regex:'.ProgramProvisioningService::URL_PATTERN],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'display_order' => ['integer'],
+        ], [
+            'code.regex' => ProgramProvisioningService::codeFormatMessage(),
+            'url.regex' => ProgramProvisioningService::urlFormatMessage(),
         ]);
+
+        $duplicate = $provisioning->findDuplicate($this->code, $this->name_es, $this->programId);
+        if ($duplicate !== null) {
+            $this->addError('code', $provisioning->duplicateMessage($duplicate));
+
+            return null;
+        }
 
         // Fuera de Microcredenciales el campo Área no se muestra: el formulario no toca el
         // category_id guardado (el emparejador de otras líneas aún lo usa).
@@ -140,6 +160,10 @@ class Form extends Component
         $program->status = $this->status;
         $program->display_order = $this->display_order;
         $program->save();
+
+        if (! $editing) {
+            $provisioning->recordCreated($program, ProgramProvisioningService::METHOD_CATALOG);
+        }
 
         $this->syncTags($program);
 
@@ -165,7 +189,7 @@ class Form extends Component
     {
         return view('catalog::livewire.programs.form', [
             'categories' => ProgramCategory::query()->orderBy('name_es')->get(),
-            'lines' => KnowledgeTaxonomy::lines(),
+            'lines' => KnowledgeTaxonomy::programLines(),
             'hasAreas' => Program::lineHasAreas($this->line),
             'editing' => $this->programId !== null,
         ]);

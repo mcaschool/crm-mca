@@ -47,13 +47,19 @@ final class KnowledgeTaxonomy
     }
 
     /**
-     * Slug de línea a partir de un texto libre («Tipo» del Excel del catálogo): acepta el
-     * slug, la etiqueta o su singular, sin distinguir mayúsculas ni tildes
+     * Slug de línea a partir de un texto libre («Tipo» del Excel del catálogo, alta manual de
+     * programas): acepta el slug interno exacto (micro_mba), la etiqueta (Micro MBA) o su
+     * singular, sin distinguir mayúsculas ni tildes, y con «_» o espacios indistintamente
      * («Programa Ejecutivo» → programas_ejecutivos, «Maestría» → maestrias). Null si no
-     * corresponde a ninguna línea de la lista fija.
+     * corresponde a ninguna línea de la lista fija. Única fuente para resolver líneas.
      */
     public static function lineFromLabel(?string $text): ?string
     {
+        $exact = mb_strtolower(trim((string) $text));
+        if (self::isLine($exact)) {
+            return $exact;
+        }
+
         $wanted = self::normalizeText($text);
         if ($wanted === '') {
             return null;
@@ -70,9 +76,10 @@ final class KnowledgeTaxonomy
         return null;
     }
 
+    /** Minúsculas, sin tildes, «_» como espacio y espacios simples. */
     private static function normalizeText(?string $text): string
     {
-        return trim((string) preg_replace('/\s+/', ' ', Str::ascii(mb_strtolower((string) $text))));
+        return trim((string) preg_replace('/[\s_]+/', ' ', Str::ascii(mb_strtolower((string) $text))));
     }
 
     /** Singular aproximado palabra a palabra (quita «es»/«s» final): basta para las etiquetas fijas. */

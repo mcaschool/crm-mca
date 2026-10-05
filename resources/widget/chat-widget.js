@@ -1,7 +1,8 @@
 /*
  * Widget de chat embebible de los asesores inteligentes de MCA.
- * Archivo unico: se sirve como /widget/chat-widget.js y, por compatibilidad con las webs
- * donde ya esta incrustado, tambien como /widget/celia.js (misma fuente, via ruta).
+ * Archivo unico (resources/widget/): se sirve por ruta como /widget/chat-widget.js y, por
+ * compatibilidad con las webs donde ya esta incrustado, tambien como /widget/celia.js, con
+ * cache corta + revalidacion (WidgetScriptController) para que un redeploy llegue enseguida.
  * - Aislado con Shadow DOM (no choca con los estilos de la web anfitriona).
  * - Sin secretos ni logica de negocio: solo habla con nuestra API.
  * - Deduce la institucion/bot desde la public_key; nunca envia institution_id.
@@ -651,7 +652,12 @@
       logBubble(t('results'), 'celia');
       r.programs.forEach(function (p) {
         var card = el('<div class="card"></div>');
-        card.innerHTML = '<b></b><a target="' + linkTarget(p.url) + '" rel="noopener" href="' + esc(p.url) + '">' + esc(t('see')) + ' ' + icon('chevronRight') + '</a>';
+        // Sin URL válida de la ficha (programa aún sin landing) no hay enlace: nunca se inventa
+        // ni se cae a la página actual (href vacío).
+        var url = String(p.url || '').trim();
+        card.innerHTML = /^https?:\/\//i.test(url)
+          ? '<b></b><a target="' + linkTarget(url) + '" rel="noopener" href="' + esc(url) + '">' + esc(t('see')) + ' ' + icon('chevronRight') + '</a>'
+          : '<b></b>';
         card.querySelector('b').textContent = p.name;
         state.clog.appendChild(card);
       });

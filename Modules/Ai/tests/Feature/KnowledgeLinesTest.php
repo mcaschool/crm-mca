@@ -199,7 +199,7 @@ it('aislamiento: asignar una línea nunca toma fuentes ni programas de otra inst
 it('una línea fuera de la lista fija se rechaza', function () {
     [, , $sophia] = linesCtx();
 
-    expect(fn () => app(LineAssignmentService::class)->assignLine($sophia, 'estancias'))->toThrow(InvalidArgumentException::class);
+    expect(fn () => app(LineAssignmentService::class)->assignLine($sophia, 'cursos_libres'))->toThrow(InvalidArgumentException::class);
 });
 
 it('el área dentro de Microcredenciales solo asigna los programas de esa línea', function () {

@@ -86,10 +86,11 @@ return [
     // "subir arriba"; el widget acepta cualquier valor via data-offset-bottom.
     'widget_offset_bottom' => (int) env('CRM_WIDGET_OFFSET_BOTTOM', 90),
 
-    // Version del asset del widget: se anexa como ?v= al src de chat-widget.js en el snippet
-    // para forzar recarga tras un redeploy (evita que el navegador/CDN del cliente
-    // sirva un script cacheado). Subir este valor al cambiar el widget.
-    'widget_asset_version' => (string) env('CRM_WIDGET_ASSET_VERSION', '2'),
+    // Version del asset del widget: se anexa como ?v= al src de chat-widget.js en los snippets
+    // NUEVOS. Las webs ya instaladas conservan el ?v= que pegaron; a esas les llega la version
+    // nueva por la cache corta con revalidacion del script (WidgetScriptController::MAX_AGE).
+    // Subir este valor al cambiar el widget.
+    'widget_asset_version' => (string) env('CRM_WIDGET_ASSET_VERSION', '3'),
 
     /*
     |--------------------------------------------------------------------------
@@ -337,6 +338,8 @@ return [
             'micro_mba' => 'Micro MBA',
             'maestrias' => 'Maestrías',
             'doctorados' => 'Doctorados',
+            // Etiqueta inglesa PROVISIONAL en lang/en.json («Academic Stays»): terminología pendiente de revisión.
+            'estancias' => 'Estancias',
             'general_institucional' => 'General institucional',
         ],
         'institutional_line' => 'general_institucional',

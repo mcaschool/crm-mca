@@ -52,7 +52,7 @@ function bulkUpload(User $admin, array $files): \Livewire\Features\SupportTestin
 
 function bulkProgram(string $code, string $url, string $status = 'active'): Program
 {
-    return Program::factory()->create(['code' => $code, 'name_es' => 'Diploma '.$code, 'url' => $url, 'status' => $status]);
+    return Program::factory()->create(['code' => $code, 'name_es' => 'Diploma '.$code, 'url' => $url, 'status' => $status, 'line' => 'diplomas_avanzados']);
 }
 
 it('sube varios archivos con campo Programa y asigna cada uno a su programa', function () {

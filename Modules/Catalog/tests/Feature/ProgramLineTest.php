@@ -102,7 +102,7 @@ it('programs.line solo acepta slugs de knowledge.lines (o null)', function () {
     expect(Program::factory()->create(['line' => 'maestrias'])->line)->toBe('maestrias')
         ->and(Program::factory()->create(['line' => null])->line)->toBeNull();
 
-    expect(fn () => Program::factory()->create(['line' => 'estancias']))->toThrow(InvalidArgumentException::class);
+    expect(fn () => Program::factory()->create(['line' => 'cursos_libres']))->toThrow(InvalidArgumentException::class);
 });
 
 it('el formulario de programa guarda la línea y rechaza una que no está en la lista', function () {
@@ -111,7 +111,7 @@ it('el formulario de programa guarda la línea y rechaza una que no está en la 
     $program = Program::factory()->create(['code' => 'DA-555', 'line' => null]);
 
     Livewire::actingAs($admin)->test(Form::class, ['program' => $program])
-        ->set('line', 'estancias')->call('save')->assertHasErrors(['line' => 'in']);
+        ->set('line', 'cursos_libres')->call('save')->assertHasErrors(['line' => 'in']);
 
     Livewire::actingAs($admin)->test(Form::class, ['program' => $program])
         ->assertSet('line', '')
@@ -158,4 +158,35 @@ it('catalog:import asigna la línea desde «Tipo» y reporta los tipos desconoci
         'NT-901' => null,
     ])->and($report->created)->toBe(6)
         ->and($report->unknownTypes)->toBe([['code' => 'XX-901', 'type' => 'Curso libre']]);
+});
+
+it('catalog:import acepta el slug interno en «Tipo» (micro_mba) igual que la etiqueta, y la línea Estancias', function () {
+    lineInstitution();
+    $path = tempnam(sys_get_temp_dir(), 'cat').'.xlsx';
+    $writer = new Writer;
+    $writer->openToFile($path);
+    $writer->getCurrentSheet()->setName('Catalogo');
+    $writer->addRow(Row::fromValues(['ID', 'Nombre del programa', 'Tipo', 'Descripcion', 'Etiquetas', 'URL', 'Activo']));
+    $tags = 'nivel-intermedio, meta-ascenso, perfil-directivo';
+    foreach ([
+        ['MMBA-1', 'Micro MBA por slug', 'micro_mba'],
+        ['MMBA-2', 'Micro MBA por etiqueta', 'Micro MBA'],
+        ['PE-1', 'Ejecutivo por slug', 'programas_ejecutivos'],
+        ['EST-1', 'Estancia por slug', 'estancias'],
+        ['EST-2', 'Estancia por etiqueta', 'Estancia'],
+    ] as [$code, $name, $type]) {
+        $writer->addRow(Row::fromValues([$code, $name, $type, 'Desc.', $tags, 'https://x.test/'.$code, 'TRUE']));
+    }
+    $writer->close();
+
+    $report = app(CatalogImporter::class)->import($path);
+    @unlink($path);
+
+    expect(Program::query()->pluck('line', 'code')->all())->toMatchArray([
+        'MMBA-1' => 'micro_mba',
+        'MMBA-2' => 'micro_mba',
+        'PE-1' => 'programas_ejecutivos',
+        'EST-1' => 'estancias',
+        'EST-2' => 'estancias',
+    ])->and($report->unknownTypes)->toBe([]);
 });

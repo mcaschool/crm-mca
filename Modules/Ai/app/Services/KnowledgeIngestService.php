@@ -121,6 +121,12 @@ class KnowledgeIngestService
 
                     continue;
                 }
+                // Carga masiva: el programa resuelto por el archivo también debe ser de la línea elegida.
+                if ($resolved['program']->line !== $classification['line']) {
+                    $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => __('El programa :code no pertenece a la línea académica indicada.', ['code' => $resolved['program']->code]), 'program' => null];
+
+                    continue;
+                }
                 $program = $resolved['program'];
             }
 
@@ -181,7 +187,7 @@ class KnowledgeIngestService
 
     /**
      * Reglas de la clasificación: tipo y línea de la lista fija; Programa Académico exige un
-     * programa ACTIVO del catálogo (no borrado) y no admite la línea institucional; Base de
+     * programa ACTIVO del catálogo (no borrado) DE ESA LÍNEA y no admite la línea institucional; Base de
      * Conocimiento no admite programa. Carga masiva ('auto_program'): solo Programa Académico,
      * sin programa elegido (cada archivo resuelve el suyo).
      *
@@ -220,8 +226,14 @@ class KnowledgeIngestService
 
             return ['type' => $type, 'line' => $line, 'program_id' => null, 'auto_program' => true];
         }
-        if ($programId === null || ! Program::query()->whereKey($programId)->where('status', 'active')->exists()) {
+        $program = $programId === null ? null : Program::query()->where('status', 'active')->find($programId, ['id', 'line']);
+        if ($program === null) {
             throw new InvalidArgumentException(__('Programa Académico exige un programa activo del catálogo.'));
+        }
+        // El programa debe ser de la línea indicada: la incoherencia se rechaza (no se corrige
+        // la línea por el programa ni el programa por la línea).
+        if ($program->line !== $line) {
+            throw new InvalidArgumentException(__('El programa seleccionado no pertenece a la línea académica indicada.'));
         }
 
         return ['type' => $type, 'line' => $line, 'program_id' => $programId, 'auto_program' => false];

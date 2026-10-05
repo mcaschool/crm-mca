@@ -110,8 +110,9 @@
 
                 <div class="kc-field">
                     <span class="kc-field-label">{{ __('Línea') }}</span>
+                    {{-- En vivo: la línea filtra el desplegable de programas al momento --}}
                     @include('ai::livewire.knowledge._dropdown', [
-                        'model' => 'programLine', 'live' => false, 'field' => true,
+                        'model' => 'programLine', 'live' => true, 'field' => true,
                         'options' => collect($programLines)->map(fn ($l) => __($l))->all(),
                         'placeholder' => __('Elige la línea…'), 'aria' => __('Línea del programa'),
                     ])
@@ -125,8 +126,16 @@
                     {{ __('Asignar programa automáticamente desde cada archivo') }}
                 </button>
 
+                {{-- Alta manual en el catálogo (solo quien puede gestionarlo; el servidor lo vuelve a comprobar) --}}
+                @php $kcProgramActions = auth()->user()?->can('create', \Modules\Catalog\Models\Program::class) ?? false; @endphp
                 @if ($programAuto)
                     <p class="kc-auto-help">{!! __('Cada archivo indica su programa con <code>Programa: CÓDIGO</code> en el comentario de metadatos; si no lo trae, se busca por la URL de la ficha del programa. Los archivos que no se puedan asignar se rechazan con el motivo y el resto se sube.') !!}</p>
+                    @if ($kcProgramActions)
+                        <div class="kc-prog-actions">
+                            <button type="button" wire:click="openAddProgram" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="plus" /> {{ __('Añadir programa') }}</button>
+                            <button type="button" wire:click="openImportPrograms" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="upload" /> {{ __('Importar') }}</button>
+                        </div>
+                    @endif
                 @else
                     <div class="kc-field">
                         <span class="kc-field-label">{{ __('Programa del catálogo') }}</span>
@@ -134,11 +143,19 @@
                             <x-ui.icon name="search" />
                             <input type="text" wire:model.live.debounce.300ms="programSearch" placeholder="{{ __('Buscar por nombre o código…') }}" aria-label="{{ __('Buscar programa') }}">
                         </div>
-                        @include('ai::livewire.knowledge._dropdown', [
-                            'model' => 'programId', 'live' => false, 'field' => true,
-                            'options' => $programs->mapWithKeys(fn ($p) => [$p->id => ($p->code ? $p->code.' · ' : '').$p->name_es])->all(),
-                            'placeholder' => __('Elige un programa…'), 'aria' => __('Programa del catálogo'),
-                        ])
+                        <div class="kc-prog-pick">
+                            @include('ai::livewire.knowledge._dropdown', [
+                                'model' => 'programId', 'live' => false, 'field' => true,
+                                'options' => $programs->mapWithKeys(fn ($p) => [$p->id => ($p->code ? $p->code.' · ' : '').$p->name_es])->all(),
+                                'placeholder' => $programLine === '' ? __('Elige primero la línea…') : __('Elige un programa…'), 'aria' => __('Programa del catálogo'),
+                            ])
+                            @if ($kcProgramActions)
+                                <div class="kc-prog-actions">
+                                    <button type="button" wire:click="openAddProgram" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="plus" /> {{ __('Añadir programa') }}</button>
+                                    <button type="button" wire:click="openImportPrograms" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="upload" /> {{ __('Importar') }}</button>
+                                </div>
+                            @endif
+                        </div>
                         @error('programId') <span class="kc-err">{{ $message }}</span> @enderror
                     </div>
                 @endif
@@ -382,6 +399,141 @@
                     <div class="kc-prose">{!! $viewingHtml !!}</div>
                 </div>
             </aside>
+        @endif
+
+        {{-- Modal «Añadir programa» (alta individual en el catálogo) --}}
+        @if ($showAddProgram)
+            <div class="kc-modal-wrap" wire:click="closeAddProgram">
+                <div class="kc-modal" wire:click.stop role="dialog" aria-modal="true" aria-labelledby="kc-add-program-title">
+                    <h2 id="kc-add-program-title">{{ __('Añadir programa al catálogo') }}</h2>
+                    <p>{{ __('Se crea en el catálogo institucional, activo, y queda elegido para subir su ficha.') }}</p>
+                    <form wire:submit="createProgram" class="kc-modal-form">
+                        <label class="kc-field">
+                            <span class="kc-field-label">{{ __('Nombre del programa') }}</span>
+                            <input type="text" wire:model="newProgramName" class="kc-input" placeholder="{{ __('Ej.: Micro MBA') }}" maxlength="200" autofocus>
+                            @error('newProgramName') <span class="kc-err">{{ $message }}</span> @enderror
+                        </label>
+                        <label class="kc-field">
+                            <span class="kc-field-label">{{ __('Código') }}</span>
+                            <input type="text" wire:model="newProgramCode" class="kc-input" placeholder="{{ __('Ej.: MMBA-001') }}" maxlength="40">
+                            @error('newProgramCode') <span class="kc-err">{{ $message }}</span> @enderror
+                        </label>
+                        <div class="kc-field">
+                            <span class="kc-field-label">{{ __('Línea') }}</span>
+                            @include('ai::livewire.knowledge._dropdown', [
+                                'model' => 'newProgramLine', 'live' => true, 'field' => true,
+                                'options' => collect($programLines)->map(fn ($l) => __($l))->all(),
+                                'placeholder' => __('Elige la línea…'), 'aria' => __('Línea del programa'),
+                            ])
+                            @error('newProgramLine') <span class="kc-err">{{ $message }}</span> @enderror
+                        </div>
+                        @if ($newProgramHasAreas)
+                            <div class="kc-field">
+                                <span class="kc-field-label">{{ __('Área') }}</span>
+                                @include('ai::livewire.knowledge._dropdown', [
+                                    'model' => 'newProgramArea', 'live' => false, 'field' => true,
+                                    'options' => $areas->mapWithKeys(fn ($a) => [$a->id => $a->name_es])->all(),
+                                    'placeholder' => __('— elige un área —'), 'aria' => __('Área'),
+                                ])
+                                @error('newProgramArea') <span class="kc-err">{{ $message }}</span> @enderror
+                            </div>
+                        @endif
+                        <label class="kc-field">
+                            <span class="kc-field-label">{{ __('URL de la ficha (opcional)') }}</span>
+                            <input type="url" wire:model="newProgramUrl" class="kc-input" placeholder="https://" maxlength="500">
+                            @error('newProgramUrl') <span class="kc-err">{{ $message }}</span> @enderror
+                        </label>
+
+                        @if ($inactiveMatchId !== null)
+                            <div class="kc-modal-note">
+                                {{ __('Ese programa ya existe pero está inactivo. Puedes activarlo en lugar de crear otro.') }}
+                                <div style="margin-top:8px"><button type="button" wire:click="activateMatchedProgram" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="check" /> {{ __('Activar el existente') }}</button></div>
+                            </div>
+                        @endif
+
+                        <div class="kc-modal-foot">
+                            <button type="button" wire:click="closeAddProgram" class="kc-btn kc-btn-ghost kc-btn-sm">{{ __('Cancelar') }}</button>
+                            <button type="submit" wire:loading.attr="disabled" wire:target="createProgram" class="kc-btn kc-btn-primary kc-btn-sm">
+                                <span wire:loading.remove wire:target="createProgram" class="kc-inl"><x-ui.icon name="plus" /> {{ __('Crear programa') }}</span>
+                                <span wire:loading.inline-flex wire:target="createProgram" class="kc-gap"><span class="mca-spin"></span> {{ __('Creando…') }}</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        @endif
+
+        {{-- Modal «Importar programas» (alta masiva: revisar y después crear) --}}
+        @if ($showImportPrograms)
+            <div class="kc-modal-wrap" wire:click="closeImportPrograms">
+                <div class="kc-modal kc-modal-wide" wire:click.stop role="dialog" aria-modal="true" aria-labelledby="kc-import-title">
+                    <h2 id="kc-import-title">{{ __('Importar programas al catálogo') }}</h2>
+                    <p>{!! __('Una fila por programa: <code>nombre | código | línea | área | URL</code>. Área solo en Microcredenciales (obligatoria ahí); URL opcional. Se admite pegar desde Excel (tabuladores) o separar con <code>|</code> o <code>;</code>.') !!}</p>
+                    <p class="kc-auto-help">{{ __('Líneas válidas:') }} @foreach ($programLines as $slug => $label)<code>{{ $slug }}</code>@if (! $loop->last), @endif @endforeach</p>
+
+                    <label class="kc-field">
+                        <span class="kc-field-label">{{ __('Programas') }}</span>
+                        <textarea wire:model="importText" class="kc-input kc-import-text" rows="7" spellcheck="false"
+                                  placeholder="Micro MBA | MMBA-001 | micro_mba&#10;{{ __('Diploma Avanzado en Dirección Estratégica') }} | DA-020 | diplomas_avanzados"></textarea>
+                        @error('importText') <span class="kc-err">{{ $message }}</span> @enderror
+                    </label>
+
+                    @if ($importPreview !== [])
+                        @php $s = $importPreview['summary'] ?? []; @endphp
+                        <div class="kc-import-summary">
+                            @if ($importResult !== [])
+                                <span class="kc-badge t-green">{{ __(':n creados', ['n' => $importResult['created']]) }}</span>
+                                <span class="kc-badge t-amber">{{ __(':n ya existían', ['n' => $importResult['duplicate']]) }}</span>
+                                <span class="kc-badge t-red">{{ __(':n omitidos por errores', ['n' => $importResult['error']]) }}</span>
+                            @else
+                                <span class="kc-badge t-green">{{ __(':n se crearán', ['n' => $s['create'] ?? 0]) }}</span>
+                                <span class="kc-badge t-amber">{{ __(':n duplicados', ['n' => $s['duplicate'] ?? 0]) }}</span>
+                                <span class="kc-badge t-red">{{ __(':n con errores', ['n' => $s['error'] ?? 0]) }}</span>
+                            @endif
+                            @if ($importPreview['truncated'] ?? false)
+                                <span class="kc-badge t-gray">{{ __('Solo se procesan las primeras :n filas.', ['n' => \Modules\Catalog\Services\ProgramProvisioningService::MAX_BULK_ROWS]) }}</span>
+                            @endif
+                        </div>
+                        <div class="kc-import-table">
+                            <table>
+                                <thead><tr><th>#</th><th>{{ __('Código') }}</th><th>{{ __('Nombre') }}</th><th>{{ __('Línea') }}</th><th>{{ __('Resultado') }}</th></tr></thead>
+                                <tbody>
+                                    @foreach ($importPreview['rows'] ?? [] as $r)
+                                        <tr wire:key="imp-{{ $r['line'] }}">
+                                            <td class="t-mut">{{ $r['line'] }}</td>
+                                            <td><span class="kc-code">{{ $r['code'] !== '' ? $r['code'] : '—' }}</span></td>
+                                            <td>{{ $r['name'] !== '' ? $r['name'] : '—' }}</td>
+                                            <td>{{ $r['program_line'] !== '' ? __($r['program_line']) : '—' }}</td>
+                                            <td>
+                                                @switch($r['status'])
+                                                    @case('created') <span class="kc-badge t-green">{{ __('Creado') }}</span> @break
+                                                    @case('create') <span class="kc-badge t-green">{{ __('Se creará') }}</span> @break
+                                                    @case('duplicate') <span class="kc-badge t-amber">{{ __('Ya existe') }}</span> @break
+                                                    @default <span class="kc-badge t-red">{{ __('Error') }}</span>
+                                                @endswitch
+                                                @if ($r['message'] !== '') <div class="kc-import-msg">{{ $r['message'] }}</div> @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+
+                    <div class="kc-modal-foot">
+                        <button type="button" wire:click="closeImportPrograms" class="kc-btn kc-btn-ghost kc-btn-sm">{{ $importResult !== [] ? __('Cerrar') : __('Cancelar') }}</button>
+                        @if ($importResult === [])
+                            <button type="button" wire:click="previewImport" wire:loading.attr="disabled" wire:target="previewImport" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="search" /> {{ __('Revisar') }}</button>
+                            @if (($importPreview['summary']['create'] ?? 0) > 0)
+                                <button type="button" wire:click="confirmImport" wire:loading.attr="disabled" wire:target="confirmImport" class="kc-btn kc-btn-primary kc-btn-sm">
+                                    <span wire:loading.remove wire:target="confirmImport" class="kc-inl"><x-ui.icon name="check" /> {{ __('Crear :n programa(s)', ['n' => $importPreview['summary']['create']]) }}</span>
+                                    <span wire:loading.inline-flex wire:target="confirmImport" class="kc-gap"><span class="mca-spin"></span> {{ __('Creando…') }}</span>
+                                </button>
+                            @endif
+                        @endif
+                    </div>
+                </div>
+            </div>
         @endif
 
         {{-- Modal de borrado --}}

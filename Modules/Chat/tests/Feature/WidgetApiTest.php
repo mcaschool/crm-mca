@@ -240,3 +240,54 @@ it('un clic guiado de interes corporativo convierte el contacto en LEAD', functi
         expect($lead->source)->toBe('corporate');
     });
 });
+
+it('un programa sin URL se recomienda sin inventar enlace: la API no rellena la URL y la tarjeta no pinta el «Ver ficha»', function () {
+    $bot = widgetBot();
+    $session = $this->withHeaders(widgetHeaders($bot))->postJson('/api/v1/widget/session', [])->json('session_id');
+    $this->withHeaders(widgetHeaders($bot))->postJson('/api/v1/widget/lead', [
+        'session_id' => $session, 'name' => 'Ana', 'email' => 'ana@example.com', 'consent' => true,
+    ]);
+
+    $categoryId = app(CurrentInstitution::class)->runFor($bot->institution_id, function () use ($bot) {
+        $cat = ProgramCategory::factory()->create();
+        $program = Program::factory()->create(['category_id' => $cat->id, 'level' => 'intermedio', 'goal' => 'ascenso', 'status' => 'active', 'url' => '']);
+        $bot->programs()->attach($program->id);
+
+        return $cat->id;
+    });
+
+    $res = $this->withHeaders(widgetHeaders($bot))->postJson('/api/v1/widget/match', [
+        'session_id' => $session,
+        'answers' => ['area' => $categoryId, 'meta' => 'ascenso', 'seniority' => 'desarrollo', 'educacion' => 'universitario_completo', 'motivacion' => 'ascender'],
+    ]);
+
+    $res->assertOk();
+    expect($res->json('programs.0.url'))->toBe(''); // ni URL inventada ni la de la página actual
+
+    // El widget solo construye el enlace de la tarjeta con una URL http(s); sin ella, la tarjeta va sin CTA.
+    $js = (string) file_get_contents(resource_path('widget/chat-widget.js'));
+    expect($js)->toContain("card.innerHTML = /^https?:\/\//i.test(url)")
+        ->and($js)->toContain(": '<b></b>';")
+        ->and($js)->not->toContain('href="\' + esc(p.url)');
+});
+
+it('/widget/chat-widget.js se sirve por ruta con caché corta y revalidación (las webs ya instaladas reciben la versión nueva)', function () {
+    $res = $this->get('/widget/chat-widget.js?v=2')->assertOk(); // la URL de los snippets ya pegados
+
+    $cache = (string) $res->headers->get('Cache-Control');
+    expect((string) $res->headers->get('Content-Type'))->toContain('javascript')
+        ->and($cache)->toContain('max-age='.\Modules\Chat\Http\Controllers\WidgetScriptController::MAX_AGE)
+        ->and($cache)->toContain('must-revalidate')
+        ->and($cache)->not->toContain('604800')
+        ->and($res->headers->getCookies())->toBe([])
+        ->and(file_get_contents($res->baseResponse->getFile()->getPathname()))->toBe(file_get_contents(resource_path('widget/chat-widget.js')));
+
+    // Revalidación: con la misma versión el servidor responde 304 sin cuerpo.
+    $etag = (string) $res->headers->get('ETag');
+    expect($etag)->not->toBe('');
+    $this->get('/widget/chat-widget.js?v=2', ['If-None-Match' => $etag])->assertStatus(304);
+
+    // El nombre antiguo sirve lo mismo con la misma política de caché.
+    expect((string) $this->get('/widget/celia.js')->assertOk()->headers->get('Cache-Control'))->toBe($cache);
+    expect(file_exists(public_path('widget/chat-widget.js')))->toBeFalse(); // si existiera, el servidor web lo serviría estático
+});

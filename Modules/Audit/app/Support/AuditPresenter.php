@@ -45,6 +45,9 @@ final class AuditPresenter
         'contact.personal_data_viewed' => ['label' => 'Acceso a datos personales', 'group' => 'info'],
         // Retencion / mantenimiento
         'retention.purged' => ['label' => 'Purga por retención', 'group' => 'neutral'],
+        // Catalogo de programas (alta manual desde el Centro de Conocimiento)
+        'program.created' => ['label' => 'Programa creado', 'group' => 'ok'],
+        'program.activated' => ['label' => 'Programa activado', 'group' => 'ok'],
     ];
 
     /** @var array<string, string> */
@@ -55,6 +58,7 @@ final class AuditPresenter
         'Modules\Crm\Models\Lead' => 'Lead',
         'Modules\Audit\Models\AuditLog' => 'Registro',
         'Modules\Institutions\Models\Institution' => 'Institución',
+        'Modules\Catalog\Models\Program' => 'Programa',
     ];
 
     public static function actionLabel(string $action): string
