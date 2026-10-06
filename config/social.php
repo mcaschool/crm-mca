@@ -90,6 +90,15 @@ return [
     | según el tipo de usuario y no se inicia ningún login.
     */
     'meta' => [
+        /*
+        | Formularios publicitarios (Meta Lead Ads → CRM, sin intermediarios). DESACTIVADO hasta
+        | que Meta apruebe el permiso «leads_retrieval» (leer los datos de cada lead) y
+        | «pages_manage_ads» (listar los formularios de la Página); la suscripción de la Página al
+        | campo «leadgen» usa además «pages_manage_metadata». No forman parte de la revisión de la
+        | app pendiente: NO activar hasta tenerlos aprobados.
+        */
+        'lead_forms_enabled' => (bool) env('SOCIAL_META_LEAD_FORMS_ENABLED', false),
+
         'login_config_id' => env('SOCIAL_META_LOGIN_CONFIG_ID'),
 
         /*

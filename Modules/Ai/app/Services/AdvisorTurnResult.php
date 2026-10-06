@@ -12,7 +12,9 @@ namespace Modules\Ai\Services;
  *  - unresolved     no tenía información suficiente: lo dice con honestidad (no inventa).
  *  - limit_reached  se alcanzó el límite de mensajes de IA de la conversación.
  *  - unavailable    sin proveedor o el proveedor falló: respuesta honesta sin IA.
- *  - duplicate      el mensaje externo ya se procesó: se devuelve la respuesta de entonces.
+ *  - handoff        el asesor transfiere a una persona (sus reglas): su mensaje se envía y la
+ *                   conversación pasa a «Esperando a una persona».
+ *  - duplicate      el mensaje externo ya se procesó: NO se vuelve a enviar nada.
  *  - human_active   la conversación está traspasada a una persona: el bot NO responde.
  *
  * `intent` es la clasificación que ya produce el asesor (answer, unresolved, start_matcher…).
@@ -37,9 +39,10 @@ final readonly class AdvisorTurnResult
         public array $adapter = [],
     ) {}
 
-    /** ¿Hay algo que enviar al usuario por el canal? */
+    /** ¿Hay algo NUEVO que enviar al usuario por el canal? */
     public function shouldReply(): bool
     {
-        return $this->reply !== null && $this->reply !== '' && ! $this->handoff;
+        return $this->reply !== null && $this->reply !== ''
+            && ! in_array($this->status, ['duplicate', 'human_active'], true);
     }
 }

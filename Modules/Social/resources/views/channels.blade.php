@@ -16,6 +16,7 @@
                 {{-- Grupo de acciones de conexión: Meta y WhatsApp, uno al lado del otro y
                      alineados a la derecha; hacen wrap natural en pantallas pequeñas. --}}
                 <div style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <a href="{{ route('social.lead-forms') }}" class="btn btn-soft btn-sm">{{ __('Formularios publicitarios') }}</a>
                 {{-- «Conectar Meta»: enlace GET normal (SIN wire:navigate: navegar a la
                      pantalla Meta no debe pasar por Livewire). Estilo primario azul. --}}
                 <a href="{{ route('social.meta') }}" class="btn btn-primary btn-sm"
@@ -159,6 +160,82 @@
             <span style="font-size:13px;color:#6B5411">{{ __('Usa el TOKEN PERMANENTE (System User), no el temporal: los tokens temporales caducan y romperían el canal.') }}</span>
         </div>
 
+        {{-- ---------------- ASESOR INTELIGENTE DEL CANAL (apagado por defecto) ---------------- --}}
+        @if ($advisorChannel)
+            <div class="card card-p fade" style="margin-bottom:22px" data-testid="advisor-panel">
+                <h3 style="margin:0 0 4px;font-size:15px;font-weight:700">{{ __('Asesor inteligente · :channel', ['channel' => $advisorChannel->display_name]) }}</h3>
+                <p class="mca-sub" style="margin:0 0 14px">{{ __('Responde automáticamente los mensajes de este canal con el mismo asesor de la web. Una persona del equipo puede tomar la conversación en cualquier momento.') }}</p>
+                <form wire:submit="saveAdvisor">
+                    <div class="field">
+                        <label>{{ __('Asesor inteligente') }}</label>
+                        <div class="mca-seg">
+                            <button type="button" wire:click="$set('advisorEnabled', false)" class="{{ $advisorEnabled ? '' : 'active' }}">{{ __('Desactivado') }}</button>
+                            <button type="button" wire:click="$set('advisorEnabled', true)" class="{{ $advisorEnabled ? 'active' : '' }}">{{ __('Activado') }}</button>
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+                        <div class="field" style="margin-bottom:0">
+                            <label>{{ __('Asesor asignado') }}</label>
+                            <select wire:model="advisorBotId">
+                                <option value="">{{ __('— Elegir —') }}</option>
+                                @foreach ($advisorBots as $b)
+                                    <option value="{{ $b->id }}">{{ $b->assistant_name }}{{ $b->status !== 'active' ? ' ('.__('inactivo').')' : '' }}</option>
+                                @endforeach
+                            </select>
+                            @error('advisorBotId') <span class="mca-err">{{ $message }}</span> @enderror
+                        </div>
+                        <div class="field" style="margin-bottom:0">
+                            <label>{{ __('Espera antes de responder') }}</label>
+                            <select wire:model="advisorDelay">
+                                @foreach (\Modules\Social\Models\SocialChannel::ADVISOR_DELAYS as $d)
+                                    <option value="{{ $d }}">{{ $d === 0 ? __('Responder al momento') : __(':n segundos', ['n' => $d]) }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="field" style="margin-top:16px">
+                        <label>{{ __('Horario de atención automática') }}</label>
+                        <div class="mca-seg">
+                            <button type="button" wire:click="$set('advisorAlways', true)" class="{{ $advisorAlways ? 'active' : '' }}">{{ __('Siempre') }}</button>
+                            <button type="button" wire:click="$set('advisorAlways', false)" class="{{ $advisorAlways ? '' : 'active' }}">{{ __('Solo en un horario') }}</button>
+                        </div>
+                        @unless ($advisorAlways)
+                            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center">
+                                @foreach ([1 => __('Lun'), 2 => __('Mar'), 3 => __('Mié'), 4 => __('Jue'), 5 => __('Vie'), 6 => __('Sáb'), 7 => __('Dom')] as $num => $day)
+                                    <label style="display:inline-flex;align-items:center;gap:5px;font-weight:500"><input type="checkbox" wire:model="advisorDays" value="{{ $num }}"> {{ $day }}</label>
+                                @endforeach
+                                <span>{{ __('de') }}</span><input type="time" wire:model="advisorFrom" style="width:auto">
+                                <span>{{ __('a') }}</span><input type="time" wire:model="advisorTo" style="width:auto">
+                            </div>
+                            @error('advisorDays') <span class="mca-err">{{ $message }}</span> @enderror
+                            <div class="field" style="margin-top:10px;margin-bottom:0">
+                                <label>{{ __('Mensaje fuera de horario') }}</label>
+                                <textarea wire:model="advisorOffHoursMessage" rows="2" maxlength="1000" placeholder="{{ __('Ej.: Gracias por escribirnos. Te responderemos en nuestro horario de atención.') }}"></textarea>
+                            </div>
+                        @endunless
+                    </div>
+
+                    <div class="field">
+                        <label>{{ __('Transferir a una persona') }}</label>
+                        <label style="display:flex;align-items:center;gap:8px;font-weight:500"><input type="checkbox" wire:model.live="advisorHandoff"> {{ __('Si la persona pide hablar con alguien del equipo, dejar de responder y avisar al equipo.') }}</label>
+                        @if ($advisorHandoff)
+                            <textarea wire:model="advisorHandoffMessage" rows="2" maxlength="1000" style="margin-top:8px" placeholder="{{ __('Te pongo en contacto con una persona del equipo. Te responderá por aquí en cuanto esté disponible.') }}"></textarea>
+                        @endif
+                    </div>
+
+                    <div class="field">
+                        <label style="display:flex;align-items:center;gap:8px;font-weight:500"><input type="checkbox" wire:model="advisorPauseOnHuman"> {{ __('Pausar el asesor en una conversación cuando responda una persona del equipo') }}</label>
+                    </div>
+
+                    <div style="display:flex;gap:8px">
+                        <button type="submit" class="btn btn-primary btn-sm">{{ __('Guardar') }}</button>
+                        <button type="button" wire:click="cancelAdvisor" class="btn btn-ghost btn-sm">{{ __('Cancelar') }}</button>
+                    </div>
+                </form>
+            </div>
+        @endif
+
         {{-- ---------------- FORMULARIO (alta / edición) ---------------- --}}
         @if ($showForm)
             <div class="card card-p fade" style="margin-bottom:22px">
@@ -249,8 +326,17 @@
                                     </div>
                                 @endif
                             @endif
+                            {{-- Asesor inteligente del canal (apagado por defecto) --}}
+                            <div style="margin-top:8px">
+                                @if ($c->advisor_enabled && $c->advisorBot)
+                                    <span class="badge badge-on" data-testid="advisor-badge-{{ $c->id }}">{{ __('Asesor inteligente: :name', ['name' => $c->advisorBot->assistant_name]) }}</span>
+                                @else
+                                    <span class="badge badge-off" data-testid="advisor-badge-{{ $c->id }}">{{ __('Asesor inteligente desactivado') }}</span>
+                                @endif
+                            </div>
                         </div>
                         <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px">
+                            <button type="button" wire:click="editAdvisor({{ $c->id }})" class="btn btn-soft btn-sm">{{ __('Asesor inteligente') }}</button>
                             <button type="button" wire:click="edit({{ $c->id }})" class="btn btn-primary btn-sm">{{ __('Editar') }}</button>
                             <button type="button" wire:click="toggle({{ $c->id }})" class="btn btn-soft btn-sm">
                                 {{ $c->is_active ? __('Desactivar') : __('Activar') }}

@@ -31,6 +31,13 @@ use Modules\Institutions\Database\Factories\BotFactory;
  * @property string|null $landing_url
  * @property string $public_key
  * @property string $default_language
+ * @property string|null $role_description función o presentación del asesor
+ * @property string|null $instructions instrucciones del asesor
+ * @property string|null $tone tono de comunicación
+ * @property string|null $restrictions límites / asuntos que no debe responder
+ * @property string|null $not_found_message mensaje para información no encontrada
+ * @property string|null $handoff_rules cuándo transferir a una persona
+ * @property bool $uses_legacy_prompt asesor previo a «Identidad e instrucciones» (prompt global)
  * @property string|null $widget_welcome_es
  * @property string|null $widget_welcome_en
  * @property string|null $widget_button_es
@@ -52,6 +59,13 @@ class Bot extends Model
         'name',
         'slug',
         'assistant_name',
+        'role_description',
+        'instructions',
+        'tone',
+        'restrictions',
+        'not_found_message',
+        'handoff_rules',
+        'uses_legacy_prompt',
         'type',
         'avatar_path',
         'landing_url',
@@ -72,9 +86,34 @@ class Bot extends Model
     {
         return [
             'allowed_origins' => 'array',
+            'uses_legacy_prompt' => 'boolean',
             'preview_token' => 'encrypted',
             'preview_token_created_at' => 'datetime',
         ];
+    }
+
+    /** Campos de «Identidad e instrucciones» (para saber si el asesor tiene identidad propia). */
+    public const IDENTITY_FIELDS = ['role_description', 'instructions', 'tone', 'restrictions', 'not_found_message', 'handoff_rules'];
+
+    /** ¿Tiene alguna instrucción o rasgo de identidad propio? */
+    public function hasOwnIdentity(): bool
+    {
+        foreach (self::IDENTITY_FIELDS as $field) {
+            if (is_string($this->{$field}) && trim($this->{$field}) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * ¿Conversa con el prompt GLOBAL de siempre? Solo un asesor previo (Celia) que aún no tiene
+     * identidad propia: así conserva exactamente su comportamiento. Un asesor nuevo, nunca.
+     */
+    public function usesGlobalPrompt(): bool
+    {
+        return (bool) $this->uses_legacy_prompt && ! $this->hasOwnIdentity();
     }
 
     /**

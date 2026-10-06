@@ -9,6 +9,7 @@ use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Modules\Core\Support\SecretMasker;
+use Modules\Institutions\Models\Bot;
 use Modules\Social\Models\SocialChannel;
 
 /**
@@ -185,9 +186,111 @@ class Channels extends Component
         ];
     }
 
+    // --- Asesor inteligente del canal (APAGADO por defecto) ------------------------------------
+
+    public ?int $advisorChannelId = null;
+
+    public bool $advisorEnabled = false;
+
+    public string $advisorBotId = '';
+
+    public int $advisorDelay = 0;
+
+    /** true = atiende siempre; false = solo en el horario indicado. */
+    public bool $advisorAlways = true;
+
+    /** @var array<int, string> días ISO (1 = lunes … 7 = domingo) */
+    public array $advisorDays = ['1', '2', '3', '4', '5'];
+
+    public string $advisorFrom = '09:00';
+
+    public string $advisorTo = '18:00';
+
+    public string $advisorOffHoursMessage = '';
+
+    public bool $advisorHandoff = true;
+
+    public string $advisorHandoffMessage = '';
+
+    public bool $advisorPauseOnHuman = true;
+
+    public function editAdvisor(int $id): void
+    {
+        $channel = SocialChannel::query()->findOrFail($id);
+        $this->authorize('update', $channel);
+
+        $schedule = is_array($channel->advisor_schedule) ? $channel->advisor_schedule : null;
+        $this->advisorChannelId = $channel->id;
+        $this->advisorEnabled = (bool) $channel->advisor_enabled;
+        $this->advisorBotId = $channel->advisor_bot_id !== null ? (string) $channel->advisor_bot_id : '';
+        $this->advisorDelay = (int) $channel->advisor_reply_delay;
+        $this->advisorAlways = $schedule === null;
+        $this->advisorDays = $schedule !== null ? array_map('strval', (array) ($schedule['days'] ?? [])) : ['1', '2', '3', '4', '5'];
+        $this->advisorFrom = (string) ($schedule['from'] ?? '09:00');
+        $this->advisorTo = (string) ($schedule['to'] ?? '18:00');
+        $this->advisorOffHoursMessage = (string) $channel->advisor_off_hours_message;
+        $this->advisorHandoff = (bool) $channel->advisor_handoff_enabled;
+        $this->advisorHandoffMessage = (string) $channel->advisor_handoff_message;
+        $this->advisorPauseOnHuman = (bool) $channel->advisor_pause_on_human;
+        $this->resetErrorBag();
+    }
+
+    public function saveAdvisor(): void
+    {
+        $channel = SocialChannel::query()->findOrFail((int) $this->advisorChannelId);
+        $this->authorize('update', $channel);
+
+        $this->validate([
+            'advisorBotId' => [$this->advisorEnabled ? 'required' : 'nullable', 'nullable', 'integer'],
+            'advisorDelay' => ['required', 'integer', Rule::in(SocialChannel::ADVISOR_DELAYS)],
+            'advisorDays' => [$this->advisorAlways ? 'nullable' : 'required', 'array'],
+            'advisorDays.*' => ['integer', 'between:1,7'],
+            'advisorFrom' => ['required', 'date_format:H:i'],
+            'advisorTo' => ['required', 'date_format:H:i'],
+            'advisorOffHoursMessage' => ['nullable', 'string', 'max:1000'],
+            'advisorHandoffMessage' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'advisorBotId.required' => __('Elige qué asesor atiende este canal.'),
+            'advisorDays.required' => __('Elige al menos un día.'),
+        ]);
+
+        // El asesor debe ser un asesor inteligente de ESTA institución (el scope lo garantiza).
+        $botId = $this->advisorBotId !== '' ? (int) $this->advisorBotId : null;
+        if ($botId !== null && ! Bot::query()->whereKey($botId)->where('type', '!=', 'human')->exists()) {
+            $this->addError('advisorBotId', __('Ese asesor no está disponible.'));
+
+            return;
+        }
+
+        $channel->advisor_enabled = $this->advisorEnabled;
+        $channel->advisor_bot_id = $botId;
+        $channel->advisor_reply_delay = $this->advisorDelay;
+        $channel->advisor_schedule = $this->advisorAlways ? null : [
+            'days' => array_values(array_map('intval', $this->advisorDays)),
+            'from' => $this->advisorFrom,
+            'to' => $this->advisorTo,
+        ];
+        $channel->advisor_off_hours_message = trim($this->advisorOffHoursMessage) !== '' ? trim($this->advisorOffHoursMessage) : null;
+        $channel->advisor_handoff_enabled = $this->advisorHandoff;
+        $channel->advisor_handoff_message = trim($this->advisorHandoffMessage) !== '' ? trim($this->advisorHandoffMessage) : null;
+        $channel->advisor_pause_on_human = $this->advisorPauseOnHuman;
+        $channel->save();
+
+        session()->flash('status', $channel->advisor_enabled
+            ? __('Asesor inteligente activado en :channel.', ['channel' => $channel->display_name])
+            : __('Asesor inteligente desactivado en :channel.', ['channel' => $channel->display_name]));
+        $this->cancelAdvisor();
+    }
+
+    public function cancelAdvisor(): void
+    {
+        $this->advisorChannelId = null;
+        $this->resetErrorBag();
+    }
+
     public function render(): View
     {
-        $channels = SocialChannel::query()->orderBy('provider')->orderBy('display_name')->get();
+        $channels = SocialChannel::query()->with('advisorBot:id,assistant_name,status')->orderBy('provider')->orderBy('display_name')->get();
 
         $masks = $channels->mapWithKeys(function (SocialChannel $c): array {
             $token = (string) (data_get($c->credentials, 'token') ?? '');
@@ -210,6 +313,10 @@ class Channels extends Component
             'grouped' => $channels->groupBy('provider'),
             'masks' => $masks,
             'webhooks' => $webhooks,
+            'advisorBots' => $this->advisorChannelId !== null
+                ? Bot::query()->where('type', '!=', 'human')->orderBy('assistant_name')->get(['id', 'assistant_name', 'status'])
+                : collect(),
+            'advisorChannel' => $this->advisorChannelId !== null ? $channels->firstWhere('id', $this->advisorChannelId) : null,
         ]);
     }
 }

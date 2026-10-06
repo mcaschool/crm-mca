@@ -8,7 +8,9 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Modules\Ai\Services\CeliaService;
+use Modules\Ai\Services\AdvisorTurn;
+use Modules\Ai\Services\AdvisorTurnResult;
+use Modules\Ai\Services\AdvisorTurnService;
 use Modules\Ai\Services\ProgramAssignmentService;
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Models\ProgramCategory;
@@ -43,7 +45,7 @@ class WidgetController extends Controller
         private readonly EventService $events,
         private readonly GuidedNavigationService $guided,
         private readonly MatcherService $matcher,
-        private readonly CeliaService $celia,
+        private readonly AdvisorTurnService $turns,
         private readonly ProgramAssignmentService $assignments,
     ) {}
 
@@ -228,35 +230,62 @@ class WidgetController extends Controller
         ]);
     }
 
-    /** Activa el modo Celia (IA): saludo con memoria del contexto. Sin tokens. */
+    /**
+     * Activa el modo asesor (IA): saludo con memoria del contexto. Sin tokens. Entra por la capa
+     * común AdvisorTurnService (canal 'web'), como el resto de canales.
+     */
     public function celiaStart(Request $request): JsonResponse
     {
-        $this->bot($request);
+        $bot = $this->bot($request);
         $data = $request->validate(['session_id' => ['required', 'string']]);
-
         $conversation = $this->conversation($data['session_id']);
-        $contact = $this->contact($conversation);
 
-        return response()->json($this->celia->greet($conversation, $contact, app()->getLocale()));
+        $result = $this->turns->open((int) $bot->institution_id, (int) $bot->getKey(), AdvisorTurnService::WEB_CHANNEL, $conversation->session_id, false, app()->getLocale());
+
+        return response()->json($this->widgetPayload($result));
     }
 
-    /** Mensaje del prospecto en modo Celia: enrutamiento en dos pasos + registro. */
+    /** Mensaje del prospecto en modo asesor: capa común AdvisorTurnService (canal 'web'). */
     public function celia(Request $request): JsonResponse
     {
         $this->assertNotBot($request);
-        $this->bot($request);
+        $bot = $this->bot($request);
 
         $data = $request->validate([
             'session_id' => ['required', 'string'],
             'message' => ['required', 'string', 'max:1000'],
         ]);
-
         $conversation = $this->conversation($data['session_id']);
-        $contact = $this->contact($conversation);
 
-        return response()->json(
-            $this->celia->handle($conversation, $contact, $data['message'], app()->getLocale()),
-        );
+        $result = $this->turns->process(new AdvisorTurn(
+            institutionId: (int) $bot->institution_id,
+            botId: (int) $bot->getKey(),
+            channel: AdvisorTurnService::WEB_CHANNEL,
+            externalConversationId: $conversation->session_id,
+            text: $data['message'],
+            contactId: $conversation->contact_id,
+            locale: app()->getLocale(),
+        ));
+
+        return response()->json($this->widgetPayload($result));
+    }
+
+    /**
+     * Respuesta del widget (mismo formato de siempre) a partir del resultado de la capa común.
+     *
+     * @return array<string, mixed>
+     */
+    private function widgetPayload(AdvisorTurnResult $result): array
+    {
+        return [
+            'reply' => $result->reply,
+            'mode' => 'celia',
+            'action' => $result->intent,
+            'node' => null,
+            'used_ai' => $result->usedAi,
+            'messages_left' => (int) ($result->adapter['messages_left'] ?? 0),
+            'limit_reached' => (bool) ($result->adapter['limit_reached'] ?? false),
+        ];
     }
 
     /**

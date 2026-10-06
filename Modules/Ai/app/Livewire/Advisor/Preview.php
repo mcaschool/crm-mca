@@ -208,7 +208,7 @@ class Preview extends Component
             ->where('conversation_id', $conversation->getKey())
             ->whereIn('sender_type', ['user', 'celia'])
             ->orderBy('id')
-            ->get(['id', 'sender_type', 'content', 'message_type']);
+            ->get(['id', 'sender_type', 'content', 'message_type', 'meta']);
 
         $ratings = $messages->isEmpty() ? collect() : AdvisorFeedback::query()
             ->whereIn('message_id', $messages->pluck('id'))

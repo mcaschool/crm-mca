@@ -29,6 +29,18 @@ class BotFactory extends Factory
             'allowed_origins' => [$this->faker->url()],
             'default_language' => 'es',
             'status' => 'active',
+            // Como los asesores existentes antes de «Identidad e instrucciones» (prompt global).
+            'uses_legacy_prompt' => true,
         ];
+    }
+
+    /**
+     * Asesor nuevo con identidad propia (sin el prompt global heredado de Celia).
+     *
+     * @param  array<string, mixed>  $identity
+     */
+    public function withOwnIdentity(array $identity = []): static
+    {
+        return $this->state(fn () => $identity + ['uses_legacy_prompt' => false]);
     }
 }

@@ -28,6 +28,8 @@ use Modules\Social\Database\Factories\SocialConversationFactory;
  * @property int $unread_count
  * @property string|null $last_message_preview
  * @property \Illuminate\Support\Carbon|null $last_message_at
+ * @property string $automation_state bot | waiting_human | human | paused
+ * @property \Illuminate\Support\Carbon|null $advisor_off_hours_notified_at
  */
 class SocialConversation extends Model
 {
@@ -49,13 +51,35 @@ class SocialConversation extends Model
         'unread_count',
         'last_message_preview',
         'last_message_at',
+        'automation_state',
+        'advisor_off_hours_notified_at',
     ];
+
+    /** Estados de atención (asesor inteligente ↔ personas del equipo) => etiqueta visible. */
+    public const AUTOMATION_STATES = [
+        'bot' => 'Asesor inteligente atendiendo',
+        'waiting_human' => 'Esperando a una persona',
+        'human' => 'En atención humana',
+        'paused' => 'Automatización pausada',
+    ];
+
+    public function automationLabel(): string
+    {
+        return __(self::AUTOMATION_STATES[$this->automation_state ?? 'bot'] ?? (string) $this->automation_state);
+    }
+
+    /** ¿Puede responder el asesor inteligente? (solo si nadie del equipo la atiende) */
+    public function advisorMayReply(): bool
+    {
+        return ($this->automation_state ?? 'bot') === 'bot' && $this->assigned_to === null;
+    }
 
     protected function casts(): array
     {
         return [
             'unread_count' => 'integer',
             'last_message_at' => 'datetime',
+            'advisor_off_hours_notified_at' => 'datetime',
         ];
     }
 

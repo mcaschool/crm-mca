@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\Ai\Services;
 
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
+use Modules\Ai\Events\AdvisorTurnHandled;
+use Modules\Ai\Models\AdvisorMessageReceipt;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Conversation;
@@ -13,32 +16,37 @@ use Modules\Crm\Models\Message;
 use Modules\Crm\Services\ConversationService;
 use Modules\Crm\Services\MessageService;
 use Modules\Institutions\Models\Bot;
+use Throwable;
 
 /**
- * Capa COMÚN del asesor inteligente por canal: un único punto para procesar un turno
- * conversacional, sea cual sea el canal (modo de prueba hoy; Web Chat, Instagram, Messenger y
- * WhatsApp en la siguiente etapa). NO es un segundo motor de IA: la respuesta, el conocimiento,
- * el prompt, el modelo, el registro de uso y las alertas son los de CeliaService y la capa común
- * AiProcessResolver → AiChatClient.
+ * PUNTO ÚNICO de entrada del asesor inteligente para TODOS los canales:
+ *
+ *   Canal (Web Chat · prueba · Instagram · Messenger · WhatsApp)
+ *     → AdvisorTurnService → CeliaService → capa IA común (AiProcessResolver → AiChatClient)
+ *
+ * No es un segundo motor: la respuesta, el conocimiento, el prompt por asesor, el modelo, el
+ * registro de uso y las alertas son los de CeliaService y la capa común.
  *
  * Garantías:
- *  - institution_id: todo corre dentro del contexto de la institución del turno; un asesor de
- *    otra institución no se encuentra.
- *  - Memoria separada por asesor + canal + conversación externa (conversations.external_id).
- *  - Idempotencia por mensaje externo (messages.external_id + bloqueo): un reintento devuelve la
- *    respuesta ya dada sin volver a llamar a la IA ni duplicar mensajes.
- *  - Traspaso a persona (mode = human): el bot deja de responder; el mensaje queda registrado.
- *  - Pruebas: el canal 'preview' es siempre is_test y viceversa; CeliaService no deja rastro
- *    comercial (eventos, leads, intereses) en conversaciones de prueba. Un asesor inactivo solo
- *    se puede usar en pruebas.
- *  - Trazabilidad: canal de origen en la conversación; fuentes usadas en el meta del mensaje.
+ *  - institution_id: todo corre en el contexto de la institución del turno; un asesor de otra
+ *    institución no existe.
+ *  - Memoria separada por asesor + canal + conversación externa. En Web Chat la conversación es
+ *    la del widget (session_id): se conservan sesión, contacto, leads, eventos y límites.
+ *  - Idempotencia PERSISTENTE por mensaje externo: índice único en advisor_message_receipts
+ *    (institución + canal + id del mensaje); el bloqueo de caché es una protección adicional.
+ *  - Traspaso a persona (mode = human): el asesor no responde en paralelo.
+ *  - Pruebas: el canal 'preview' es siempre is_test y viceversa; un asesor inactivo solo atiende
+ *    en pruebas. CeliaService no deja rastro comercial en pruebas.
+ *  - Cada turno emite AdvisorTurnHandled (trazabilidad del canal de origen).
  */
-final class AdvisorTurnService
+class AdvisorTurnService
 {
     public const TEST_CHANNEL = 'preview';
 
-    /** Canales que la capa común admite (los sociales aún sin adaptador conectado). */
-    public const CHANNELS = ['web', self::TEST_CHANNEL, 'instagram', 'messenger', 'whatsapp'];
+    public const WEB_CHANNEL = 'web';
+
+    /** Canales que la capa común admite. */
+    public const CHANNELS = [self::WEB_CHANNEL, self::TEST_CHANNEL, 'instagram', 'messenger', 'whatsapp'];
 
     public function __construct(
         private readonly CeliaService $celia,
@@ -48,27 +56,30 @@ final class AdvisorTurnService
     ) {}
 
     /**
-     * Abre (o retoma) la conversación del asesor en un canal. Si es nueva, devuelve el saludo del
-     * asesor (plantilla, sin IA); si ya existía, su última respuesta.
+     * Abre (o retoma) la conversación del asesor en un canal y devuelve el saludo (plantilla, sin
+     * IA). En Web Chat saluda SIEMPRE que la persona activa al asesor (comportamiento del widget);
+     * en otros canales solo si la conversación es nueva.
      */
     public function open(int $institutionId, int $botId, string $channel, string $externalConversationId, bool $isTest = false, string $locale = 'es', ?int $contactId = null): AdvisorTurnResult
     {
-        return $this->tenancy->runFor($institutionId, function () use ($botId, $channel, $externalConversationId, $isTest, $locale, $contactId): AdvisorTurnResult {
+        return $this->tenancy->runFor($institutionId, function () use ($institutionId, $botId, $channel, $externalConversationId, $isTest, $locale, $contactId): AdvisorTurnResult {
             $bot = $this->bot($botId, $isTest);
             [$conversation, $created] = $this->conversationFor($bot, $channel, $externalConversationId, $isTest, $locale, $contactId);
 
-            if (! $created && $conversation->messages()->exists()) {
+            if (! $created && $channel !== self::WEB_CHANNEL && $conversation->messages()->exists()) {
                 $last = $this->lastAdvisorMessage($conversation);
-
-                return new AdvisorTurnResult(
+                $result = new AdvisorTurnResult(
                     status: 'answered', reply: $last?->content, intent: 'resume', handoff: $conversation->mode === 'human',
                     conversationId: (int) $conversation->getKey(), replyMessageId: $last?->getKey(),
                 );
+            } else {
+                $response = $this->celia->greet($conversation, $this->contact($conversation), $locale);
+                $result = $this->toResult($conversation, $response, $this->lastAdvisorMessage($conversation));
             }
 
-            $response = $this->celia->greet($conversation, $this->contact($conversation), $locale);
+            AdvisorTurnHandled::dispatch($institutionId, (int) $bot->getKey(), $channel, (int) $conversation->getKey(), $result->status, $isTest, 'open');
 
-            return $this->toResult($conversation, $response, $this->lastAdvisorMessage($conversation));
+            return $result;
         });
     }
 
@@ -83,15 +94,39 @@ final class AdvisorTurnService
             $bot = $this->bot($turn->botId, $turn->isTest);
             [$conversation] = $this->conversationFor($bot, $turn->channel, $turn->externalConversationId, $turn->isTest, $turn->locale, $turn->contactId);
 
-            if ($turn->externalMessageId === null) {
-                return $this->runTurn($conversation, $turn);
+            $result = $turn->externalMessageId === null
+                ? $this->runTurn($conversation, $turn)
+                : Cache::lock('advisor-turn:'.$turn->institutionId.':'.$turn->channel.':'.sha1($turn->externalMessageId), 60)
+                    ->block(20, fn (): AdvisorTurnResult => $this->claimAndRun($conversation, $turn));
+
+            AdvisorTurnHandled::dispatch($turn->institutionId, (int) $bot->getKey(), $turn->channel, (int) $conversation->getKey(), $result->status, $turn->isTest, 'message');
+
+            return $result;
+        });
+    }
+
+    /** ¿Ya hay una decisión (respuesta u omisión) para este mensaje externo? */
+    public function alreadyHandled(int $institutionId, string $channel, string $externalMessageId): bool
+    {
+        return $this->tenancy->runFor($institutionId, fn (): bool => AdvisorMessageReceipt::query()
+            ->where('channel', $channel)->where('external_message_id', $externalMessageId)->exists());
+    }
+
+    /**
+     * El adaptador decidió NO consultar al asesor para este mensaje (persona atendiendo, fuera de
+     * horario, transferencia pedida…): se registra con el mismo índice único para que el mensaje
+     * no se atienda nunca dos veces. Devuelve false si ya estaba registrado (duplicado).
+     */
+    public function recordSkipped(int $institutionId, string $channel, string $externalMessageId): bool
+    {
+        return $this->tenancy->runFor($institutionId, function () use ($channel, $externalMessageId): bool {
+            try {
+                AdvisorMessageReceipt::query()->create(['channel' => $channel, 'external_message_id' => $externalMessageId, 'status' => 'skipped']);
+            } catch (UniqueConstraintViolationException) {
+                return false;
             }
 
-            // Idempotencia: el mismo mensaje externo (webhook reintentado) se procesa una vez.
-            $key = 'advisor-turn:'.$conversation->getKey().':'.sha1($turn->externalMessageId);
-
-            return Cache::lock($key, 60)->block(20, fn (): AdvisorTurnResult => $this->alreadyProcessed($conversation, $turn->externalMessageId)
-                ?? $this->runTurn($conversation, $turn));
+            return true;
         });
     }
 
@@ -105,6 +140,68 @@ final class AdvisorTurnService
     public function releaseToAdvisor(Conversation $conversation): void
     {
         $this->conversations->switchMode($conversation, 'celia');
+    }
+
+    /**
+     * Conversación del asesor ligada a una conversación externa de un canal (o null si aún no
+     * existe). La usan los adaptadores para sincronizar el traspaso a persona.
+     */
+    public function findConversation(int $botId, string $channel, string $externalConversationId): ?Conversation
+    {
+        return Conversation::query()
+            ->where('bot_id', $botId)
+            ->where('channel', $channel)
+            ->where('external_id', $externalConversationId)
+            ->where('status', 'open')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Reclama el mensaje externo de forma persistente (índice único) y solo entonces lo procesa.
+     * Si otro proceso ya lo reclamó (reintento o entrega simultánea), devuelve 'duplicate' sin
+     * llamar a la IA ni crear mensajes. Si el procesamiento falla de forma inesperada, se libera
+     * el reclamo para que un reintento pueda atenderlo.
+     */
+    private function claimAndRun(Conversation $conversation, AdvisorTurn $turn): AdvisorTurnResult
+    {
+        try {
+            $receipt = AdvisorMessageReceipt::query()->create([
+                'channel' => $turn->channel,
+                'external_message_id' => (string) $turn->externalMessageId,
+                'conversation_id' => $conversation->getKey(),
+                'status' => 'processing',
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            return $this->duplicateOf($conversation, $turn);
+        }
+
+        try {
+            $result = $this->runTurn($conversation, $turn);
+        } catch (Throwable $e) {
+            $receipt->delete();
+
+            throw $e;
+        }
+
+        $receipt->forceFill(['status' => 'done', 'reply_message_id' => $result->replyMessageId])->save();
+
+        return $result;
+    }
+
+    private function duplicateOf(Conversation $conversation, AdvisorTurn $turn): AdvisorTurnResult
+    {
+        $receipt = AdvisorMessageReceipt::query()
+            ->where('channel', $turn->channel)
+            ->where('external_message_id', (string) $turn->externalMessageId)
+            ->first();
+        $reply = $receipt?->reply_message_id !== null ? Message::query()->find($receipt->reply_message_id) : null;
+
+        return new AdvisorTurnResult(
+            status: 'duplicate', reply: $reply?->content, intent: 'duplicate', handoff: $conversation->mode === 'human',
+            conversationId: (int) $conversation->getKey(), replyMessageId: $reply?->getKey(),
+            sources: $this->sourcesOf($reply),
+        );
     }
 
     private function runTurn(Conversation $conversation, AdvisorTurn $turn): AdvisorTurnResult
@@ -125,31 +222,6 @@ final class AdvisorTurnService
         $response = $this->celia->handle($conversation, $this->contact($conversation), $turn->text, $turn->locale, $turn->externalMessageId);
 
         return $this->toResult($conversation, $response, $this->lastAdvisorMessage($conversation));
-    }
-
-    private function alreadyProcessed(Conversation $conversation, string $externalMessageId): ?AdvisorTurnResult
-    {
-        $seen = Message::query()
-            ->where('conversation_id', $conversation->getKey())
-            ->where('sender_type', 'user')
-            ->where('external_id', $externalMessageId)
-            ->first();
-        if ($seen === null) {
-            return null;
-        }
-
-        $reply = Message::query()
-            ->where('conversation_id', $conversation->getKey())
-            ->where('sender_type', 'celia')
-            ->where('id', '>', $seen->getKey())
-            ->orderBy('id')
-            ->first();
-
-        return new AdvisorTurnResult(
-            status: 'duplicate', reply: $reply?->content, intent: 'duplicate', handoff: $conversation->mode === 'human',
-            conversationId: (int) $conversation->getKey(), replyMessageId: $reply?->getKey(),
-            sources: $this->sourcesOf($reply),
-        );
     }
 
     /**
@@ -182,13 +254,21 @@ final class AdvisorTurnService
             throw new InvalidArgumentException('Falta el id de la conversación en el canal.');
         }
 
-        $existing = Conversation::query()
-            ->where('bot_id', $bot->getKey())
-            ->where('channel', $channel)
-            ->where('external_id', $externalId)
-            ->where('status', 'open')
-            ->orderByDesc('id')
-            ->first();
+        // Web Chat: la conversación es la del widget (sesión), creada por su endpoint de sesión.
+        if ($channel === self::WEB_CHANNEL) {
+            $web = Conversation::query()
+                ->where('bot_id', $bot->getKey())
+                ->where('session_id', $externalId)
+                ->where('is_test', false)
+                ->first();
+            if ($web === null) {
+                throw new InvalidArgumentException('Sesión de Web Chat no encontrada.');
+            }
+
+            return [$web, false];
+        }
+
+        $existing = $this->findConversation((int) $bot->getKey(), $channel, $externalId);
         if ($existing !== null) {
             return [$existing, false];
         }
@@ -235,6 +315,7 @@ final class AdvisorTurnService
             'unresolved' => 'unresolved',
             'limit' => 'limit_reached',
             'unavailable' => 'unavailable',
+            'handoff' => 'handoff',
             default => 'answered',
         };
 
@@ -242,7 +323,9 @@ final class AdvisorTurnService
             status: $status,
             reply: isset($response['reply']) ? (string) $response['reply'] : null,
             intent: $action,
-            handoff: false, // el asesor no traspasa por sí mismo: lo hace una persona (handOff)
+            // El asesor pide pasar a una persona (sus reglas de transferencia). El adaptador del
+            // canal decide cómo (en redes: «Esperando a una persona»).
+            handoff: $action === 'handoff',
             conversationId: (int) $conversation->getKey(),
             replyMessageId: $reply?->getKey(),
             sources: $this->sourcesOf($reply),

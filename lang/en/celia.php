@@ -18,4 +18,10 @@ return [
     'limit_reached' => 'We have talked quite a bit and I do not want to keep you waiting. Each program\'s detail is in the catalog, and enrollment is open whenever you decide. If you prefer, leave your question and we will pick it up later. Catalog: :catalog',
 
     'ai_unavailable' => 'I cannot chat in detail right now, but I can guide you with the options or point you to the catalog: :catalog',
+
+    // Advisors with their own identity and instructions (not Celia): neutral texts.
+    'greeting_custom' => "Hi :name, I'm :advisor, :role. How can I help you?",
+    'default_role' => "the institution's virtual assistant",
+    'limit_reached_custom' => "We've talked quite a bit and I don't want to keep you waiting. If you need more detail, the institution's team can help you.",
+    'ai_unavailable_custom' => 'I cannot answer in detail right now. Please try again in a few minutes.',
 ];

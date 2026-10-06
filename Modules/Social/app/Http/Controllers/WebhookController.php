@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
+use Modules\Social\Services\MetaLeadFormService;
 use Modules\Social\Services\MetaWebhookNormalizer;
 use Modules\Social\Services\SocialIngestService;
 use Modules\Social\Services\WhatsAppCoexistenceService;
@@ -30,6 +31,7 @@ final class WebhookController
         private readonly SocialIngestService $ingest,
         private readonly WhatsAppTemplateService $templates,
         private readonly WhatsAppCoexistenceService $coexistence,
+        private readonly MetaLeadFormService $leadForms,
     ) {}
 
     /**
@@ -71,7 +73,10 @@ final class WebhookController
             $templateEvents = $this->templates->handleWebhook($payload);
             $coexistence = $this->coexistence->handleWebhook($payload);
         }
-        $extras = $templateEvents + array_sum($coexistence);
+        // Formularios publicitarios (Página de Facebook, campo leadgen): solo si están activados
+        // (pendientes de aprobación de Meta). Desactivado → no hace nada.
+        $leadForms = $provider === 'messenger' ? $this->leadForms->handleWebhook($payload) : 0;
+        $extras = $templateEvents + array_sum($coexistence) + $leadForms;
 
         if ($messages === [] && $statuses === [] && $extras === 0) {
             // Evento sin nada procesable (echoes IG/Messenger, comentarios/feed, etc.).

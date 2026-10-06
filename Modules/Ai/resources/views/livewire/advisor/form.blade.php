@@ -132,6 +132,50 @@
                 </div>
             </div>
 
+            {{-- Identidad e instrucciones: cómo es y cómo responde ESTE asesor --}}
+            <div class="card card-p fade" style="margin-top:16px">
+                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">
+                    <h3><x-ui.icon name="user-cog" class="ic" style="width:17px;height:17px" /> {{ __('Identidad e instrucciones') }}</h3>
+                    <p class="mca-sub">{{ __('Cómo se presenta y cómo responde este asesor. Se combina siempre con las reglas de la institución (es un asistente virtual, no inventa datos y responde solo con su conocimiento), que no se pueden desactivar desde aquí.') }}</p>
+                </div>
+                @if ($usesGlobalPrompt)
+                    <div class="mca-help" style="margin-bottom:12px;padding:10px 12px;border-radius:10px;background:var(--mca-blue-soft)">{{ __('Este asesor usa ahora las instrucciones generales de siempre. Cuando completes esta sección, pasará a usar las suyas.') }}</div>
+                @endif
+                <div class="field">
+                    <label for="adv-role">{{ __('Función o presentación') }}</label>
+                    <input id="adv-role" type="text" wire:model="roleDescription" maxlength="255" placeholder="{{ __('Ej.: asesora de Diplomas Avanzados de la escuela') }}">
+                    <div class="mca-help">{{ __('El nombre público es el «Nombre del asesor» de arriba.') }}</div>
+                    @error('roleDescription') <span class="mca-err">{{ $message }}</span> @enderror
+                </div>
+                <div class="field">
+                    <label for="adv-instructions">{{ __('Instrucciones del asesor') }}</label>
+                    <textarea id="adv-instructions" wire:model="instructions" rows="7" maxlength="6000" placeholder="{{ __('Qué hace, a quién atiende, qué debe priorizar y cómo debe orientar a cada persona…') }}"></textarea>
+                    @error('instructions') <span class="mca-err">{{ $message }}</span> @enderror
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+                    <div class="field" style="margin-bottom:0">
+                        <label for="adv-tone">{{ __('Tono de comunicación') }}</label>
+                        <input id="adv-tone" type="text" wire:model="tone" maxlength="255" placeholder="{{ __('Ej.: cercano y profesional, frases breves') }}">
+                        @error('tone') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label for="adv-notfound">{{ __('Mensaje para información no encontrada') }}</label>
+                        <input id="adv-notfound" type="text" wire:model="notFoundMessage" maxlength="500" placeholder="{{ __('Ej.: No tengo ese dato; te recomiendo revisar la ficha del programa.') }}">
+                        @error('notFoundMessage') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label for="adv-limits">{{ __('Límites: asuntos que no debe responder') }}</label>
+                        <textarea id="adv-limits" wire:model="restrictions" rows="3" maxlength="2000" placeholder="{{ __('Ej.: precios concretos, temas médicos o legales, otras instituciones…') }}"></textarea>
+                        @error('restrictions') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label for="adv-handoff">{{ __('Cuándo transferir a una persona') }}</label>
+                        <textarea id="adv-handoff" wire:model="handoffRules" rows="3" maxlength="2000" placeholder="{{ __('Ej.: si pide hablar con alguien, si quiere una beca especial o si está molesto.') }}"></textarea>
+                        @error('handoffRules') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+            </div>
+
             {{-- Presentación del widget: los dos textos visibles antes de abrir el chat --}}
             <div class="card card-p fade" style="margin-top:16px">
                 <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">

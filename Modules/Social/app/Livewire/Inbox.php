@@ -10,6 +10,7 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialWhatsAppTemplate;
+use Modules\Social\Services\SocialAutomationService;
 use Modules\Social\Services\SocialOutboundService;
 use RuntimeException;
 
@@ -182,6 +183,37 @@ class Inbox extends Component
      * adjunto: el texto de la caja hace de caption. El scoping por institución lo garantiza
      * la consulta (solo encuentra conversaciones de la institución activa).
      */
+    /** «Tomar conversación»: una persona la atiende y el asesor inteligente deja de responder. */
+    public function takeOver(SocialAutomationService $automation): void
+    {
+        $conversation = $this->selectedConversation();
+        if ($conversation !== null) {
+            $automation->takeOver($conversation, auth()->user());
+        }
+    }
+
+    /** «Devolver al asesor inteligente» (con confirmación en la vista). */
+    public function returnToAdvisor(SocialAutomationService $automation): void
+    {
+        $conversation = $this->selectedConversation();
+        if ($conversation !== null && $conversation->channel?->advisor_enabled) {
+            $automation->returnToAdvisor($conversation);
+        }
+    }
+
+    public function pauseAutomation(SocialAutomationService $automation): void
+    {
+        $conversation = $this->selectedConversation();
+        if ($conversation !== null) {
+            $automation->pause($conversation);
+        }
+    }
+
+    private function selectedConversation(): ?SocialConversation
+    {
+        return $this->selectedId !== null ? SocialConversation::query()->with('channel')->find($this->selectedId) : null;
+    }
+
     public function send(SocialOutboundService $outbound, string $text = ''): bool
     {
         // El texto llega desde la caja (Alpine, wire:ignore); $this->draft es el respaldo.

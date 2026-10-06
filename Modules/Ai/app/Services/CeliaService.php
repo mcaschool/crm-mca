@@ -42,6 +42,7 @@ class CeliaService
         private readonly EventService $events,
         private readonly LeadConversionService $leadConversion,
         private readonly ProgramAssignmentService $programAssignments,
+        private readonly AdvisorPromptBuilder $prompts,
     ) {}
 
     /**
@@ -81,7 +82,7 @@ class CeliaService
 
         // Control de costos: al alcanzar el limite se deja de llamar a la IA.
         if ($this->aiMessageCount($conversation) >= $this->limit()) {
-            $reply = $this->trans('celia.limit_reached', $locale, ['catalog' => $this->catalogUrl($locale)]);
+            $reply = $this->fallbackText('limit_reached', $conversation, $locale);
             $this->messages->record($conversation, 'celia', $reply, 'text');
 
             return $this->response($conversation, reply: $reply, action: 'limit', usedAi: false, limitReached: true);
@@ -103,7 +104,7 @@ class CeliaService
 
         // Sin proveedor configurado: honesto y deriva (no inventa, no promete humano).
         if ($resolved === null) {
-            $reply = $this->trans('celia.ai_unavailable', $locale, ['catalog' => $this->catalogUrl($locale)]);
+            $reply = $this->fallbackText('ai_unavailable', $conversation, $locale);
             $this->messages->record($conversation, 'celia', $reply, 'text');
             $this->recordUnresolved($conversation, $message);
 
@@ -125,7 +126,8 @@ class CeliaService
         }
 
         $knowledge = $this->knowledge->retrieveWithSources((int) $conversation->bot_id, $message, $locale);
-        $prompt = $this->systemPrompt($locale, $knowledge['text'], $corporate);
+        // Prompt del asesor: el global de siempre (Celia) o su identidad e instrucciones propias.
+        $prompt = $this->prompts->build($this->bot($conversation) ?? new Bot(['uses_legacy_prompt' => true]), $locale, (string) $conversation->channel, $knowledge['text'], $corporate);
         $chat = array_merge(
             [['role' => 'system', 'content' => $prompt]],
             $this->history($conversation, $locale),
@@ -153,7 +155,7 @@ class CeliaService
                 $context,
             );
         } catch (Throwable) {
-            $reply = $this->trans('celia.ai_unavailable', $locale, ['catalog' => $this->catalogUrl($locale)]);
+            $reply = $this->fallbackText('ai_unavailable', $conversation, $locale);
             $this->messages->record($conversation, 'celia', $reply, 'text');
             $this->recordUnresolved($conversation, $message);
 
@@ -165,7 +167,7 @@ class CeliaService
 
         // Se registra el mensaje de IA con su meta (base del AI Deflection Rate) y las fuentes de
         // conocimiento usadas (trazabilidad interna; no viajan al usuario).
-        $this->messages->record($conversation, 'celia', $reply, 'ai', array_merge($result->meta(), ['knowledge_sources' => $knowledge['sources']]));
+        $this->messages->record($conversation, 'celia', $reply, 'ai', array_merge($result->meta(), ['knowledge_sources' => $knowledge['sources'], 'action' => $action]));
 
         if ($action === 'unresolved') {
             $this->recordUnresolved($conversation, $message);
@@ -184,16 +186,21 @@ class CeliaService
     {
         $name = $contact !== null ? (string) $contact->first_name : '';
         // El nombre del asesor sale de la ficha (bots.assistant_name), no de un literal.
-        $bot = Bot::query()->find($conversation->bot_id);
+        $bot = $this->bot($conversation);
         $advisor = $bot !== null ? (string) $bot->assistant_name : 'Celia';
-        $parts = [$this->trans('celia.greeting', $locale, ['name' => $name, 'advisor' => $advisor])];
+        // Celia (prompt global) conserva su saludo; un asesor con identidad propia se presenta con
+        // SU función, sin hablar de Microcredenciales.
+        $custom = $bot !== null && ! $bot->usesGlobalPrompt();
+        $parts = [$custom
+            ? $this->trans('celia.greeting_custom', $locale, ['name' => $name, 'advisor' => $advisor, 'role' => $this->roleOf($bot, $locale)])
+            : $this->trans('celia.greeting', $locale, ['name' => $name, 'advisor' => $advisor])];
 
         $viewed = $this->viewedPrograms($contact, (int) $conversation->bot_id, $locale);
         if ($viewed !== []) {
             $parts[] = $this->trans('celia.context_viewed_programs', $locale, ['programs' => implode(', ', $viewed)]);
         }
 
-        if ($locale === 'en') {
+        if ($locale === 'en' && ! $custom) {
             $parts[] = $this->trans('celia.greeting_language_note', $locale);
         }
 
@@ -242,25 +249,6 @@ class CeliaService
 
     // --- IA: prompt, historial, parseo ------------------------------------
 
-    private function systemPrompt(string $locale, string $knowledge, bool $corporate = false): string
-    {
-        $base = (string) config('crm.celia.system_prompt.'.$locale, config('crm.celia.system_prompt.es'));
-        $topics = $this->router->topicMap();
-        $kb = $knowledge !== '' ? $knowledge : '(sin conocimiento cargado)';
-
-        $prompt = $base."\n\n".$topics."\n\nCONOCIMIENTO AUTORIZADO (unica fuente de hechos):\n".$kb;
-
-        // Encaminamiento corporativo (InCompany), solo cuando el mensaje lo dispara.
-        // Discrecional: si en realidad es una consulta personal, se responde normal.
-        if ($corporate) {
-            $email = (string) config('crm.celia.corporate_email');
-            $form = (string) config('crm.celia.corporate_form_url.'.$locale, config('crm.celia.corporate_form_url.es'));
-            $prompt .= "\n\nFORMACION CORPORATIVA (InCompany): si el prospecto pregunta por capacitar a su empresa, equipo o personal (varios empleados, plan corporativo, descuento por volumen...), encaminalo de forma NATURAL y conversada al canal corporativo, incluyendo SIEMPRE el correo ".$email.' y el formulario '.$form.'. Preséntalo con tus palabras, no como un bloque rigido. Si en realidad es una consulta personal, respondela con normalidad.';
-        }
-
-        return $prompt;
-    }
-
     /**
      * Ultimos N mensajes como memoria de la conversacion (rol user/assistant).
      *
@@ -303,7 +291,7 @@ class CeliaService
         $decoded = json_decode($content, true);
         if (is_array($decoded) && isset($decoded['reply'])) {
             $action = isset($decoded['action']) && is_string($decoded['action']) ? $decoded['action'] : 'answer';
-            $action = in_array($action, ['answer', 'unresolved', 'start_matcher'], true) ? $action : 'answer';
+            $action = in_array($action, ['answer', 'unresolved', 'start_matcher', 'handoff'], true) ? $action : 'answer';
 
             return [(string) $decoded['reply'], $action];
         }
@@ -313,6 +301,33 @@ class CeliaService
     }
 
     // --- Registro / helpers ------------------------------------------------
+
+    private function bot(Conversation $conversation): ?Bot
+    {
+        return Bot::query()->find($conversation->bot_id);
+    }
+
+    /** Función con la que se presenta un asesor con identidad propia. */
+    private function roleOf(Bot $bot, string $locale): string
+    {
+        $role = trim((string) $bot->role_description);
+
+        return $role !== '' ? $role : $this->trans('celia.default_role', $locale);
+    }
+
+    /**
+     * Texto de respaldo (límite alcanzado / IA no disponible): el de Celia con el catálogo de
+     * Microcredenciales, o uno neutro para un asesor con identidad propia.
+     */
+    private function fallbackText(string $key, Conversation $conversation, string $locale): string
+    {
+        $bot = $this->bot($conversation);
+        if ($bot !== null && ! $bot->usesGlobalPrompt()) {
+            return $this->trans('celia.'.$key.'_custom', $locale);
+        }
+
+        return $this->trans('celia.'.$key, $locale, ['catalog' => $this->catalogUrl($locale)]);
+    }
 
     /** Conversación de PRUEBA interna: sin eventos, leads ni intereses (no es producción). */
     private function isTest(Conversation $conversation): bool

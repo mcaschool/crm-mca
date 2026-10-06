@@ -32,6 +32,14 @@
         .sb-thread__head{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--sb-line)}
         .sb-thread__head .sb-item__avatar{width:38px;height:38px}
         .sb-thread__who{min-width:0}
+        .sb-auto{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+        .sb-auto__state{font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:#EAF1FA;color:#1E5AA8;white-space:nowrap}
+        .sb-auto__state--waiting_human{background:#FBF0DC;color:#8A5A0C}
+        .sb-auto__state--human{background:#E5F4EE;color:#1F7A55}
+        .sb-auto__state--paused{background:#EEF1F5;color:#5A6B84}
+        .sb-auto__btn{height:30px;padding:0 12px;border-radius:9px;border:1px solid var(--sb-line);background:#fff;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;color:inherit}
+        .sb-auto__btn--primary{background:#1E5AA8;border-color:#1E5AA8;color:#fff}
+        .sb-bot-tag{display:block;font-size:11px;font-weight:700;opacity:.8;margin-bottom:3px}
         .sb-thread__who strong{display:block;font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .sb-thread__who small{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sb-muted);margin-top:1px}
         .sb-msgs{flex:1;overflow-y:auto;padding:20px 22px;background:var(--sb-bg);display:flex;flex-direction:column;gap:10px}
@@ -170,6 +178,22 @@
                         {{ $selected->channel?->providerLabel() }} · {{ $selected->channel?->display_name }}
                     </small>
                 </span>
+                {{-- Asesor inteligente del canal: estado visible y control humano --}}
+                @if ($selected->channel?->advisor_enabled)
+                    @php $autoState = $selected->automation_state ?? 'bot'; @endphp
+                    <span class="sb-auto">
+                        <span class="sb-auto__state sb-auto__state--{{ $autoState }}" data-testid="automation-state">{{ $selected->automationLabel() }}</span>
+                        @if ($autoState !== 'human')
+                            <button type="button" class="sb-auto__btn sb-auto__btn--primary" wire:click="takeOver">{{ __('Tomar conversación') }}</button>
+                        @endif
+                        @if ($autoState === 'bot')
+                            <button type="button" class="sb-auto__btn" wire:click="pauseAutomation">{{ __('Pausar automatización') }}</button>
+                        @else
+                            <button type="button" class="sb-auto__btn" wire:click="returnToAdvisor"
+                                    wire:confirm="{{ __('¿Devolver la conversación al asesor inteligente? Volverá a responder él automáticamente.') }}">{{ __('Devolver al asesor inteligente') }}</button>
+                        @endif
+                    </span>
+                @endif
             </header>
 
             @if ($waOffboarded)
@@ -220,6 +244,9 @@
                                 <span class="sb-doc sb-doc--pending">{{ __('Adjunto no disponible todavía.') }}</span>
                             @endif
                         @endforeach
+                        @if ($msg->sender_type === 'bot')
+                            <span class="sb-bot-tag">{{ __('Asesor inteligente') }}</span>
+                        @endif
                         @if ($msg->body !== null && $msg->body !== '')
                             {!! nl2br(e($msg->body)) !!}
                         @elseif (! $hasStoredMedia && $atts === [])

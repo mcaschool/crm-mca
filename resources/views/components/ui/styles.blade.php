@@ -60,7 +60,7 @@
 /* Forms */
 .mca-panel .field{margin-bottom:16px}
 .mca-panel .field label,.mca-lbl{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px}
-.mca-panel .field input[type=text],.mca-panel .field input[type=email],.mca-panel .field input[type=password],.mca-panel .field input[type=number],.mca-panel .field input[type=search],.mca-panel .field select,.mca-panel .field textarea{
+.mca-panel .field input[type=text],.mca-panel .field input[type=email],.mca-panel .field input[type=password],.mca-panel .field input[type=number],.mca-panel .field input[type=search],.mca-panel .field input[type=time],.mca-panel .field select,.mca-panel .field textarea{
   width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:11px;font-size:14px;font-family:inherit;color:var(--ink);background:#fff}
 .mca-panel .field input:focus,.mca-panel .field select:focus,.mca-panel .field textarea:focus{outline:none;border-color:var(--mca-blue);box-shadow:0 0 0 3px rgba(30,90,168,.12)}
 .mca-help{font-size:12px;color:var(--muted);margin-top:6px}

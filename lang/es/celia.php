@@ -22,4 +22,11 @@ return [
 
     // Respaldo cuando la IA no está disponible o falla: honesto, deriva.
     'ai_unavailable' => 'Ahora mismo no puedo conversar en detalle, pero puedo orientarte con las opciones o derivarte al catálogo: :catalog',
+
+    // Asesores con «Identidad e instrucciones» propias (no Celia): textos neutros, sin
+    // Microcredenciales ni catálogo concreto.
+    'greeting_custom' => 'Hola :name, soy :advisor, :role. ¿En qué te puedo ayudar?',
+    'default_role' => 'asistente virtual de la institución',
+    'limit_reached_custom' => 'Hemos conversado bastante y no quiero hacerte esperar. Si necesitas más detalle, el equipo de la institución puede ayudarte.',
+    'ai_unavailable_custom' => 'Ahora mismo no puedo responder en detalle. Inténtalo de nuevo en unos minutos, por favor.',
 ];

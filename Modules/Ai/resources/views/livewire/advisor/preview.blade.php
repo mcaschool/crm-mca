@@ -30,6 +30,9 @@
         .pv-msg.user{align-self:flex-end;background:var(--mca-blue);color:#fff;border-bottom-right-radius:4px}
         .pv-msg.bot{align-self:flex-start;background:#fff;border:1px solid var(--mca-card-border);border-bottom-left-radius:4px}
         .pv-msg.bot a{color:var(--mca-blue);font-weight:600;word-break:break-all}
+        .pv-tag{display:inline-block;margin-bottom:6px;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:700}
+        .pv-tag.warn{background:var(--mca-warn-soft);color:#8A5A0C}
+        .pv-tag.info{background:var(--mca-info-soft);color:var(--mca-info)}
         .pv-rate{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--mca-card-border)}
         .pv-rate button{height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--mca-card-border);background:#fff;font:inherit;font-size:12px;font-weight:600;color:var(--mca-ink-2);cursor:pointer}
         .pv-rate button.ok{background:var(--mca-ok-soft);border-color:var(--mca-ok);color:var(--mca-ok)}
@@ -84,7 +87,14 @@
                 <div class="pv-msg user" wire:key="m-{{ $m->id }}">{{ $m->content }}</div>
             @else
                 @php $r = $ratings[$m->id] ?? null; @endphp
+                @php $intent = is_array($m->meta) ? ($m->meta['action'] ?? null) : null; @endphp
                 <div class="pv-msg bot" wire:key="m-{{ $m->id }}">
+                    {{-- Qué decidió el asesor (para evaluar límites, transferencia e información no encontrada) --}}
+                    @if ($intent === 'unresolved')
+                        <span class="pv-tag warn">{{ __('Información no encontrada') }}</span>
+                    @elseif ($intent === 'handoff')
+                        <span class="pv-tag info">{{ __('Transferiría a una persona') }}</span>
+                    @endif
                     <div>{!! \Modules\Ai\Livewire\Advisor\Preview::formatReply((string) $m->content) !!}</div>
                     <div class="pv-rate" aria-label="{{ __('Valorar respuesta') }}">
                         <button type="button" wire:click="rate({{ $m->id }}, 'correct')" @class(['ok' => $r === 'correct'])>✓ {{ __('Correcta') }}</button>

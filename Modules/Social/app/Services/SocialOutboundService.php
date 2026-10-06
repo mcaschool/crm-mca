@@ -30,6 +30,7 @@ final class SocialOutboundService
         private readonly MetaMessageSender $sender,
         private readonly WhatsAppMessageSender $whatsapp,
         private readonly WhatsAppMediaService $media,
+        private readonly SocialAutomationService $automation,
     ) {}
 
     public function send(SocialConversation $conversation, string $text, User $user): SocialMessage
@@ -44,6 +45,34 @@ final class SocialOutboundService
         $message = $this->newOutbound($conversation, 'text', $text, null, $user);
 
         // 2) Enviar a Meta y 3) reflejar el resultado.
+        $result = match (true) {
+            $channel === null => SendResult::failed('La conversación no tiene canal asociado.'),
+            $conversation->provider === 'whatsapp' => $this->whatsapp->sendText($channel, $conversation, $text),
+            default => $this->sender->sendText($channel, $conversation, $text),
+        };
+
+        $this->applyResult($message, $result);
+        $this->touchConversation($conversation, $text, $message);
+        // Una persona respondió: el asesor inteligente se pausa en esta conversación (si el
+        // canal lo tiene así configurado).
+        $this->automation->humanReplied($conversation, $user);
+
+        return $message;
+    }
+
+    /**
+     * Respuesta del ASESOR INTELIGENTE por el mismo remitente del canal (MetaMessageSender /
+     * WhatsAppMessageSender). Queda en el hilo como 'bot' (sin usuario) con el estado del envío.
+     */
+    public function sendFromAdvisor(SocialConversation $conversation, string $text): SocialMessage
+    {
+        if (! in_array($conversation->provider, self::SENDABLE, true)) {
+            throw UnsupportedSocialProviderException::for($conversation->provider);
+        }
+
+        $channel = $conversation->channel;
+        $message = $this->newOutbound($conversation, 'text', $text, null, null, 'bot');
+
         $result = match (true) {
             $channel === null => SendResult::failed('La conversación no tiene canal asociado.'),
             $conversation->provider === 'whatsapp' => $this->whatsapp->sendText($channel, $conversation, $text),
@@ -109,6 +138,7 @@ final class SocialOutboundService
 
         $this->applyResult($message, $result);
         $this->touchConversation($conversation, $caption !== '' ? $caption : '['.$type.']', $message);
+        $this->automation->humanReplied($conversation, $user);
 
         return $message;
     }
@@ -169,6 +199,7 @@ final class SocialOutboundService
 
         $this->applyResult($message, $result);
         $this->touchConversation($conversation, $rendered, $message);
+        $this->automation->humanReplied($conversation, $user);
 
         return $message;
     }
@@ -212,7 +243,7 @@ final class SocialOutboundService
     /**
      * @param  array<int, array<string, mixed>>|null  $attachments
      */
-    private function newOutbound(SocialConversation $conversation, string $type, ?string $body, ?array $attachments, User $user): SocialMessage
+    private function newOutbound(SocialConversation $conversation, string $type, ?string $body, ?array $attachments, ?User $user, string $senderType = 'agent'): SocialMessage
     {
         $message = new SocialMessage;
         $message->social_conversation_id = $conversation->id;
@@ -222,8 +253,8 @@ final class SocialOutboundService
         $message->body = $body;
         $message->attachments = $attachments;
         $message->status = 'pending';
-        $message->sender_type = 'agent';
-        $message->sent_by = $user->id;
+        $message->sender_type = $senderType;                // agent (persona) | bot (asesor inteligente)
+        $message->sent_by = $user?->id;
         $message->provider_timestamp = now();
         $message->save();
 

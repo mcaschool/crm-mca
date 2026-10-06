@@ -47,6 +47,19 @@ class Form extends Component
 
     public string $model = '';
 
+    /** «Identidad e instrucciones»: se combinan con las reglas institucionales (nunca las sustituyen). */
+    public string $roleDescription = '';
+
+    public string $instructions = '';
+
+    public string $tone = '';
+
+    public string $restrictions = '';
+
+    public string $notFoundMessage = '';
+
+    public string $handoffRules = '';
+
     /** «Presentación del widget» (ES/EN). Vacío = el texto por defecto del widget. */
     public string $welcomeEs = '';
 
@@ -76,6 +89,12 @@ class Form extends Component
             $this->type = $bot->type ?: 'ia';
             $this->language = $bot->default_language ?: 'es';
             $this->status = $bot->status ?: 'active';
+            $this->roleDescription = (string) $bot->role_description;
+            $this->instructions = (string) $bot->instructions;
+            $this->tone = (string) $bot->tone;
+            $this->restrictions = (string) $bot->restrictions;
+            $this->notFoundMessage = (string) $bot->not_found_message;
+            $this->handoffRules = (string) $bot->handoff_rules;
             $this->welcomeEs = (string) $bot->widget_welcome_es;
             $this->welcomeEn = (string) $bot->widget_welcome_en;
             $this->buttonEs = (string) $bot->widget_button_es;
@@ -99,6 +118,13 @@ class Form extends Component
             'status' => ['required', 'in:active,inactive'],
             'integrationId' => ['nullable', 'integer'],
             'model' => ['nullable', 'string', 'max:100'],
+            // Identidad e instrucciones (texto libre, con límites razonables).
+            'roleDescription' => ['nullable', 'string', 'max:255'],
+            'instructions' => ['nullable', 'string', 'max:6000'],
+            'tone' => ['nullable', 'string', 'max:255'],
+            'restrictions' => ['nullable', 'string', 'max:2000'],
+            'notFoundMessage' => ['nullable', 'string', 'max:500'],
+            'handoffRules' => ['nullable', 'string', 'max:2000'],
             // Presentación del widget: texto plano (Unicode y emojis sí; HTML/scripts no).
             'welcomeEs' => ['nullable', 'string', 'max:200', 'not_regex:/<[^>]*>/'],
             'welcomeEn' => ['nullable', 'string', 'max:200', 'not_regex:/<[^>]*>/'],
@@ -127,6 +153,14 @@ class Form extends Component
         $bot->type = $this->type;
         $bot->default_language = $this->language;
         $bot->status = $this->status;
+        // Identidad e instrucciones del asesor (un asesor NUEVO nunca hereda el prompt de Celia:
+        // uses_legacy_prompt queda en false; los existentes lo conservan mientras esto esté vacío).
+        $bot->role_description = $this->plainText($this->roleDescription);
+        $bot->instructions = $this->multilineText($this->instructions);
+        $bot->tone = $this->plainText($this->tone);
+        $bot->restrictions = $this->multilineText($this->restrictions);
+        $bot->not_found_message = $this->plainText($this->notFoundMessage);
+        $bot->handoff_rules = $this->multilineText($this->handoffRules);
         // Por asesor (y por tanto por institución); vacío = el texto por defecto del widget.
         $bot->widget_welcome_es = $this->plainText($this->welcomeEs);
         $bot->widget_welcome_en = $this->plainText($this->welcomeEn);
@@ -358,6 +392,7 @@ class Form extends Component
             // de WordPress/temas (que NO admiten etiquetas <script>).
             'embedSnippet' => $bot !== null ? $this->embedSnippet($bot) : null,
             'embedSnippetJs' => $bot !== null ? $this->embedSnippetJs($bot) : null,
+            'usesGlobalPrompt' => $bot !== null && $bot->usesGlobalPrompt(),
             'widgetDefaults' => ['es' => (array) config('crm.widget.default_texts.es'), 'en' => (array) config('crm.widget.default_texts.en')],
             'previewUrl' => $bot !== null ? app(AdvisorPreviewLinkService::class)->url($bot) : null,
             'feedback' => $bot !== null ? $this->feedbackSummary($bot) : null,
@@ -381,6 +416,14 @@ class Form extends Component
                 ->where('bot_id', $bot->getKey())->where('rating', AdvisorFeedback::NEEDS_IMPROVEMENT)
                 ->orderByDesc('updated_at')->limit(5)->get(),
         ];
+    }
+
+    /** Texto de varias líneas: conserva los saltos de línea, recorta y vacío → null. */
+    private function multilineText(string $value): ?string
+    {
+        $value = trim((string) preg_replace("/[ \t]+/u", ' ', str_replace("\r\n", "\n", $value)));
+
+        return $value === '' ? null : $value;
     }
 
     /** Texto plano recortado; vacío → null (se usa el texto por defecto del widget). */

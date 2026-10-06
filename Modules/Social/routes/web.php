@@ -26,6 +26,9 @@ Route::get('/social/media/{message}/{index}', [MediaController::class, 'show'])
 // Plantillas de WhatsApp (listado, diseñador, sync). Acceso Admin (policy en mount).
 Route::get('/social/plantillas', WhatsAppTemplates::class)->name('social.wa-templates');
 
+// «Formularios publicitarios» (anuncios de Facebook/Instagram → CRM). Admin (policy en mount).
+Route::get('/social/formularios', \Modules\Social\Livewire\LeadForms::class)->name('social.lead-forms');
+
 // «Conectar Meta»: onboarding visual (Facebook Login for Business) que descubre Páginas +
 // Instagram. Convive con la conexión Meta actual; en esta etapa solo login + descubrimiento.
 Route::get('/social/meta', MetaConnect::class)->name('social.meta');

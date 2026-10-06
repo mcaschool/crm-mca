@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Social\Jobs\ProcessWhatsAppInboundMedia;
+use Modules\Social\Jobs\RespondWithAdvisor;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialMessage;
@@ -70,6 +71,13 @@ final class SocialIngestService
         if ($result->status === 'created' && $result->messageId !== null
             && $m->provider === 'whatsapp' && $m->attachments !== null) {
             ProcessWhatsAppInboundMedia::dispatchAfterResponse($channel->id, $result->messageId, $channel->institution_id);
+        }
+
+        // Asesor inteligente (APAGADO por defecto en cada canal): solo un entrante NUEVO (nunca un
+        // reintento duplicado ni el historial) y solo si el canal lo tiene activado. Tras el 200.
+        if ($result->status === 'created' && $result->messageId !== null && $m->direction === 'inbound'
+            && ! $m->fromHistory && SocialAdvisorResponder::channelIsAutomated($channel)) {
+            RespondWithAdvisor::dispatchAfterResponse($result->messageId, $channel->institution_id);
         }
 
         return $result;
