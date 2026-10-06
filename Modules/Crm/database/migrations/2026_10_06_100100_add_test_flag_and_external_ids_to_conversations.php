@@ -39,6 +39,12 @@ return new class extends Migration
             $table->dropColumn('external_id');
         });
 
+        // MySQL adopta el índice compuesto (bot_id, channel, external_id) para la clave foránea de
+        // bot_id (y descarta el suyo): se restituye un índice simple ANTES de quitar el compuesto.
+        Schema::table('conversations', function (Blueprint $table) {
+            $table->index('bot_id');
+        });
+
         Schema::table('conversations', function (Blueprint $table) {
             $table->dropIndex(['institution_id', 'is_test']);
             $table->dropIndex(['bot_id', 'channel', 'external_id']);
