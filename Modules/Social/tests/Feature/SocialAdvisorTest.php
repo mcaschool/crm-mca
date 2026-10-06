@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 use App\Models\User;
 use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Sleep;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
 use Modules\Ai\Events\AdvisorTurnHandled;
@@ -19,6 +21,7 @@ use Modules\Institutions\Models\Bot;
 use Modules\Institutions\Models\Institution;
 use Modules\Integrations\Models\AiProcessConfig;
 use Modules\Integrations\Models\Integration;
+use Modules\Social\Jobs\RespondWithAdvisor;
 use Modules\Social\Livewire\Channels;
 use Modules\Social\Livewire\Inbox;
 use Modules\Social\Models\SocialChannel;
@@ -26,6 +29,7 @@ use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialMessage;
 use Modules\Social\Services\SocialAdvisorResponder;
 use Modules\Social\Services\SocialOutboundService;
+use Modules\Social\Support\AdvisorDispatcher;
 
 /**
  * Instagram, Messenger y WhatsApp con el asesor inteligente (mismo núcleo que la web):
@@ -37,7 +41,8 @@ use Modules\Social\Services\SocialOutboundService;
  */
 function sadvCtx(array $channelAttrs = ['advisor_enabled' => true], string $botStatus = 'active'): array
 {
-    config(['social.app_secret' => 'sadv_secret', 'social.secrets.instagram' => 'sadv_secret']);
+    // Interruptor general encendido en las pruebas (en la instalación está APAGADO por defecto).
+    config(['social.app_secret' => 'sadv_secret', 'social.secrets.instagram' => 'sadv_secret', 'social.advisor.autoreply_enabled' => true]);
     // Meta devuelve un id distinto por cada envío.
     Http::fake([
         'graph.facebook.com/*/me/messages' => fn () => Http::response(['message_id' => 'm_bot_'.\Illuminate\Support\Str::random(10)]),
@@ -227,7 +232,8 @@ it('si la IA falla no se envía ninguna respuesta incorrecta', function () {
 
     sadvPost('instagram', sadvFixture('instagram'));
 
-    expect(sadvBotMessages($inst))->toHaveCount(0);
+    expect(sadvBotMessages($inst))->toHaveCount(0)
+        ->and(sadvConversation($inst, 'instagram')->automation_state)->toBe('waiting_human');
     Http::assertNotSent(fn (HttpRequest $r) => str_contains($r->url(), 'me/messages'));
 });
 
@@ -275,24 +281,123 @@ it('fuera de horario envía el aviso una sola vez y no consulta la IA', function
         ->and(sadvBotMessages($inst)->pluck('body')->all())->toBe(['Te respondemos en horario de atención.']);
 });
 
-it('respeta la espera antes de responder y no contesta si mientras tanto respondió una persona', function () {
+/** Cola PERSISTENTE (tabla jobs), como en producción. */
+function sadvPersistentQueue(): void
+{
+    config(['queue.default' => 'database']);
+}
+
+/** Trabajos pendientes en la cola del asesor. */
+function sadvPending(): int
+{
+    return DB::table('jobs')->where('queue', AdvisorDispatcher::queue())->count();
+}
+
+it('el webhook confirma al instante: encola la respuesta con la espera del canal y no espera a la IA ni al envío', function () {
     [$inst, , $fake] = sadvCtx(['advisor_enabled' => true, 'advisor_reply_delay' => 10]);
-    Sleep::fake();
+    Queue::fake();
 
     sadvPost('instagram', sadvFixture('instagram'));
-    Sleep::assertSlept(fn ($duration) => (int) $duration->totalSeconds === 10);
-    expect($fake->calls)->toHaveCount(1);
 
-    // Durante la espera responde una persona del equipo → el asesor no contesta.
-    $agent = User::factory()->create(['institution_id' => $inst->id, 'role' => 'admin']);
-    $conversation = sadvConversation($inst, 'instagram');
-    app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialChannel::query()->update(['advisor_pause_on_human' => false]));
-    Sleep::whenFakingSleep(function () use ($conversation, $agent, $inst) {
-        app(CurrentInstitution::class)->runFor($inst->id, fn () => app(SocialOutboundService::class)->send($conversation->fresh(), 'Ya te atiendo yo.', $agent));
+    Queue::assertPushedOn(AdvisorDispatcher::queue(), RespondWithAdvisor::class, function (RespondWithAdvisor $job) use ($inst) {
+        return $job->institutionId === $inst->id
+            && $job->delay instanceof DateTimeInterface
+            && abs(now()->diffInSeconds($job->delay) - 10) <= 1;
     });
-    sadvPost('instagram', sadvFixture('instagram', 'm_IG00000009'));
+    expect($fake->calls)->toHaveCount(0)->and(sadvBotMessages($inst))->toHaveCount(0);
+    Http::assertNotSent(fn (HttpRequest $r) => str_contains($r->url(), 'me/messages'));
+});
 
-    expect($fake->calls)->toHaveCount(1)->and(sadvBotMessages($inst))->toHaveCount(1);
+it('con el interruptor general apagado (por defecto) no se encola nada aunque el canal esté activado', function () {
+    [, , $fake] = sadvCtx();
+    config(['social.advisor.autoreply_enabled' => false]);
+    Queue::fake();
+
+    sadvPost('messenger', sadvFixture('messenger'));
+
+    Queue::assertNothingPushed();
+    expect($fake->calls)->toHaveCount(0)->and(AdvisorDispatcher::ready())->toBeFalse();
+});
+
+it('cola persistente: el worker programado procesa, deja su latido y la respuesta sale una sola vez', function () {
+    [$inst, , $fake] = sadvCtx();
+    sadvPersistentQueue();
+
+    sadvPost('whatsapp', sadvFixture('whatsapp'));
+    expect(sadvPending())->toBe(1)->and($fake->calls)->toHaveCount(0)->and(AdvisorDispatcher::workerRunning())->toBeFalse();
+
+    Artisan::call('social:advisor-worker');
+
+    expect(sadvPending())->toBe(0)
+        ->and($fake->calls)->toHaveCount(1)
+        ->and(sadvBotMessages($inst))->toHaveCount(1)
+        ->and(AdvisorDispatcher::workerRunning())->toBeTrue();
+
+    // Un reintento de Meta del mismo mensaje no encola ni responde otra vez.
+    sadvPost('whatsapp', sadvFixture('whatsapp'));
+    Artisan::call('social:advisor-worker');
+    expect(sadvPending())->toBe(0)->and($fake->calls)->toHaveCount(1)->and(sadvBotMessages($inst))->toHaveCount(1);
+});
+
+it('si la IA falla de forma pasajera se reintenta sin duplicar mensajes y responde una sola vez', function () {
+    [$inst, , $fake] = sadvCtx();
+    sadvPersistentQueue();
+    $fake->willThrow();
+
+    sadvPost('instagram', sadvFixture('instagram'));
+    Artisan::call('social:advisor-worker');
+
+    // Primer intento fallido: nada enviado, sin decisión registrada, el trabajo vuelve a la cola.
+    expect(sadvBotMessages($inst))->toHaveCount(0)
+        ->and(sadvPending())->toBe(1)
+        ->and(app(CurrentInstitution::class)->runFor($inst->id, fn () => AdvisorMessageReceipt::query()->count()))->toBe(0);
+
+    $fake->recovers();
+    $this->travel(31)->seconds();
+    Artisan::call('social:advisor-worker');
+
+    expect(sadvPending())->toBe(0)
+        ->and($fake->calls)->toHaveCount(2)
+        ->and(sadvBotMessages($inst)->pluck('body')->all())->toBe(['Sí, hay cupo en el próximo grupo.'])
+        ->and(sadvConversation($inst, 'instagram')->automation_state)->toBe('bot');
+    // La memoria del asesor guarda el mensaje del prospecto UNA vez (idempotencia por id del canal).
+    $memory = app(CurrentInstitution::class)->runFor($inst->id, fn () => Conversation::query()->sole());
+    expect(app(CurrentInstitution::class)->runFor($inst->id, fn () => $memory->messages()->where('sender_type', 'user')->count()))->toBe(1)
+        ->and(DB::table('failed_jobs')->count())->toBe(0);
+});
+
+it('agotados los reintentos no envía nada y deja la conversación «Esperando a una persona»', function () {
+    [$inst, , $fake] = sadvCtx();
+    sadvPersistentQueue();
+    $fake->willThrow();
+
+    sadvPost('messenger', sadvFixture('messenger'));
+    Artisan::call('social:advisor-worker');
+    $this->travel(31)->seconds();
+    Artisan::call('social:advisor-worker');
+    $this->travel(121)->seconds();
+    Artisan::call('social:advisor-worker');
+
+    expect($fake->calls)->toHaveCount(3)
+        ->and(sadvPending())->toBe(0)
+        ->and(sadvBotMessages($inst))->toHaveCount(0)
+        ->and(sadvConversation($inst, 'messenger')->automation_state)->toBe('waiting_human');
+    Http::assertNotSent(fn (HttpRequest $r) => str_contains($r->url(), 'me/messages'));
+});
+
+it('no contesta si, durante la espera, respondió una persona del equipo', function () {
+    [$inst, , $fake] = sadvCtx(['advisor_enabled' => true, 'advisor_reply_delay' => 10, 'advisor_pause_on_human' => false]);
+    sadvPersistentQueue();
+    $agent = User::factory()->create(['institution_id' => $inst->id, 'role' => 'admin']);
+
+    sadvPost('instagram', sadvFixture('instagram'));
+    $conversation = sadvConversation($inst, 'instagram');
+    app(CurrentInstitution::class)->runFor($inst->id, fn () => app(SocialOutboundService::class)->send($conversation->fresh(), 'Ya te atiendo yo.', $agent));
+
+    $this->travel(11)->seconds();
+    Artisan::call('social:advisor-worker');
+
+    expect($fake->calls)->toHaveCount(0)->and(sadvBotMessages($inst))->toHaveCount(0)->and(sadvPending())->toBe(0);
 });
 
 it('al alcanzar el límite de la conversación no responde y la pasa a una persona', function () {
@@ -331,8 +436,16 @@ it('la configuración del canal es amigable, apagada por defecto y solo admite a
     $page->set('advisorBotId', (string) $foreign->id)->call('saveAdvisor')->assertHasErrors('advisorBotId');
 
     $page->set('advisorBotId', (string) $bot->id)->set('advisorDelay', 5)->set('advisorAlways', false)
-        ->set('advisorDays', ['1', '2', '3'])->set('advisorFrom', '08:00')->set('advisorTo', '20:00')
-        ->call('saveAdvisor')->assertHasNoErrors();
+        ->set('advisorDays', ['1', '2', '3'])->set('advisorFrom', '08:00')->set('advisorTo', '20:00');
+
+    // Sin el procesamiento automático del servidor funcionando, no se puede activar.
+    $page->call('saveAdvisor')->assertHasErrors('advisorEnabled')->assertSee('todavía no está funcionando');
+    expect((bool) $channel->fresh()->advisor_enabled)->toBeFalse();
+
+    // Con la cola persistente y el latido reciente del worker, sí.
+    sadvPersistentQueue();
+    AdvisorDispatcher::touch();
+    $page->call('saveAdvisor')->assertHasNoErrors();
 
     expect($channel->fresh()->only(['advisor_enabled', 'advisor_bot_id', 'advisor_reply_delay', 'advisor_schedule']))->toEqual([
         'advisor_enabled' => true, 'advisor_bot_id' => $bot->id, 'advisor_reply_delay' => 5,

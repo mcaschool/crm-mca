@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Modules\Social\Services;
 
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Sleep;
 use InvalidArgumentException;
 use Modules\Ai\Services\AdvisorTurn;
 use Modules\Ai\Services\AdvisorTurnService;
@@ -27,9 +26,16 @@ use Throwable;
  * atiende una persona / está pausada / espera a una persona, el mensaje no es de texto, el canal no
  * puede enviar, el asesor está inactivo o es de otra institución, el mensaje ya se procesó, se
  * alcanzó el límite o la IA falló (nunca envía una respuesta incorrecta). Devuelve el motivo.
+ *
+ * Se ejecuta desde la cola persistente (RespondWithAdvisor), nunca dentro del webhook. Un fallo
+ * pasajero (IA o error inesperado) devuelve RETRY sin dejar rastro, y el job reintenta; en el
+ * último intento la conversación pasa a «Esperando a una persona» sin enviar nada.
  */
 final class SocialAdvisorResponder
 {
+    /** Fallo pasajero: el job debe volver a la cola. */
+    public const RETRY = 'retry';
+
     public function __construct(
         private readonly AdvisorTurnService $turns,
         private readonly SocialOutboundService $outbound,
@@ -43,8 +49,8 @@ final class SocialAdvisorResponder
         return $channel->advisor_enabled && $channel->advisor_bot_id !== null;
     }
 
-    /** @return string motivo: replied | handoff | off_hours | y los de omisión (disabled, human, …) */
-    public function respond(int $messageId): string
+    /** @return string motivo: replied | handoff | off_hours | retry | gave_up | y los de omisión (disabled, human, …) */
+    public function respond(int $messageId, bool $finalAttempt = true): string
     {
         $message = SocialMessage::query()->find($messageId);
         $conversation = $message !== null ? SocialConversation::query()->with('channel')->find($message->social_conversation_id) : null;
@@ -102,14 +108,10 @@ final class SocialAdvisorResponder
             return 'handoff';
         }
 
-        // Espera antes de responder (tras confirmar el webhook) y revalidación: si mientras tanto
-        // respondió una persona o tomó la conversación, el asesor no contesta.
-        if ($channel->advisor_reply_delay > 0) {
-            Sleep::for(min((int) $channel->advisor_reply_delay, 30))->seconds();
-            $conversation->refresh();
-            if (! $conversation->advisorMayReply() || $this->personRepliedAfter($conversation, $message)) {
-                return $skip('human');
-            }
+        // La espera del canal ya se aplicó como retraso del job: si mientras tanto respondió una
+        // persona del equipo, el asesor no contesta.
+        if ($this->personRepliedAfter($conversation, $message)) {
+            return $skip('human');
         }
 
         try {
@@ -121,6 +123,7 @@ final class SocialAdvisorResponder
                 text: (string) $message->body,
                 externalMessageId: (string) $message->external_message_id,
                 metadata: ['social_conversation_id' => $conversation->getKey(), 'social_message_id' => $message->getKey()],
+                retryOnAiFailure: true,
             ));
         } catch (InvalidArgumentException $e) {
             // Asesor inactivo, de otra institución o canal no admitido: no se responde.
@@ -128,21 +131,43 @@ final class SocialAdvisorResponder
 
             return 'not_allowed';
         } catch (Throwable $e) {
-            Log::warning('social.advisor: error inesperado', ['conversation_id' => $conversation->getKey(), 'error' => $e->getMessage()]);
+            // IA caída (AdvisorAiUnavailable) o error inesperado. El turno se deshizo (sin recibo ni respuesta): se reintenta o, al final, pasa a una persona.
+            Log::warning('social.advisor: fallo al responder', ['conversation_id' => $conversation->getKey(), 'final' => $finalAttempt, 'error' => $e->getMessage()]);
 
-            return 'error';
+            return $finalAttempt ? $this->giveUp($messageId) : self::RETRY;
         }
 
         return match ($result->status) {
             'duplicate' => 'duplicate',
             'human_active' => 'human',
-            // La IA falló o no hay proveedor: nunca se envía una respuesta incorrecta al canal.
-            'unavailable' => 'ai_unavailable',
+            // No hay proveedor de IA configurado: nunca se envía una respuesta incorrecta; a una persona.
+            'unavailable' => $this->toPerson($conversation, 'ai_unavailable'),
             // Límite de la conversación: no se responde y pasa a una persona.
             'limit_reached' => $this->toPerson($conversation, 'limit'),
             'handoff' => $this->sendThenWait($conversation, (string) $result->reply),
             default => $this->send($conversation, (string) $result->reply),
         };
+    }
+
+    /**
+     * Sin respuesta automática para este mensaje (agotados los intentos): se registra la decisión
+     * (nunca se reintenta después) y la conversación queda «Esperando a una persona». No envía nada.
+     */
+    public function giveUp(int $messageId): string
+    {
+        $message = SocialMessage::query()->find($messageId);
+        $conversation = $message !== null ? SocialConversation::query()->find($message->social_conversation_id) : null;
+        if ($message === null || $conversation === null) {
+            return 'missing';
+        }
+        if (! $this->turns->recordSkipped((int) $conversation->institution_id, (string) $conversation->provider, (string) $message->external_message_id)) {
+            return 'duplicate';
+        }
+        if ($conversation->advisorMayReply()) {
+            $this->automation->waitForPerson($conversation);
+        }
+
+        return 'gave_up';
     }
 
     private function send(SocialConversation $conversation, string $reply): string

@@ -11,6 +11,7 @@ use Livewire\Component;
 use Modules\Core\Support\SecretMasker;
 use Modules\Institutions\Models\Bot;
 use Modules\Social\Models\SocialChannel;
+use Modules\Social\Support\AdvisorDispatcher;
 
 /**
  * Administración de canales sociales (Configuraciones). CRUD de los canales de la institución
@@ -262,6 +263,13 @@ class Channels extends Component
             return;
         }
 
+        // Activar exige el despacho persistente funcionando (interruptor general + latido del worker).
+        if ($this->advisorEnabled && ! $channel->advisor_enabled && ! AdvisorDispatcher::ready()) {
+            $this->addError('advisorEnabled', (string) AdvisorDispatcher::pendingReason());
+
+            return;
+        }
+
         $channel->advisor_enabled = $this->advisorEnabled;
         $channel->advisor_bot_id = $botId;
         $channel->advisor_reply_delay = $this->advisorDelay;
@@ -317,6 +325,8 @@ class Channels extends Component
                 ? Bot::query()->where('type', '!=', 'human')->orderBy('assistant_name')->get(['id', 'assistant_name', 'status'])
                 : collect(),
             'advisorChannel' => $this->advisorChannelId !== null ? $channels->firstWhere('id', $this->advisorChannelId) : null,
+            'advisorPending' => AdvisorDispatcher::pendingReason(),
+            'advisorLastSeen' => AdvisorDispatcher::lastSeen(),
         ]);
     }
 }

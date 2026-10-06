@@ -12,6 +12,7 @@ use Modules\Institutions\Models\Bot;
 use Modules\Social\Models\MetaLeadForm;
 use Modules\Social\Models\MetaLeadReceipt;
 use Modules\Social\Models\SocialChannel;
+use Modules\Social\Services\MetaLeadAccessCheck;
 use Modules\Social\Services\MetaLeadFormService;
 
 /**
@@ -23,6 +24,14 @@ use Modules\Social\Services\MetaLeadFormService;
 class LeadForms extends Component
 {
     public ?string $notice = null;
+
+    /**
+     * Resultado de «Comprobar acceso» por Página: estado de cada causa (ok|fail|unknown) y
+     * formularios encontrados. Solo lectura en Meta; no depende de la aprobación.
+     *
+     * @var array<int, array{page: string, business: string, app: string, forms: int|null}>
+     */
+    public array $access = [];
 
     public function mount(): void
     {
@@ -36,6 +45,22 @@ class LeadForms extends Component
         $this->authorize('update', $page);
 
         $this->notice = $service->syncForms($page)['message'];
+    }
+
+    /** «Comprobar acceso»: con la conexión actual de la Página, sin activar nada. */
+    public function checkAccess(int $channelId, MetaLeadAccessCheck $check): void
+    {
+        $page = SocialChannel::query()->where('provider', 'messenger')->findOrFail($channelId);
+        $this->authorize('update', $page);
+
+        $result = $check->run($page);
+        $forms = collect($result['steps'])->firstWhere('step', 'forms');
+        $this->access[$channelId] = [
+            'page' => $result['verdict']['page']['status'],
+            'business' => $result['verdict']['business']['status'],
+            'app' => $result['verdict']['app']['status'],
+            'forms' => ($forms['ok'] ?? false) ? count((array) ($forms['response']['data'] ?? [])) : null,
+        ];
     }
 
     public function setProgram(int $formId, string $programId): void

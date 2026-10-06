@@ -49,6 +49,14 @@ class FakeAiChatClient implements AiChatClient
         return $this;
     }
 
+    /** El proveedor vuelve a responder (tras willThrow): fallo pasajero. */
+    public function recovers(): self
+    {
+        $this->throw = false;
+
+        return $this;
+    }
+
     public function chat(Integration $integration, string $model, array $messages, array $params = [], ?AiExecutionContext $context = null): AiChatResponse
     {
         $this->calls[] = compact('integration', 'model', 'messages', 'params', 'context');

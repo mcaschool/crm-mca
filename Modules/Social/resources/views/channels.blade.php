@@ -172,6 +172,14 @@
                             <button type="button" wire:click="$set('advisorEnabled', false)" class="{{ $advisorEnabled ? '' : 'active' }}">{{ __('Desactivado') }}</button>
                             <button type="button" wire:click="$set('advisorEnabled', true)" class="{{ $advisorEnabled ? 'active' : '' }}">{{ __('Activado') }}</button>
                         </div>
+                        @error('advisorEnabled') <span class="mca-err">{{ $message }}</span> @enderror
+                        <div class="mca-help" data-testid="advisor-dispatch">
+                            @if ($advisorPending)
+                                {{ $advisorPending }}
+                            @else
+                                {{ __('Procesamiento automático del servidor: funcionando (última comprobación :when).', ['when' => $advisorLastSeen?->diffForHumans()]) }}
+                            @endif
+                        </div>
                     </div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
                         <div class="field" style="margin-bottom:0">

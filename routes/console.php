@@ -20,3 +20,11 @@ Schedule::command('crm:purge-retention')
     ->monthlyOn(1, '03:30')
     ->withoutOverlapping()
     ->runInBackground();
+
+// Respuestas del asesor en Instagram/Messenger/WhatsApp (cola persistente «social-advisor»):
+// cada minuto procesa lo pendiente durante ~50 s y termina. Sin procesos permanentes. Deja un
+// latido; el panel no permite activar el asesor en un canal hasta ver ese latido.
+Schedule::command('social:advisor-worker')
+    ->everyMinute()
+    ->withoutOverlapping(5)
+    ->runInBackground();

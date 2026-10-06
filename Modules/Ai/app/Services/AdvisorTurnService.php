@@ -219,7 +219,7 @@ class AdvisorTurnService
             $this->conversations->switchMode($conversation, 'celia');
         }
 
-        $response = $this->celia->handle($conversation, $this->contact($conversation), $turn->text, $turn->locale, $turn->externalMessageId);
+        $response = $this->celia->handle($conversation, $this->contact($conversation), $turn->text, $turn->locale, $turn->externalMessageId, $turn->retryOnAiFailure);
 
         return $this->toResult($conversation, $response, $this->lastAdvisorMessage($conversation));
     }

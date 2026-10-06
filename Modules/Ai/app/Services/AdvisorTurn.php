@@ -15,6 +15,8 @@ namespace Modules\Ai\Services;
  * - externalMessageId: id del mensaje en el canal (mid, wamid…). Idempotencia: el mismo id no
  *   se procesa dos veces (los webhooks se reintentan).
  * - attachments/metadata: contexto del canal; se aceptan pero hoy el asesor solo usa el texto.
+ * - retryOnAiFailure: si la IA falla, lanzar AdvisorAiUnavailable (el canal reintenta) en vez de
+ *   contestar «no disponible». Lo usan los canales sociales con despacho persistente.
  */
 final readonly class AdvisorTurn
 {
@@ -34,5 +36,6 @@ final readonly class AdvisorTurn
         public bool $isTest = false,
         public array $attachments = [],
         public array $metadata = [],
+        public bool $retryOnAiFailure = false,
     ) {}
 }

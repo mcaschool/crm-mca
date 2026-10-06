@@ -26,6 +26,18 @@ class MessageService
         array $meta = [],
         ?string $externalId = null,
     ): Message {
+        // Idempotencia por id del canal: un reintento del mismo mensaje entrante no lo duplica.
+        if ($externalId !== null && $senderType === 'user') {
+            $existing = Message::query()
+                ->where('conversation_id', $conversation->getKey())
+                ->where('external_id', $externalId)
+                ->where('sender_type', 'user')
+                ->first();
+            if ($existing !== null) {
+                return $existing;
+            }
+        }
+
         $message = new Message;
         $message->conversation_id = $conversation->getKey();
         $message->sender_type = $senderType;

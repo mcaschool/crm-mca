@@ -6,6 +6,8 @@ namespace Modules\Social\Providers;
 
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
+use Modules\Social\Console\AdvisorWorkerCommand;
+use Modules\Social\Console\MetaLeadCheckCommand;
 use Modules\Social\Livewire\Channels;
 use Modules\Social\Livewire\Inbox;
 use Modules\Social\Livewire\MetaConnect;
@@ -29,6 +31,12 @@ class SocialServiceProvider extends ModuleServiceProvider
     /** @var array<int, class-string> */
     protected array $providers = [
         RouteServiceProvider::class,
+    ];
+
+    /** @var array<int, class-string> */
+    protected array $commands = [
+        AdvisorWorkerCommand::class,
+        MetaLeadCheckCommand::class,
     ];
 
     public function boot(): void

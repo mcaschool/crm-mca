@@ -14,6 +14,7 @@ use Modules\Social\Jobs\RespondWithAdvisor;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialMessage;
+use Modules\Social\Support\AdvisorDispatcher;
 use Throwable;
 
 /**
@@ -73,11 +74,13 @@ final class SocialIngestService
             ProcessWhatsAppInboundMedia::dispatchAfterResponse($channel->id, $result->messageId, $channel->institution_id);
         }
 
-        // Asesor inteligente (APAGADO por defecto en cada canal): solo un entrante NUEVO (nunca un
-        // reintento duplicado ni el historial) y solo si el canal lo tiene activado. Tras el 200.
+        // Asesor inteligente (APAGADO por defecto: interruptor general + cada canal): solo un
+        // entrante NUEVO (nunca un reintento duplicado ni el historial). Se ENCOLA (persistente) con
+        // la espera del canal como retraso; el webhook responde ya, sin esperar a la IA ni al envío.
         if ($result->status === 'created' && $result->messageId !== null && $m->direction === 'inbound'
-            && ! $m->fromHistory && SocialAdvisorResponder::channelIsAutomated($channel)) {
-            RespondWithAdvisor::dispatchAfterResponse($result->messageId, $channel->institution_id);
+            && ! $m->fromHistory && AdvisorDispatcher::autoreplyEnabled() && SocialAdvisorResponder::channelIsAutomated($channel)) {
+            RespondWithAdvisor::dispatch($result->messageId, $channel->institution_id)
+                ->delay(now()->addSeconds(max(0, (int) $channel->advisor_reply_delay)));
         }
 
         return $result;

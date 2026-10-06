@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Ai\Services;
 
 use Illuminate\Support\Str;
+use Modules\Ai\Exceptions\AdvisorAiUnavailable;
 use Modules\Catalog\Models\Program;
 use Modules\Crm\Enums\EventType;
 use Modules\Crm\Models\Contact;
@@ -75,7 +76,7 @@ class CeliaService
      *
      * @return array<string,mixed>
      */
-    public function handle(Conversation $conversation, ?Contact $contact, string $message, string $locale, ?string $externalMessageId = null): array
+    public function handle(Conversation $conversation, ?Contact $contact, string $message, string $locale, ?string $externalMessageId = null, bool $retryOnAiFailure = false): array
     {
         // Siempre se registra lo que dijo el usuario (con el id del canal de origen, si lo hay).
         $this->messages->record($conversation, 'user', $message, 'text', [], $externalMessageId);
@@ -92,13 +93,13 @@ class CeliaService
         // conocimiento autorizado y solo ofrece el menu/emparejador como ULTIMO
         // recurso. Ya no se enruta a botones por palabra clave (eludia preguntas
         // que el conocimiento si responde, p. ej. "cuanto dura" o "metodos de pago").
-        return $this->converse($conversation, $contact, $message, $locale);
+        return $this->converse($conversation, $contact, $message, $locale, $retryOnAiFailure);
     }
 
     /**
      * @return array<string,mixed>
      */
-    private function converse(Conversation $conversation, ?Contact $contact, string $message, string $locale): array
+    private function converse(Conversation $conversation, ?Contact $contact, string $message, string $locale, bool $retryOnAiFailure = false): array
     {
         $resolved = $this->resolver->resolve((int) $conversation->bot_id, 'conversation');
 
@@ -154,7 +155,11 @@ class CeliaService
                 array_merge($resolved['params'], ['structured' => true, 'max_tokens' => 500]),
                 $context,
             );
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            // Canal con despacho persistente: se reintenta más tarde en lugar de contestar «no disponible».
+            if ($retryOnAiFailure) {
+                throw new AdvisorAiUnavailable($e->getMessage(), 0, $e);
+            }
             $reply = $this->fallbackText('ai_unavailable', $conversation, $locale);
             $this->messages->record($conversation, 'celia', $reply, 'text');
             $this->recordUnresolved($conversation, $message);

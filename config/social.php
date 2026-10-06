@@ -148,6 +148,20 @@ return [
     'graph_version' => env('SOCIAL_GRAPH_VERSION', 'v26.0'),
 
     /*
+    | Asesor inteligente en Instagram, Messenger y WhatsApp. Despacho PERSISTENTE: el webhook
+    | confirma a Meta y encola la respuesta (tabla `jobs`); la procesa `social:advisor-worker`,
+    | que el scheduler lanza cada minuto (cron del hosting → schedule:run). Ver
+    | Modules\Social\Support\AdvisorDispatcher.
+    |   SOCIAL_ADVISOR_AUTOREPLY_ENABLED=false   # interruptor general: APAGADO hasta verificar
+    |                                            # en producción que el worker deja su latido
+    |   SOCIAL_ADVISOR_QUEUE=social-advisor
+    */
+    'advisor' => [
+        'autoreply_enabled' => (bool) env('SOCIAL_ADVISOR_AUTOREPLY_ENABLED', false),
+        'queue' => env('SOCIAL_ADVISOR_QUEUE', 'social-advisor'),
+    ],
+
+    /*
     | Atajo SOLO-LOCAL para verificación visual sin tokens reales de Meta: si está definido
     | (y APP_ENV=local), MetaMessageSender NO llama a la red y simula el resultado:
     |   SOCIAL_FAKE_SEND=ok | window | error
