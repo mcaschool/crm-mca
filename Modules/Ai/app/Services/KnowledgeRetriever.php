@@ -20,6 +20,17 @@ class KnowledgeRetriever
      */
     public function retrieve(int $botId, string $question, string $locale, ?int $limit = null): string
     {
+        return $this->retrieveWithSources($botId, $question, $locale, $limit)['text'];
+    }
+
+    /**
+     * Igual que retrieve(), y además los códigos de las fuentes cuyas secciones entraron en el
+     * bloque (trazabilidad interna de la respuesta; nunca se envían al usuario).
+     *
+     * @return array{text: string, sources: array<int, string>}
+     */
+    public function retrieveWithSources(int $botId, string $question, string $locale, ?int $limit = null): array
+    {
         $limit ??= (int) config('crm.celia.knowledge_sections', 3);
 
         // Centro de Conocimiento: fuentes ACTIVAS asignadas a este bot en el pivote con
@@ -35,20 +46,20 @@ class KnowledgeRetriever
             ->get();
 
         if ($sources->isEmpty()) {
-            return '';
+            return ['text' => '', 'sources' => []];
         }
 
-        /** @var array<int, array{title: string, body: string, priority: int}> $sections */
+        /** @var array<int, array{title: string, body: string, priority: int, code: string}> $sections */
         $sections = [];
         foreach ($sources as $source) {
             $content = (string) $source->translate('content', $locale);
             foreach ($this->splitSections($content) as $section) {
-                $sections[] = $section + ['priority' => (int) ($source->priority ?? 0)];
+                $sections[] = $section + ['priority' => (int) ($source->priority ?? 0), 'code' => (string) $source->code];
             }
         }
 
         if ($sections === []) {
-            return '';
+            return ['text' => '', 'sources' => []];
         }
 
         $tokens = $this->tokenize($question);
@@ -63,10 +74,13 @@ class KnowledgeRetriever
 
         $chosen = array_slice($sections, 0, max(1, $limit));
 
-        return trim(implode("\n\n", array_map(
-            fn (array $s) => trim($s['title']."\n".$s['body']),
-            $chosen,
-        )));
+        return [
+            'text' => trim(implode("\n\n", array_map(
+                fn (array $s) => trim($s['title']."\n".$s['body']),
+                $chosen,
+            ))),
+            'sources' => array_values(array_unique(array_filter(array_column($chosen, 'code')))),
+        ];
     }
 
     /**

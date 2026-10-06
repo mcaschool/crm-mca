@@ -54,6 +54,16 @@ Route::get('/widget-demo', function () {
     return view('widget-demo', ['botKey' => $bot->public_key]);
 });
 
+/*
+| «Probar asesor»: enlace PRIVADO por asesor (token aleatorio de 48 caracteres, buscado por su
+| hash, revocable desde la ficha). Fuera del panel para poder compartirlo con el equipo; la página
+| revalida el token en cada petición y fija la institución del asesor. Sin ids en la URL.
+*/
+Route::get('/asesores/prueba/{token}', \Modules\Ai\Livewire\Advisor\Preview::class)
+    ->where('token', '[A-Za-z0-9]{48}')
+    ->middleware('throttle:60,1')
+    ->name('advisors.preview');
+
 $panel = Route::middleware(['auth', 'institution.user', 'setlocale', 'can:access-panel', \App\Http\Middleware\EnsureTwoFactorEnabled::class]);
 
 if ($domain = config('crm.panel_domain')) {

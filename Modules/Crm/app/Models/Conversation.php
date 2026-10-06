@@ -21,8 +21,10 @@ use Modules\Crm\Database\Factories\ConversationFactory;
  * @property int|null $contact_id
  * @property int $bot_id
  * @property string $session_id
- * @property string $channel
- * @property string $mode
+ * @property string $channel web | preview | instagram | messenger | whatsapp
+ * @property bool $is_test conversación de PRUEBA interna (nunca cuenta como producción)
+ * @property string|null $external_id id de la conversación en el canal de origen
+ * @property string $mode guided | celia | human (traspasada a una persona: el bot no responde)
  * @property string $language
  * @property string $status
  * @property int|null $current_node_id
@@ -42,6 +44,8 @@ class Conversation extends Model
         'bot_id',
         'session_id',
         'channel',
+        'is_test',
+        'external_id',
         'mode',
         'language',
         'status',
@@ -53,6 +57,7 @@ class Conversation extends Model
     protected function casts(): array
     {
         return [
+            'is_test' => 'boolean',
             'started_at' => 'datetime',
             'last_activity_at' => 'datetime',
         ];

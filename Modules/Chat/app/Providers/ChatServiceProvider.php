@@ -37,6 +37,11 @@ class ChatServiceProvider extends ModuleServiceProvider
         RateLimiter::for('widget-message', fn (Request $request) => Limit::perMinute(
             (int) config('crm.widget.message_rate_per_min', 8)
         )->by((string) $request->ip()));
+
+        // Textos del lanzador (/config): una petición por vista de página, ligera y cacheable.
+        RateLimiter::for('widget-config', fn (Request $request) => Limit::perMinute(
+            (int) config('crm.widget.config_rate_per_min', 120)
+        )->by((string) $request->ip()));
     }
 
     /**

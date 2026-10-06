@@ -61,9 +61,9 @@ class Dashboard extends Component
             'enrolledMonth' => Lead::query()->where('status', 'enrolled')->where('updated_at', '>=', $startOfMonth)->count(),
             'leadsMonth' => Lead::query()->where('created_at', '>=', $startOfMonth)->count(),
             'leadsPrevMonth' => Lead::query()->whereBetween('created_at', [$startOfPrevMonth, $startOfMonth])->count(),
-            'conversationsToday' => Conversation::query()->whereDate('last_activity_at', Carbon::today())->count(),
-            'conversationsMonth' => Conversation::query()->where('started_at', '>=', $startOfMonth)->count(),
-            'conversationsPrevMonth' => Conversation::query()->whereBetween('started_at', [$startOfPrevMonth, $startOfMonth])->count(),
+            'conversationsToday' => Conversation::query()->where('is_test', false)->whereDate('last_activity_at', Carbon::today())->count(),
+            'conversationsMonth' => Conversation::query()->where('is_test', false)->where('started_at', '>=', $startOfMonth)->count(),
+            'conversationsPrevMonth' => Conversation::query()->where('is_test', false)->whereBetween('started_at', [$startOfPrevMonth, $startOfMonth])->count(),
             'corporate' => Event::query()->where('event_type', 'corporate_interest')->distinct()->count('contact_id'),
             'referredToMe' => Lead::query()->where('assigned_to_user_id', $user->getKey())->count(),
             'referredPending' => Lead::query()->where('assigned_to_user_id', $user->getKey())

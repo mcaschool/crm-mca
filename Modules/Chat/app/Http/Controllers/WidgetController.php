@@ -47,6 +47,27 @@ class WidgetController extends Controller
         private readonly ProgramAssignmentService $assignments,
     ) {}
 
+    /**
+     * «Presentación del widget» del asesor (mensaje de bienvenida y texto del botón, ES/EN), para
+     * pintar el lanzador ANTES de abrir el chat. No crea conversación ni evento. Caché corta: un
+     * cambio en la ficha llega a la web instalada en ~1 minuto, sin tocar el snippet.
+     */
+    public function config(Request $request): JsonResponse
+    {
+        $bot = $this->bot($request);
+
+        return response()->json([
+            'texts' => [
+                'es' => $bot->effectiveWidgetTexts('es'),
+                'en' => $bot->effectiveWidgetTexts('en'),
+            ],
+        ])
+            // Depende de la clave del asesor (cabecera), no de la URL: solo caché del navegador
+            // (nunca CDN/proxy compartido) y variando por esa cabecera.
+            ->header('Cache-Control', 'private, max-age=60')
+            ->header('Vary', 'X-Bot-Key');
+    }
+
     /** Inicia o recupera una conversacion (recuperacion de sesion por session_id). */
     public function session(Request $request): JsonResponse
     {

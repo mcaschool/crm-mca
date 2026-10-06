@@ -315,6 +315,20 @@
     if (!state.teaserDone && panel && !panel.classList.contains('open')) { teaser.removeAttribute('hidden'); }
   }, 4000);
 
+  // «Presentación del widget» del asesor (ficha → /config): sustituye el mensaje de bienvenida
+  // (teaser) y el texto del botón (launcher) por idioma. No crea sesión. Si falla o no hay
+  // textos propios, se quedan los de arriba (comportamiento de siempre). Siempre como TEXTO
+  // (textContent/esc), nunca HTML.
+  api('/config', 'GET').then(function (c) {
+    var texts = (c && c.texts) || {};
+    ['es', 'en'].forEach(function (lang) {
+      var own = texts[lang] || {};
+      if (typeof own.welcome === 'string' && own.welcome.trim()) { T[lang].teaser = own.welcome; }
+      if (typeof own.button === 'string' && own.button.trim()) { T[lang].launcher = own.button; }
+    });
+    refreshLauncherTexts();
+  }).catch(function () { /* sin red o sin endpoint: textos por defecto */ });
+
   // Refresca los textos del lanzador/teaser al cambiar de idioma (ES/EN).
   function refreshLauncherTexts() {
     var lm = launcher.querySelector('.l-main'); if (lm) { lm.textContent = t('launcher'); }

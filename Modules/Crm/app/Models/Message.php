@@ -23,6 +23,7 @@ use Modules\Crm\Database\Factories\MessageFactory;
  * @property string $sender_type
  * @property string $content
  * @property string $message_type
+ * @property string|null $external_id id del mensaje en el canal de origen (idempotencia)
  * @property array<string,mixed>|null $meta
  * @property \Illuminate\Support\Carbon|null $created_at
  */
@@ -42,6 +43,7 @@ class Message extends Model
         'sender_type',
         'content',
         'message_type',
+        'external_id',
         'meta',
     ];
 

@@ -131,6 +131,37 @@
                     </div>
                 </div>
             </div>
+
+            {{-- Presentación del widget: los dos textos visibles antes de abrir el chat --}}
+            <div class="card card-p fade" style="margin-top:16px">
+                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">
+                    <h3><x-ui.icon name="message-circle" class="ic" style="width:17px;height:17px" /> {{ __('Presentación del widget') }}</h3>
+                    <p class="mca-sub">{{ __('Lo que ve el visitante en la web antes de abrir el chat. Déjalo vacío para usar el texto actual del widget. Texto plano: se admiten emojis, no HTML.') }}</p>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+                    <div class="field" style="margin-bottom:0">
+                        <label for="adv-welcome-es">{{ __('Mensaje de bienvenida') }} <span class="mca-help" style="display:inline">· {{ __('Español') }}</span></label>
+                        <input id="adv-welcome-es" type="text" wire:model="welcomeEs" maxlength="200" placeholder="{{ $widgetDefaults['es']['welcome'] ?? '' }}">
+                        @error('welcomeEs') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label for="adv-button-es">{{ __('Texto del botón') }} <span class="mca-help" style="display:inline">· {{ __('Español') }}</span></label>
+                        <input id="adv-button-es" type="text" wire:model="buttonEs" maxlength="40" placeholder="{{ $widgetDefaults['es']['button'] ?? '' }}">
+                        @error('buttonEs') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label for="adv-welcome-en">{{ __('Mensaje de bienvenida') }} <span class="mca-help" style="display:inline">· English</span></label>
+                        <input id="adv-welcome-en" type="text" wire:model="welcomeEn" maxlength="200" placeholder="{{ $widgetDefaults['en']['welcome'] ?? '' }}">
+                        @error('welcomeEn') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label for="adv-button-en">{{ __('Texto del botón') }} <span class="mca-help" style="display:inline">· English</span></label>
+                        <input id="adv-button-en" type="text" wire:model="buttonEn" maxlength="40" placeholder="{{ $widgetDefaults['en']['button'] ?? '' }}">
+                        @error('buttonEn') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+                <div class="mca-help" style="margin-top:10px">{{ __('El widget ya instalado en la web los recibe al cargar la página (no hace falta cambiar el código incrustado). El indicador «En línea» no cambia.') }}</div>
+            </div>
         @endif
 
         {{-- Guardar --}}
@@ -141,6 +172,46 @@
             </button>
             <a href="{{ route('advisors.index') }}" class="btn btn-ghost">{{ __('Cancelar') }}</a>
         </div>
+
+        {{-- Probar asesor (solo IA en edición): enlace privado del modo de prueba --}}
+        @if ($editing && $type === 'ia')
+            <div class="card card-p fade" style="margin-top:22px">
+                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">
+                    <h3><x-ui.icon name="sparkles" class="ic" style="width:17px;height:17px" /> {{ __('Probar asesor') }}</h3>
+                    <p class="mca-sub">{{ __('Conversa con el asesor real (mismo modelo, instrucciones y conocimiento) antes de activarlo. Las conversaciones de prueba no crean contactos ni leads, no envían nada a redes y no cuentan en las métricas.') }}</p>
+                </div>
+
+                @if ($previewUrl)
+                    <div x-data="{ copied: false }" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                        <a href="{{ $previewUrl }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm"><span class="adv-bi"><x-ui.icon name="external-link" class="ic" style="width:15px;height:15px" /> {{ __('Abrir prueba en nueva pestaña') }}</span></a>
+                        <button type="button" class="btn btn-ghost btn-sm" x-on:click="navigator.clipboard.writeText(@js($previewUrl)).then(() => { copied = true; setTimeout(() => copied = false, 2000) })">
+                            <span class="adv-bi" x-show="! copied"><x-ui.icon name="file-text" class="ic" style="width:15px;height:15px" /> {{ __('Copiar enlace') }}</span>
+                            <span class="adv-bi" x-show="copied" x-cloak><x-ui.icon name="check" class="ic" style="width:15px;height:15px" /> {{ __('Copiado') }}</span>
+                        </button>
+                        <button type="button" wire:click="generatePreviewLink" wire:confirm="{{ __('El enlace actual dejará de funcionar. ¿Generar uno nuevo?') }}" class="btn btn-ghost btn-sm"><span class="adv-bi"><x-ui.icon name="refresh" class="ic" style="width:15px;height:15px" /> {{ __('Regenerar') }}</span></button>
+                        <button type="button" wire:click="revokePreviewLink" wire:confirm="{{ __('¿Revocar el enlace de prueba? Dejará de funcionar para todos.') }}" class="btn btn-ghost btn-sm"><span class="adv-bi"><x-ui.icon name="x" class="ic" style="width:15px;height:15px" /> {{ __('Revocar') }}</span></button>
+                    </div>
+                    <div class="mca-help" style="margin-top:8px">{{ __('Enlace privado: compártelo solo con el equipo. Quien lo tenga puede conversar con el asesor en modo de prueba.') }}</div>
+                @else
+                    <button type="button" wire:click="generatePreviewLink" class="btn btn-primary btn-sm"><span class="adv-bi"><x-ui.icon name="plus" class="ic" style="width:15px;height:15px" /> {{ __('Generar enlace de prueba') }}</span></button>
+                @endif
+
+                @if ($feedback && ($feedback['correct'] + $feedback['needs_improvement']) > 0)
+                    <div class="mca-section">
+                        <h3 style="font-size:14px">{{ __('Valoraciones del equipo') }}</h3>
+                        <p class="mca-sub">{{ __(':ok correctas · :bad necesitan mejora. Sirven para corregir fuentes o instrucciones; no cambian nada automáticamente.', ['ok' => $feedback['correct'], 'bad' => $feedback['needs_improvement']]) }}</p>
+                        @foreach ($feedback['recent'] as $f)
+                            <div style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:6px;font-size:13px">
+                                <div class="mca-help">{{ \Illuminate\Support\Str::limit((string) $f->message?->content, 160) }}</div>
+                                @if ($f->comment)
+                                    <div style="margin-top:4px"><strong>{{ __('Observación') }}:</strong> {{ $f->comment }}</div>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        @endif
 
         {{-- Base de conocimiento (solo IA en edicion) --}}
         @if ($editing && $type === 'ia')

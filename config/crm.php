@@ -90,7 +90,7 @@ return [
     // NUEVOS. Las webs ya instaladas conservan el ?v= que pegaron; a esas les llega la version
     // nueva por la cache corta con revalidacion del script (WidgetScriptController::MAX_AGE).
     // Subir este valor al cambiar el widget.
-    'widget_asset_version' => (string) env('CRM_WIDGET_ASSET_VERSION', '3'),
+    'widget_asset_version' => (string) env('CRM_WIDGET_ASSET_VERSION', '4'),
 
     /*
     |--------------------------------------------------------------------------
@@ -150,12 +150,23 @@ return [
     'widget' => [
         'rate_per_min' => (int) env('CRM_WIDGET_RATE_PER_MIN', 30),
         'message_rate_per_min' => (int) env('CRM_WIDGET_MESSAGE_RATE_PER_MIN', 8),
+        'config_rate_per_min' => (int) env('CRM_WIDGET_CONFIG_RATE_PER_MIN', 120),
 
         // Ventana de reanudacion de sesion (minutos). Al volver dentro de la ventana
         // (recargar/minimizar) se reanuda la MISMA conversacion; al volver despues,
         // el regreso se trata como una conversacion NUEVA (el contador de
         // CONVERSACIONES crece y, si el contacto ya existia, se marca el re-contacto).
         'session_resume_minutes' => (int) env('CRM_WIDGET_SESSION_RESUME_MINUTES', 30),
+
+        // «Presentación del widget» por defecto (los mismos textos que trae chat-widget.js). Cada
+        // asesor puede sustituirlos en su ficha (bots.widget_welcome_* / widget_button_*).
+        'default_texts' => [
+            'es' => ['welcome' => 'Hola 👋 Soy Celia. ¿Te ayudo a elegir tu microcredencial?', 'button' => '¡Conversemos!'],
+            'en' => ['welcome' => "Hi 👋 I'm Celia. Shall I help you choose your microcredential?", 'button' => "Let's talk!"],
+        ],
+
+        // Modo de prueba de asesores (/asesores/prueba/{token}): mensajes por minuto por enlace.
+        'preview_rate_per_min' => (int) env('CRM_ADVISOR_PREVIEW_RATE_PER_MIN', 20),
     ],
 
     // Endpoint público InCompany (n8n → CRM): rate limit por IP (anti-inundación).

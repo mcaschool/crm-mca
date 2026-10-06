@@ -24,12 +24,14 @@ class MessageService
         string $content,
         string $messageType = 'text',
         array $meta = [],
+        ?string $externalId = null,
     ): Message {
         $message = new Message;
         $message->conversation_id = $conversation->getKey();
         $message->sender_type = $senderType;
         $message->content = $content;
         $message->message_type = $messageType;
+        $message->external_id = $externalId; // id del mensaje en el canal de origen (idempotencia)
         $message->meta = $meta === [] ? null : $meta;
         $message->save();
 

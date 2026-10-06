@@ -16,7 +16,7 @@ class ConversationService
 {
     /**
      * @param  array<string,mixed>  $attrs  bot_id (requerido), session_id, mode,
-     *                                      language, channel, contact_id
+     *                                      language, channel, contact_id, is_test, external_id
      */
     public function start(array $attrs): Conversation
     {
@@ -25,6 +25,8 @@ class ConversationService
         $conversation->contact_id = $attrs['contact_id'] ?? null;
         $conversation->session_id = (string) ($attrs['session_id'] ?? Str::uuid());
         $conversation->channel = (string) ($attrs['channel'] ?? 'web');
+        $conversation->is_test = (bool) ($attrs['is_test'] ?? false);
+        $conversation->external_id = isset($attrs['external_id']) ? (string) $attrs['external_id'] : null;
         $conversation->mode = (string) ($attrs['mode'] ?? 'guided');
         $conversation->language = (string) ($attrs['language'] ?? 'es');
         $conversation->status = 'open';

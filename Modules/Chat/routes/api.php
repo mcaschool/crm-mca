@@ -12,6 +12,14 @@ use Modules\Chat\Http\Controllers\WidgetController;
 | mas estricto porque es la accion mas costosa.
 */
 
+// Presentación del widget (se pide en CADA vista de página, antes de abrir el chat): límite propio
+// para no consumir el presupuesto de las acciones del chat de visitantes que comparten IP.
+Route::prefix('v1/widget')
+    ->middleware(['institution.bot', 'setlocale', 'throttle:widget-config'])
+    ->group(function () {
+        Route::get('config', [WidgetController::class, 'config'])->name('widget.config');
+    });
+
 Route::prefix('v1/widget')
     ->middleware(['institution.bot', 'setlocale', 'throttle:widget'])
     ->group(function () {

@@ -54,11 +54,13 @@ class CeliaService
     public function greet(Conversation $conversation, ?Contact $contact, string $locale): array
     {
         $this->conversations->switchMode($conversation, 'celia');
-        $this->events->record(EventType::StartedCelia, [
-            'contact_id' => $conversation->contact_id,
-            'conversation_id' => $conversation->getKey(),
-            'bot_id' => $conversation->bot_id,
-        ]);
+        if (! $this->isTest($conversation)) {
+            $this->events->record(EventType::StartedCelia, [
+                'contact_id' => $conversation->contact_id,
+                'conversation_id' => $conversation->getKey(),
+                'bot_id' => $conversation->bot_id,
+            ]);
+        }
 
         $reply = $this->buildGreeting($conversation, $contact, $locale);
         $this->messages->record($conversation, 'celia', $reply, 'text');
@@ -72,10 +74,10 @@ class CeliaService
      *
      * @return array<string,mixed>
      */
-    public function handle(Conversation $conversation, ?Contact $contact, string $message, string $locale): array
+    public function handle(Conversation $conversation, ?Contact $contact, string $message, string $locale, ?string $externalMessageId = null): array
     {
-        // Siempre se registra lo que dijo el usuario.
-        $this->messages->record($conversation, 'user', $message, 'text');
+        // Siempre se registra lo que dijo el usuario (con el id del canal de origen, si lo hay).
+        $this->messages->record($conversation, 'user', $message, 'text', [], $externalMessageId);
 
         // Control de costos: al alcanzar el limite se deja de llamar a la IA.
         if ($this->aiMessageCount($conversation) >= $this->limit()) {
@@ -109,7 +111,8 @@ class CeliaService
         }
 
         $corporate = $this->router->isCorporate($message);
-        if ($corporate) {
+        // En una conversación de PRUEBA el prompt es el mismo, pero no se deja rastro comercial.
+        if ($corporate && ! $this->isTest($conversation)) {
             $this->events->record('corporate_interest', [
                 'contact_id' => $conversation->contact_id,
                 'conversation_id' => $conversation->getKey(),
@@ -121,7 +124,8 @@ class CeliaService
             $this->leadConversion->convert($contact, (int) $conversation->bot_id, 'corporate_interest');
         }
 
-        $prompt = $this->systemPrompt($locale, $this->knowledge->retrieve((int) $conversation->bot_id, $message, $locale), $corporate);
+        $knowledge = $this->knowledge->retrieveWithSources((int) $conversation->bot_id, $message, $locale);
+        $prompt = $this->systemPrompt($locale, $knowledge['text'], $corporate);
         $chat = array_merge(
             [['role' => 'system', 'content' => $prompt]],
             $this->history($conversation, $locale),
@@ -131,7 +135,8 @@ class CeliaService
         $integration = $resolved['integration'];
         $context = new AiExecutionContext(
             institutionId: (int) $conversation->institution_id,
-            process: 'conversation',
+            // Mismo proceso/modelo; el uso de una conversación de prueba queda etiquetado aparte.
+            process: $this->isTest($conversation) ? 'conversation_test' : 'conversation',
             integrationId: (int) $integration->getKey(),
             provider: (string) ($integration->provider ?? ''),
             model: (string) $resolved['model'],
@@ -158,8 +163,9 @@ class CeliaService
         [$reply, $action] = $this->parse($result->content);
         $reply = $this->truncate($reply, $locale);
 
-        // Se registra el mensaje de IA con su meta (base del AI Deflection Rate).
-        $this->messages->record($conversation, 'celia', $reply, 'ai', $result->meta());
+        // Se registra el mensaje de IA con su meta (base del AI Deflection Rate) y las fuentes de
+        // conocimiento usadas (trazabilidad interna; no viajan al usuario).
+        $this->messages->record($conversation, 'celia', $reply, 'ai', array_merge($result->meta(), ['knowledge_sources' => $knowledge['sources']]));
 
         if ($action === 'unresolved') {
             $this->recordUnresolved($conversation, $message);
@@ -308,8 +314,18 @@ class CeliaService
 
     // --- Registro / helpers ------------------------------------------------
 
+    /** Conversación de PRUEBA interna: sin eventos, leads ni intereses (no es producción). */
+    private function isTest(Conversation $conversation): bool
+    {
+        return (bool) $conversation->is_test;
+    }
+
     private function recordUnresolved(Conversation $conversation, string $question): void
     {
+        if ($this->isTest($conversation)) {
+            return;
+        }
+
         $this->events->record(EventType::UnresolvedQuestion, [
             'contact_id' => $conversation->contact_id,
             'conversation_id' => $conversation->getKey(),
@@ -320,7 +336,7 @@ class CeliaService
 
     private function detectProgramInterest(Conversation $conversation, ?Contact $contact, string $reply): void
     {
-        if ($contact === null || $reply === '') {
+        if ($contact === null || $reply === '' || $this->isTest($conversation)) {
             return;
         }
 

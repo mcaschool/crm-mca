@@ -36,7 +36,8 @@ class AdvisorDeletionService
             return 'Está activo (en uso por el widget). Desactívalo primero para poder eliminarlo.';
         }
 
-        $conversations = Conversation::query()->where('bot_id', $bot->getKey())->count();
+        // Las conversaciones del modo de prueba no son histórico de negocio: no bloquean.
+        $conversations = Conversation::query()->where('bot_id', $bot->getKey())->where('is_test', false)->count();
         $leads = Lead::query()->where('bot_id', $bot->getKey())->count();
         $interests = ProgramInterest::query()->where('bot_id', $bot->getKey())->count();
 
@@ -68,6 +69,10 @@ class AdvisorDeletionService
             // Archivos (la BD borra las FILAS en cascada; los archivos hay que borrarlos).
             Storage::disk('knowledge')->deleteDirectory($bot->advisorFolder());
             Storage::disk('public')->deleteDirectory('advisors/'.$bot->advisorFolder());
+
+            // Conversaciones de PRUEBA del asesor (sus mensajes y valoraciones caen en cascada):
+            // no son negocio y la FK conversations.bot_id impediría el borrado.
+            Conversation::query()->where('bot_id', $bot->getKey())->where('is_test', true)->delete();
 
             // Cascada BD: knowledge_sources, conversation_nodes/options, ai_process_configs.
             // events -> bot_id nulo (se conservan). conversations/leads no existen (bloqueado).

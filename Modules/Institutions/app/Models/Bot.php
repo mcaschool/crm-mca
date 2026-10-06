@@ -31,6 +31,13 @@ use Modules\Institutions\Database\Factories\BotFactory;
  * @property string|null $landing_url
  * @property string $public_key
  * @property string $default_language
+ * @property string|null $widget_welcome_es
+ * @property string|null $widget_welcome_en
+ * @property string|null $widget_button_es
+ * @property string|null $widget_button_en
+ * @property string|null $preview_token_hash
+ * @property string|null $preview_token
+ * @property \Illuminate\Support\Carbon|null $preview_token_created_at
  * @property string $status
  */
 class Bot extends Model
@@ -51,13 +58,62 @@ class Bot extends Model
         'public_key',
         'allowed_origins',
         'default_language',
+        'widget_welcome_es',
+        'widget_welcome_en',
+        'widget_button_es',
+        'widget_button_en',
         'status',
     ];
+
+    /** El enlace de prueba nunca viaja en serializaciones (solo se muestra en la ficha). */
+    protected $hidden = ['preview_token', 'preview_token_hash'];
 
     protected function casts(): array
     {
         return [
             'allowed_origins' => 'array',
+            'preview_token' => 'encrypted',
+            'preview_token_created_at' => 'datetime',
+        ];
+    }
+
+    /**
+     * «Presentación del widget» configurada para este asesor: solo los textos guardados (los
+     * vacíos no aparecen; el widget conserva entonces su texto por defecto).
+     *
+     * @return array<string, array{welcome?: string, button?: string}> idioma => textos
+     */
+    public function widgetTexts(): array
+    {
+        $texts = [];
+        foreach (['es', 'en'] as $lang) {
+            $set = array_filter([
+                'welcome' => $this->{'widget_welcome_'.$lang},
+                'button' => $this->{'widget_button_'.$lang},
+            ], fn ($v): bool => is_string($v) && trim($v) !== '');
+            if ($set !== []) {
+                $texts[$lang] = $set;
+            }
+        }
+
+        return $texts;
+    }
+
+    /**
+     * Textos EFECTIVOS del widget en un idioma: los del asesor o, si no tiene, los por defecto
+     * (config crm.widget.default_texts, idénticos a los de chat-widget.js).
+     *
+     * @return array{welcome: string, button: string}
+     */
+    public function effectiveWidgetTexts(string $lang): array
+    {
+        $lang = in_array($lang, ['es', 'en'], true) ? $lang : 'es';
+        $defaults = (array) config('crm.widget.default_texts.'.$lang, []);
+        $own = $this->widgetTexts()[$lang] ?? [];
+
+        return [
+            'welcome' => (string) ($own['welcome'] ?? $defaults['welcome'] ?? ''),
+            'button' => (string) ($own['button'] ?? $defaults['button'] ?? ''),
         ];
     }
 

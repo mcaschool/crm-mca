@@ -11,8 +11,10 @@ use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
+use Modules\Ai\Models\AdvisorFeedback;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Services\AdvisorDeletionService;
+use Modules\Ai\Services\AdvisorPreviewLinkService;
 use Modules\Ai\Services\KnowledgeAssignmentService;
 use Modules\Ai\Services\KnowledgeIngestService;
 use Modules\Ai\Services\KnowledgeSyncService;
@@ -45,6 +47,15 @@ class Form extends Component
 
     public string $model = '';
 
+    /** «Presentación del widget» (ES/EN). Vacío = el texto por defecto del widget. */
+    public string $welcomeEs = '';
+
+    public string $welcomeEn = '';
+
+    public string $buttonEs = '';
+
+    public string $buttonEn = '';
+
     public mixed $avatar = null;
 
     /** @var array<int, mixed> */
@@ -65,6 +76,10 @@ class Form extends Component
             $this->type = $bot->type ?: 'ia';
             $this->language = $bot->default_language ?: 'es';
             $this->status = $bot->status ?: 'active';
+            $this->welcomeEs = (string) $bot->widget_welcome_es;
+            $this->welcomeEn = (string) $bot->widget_welcome_en;
+            $this->buttonEs = (string) $bot->widget_button_es;
+            $this->buttonEn = (string) $bot->widget_button_en;
 
             $cfg = AiProcessConfig::query()->where('bot_id', $this->botId)->where('process', 'conversation')->first();
             $this->integrationId = $cfg?->integration_id;
@@ -84,6 +99,20 @@ class Form extends Component
             'status' => ['required', 'in:active,inactive'],
             'integrationId' => ['nullable', 'integer'],
             'model' => ['nullable', 'string', 'max:100'],
+            // Presentación del widget: texto plano (Unicode y emojis sí; HTML/scripts no).
+            'welcomeEs' => ['nullable', 'string', 'max:200', 'not_regex:/<[^>]*>/'],
+            'welcomeEn' => ['nullable', 'string', 'max:200', 'not_regex:/<[^>]*>/'],
+            'buttonEs' => ['nullable', 'string', 'max:40', 'not_regex:/<[^>]*>/'],
+            'buttonEn' => ['nullable', 'string', 'max:40', 'not_regex:/<[^>]*>/'],
+        ], [
+            'welcomeEs.not_regex' => __('El texto no admite HTML ni etiquetas.'),
+            'welcomeEn.not_regex' => __('El texto no admite HTML ni etiquetas.'),
+            'buttonEs.not_regex' => __('El texto no admite HTML ni etiquetas.'),
+            'buttonEn.not_regex' => __('El texto no admite HTML ni etiquetas.'),
+            'welcomeEs.max' => __('Máximo :max caracteres.'),
+            'welcomeEn.max' => __('Máximo :max caracteres.'),
+            'buttonEs.max' => __('Máximo :max caracteres.'),
+            'buttonEn.max' => __('Máximo :max caracteres.'),
         ]);
 
         $creating = $this->botId === null;
@@ -98,6 +127,11 @@ class Form extends Component
         $bot->type = $this->type;
         $bot->default_language = $this->language;
         $bot->status = $this->status;
+        // Por asesor (y por tanto por institución); vacío = el texto por defecto del widget.
+        $bot->widget_welcome_es = $this->plainText($this->welcomeEs);
+        $bot->widget_welcome_en = $this->plainText($this->welcomeEn);
+        $bot->widget_button_es = $this->plainText($this->buttonEs);
+        $bot->widget_button_en = $this->plainText($this->buttonEn);
         $bot->save();
 
         $this->botId = $bot->getKey();
@@ -118,6 +152,32 @@ class Form extends Component
         }
 
         return null;
+    }
+
+    /** «Probar asesor»: crea el enlace privado (o lo sustituye: el anterior deja de funcionar). */
+    public function generatePreviewLink(AdvisorPreviewLinkService $links): void
+    {
+        abort_unless((bool) auth()->user()?->canManageIntegrations(), 403);
+        $bot = $this->bot();
+        if ($bot === null) {
+            return;
+        }
+
+        $hadLink = $bot->preview_token_hash !== null;
+        $links->generate($bot);
+        session()->flash('status', $hadLink ? __('Enlace de prueba regenerado: el anterior ya no funciona.') : __('Enlace de prueba creado.'));
+    }
+
+    public function revokePreviewLink(AdvisorPreviewLinkService $links): void
+    {
+        abort_unless((bool) auth()->user()?->canManageIntegrations(), 403);
+        $bot = $this->bot();
+        if ($bot === null) {
+            return;
+        }
+
+        $links->revoke($bot);
+        session()->flash('status', __('Enlace de prueba revocado.'));
     }
 
     public function saveAvatar(): void
@@ -298,7 +358,37 @@ class Form extends Component
             // de WordPress/temas (que NO admiten etiquetas <script>).
             'embedSnippet' => $bot !== null ? $this->embedSnippet($bot) : null,
             'embedSnippetJs' => $bot !== null ? $this->embedSnippetJs($bot) : null,
+            'widgetDefaults' => ['es' => (array) config('crm.widget.default_texts.es'), 'en' => (array) config('crm.widget.default_texts.en')],
+            'previewUrl' => $bot !== null ? app(AdvisorPreviewLinkService::class)->url($bot) : null,
+            'feedback' => $bot !== null ? $this->feedbackSummary($bot) : null,
         ]);
+    }
+
+    /**
+     * Resumen de las valoraciones del modo de prueba (evidencia para el equipo; no cambia nada).
+     *
+     * @return array{correct: int, needs_improvement: int, recent: \Illuminate\Support\Collection<int, AdvisorFeedback>}
+     */
+    private function feedbackSummary(Bot $bot): array
+    {
+        $counts = AdvisorFeedback::query()->where('bot_id', $bot->getKey())
+            ->selectRaw('rating, count(*) as c')->groupBy('rating')->pluck('c', 'rating');
+
+        return [
+            'correct' => (int) ($counts[AdvisorFeedback::CORRECT] ?? 0),
+            'needs_improvement' => (int) ($counts[AdvisorFeedback::NEEDS_IMPROVEMENT] ?? 0),
+            'recent' => AdvisorFeedback::query()->with('message:id,content')
+                ->where('bot_id', $bot->getKey())->where('rating', AdvisorFeedback::NEEDS_IMPROVEMENT)
+                ->orderByDesc('updated_at')->limit(5)->get(),
+        ];
+    }
+
+    /** Texto plano recortado; vacío → null (se usa el texto por defecto del widget). */
+    private function plainText(string $value): ?string
+    {
+        $value = trim((string) preg_replace('/\s+/u', ' ', $value));
+
+        return $value === '' ? null : $value;
     }
 
     private function bot(): ?Bot
