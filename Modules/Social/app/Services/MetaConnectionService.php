@@ -431,10 +431,11 @@ final class MetaConnectionService
         return new MetaDiscoveryResult([
             new MetaDiscoveredPage(
                 pageId: 'FAKE_PAGE_1',
-                name: 'MCA Business & Postgraduate School',
+                name: 'Página de demostración',
                 pageAccessToken: 'FAKE_PAGE_TOKEN',
                 instagramId: 'FAKE_IG_1',
-                instagramUsername: 'mcaschoolofbusiness',
+                instagramUsername: 'pagina.demo',
+                tasks: ['MANAGE', 'ADVERTISE'],
             ),
         ]);
     }

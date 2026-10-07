@@ -134,10 +134,17 @@ final class MetaLeadFormService
         return $created;
     }
 
+    /** «Buscar contactos ahora» desde el panel (misma lógica que el sondeo programado). */
+    public function fetchNow(MetaLeadPage $page): int
+    {
+        return ! $this->killSwitch() && $page->receiving() ? $this->pollPage($page) : 0;
+    }
+
     private function pollPage(MetaLeadPage $page): int
     {
         $created = 0;
-        $forms = MetaLeadForm::query()->where('meta_lead_page_id', $page->getKey())->where('is_active', true)->whereNotNull('program_id')->get();
+        $forms = MetaLeadForm::query()->where('meta_lead_page_id', $page->getKey())->where('is_active', true)->whereNotNull('destination')->get()
+            ->filter(fn (MetaLeadForm $f): bool => $f->hasDestination());
         foreach ($forms as $form) {
             $since = max(
                 (int) ($form->receiving_since?->getTimestamp() ?? now()->getTimestamp()),
@@ -271,11 +278,18 @@ final class MetaLeadFormService
             if ($form === null || ! $form->is_active) {
                 return $this->finish($receipt, 'skipped', __('El formulario no está activado en el CRM.'));
             }
-            $program = $form->program_id !== null ? Program::query()->find($form->program_id) : null;
-            $productType = $program !== null ? (self::PRODUCT_TYPES[(string) $program->line] ?? null) : null;
-            if ($program === null || $productType === null) {
-                return $this->finish($receipt, 'failed', __('Asigna al formulario un programa con tipo de producto reconocido.'));
+            if (! $form->hasDestination()) {
+                return $this->finish($receipt, 'failed', __('Asigna un destino al formulario (un programa o «contacto general»).'));
             }
+            // Destino: un programa de la empresa (su tipo sale de la línea del catálogo; si la línea
+            // no es una conocida, la propia línea) o «contacto general» sin programa.
+            $program = $form->destination === 'program' ? Program::query()->find($form->program_id) : null;
+            if ($form->destination === 'program' && $program === null) {
+                return $this->finish($receipt, 'failed', __('El programa de destino ya no existe: asigna otro destino al formulario.'));
+            }
+            $productType = $program !== null
+                ? (self::PRODUCT_TYPES[(string) $program->line] ?? ((string) $program->line !== '' ? (string) $program->line : 'programa'))
+                : 'general';
 
             $lead = $this->fetchLead($page, $leadgenId);
             if ($lead === null) {
@@ -283,6 +297,7 @@ final class MetaLeadFormService
             }
 
             $fields = $this->fieldMap((array) ($lead['field_data'] ?? []));
+            $fullName = $this->pick($fields, ['full_name'], ['nombre_completo', 'nombre completo', 'nombre y apellido']);
             $attribution = array_filter([
                 'platform' => ($lead['platform'] ?? null) === 'ig' ? 'instagram' : 'facebook',
                 'campaign' => $lead['campaign_name'] ?? null,
@@ -293,13 +308,15 @@ final class MetaLeadFormService
             ], fn ($v): bool => $v !== null && $v !== '');
 
             $data = array_filter([
-                'email' => $fields['email'] ?? null,
-                'phone' => $fields['phone_number'] ?? $fields['phone'] ?? null,
-                'first_name' => $fields['first_name'] ?? $this->firstName($fields['full_name'] ?? null),
-                'last_name' => $fields['last_name'] ?? $this->lastName($fields['full_name'] ?? null),
+                // Campos estándar de Meta o personalizados («Teléfono», «WhatsApp», «Correo»…).
+                'email' => $this->pick($fields, ['email', 'work_email'], ['email', 'correo']),
+                'phone' => $this->pick($fields, ['phone_number', 'phone', 'work_phone_number'], ['phone', 'telefono', 'teléfono', 'celular', 'movil', 'móvil', 'whatsapp']),
+                // Formularios sin nombre (solo teléfono o correo): el contacto entra igual, «Sin nombre».
+                'first_name' => ($fields['first_name'] ?? '') !== '' ? $fields['first_name'] : ($this->firstName($fullName) ?? __('Sin nombre')),
+                'last_name' => ($fields['last_name'] ?? '') !== '' ? $fields['last_name'] : $this->lastName($fullName),
                 'country' => $fields['country'] ?? null,
                 'product_type' => $productType,
-                'program' => (string) $program->code,
+                'program' => $program !== null ? (string) $program->code : null,
                 'source' => 'meta_lead_ads',
                 'channel' => $attribution['platform'],
                 'form' => $form->name,
@@ -329,7 +346,7 @@ final class MetaLeadFormService
             $this->events->record('meta_lead_received', [
                 'contact_id' => $crmLead->contact_id,
                 'bot_id' => $crmLead->bot_id,
-                'data' => $attribution + ['program_id' => $program->getKey()],
+                'data' => $attribution + ['program_id' => $program?->getKey(), 'destination' => $form->destination],
             ]);
 
             $receipt->forceFill(['status' => 'processed', 'lead_id' => $crmLead->getKey(), 'attribution' => $attribution, 'error' => null])->save();
@@ -374,6 +391,31 @@ final class MetaLeadFormService
         }
 
         return $map;
+    }
+
+    /**
+     * Primer valor no vacío: por nombre exacto o, si no, por un campo cuyo nombre contenga la pista.
+     *
+     * @param  array<string, string>  $fields
+     * @param  list<string>  $exact
+     * @param  list<string>  $contains
+     */
+    private function pick(array $fields, array $exact, array $contains): ?string
+    {
+        foreach ($exact as $name) {
+            if (($fields[$name] ?? '') !== '') {
+                return $fields[$name];
+            }
+        }
+        foreach ($fields as $name => $value) {
+            foreach ($contains as $hint) {
+                if ($value !== '' && str_contains($name, $hint)) {
+                    return $value;
+                }
+            }
+        }
+
+        return null;
     }
 
     /** @param  array<int, mixed>  $responses */

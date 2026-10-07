@@ -31,6 +31,7 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * @property bool $receiving_enabled
  * @property \Illuminate\Support\Carbon|null $last_polled_at
  * @property string|null $last_error
+ * @property \Illuminate\Support\Carbon|null $released_at la Página pasó a otra empresa
  */
 class MetaLeadPage extends Model
 {
@@ -38,7 +39,7 @@ class MetaLeadPage extends Model
 
     protected $fillable = [
         'institution_id', 'meta_connection_id', 'page_id', 'name', 'page_token', 'tasks', 'available', 'selected',
-        'access_status', 'access_result', 'access_checked_at', 'receiving_enabled', 'last_polled_at', 'last_error',
+        'access_status', 'access_result', 'access_checked_at', 'receiving_enabled', 'last_polled_at', 'last_error', 'released_at',
     ];
 
     protected $hidden = ['page_token'];
@@ -54,6 +55,7 @@ class MetaLeadPage extends Model
             'access_checked_at' => 'datetime',
             'receiving_enabled' => 'boolean',
             'last_polled_at' => 'datetime',
+            'released_at' => 'datetime',
         ];
     }
 
@@ -67,6 +69,12 @@ class MetaLeadPage extends Model
     public function forms(): HasMany
     {
         return $this->hasMany(MetaLeadForm::class);
+    }
+
+    /** ¿La persona que conectó Meta tiene control total de la Página? (para transferirla) */
+    public function fullControl(): bool
+    {
+        return in_array('MANAGE', (array) $this->tasks, true);
     }
 
     public function verified(): bool

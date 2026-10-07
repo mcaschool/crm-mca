@@ -142,6 +142,14 @@ return [
         | usan (usan Http::fake).
         */
         'fake_discovery' => env('SOCIAL_META_FAKE_DISCOVERY'),
+
+        /*
+        | Atajo SOLO-LOCAL (APP_ENV=local) para recorrer el asistente de Formularios publicitarios sin
+        | Meta real (junto con SOCIAL_META_FAKE_DISCOVERY=ok): simula Graph para la Página de demostración.
+        |   SOCIAL_META_FAKE_GRAPH=demo
+        | En producción se deja SIN definir. Los tests no lo usan (usan Http::fake).
+        */
+        'fake_graph' => env('SOCIAL_META_FAKE_GRAPH'),
     ],
 
     /*

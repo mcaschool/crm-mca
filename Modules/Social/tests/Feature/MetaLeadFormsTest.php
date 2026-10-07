@@ -40,7 +40,7 @@ function mlfCtx(bool $receiving = true): array
     $bot = Bot::factory()->create(['assistant_name' => 'Sofía']);
     $program = Program::factory()->create(['code' => 'DA-001', 'line' => 'diplomas_avanzados', 'status' => 'active']);
     $form = MetaLeadForm::query()->create([
-        'meta_lead_page_id' => $page->id, 'form_id' => 'form_9', 'name' => 'Diplomas · Septiembre', 'program_id' => $program->id,
+        'meta_lead_page_id' => $page->id, 'form_id' => 'form_9', 'name' => 'Diplomas · Septiembre', 'program_id' => $program->id, 'destination' => 'program',
         'bot_id' => $bot->id, 'is_active' => true, 'receiving_since' => now()->subHour(),
     ]);
 
@@ -80,7 +80,7 @@ it('apagado por defecto: una Página sin activar no registra nada y la pantalla 
 
     $html = Livewire::actingAs($admin)->test(LeadForms::class)
         ->assertSee('Formularios publicitarios')->assertSee('Conectar Meta')->assertSee('Activar la recepción')
-        ->assertSee('Recepción apagada')->assertSee('Diplomas · Septiembre')->html();
+        ->assertSee('Recepción en pausa')->assertSee('Diplomas · Septiembre')->html();
     foreach (['webhook', 'endpoint', 'token', 'payload', 'n8n', 'leadgen', '.env'] as $word) {
         expect(mb_strtolower(strip_tags($html)))->not->toContain($word);
     }
@@ -155,10 +155,10 @@ it('errores comprensibles: formulario no activado, sin programa, sin datos de co
     $form->update(['is_active' => false]);
     expect($service->processLeadgen($value('l_a')))->toBe('skipped');
 
-    $form->update(['is_active' => true, 'program_id' => null]);
+    $form->update(['is_active' => true, 'program_id' => null, 'destination' => null]);
     expect($service->processLeadgen($value('l_b')))->toBe('failed');
 
-    $form->update(['program_id' => Program::query()->value('id')]);
+    $form->update(['program_id' => Program::query()->value('id'), 'destination' => 'program']);
     Http::fake(['graph.facebook.com/*/l_c*' => Http::response(mlfMetaLead(['field_data' => [['name' => 'full_name', 'values' => ['Sin Datos']]]])), 'graph.facebook.com/*/l_d*' => Http::response(['error' => ['message' => 'x']], 403)]);
     expect($service->processLeadgen($value('l_c')))->toBe('failed')
         ->and($service->processLeadgen($value('l_d')))->toBe('failed')
@@ -166,7 +166,7 @@ it('errores comprensibles: formulario no activado, sin programa, sin datos de co
 
     expect(MetaLeadReceipt::query()->orderBy('id')->pluck('error', 'leadgen_id')->all())->toBe([
         'l_a' => 'El formulario no está activado en el CRM.',
-        'l_b' => 'Asigna al formulario un programa con tipo de producto reconocido.',
+        'l_b' => 'Asigna un destino al formulario (un programa o «contacto general»).',
         'l_c' => 'El contacto no trae correo ni teléfono.',
         'l_d' => 'No se pudieron leer los datos del contacto en Meta (acceso denegado o conexión caducada).',
     ])->and(Lead::query()->count())->toBe(0);

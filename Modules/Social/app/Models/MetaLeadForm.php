@@ -19,6 +19,7 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * @property string $name
  * @property int|null $program_id
  * @property int|null $bot_id
+ * @property string|null $destination program | general (null = sin asignar)
  * @property bool $is_active
  * @property \Illuminate\Support\Carbon|null $receiving_since contactos creados desde aquí (al activarlo)
  * @property \Illuminate\Support\Carbon|null $last_synced_at
@@ -28,12 +29,18 @@ class MetaLeadForm extends Model
     use BelongsToInstitution;
 
     protected $fillable = [
-        'institution_id', 'social_channel_id', 'meta_lead_page_id', 'form_id', 'name', 'program_id', 'bot_id', 'is_active', 'receiving_since', 'last_synced_at',
+        'institution_id', 'social_channel_id', 'meta_lead_page_id', 'form_id', 'name', 'program_id', 'bot_id', 'destination', 'is_active', 'receiving_since', 'last_synced_at',
     ];
 
     protected function casts(): array
     {
         return ['is_active' => 'boolean', 'receiving_since' => 'datetime', 'last_synced_at' => 'datetime'];
+    }
+
+    /** ¿Tiene destino? Un programa elegido, o «contacto general». */
+    public function hasDestination(): bool
+    {
+        return $this->destination === 'general' || ($this->destination === 'program' && $this->program_id !== null);
     }
 
     /** @return BelongsTo<MetaLeadPage, $this> */

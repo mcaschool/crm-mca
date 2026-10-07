@@ -16,6 +16,7 @@ use Modules\Social\Livewire\MetaConnect;
 use Modules\Social\Livewire\Publisher;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Policies\SocialChannelPolicy;
+use Modules\Social\Support\MetaDemoGraph;
 use Nwidart\Modules\Support\ModuleServiceProvider;
 
 /**
@@ -48,6 +49,11 @@ class SocialServiceProvider extends ModuleServiceProvider
         parent::boot();
 
         Gate::policy(SocialChannel::class, SocialChannelPolicy::class);
+
+        // Atajo SOLO-LOCAL para recorrer Formularios publicitarios sin Meta real.
+        if ($this->app->environment('local') && config('social.meta.fake_graph') === 'demo') {
+            MetaDemoGraph::register();
+        }
 
         Livewire::component('social.inbox', Inbox::class);
         Livewire::component('social.publisher', Publisher::class);

@@ -183,13 +183,13 @@ it('«Comprobar acceso» en el panel usa lenguaje llano, dice quién lo resuelve
     ]);
 
     $c = Livewire::actingAs($admin)->test(LeadForms::class)
-        ->assertSee('Conectar Meta')->assertSee('Elegir Páginas y formularios')->assertSee('Asignar programa')
+        ->assertSee('Conectar Meta')->assertSee('Elegir Página y formularios')->assertSee('Asignar destino')
         ->call('checkAccess', $page->id)
         ->assertSee('Acceso con problemas')
         ->assertSee('Lo resuelve la plataforma del CRM')
-        ->assertSee('1 formulario en la Página.');
+        ->assertSee('(1 formulario)');
 
-    $block = Illuminate\Support\Str::between($c->html(), 'data-testid="page-issues-'.$page->id.'"', '<h4');
+    $block = Illuminate\Support\Str::between($c->html(), 'data-testid="page-issues-'.$page->id.'"', 'data-testid="step-receiving"');
     foreach (['token', 'webhook', 'endpoint', 'payload', 'n8n', 'leads_retrieval', 'http'] as $word) {
         expect(strtolower($block))->not->toContain($word);
     }

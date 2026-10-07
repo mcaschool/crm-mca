@@ -15,8 +15,8 @@ use Illuminate\Support\Facades\Schema;
  * meta_lead_pages: Páginas que esa conexión puede usar para formularios (token de Página cifrado),
  *   si la empresa la usa, el último resultado de «Comprobar acceso» y si recibe contactos.
  *   Totalmente separadas de social_channels: la conexión de Messenger nunca se toca.
- * meta_lead_forms: pasan a colgar de meta_lead_pages (social_channel_id queda opcional, heredado)
- *   y guardan desde cuándo reciben contactos.
+ * meta_lead_forms: pasan a colgar de meta_lead_pages (social_channel_id queda opcional, heredado),
+ *   guardan desde cuándo reciben contactos y su destino (un programa o «contacto general»).
  */
 return new class extends Migration
 {
@@ -57,6 +57,7 @@ return new class extends Migration
             $table->boolean('receiving_enabled')->default(false);    // APAGADO hasta validar acceso y lectura
             $table->timestamp('last_polled_at')->nullable();
             $table->string('last_error', 255)->nullable();
+            $table->timestamp('released_at')->nullable();                // la Página pasó a otra empresa
             $table->timestamps();
 
             $table->unique(['institution_id', 'page_id']);
@@ -67,6 +68,7 @@ return new class extends Migration
             $table->unsignedBigInteger('social_channel_id')->nullable()->change();
             $table->foreignId('meta_lead_page_id')->nullable()->after('social_channel_id')->constrained('meta_lead_pages')->cascadeOnDelete();
             $table->timestamp('receiving_since')->nullable()->after('is_active');
+            $table->string('destination', 20)->nullable()->after('bot_id'); // program | general (null = sin asignar)
         });
     }
 
@@ -78,7 +80,7 @@ return new class extends Migration
     {
         Schema::table('meta_lead_forms', function (Blueprint $table) {
             $table->dropConstrainedForeignId('meta_lead_page_id');
-            $table->dropColumn('receiving_since');
+            $table->dropColumn(['receiving_since', 'destination']);
         });
         Schema::dropIfExists('meta_lead_pages');
         Schema::dropIfExists('meta_connections');

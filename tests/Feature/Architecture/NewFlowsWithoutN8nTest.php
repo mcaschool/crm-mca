@@ -36,6 +36,8 @@ function newFlowFiles(): array
         'Modules/Social/app/Console/MetaConnectionsCheckCommand.php',
         'Modules/Social/app/Models/MetaConnection.php',
         'Modules/Social/app/Models/MetaLeadPage.php',
+        'Modules/Social/app/Livewire/Concerns/ConnectsMeta.php',
+        'Modules/Social/app/Support/MetaDemoGraph.php',
     ]);
 }
 

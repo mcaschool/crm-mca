@@ -5,15 +5,11 @@ declare(strict_types=1);
 namespace Modules\Social\Livewire;
 
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
-use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Social\Livewire\Concerns\ConnectsMeta;
 use Modules\Social\Models\MetaConnection;
 use Modules\Social\Models\SocialChannel;
-use Modules\Social\Services\MetaConnectionService;
-use RuntimeException;
-use Throwable;
 
 /**
  * «Conectar Meta» — onboarding visual (Facebook Login for Business) que descubre las
@@ -29,6 +25,8 @@ use Throwable;
 #[Layout('layouts.app')]
 class MetaConnect extends Component
 {
+    use ConnectsMeta;
+
     /** idle → select → done. */
     public string $step = 'idle';
 
@@ -48,76 +46,16 @@ class MetaConnect extends Component
         $this->authorize('viewAny', SocialChannel::class);
     }
 
-    /** La plataforma Meta está lista (config de plataforma presente). */
-    public function platformReady(): bool
-    {
-        return app(MetaConnectionService::class)->isPlatformConfigured();
-    }
-
     /**
-     * Datos públicos para el SDK de Facebook (App ID + Configuration ID + versión).
-     *
-     * @return array{app_id: string, config_id: string, version: string}
-     */
-    public function browserConfig(): array
-    {
-        return app(MetaConnectionService::class)->browserConfig();
-    }
-
-    /**
-     * Emite el state anti-CSRF (lo pide el JS AL PULSAR el botón; nunca se genera en el
-     * navegador). Un solo uso, ligado a este usuario y su institución. null si el usuario
-     * no puede administrar canales o la plataforma no está lista.
-     */
-    public function connectState(): ?string
-    {
-        $service = app(MetaConnectionService::class);
-        $user = auth()->user();
-        if (! $service->isPlatformConfigured() || $user === null || ! $user->can('create', SocialChannel::class)) {
-            return null;
-        }
-
-        $institutionId = app(CurrentInstitution::class)->id();
-        if ($institutionId === null) {
-            return null;
-        }
-
-        return $service->issueState((int) $user->id, $institutionId);
-    }
-
-    /**
-     * Recibe el state + lo que devolvió Facebook Login for Business, valida el state (un solo
-     * uso, misma institución) y descubre los activos. Soporta los dos tipos de configuración:
-     * un authorization code (System User → intercambio server-side) o un access token (User
-     * Access Token → uso directo). El token/código nunca se guarda en propiedades públicas.
+     * Recibe el state + lo que devolvió Facebook Login for Business (code de System User o token de
+     * usuario), valida y GUARDA la conexión de la empresa, y muestra lo detectado.
      */
     public function discover(string $state, string $code = '', string $accessToken = ''): void
     {
-        $this->authorize('create', SocialChannel::class);
         $this->errorMessage = '';
-
-        $service = app(MetaConnectionService::class);
-        $user = auth()->user();
-        $context = app(CurrentInstitution::class);
-
-        $institutionId = $user !== null ? $service->consumeState((int) $user->id, $state) : null;
-        if ($institutionId === null || $institutionId !== $context->id()) {
-            $this->errorMessage = __('La conexión expiró o no es válida. Vuelve a iniciar el proceso.');
-
-            return;
-        }
-
-        // Valida la autorización y la GUARDA como la conexión de la empresa (Formularios
-        // publicitarios). Si algo falla no se guarda nada y la conexión anterior sigue intacta.
-        try {
-            [, $result] = $service->connect($institutionId, (int) $user->id, $code, $accessToken);
-        } catch (RuntimeException $e) {
-            $this->errorMessage = $e->getMessage();
-
-            return;
-        } catch (Throwable $e) {
-            Log::warning('social.meta.connect: no se pudo guardar la conexión', ['error' => $e->getMessage()]);
-            $this->errorMessage = __('No se pudo guardar la conexión con Meta. Tu conexión anterior sigue activa; inténtalo de nuevo.');
+        $result = $this->completeMetaConnection($state, $code, $accessToken);
+        if (is_string($result)) {
+            $this->errorMessage = $result;
 
             return;
         }

@@ -143,14 +143,14 @@ it('una segunda empresa completa el alta desde el panel: conectar, elegir, asign
     $panel = Livewire::actingAs($admin)->test(LeadForms::class)
         ->assertSee('Conectada')->assertSee('Escuela B')
         ->call('selectPage', $page->id, true)->assertSee('Usada para formularios')
-        ->call('checkAccess', $page->id)->assertSee('Acceso verificado')->assertSee('El CRM puede leer sus contactos.');
+        ->call('checkAccess', $page->id)->assertSee('Acceso verificado')->assertSee('Leer los contactos de un formulario');
 
     $form = MetaLeadForm::query()->sole(); // traído en la misma comprobación
     expect($form->only(['form_id', 'meta_lead_page_id', 'is_active']))->toBe(['form_id' => 'FORM_B1', 'meta_lead_page_id' => $page->id, 'is_active' => false]);
 
-    $panel->call('setProgram', $form->id, (string) $program->id)
+    $panel->call('chooseForm', $form->id, true)
+        ->call('setDestination', $form->id, (string) $program->id)
         ->call('setAdvisor', $form->id, (string) $bot->id)
-        ->call('toggle', $form->id)
         ->call('setReceiving', $page->id, true)->assertSee('Recibiendo contactos');
 
     // Ningún token llega al navegador.
@@ -180,7 +180,7 @@ it('reconectar sustituye la autorización solo si la nueva funciona y nunca toca
     mloConnect($admin, $inst);
     $page = MetaLeadPage::query()->sole();
     app(MetaLeadPageService::class)->select($page, true);
-    MetaLeadForm::query()->create(['meta_lead_page_id' => $page->id, 'form_id' => 'FORM_B1', 'name' => 'Diplomas', 'program_id' => $program->id, 'is_active' => true]);
+    MetaLeadForm::query()->create(['meta_lead_page_id' => $page->id, 'form_id' => 'FORM_B1', 'name' => 'Diplomas', 'program_id' => $program->id, 'destination' => 'program', 'is_active' => true]);
 
     // 1) Meta rechaza el código: nada cambia.
     mloMeta(['exchange' => [['error' => ['message' => 'Invalid verification code format.', 'code' => 100]], 400]]);
@@ -281,19 +281,19 @@ it('aislamiento entre empresas: Páginas, formularios, programas y contactos no 
 
     // Una Página solo envía contactos a UNA empresa.
     Livewire::actingAs($adminB)->test(LeadForms::class)->call('selectPage', $pageB->id, true)
-        ->assertSee('Esta Página ya la usa otra empresa');
+        ->assertSee('Esta Página la usa otra empresa en el CRM');
     expect($pageB->fresh()->selected)->toBeFalse();
 
     // B no ve ni toca lo de A.
     $panelB = Livewire::actingAs($adminB)->test(LeadForms::class)->assertDontSee('Formulario de A');
     expect(fn () => $panelB->call('selectPage', $pageA->id, true))->toThrow(ModelNotFoundException::class)
-        ->and(fn () => Livewire::actingAs($adminB)->test(LeadForms::class)->call('setProgram', $formA->id, (string) $programB->id))->toThrow(ModelNotFoundException::class);
+        ->and(fn () => Livewire::actingAs($adminB)->test(LeadForms::class)->call('setDestination', $formA->id, (string) $programB->id))->toThrow(ModelNotFoundException::class);
 
     // A no puede asignar un programa de B.
     app(CurrentInstitution::class)->set($instA->id);
-    Livewire::actingAs($adminA)->test(LeadForms::class)->call('setProgram', $formA->id, (string) $programB->id);
+    Livewire::actingAs($adminA)->test(LeadForms::class)->call('setDestination', $formA->id, (string) $programB->id);
     expect($formA->fresh()->program_id)->toBeNull();
-    Livewire::actingAs($adminA)->test(LeadForms::class)->call('setProgram', $formA->id, (string) $programA->id);
+    Livewire::actingAs($adminA)->test(LeadForms::class)->call('setDestination', $formA->id, (string) $programA->id);
     expect($formA->fresh()->program_id)->toBe($programA->id);
 
     // Cada empresa ve solo sus conexiones y Páginas.
@@ -309,12 +309,12 @@ it('una conexión caducada pide reconectar y deja de recibir; la revisión diari
     mloConnect($admin, $inst);
     $page = MetaLeadPage::query()->sole();
     $page->forceFill(['selected' => true, 'access_status' => 'verified', 'receiving_enabled' => true])->save();
-    MetaLeadForm::query()->create(['meta_lead_page_id' => $page->id, 'form_id' => 'FORM_B1', 'name' => 'Diplomas', 'program_id' => $program->id, 'is_active' => true, 'receiving_since' => now()]);
+    MetaLeadForm::query()->create(['meta_lead_page_id' => $page->id, 'form_id' => 'FORM_B1', 'name' => 'Diplomas', 'program_id' => $program->id, 'destination' => 'program', 'is_active' => true, 'receiving_since' => now()]);
 
     MetaConnection::query()->sole()->forceFill(['expires_at' => now()->subDay()])->save();
     expect(MetaLeadPage::query()->with('metaConnection')->sole()->receiving())->toBeFalse();
     Livewire::actingAs($admin)->test(LeadForms::class)
-        ->assertSee('Caducada')->assertSee('Reconectar Meta')->assertSee('Recepción apagada');
+        ->assertSee('Caducada')->assertSee('Reconectar Meta')->assertSee('En pausa por un problema de acceso');
 
     Http::fake();
     Artisan::call('social:meta-leads-poll');
@@ -334,7 +334,7 @@ it('desconectar borra las credenciales y para la recepción, pero conserva la co
     mloConnect($admin, $inst);
     $page = MetaLeadPage::query()->sole();
     $page->forceFill(['selected' => true, 'access_status' => 'verified', 'receiving_enabled' => true])->save();
-    MetaLeadForm::query()->create(['meta_lead_page_id' => $page->id, 'form_id' => 'FORM_B1', 'name' => 'Diplomas', 'program_id' => $program->id, 'is_active' => true]);
+    MetaLeadForm::query()->create(['meta_lead_page_id' => $page->id, 'form_id' => 'FORM_B1', 'name' => 'Diplomas', 'program_id' => $program->id, 'destination' => 'program', 'is_active' => true]);
 
     Livewire::actingAs($admin)->test(LeadForms::class)->call('disconnect')
         ->assertSee('Sin conexión')->assertSee('Conectar Meta');
