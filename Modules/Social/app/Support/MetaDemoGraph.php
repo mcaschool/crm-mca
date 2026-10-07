@@ -26,6 +26,10 @@ final class MetaDemoGraph
                 ['id' => 'DEMO_FORM_1', 'name' => 'Solicitud de información · Otoño', 'status' => 'ACTIVE'],
                 ['id' => 'DEMO_FORM_2', 'name' => 'Inscripción al webinar gratuito', 'status' => 'ACTIVE'],
             ]]),
+            'graph.facebook.com/*/test_leads*' => Http::response(['id' => 'DEMO_TEST_1']),
+            'graph.facebook.com/*/DEMO_TEST_1*' => Http::response(['platform' => 'fb', 'field_data' => [
+                ['name' => 'full_name', 'values' => ['Test Lead Dummy']], ['name' => 'email', 'values' => ['test@fb.com']],
+            ]]),
             'graph.facebook.com/*/DEMO_FORM_1/leads*' => Http::response(['data' => [['id' => 'DEMO_LEAD_1'], ['id' => 'DEMO_LEAD_2']]]),
             'graph.facebook.com/*/DEMO_FORM_2/leads*' => Http::response(['data' => []]),
             'graph.facebook.com/*/DEMO_LEAD_1*' => Http::response(['platform' => 'ig', 'campaign_name' => 'Otoño · Instagram', 'field_data' => [

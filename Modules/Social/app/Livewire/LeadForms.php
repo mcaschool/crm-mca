@@ -42,6 +42,12 @@ class LeadForms extends Component
 
     public ?string $error = null;
 
+    /** Página cuya transferencia se está confirmando (null = ninguna). */
+    public ?int $transferPageId = null;
+
+    /** Nombre de la Página escrito para confirmar la transferencia. */
+    public string $transferConfirmation = '';
+
     public function mount(): void
     {
         $this->authorize('viewAny', SocialChannel::class);
@@ -86,10 +92,33 @@ class LeadForms extends Component
         $this->attempt(fn () => $pages->select($page, $on), $on ? __('Página elegida para formularios.') : __('La Página ya no se usa para formularios.'));
     }
 
-    public function transfer(int $pageId, MetaLeadPageService $pages): void
+    /** Abre la confirmación de transferencia (se confirma escribiendo el nombre de la Página). */
+    public function askTransfer(int $pageId): void
     {
-        $page = $this->page($pageId);
-        $this->attempt(fn () => $pages->transfer($page), __('La Página ya envía sus contactos a tu empresa. Comprueba el acceso para activar la recepción.'));
+        $this->transferPageId = $this->page($pageId)->getKey();
+        $this->transferConfirmation = '';
+    }
+
+    public function cancelTransfer(): void
+    {
+        $this->transferPageId = null;
+        $this->transferConfirmation = '';
+    }
+
+    /** Transferencia confirmada: el servicio comprueba el nombre y, EN VIVO con Meta, el control total. */
+    public function confirmTransfer(MetaLeadPageService $pages): void
+    {
+        if ($this->transferPageId === null) {
+            return;
+        }
+        $page = $this->page($this->transferPageId);
+        try {
+            $pages->transfer($page, $this->transferConfirmation);
+            $this->cancelTransfer();
+            $this->say(__('La Página ya envía sus contactos a tu empresa. Comprueba el acceso para activar la recepción.'));
+        } catch (DomainException $e) {
+            $this->fail($e->getMessage()); // la confirmación sigue abierta para corregir o cancelar
+        }
     }
 
     public function sync(int $pageId, MetaLeadFormService $service): void
@@ -140,11 +169,19 @@ class LeadForms extends Component
         $this->attempt(fn () => $pages->verify($page), __('Comprobación terminada.'));
     }
 
-    /** Crea un contacto de PRUEBA de Meta en un formulario de la Página, lo lee y lo borra. */
-    public function testLead(int $pageId, MetaLeadPageService $pages): void
+    /**
+     * PRUEBA COMPLETA DE RECEPCIÓN: contacto de prueba de Meta → mismo camino que uno real hasta el
+     * CRM (deshecho, sin dejar datos) → borrado en Meta. Distinta de la lectura autorizada.
+     */
+    public function receptionTest(int $pageId, MetaLeadPageService $pages): void
     {
         $page = $this->page($pageId);
-        $this->attempt(fn () => $pages->verify($page, true), __('Prueba con contacto de prueba terminada.'));
+        try {
+            $result = $pages->receptionTest($page);
+            $result['status'] === 'passed' ? $this->say($result['detail']) : $this->fail($result['detail']);
+        } catch (DomainException $e) {
+            $this->fail($e->getMessage());
+        }
     }
 
     // ───────────────────────────── 5. Activar recepción (y operación diaria)

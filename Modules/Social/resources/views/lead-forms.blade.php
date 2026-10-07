@@ -152,14 +152,31 @@
                                 <button type="button" class="btn btn-ghost btn-sm" wire:click="sync({{ $page->id }})">{{ __('Actualizar formularios') }}</button>
                                 <button type="button" class="btn btn-soft btn-sm" wire:click="selectPage({{ $page->id }}, false)" wire:confirm="{{ __('¿Dejar de usar esta Página? Dejará de recibir contactos.') }}">{{ __('Dejar de usar') }}</button>
                             @elseif (in_array($page->id, $takenElsewhere, true))
-                                @if ($page->fullControl())
-                                    <button type="button" class="btn btn-primary btn-sm" wire:click="transfer({{ $page->id }})" wire:confirm="{{ __('La Página dejará de enviar contactos a la otra empresa (conserva los que ya recibió) y empezará a enviarlos a la tuya tras comprobar el acceso. ¿Transferir?') }}">{{ __('Transferir a mi empresa') }}</button>
+                                @if ($page->fullControl() && $transferPageId !== $page->id)
+                                    <button type="button" class="btn btn-primary btn-sm" wire:click="askTransfer({{ $page->id }})">{{ __('Transferir a mi empresa') }}</button>
                                 @endif
                             @elseif ($page->available)
                                 <button type="button" class="btn btn-primary btn-sm" wire:click="selectPage({{ $page->id }}, true)">{{ __('Usar para formularios') }}</button>
                             @endif
                         </div>
                     </div>
+                    @if ($transferPageId === $page->id)
+                        <div class="lf-issue platform" data-testid="transfer-confirm">
+                            <strong>{{ __('Confirmar la transferencia') }}</strong>
+                            <ul style="margin:4px 0 8px;padding-left:18px">
+                                <li>{{ __('El CRM comprobará ahora con Meta que quien conectó Meta en tu empresa tiene control total de la Página.') }}</li>
+                                <li>{{ __('La otra empresa dejará de recibir sus contactos de inmediato; conserva los que ya recibió y verá el aviso.') }}</li>
+                                <li>{{ __('En tu empresa la recepción quedará apagada hasta que compruebes el acceso.') }}</li>
+                                <li>{{ __('Quedará registrado en la auditoría de las dos empresas.') }}</li>
+                            </ul>
+                            <label style="display:block;font-size:13px;margin-bottom:4px">{{ __('Escribe el nombre de la Página para confirmar:') }} <strong>{{ $page->name }}</strong></label>
+                            <div class="lf-actions">
+                                <input type="text" wire:model="transferConfirmation" aria-label="{{ __('Nombre de la Página') }}" style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;font-family:inherit">
+                                <button type="button" class="btn btn-primary btn-sm" wire:click="confirmTransfer">{{ __('Transferir') }}</button>
+                                <button type="button" class="btn btn-soft btn-sm" wire:click="cancelTransfer">{{ __('Cancelar') }}</button>
+                            </div>
+                        </div>
+                    @endif
                     @if (! $page->selected && in_array($page->id, $takenElsewhere, true) && ! $page->fullControl())
                         <p class="mca-help" style="margin:6px 0 0">{{ __('Para transferirla, quien tenga control total de la Página en Meta debe conectar Meta desde tu empresa, o la otra empresa debe dejar de usarla.') }}</p>
                     @endif
@@ -230,7 +247,7 @@
                         </div>
                         <div class="lf-actions">
                             <button type="button" class="btn btn-primary btn-sm" wire:click="checkAccess({{ $page->id }})" wire:loading.attr="disabled">{{ __('Comprobar acceso') }}</button>
-                            <button type="button" class="btn btn-soft btn-sm" wire:click="testLead({{ $page->id }})" wire:confirm="{{ __('Se creará un contacto de prueba de Meta en un formulario de la Página, se leerá y se borrará al terminar. ¿Continuar?') }}">{{ __('Probar con un contacto de prueba') }}</button>
+                            <button type="button" class="btn btn-soft btn-sm" wire:click="receptionTest({{ $page->id }})" wire:confirm="{{ __('Se creará un contacto de prueba de Meta en un formulario elegido, se pasará por el mismo camino que un contacto real hasta el CRM sin guardarlo, y se borrará en Meta al terminar. ¿Continuar?') }}">{{ __('Prueba completa de recepción') }}</button>
                         </div>
                     </div>
                     @if ($page->access_checked_at)
@@ -238,12 +255,24 @@
                             <li class="{{ $checks['page'] ?? '' }}"><b>{{ $mark($checks['page'] ?? null) }}</b>{{ __('La conexión llega a la Página') }}</li>
                             <li class="{{ $checks['list_forms'] ?? '' }}"><b>{{ $mark($checks['list_forms'] ?? null) }}</b>{{ __('Listar los formularios de la Página') }}
                                 @if (($result['forms'] ?? null) !== null) <span class="mca-help">({{ trans_choice(':n formulario|:n formularios', $result['forms'], ['n' => $result['forms']]) }})</span> @endif</li>
-                            <li class="{{ $checks['read_contacts'] ?? '' }}"><b>{{ $mark($checks['read_contacts'] ?? null) }}</b>{{ __('Leer los contactos de un formulario') }}
+                            <li class="{{ $checks['read_contacts'] ?? '' }}"><b>{{ $mark($checks['read_contacts'] ?? null) }}</b>{{ __('Lectura de contactos autorizada por Meta') }}
                                 @if (($checks['read_contacts'] ?? null) === 'na') <span class="mca-help">({{ __('sin formularios con los que probar') }})</span> @endif</li>
                         </ul>
                         <p class="mca-help" style="margin:6px 0 0">{{ __('Última comprobación: :date.', ['date' => $page->access_checked_at->format('d/m/Y H:i')]) }}
                             @if ($page->verified() && ($checks['list_forms'] ?? null) === 'fail') {{ __('Puedes recibir contactos; para traer formularios nuevos hace falta que Meta permita listarlos.') }} @endif</p>
                     @endif
+                    {{-- Distinto de la lectura autorizada: demuestra que un contacto entraría de verdad en su destino. --}}
+                    @php($rt = (array) ($result['reception_test'] ?? []))
+                    <div class="lf-checks" data-testid="reception-test-{{ $page->id }}" style="margin-top:8px">
+                        <span class="{{ ['passed' => 'ok', 'failed' => 'fail'][$rt['status'] ?? ''] ?? '' }}">
+                            @php($rtText = match ($rt['status'] ?? null) {
+                                'passed' => __('superada el :date con «:form».', ['date' => \Illuminate\Support\Carbon::parse($rt['at'])->format('d/m/Y H:i'), 'form' => $rt['form']]),
+                                'failed' => __('fallida el :date: :detail', ['date' => \Illuminate\Support\Carbon::parse($rt['at'])->format('d/m/Y H:i'), 'detail' => $rt['detail']]),
+                                default => __('sin hacer. Crea un contacto de prueba de Meta y lo pasa por el CRM sin guardarlo.'),
+                            })
+                            <b>{{ ['passed' => '✓', 'failed' => '✗'][$rt['status'] ?? ''] ?? '–' }}</b>{{ __('Prueba completa de recepción') }}: {{ $rtText }}
+                        </span>
+                    </div>
                     @if ($page->access_status === 'incomplete')
                         <p class="lf-issue platform"><strong>{{ __('Lo resuelve tu empresa') }}</strong>{{ __('La Página aún no tiene formularios: crea uno en Meta y vuelve a «Comprobar acceso».') }}</p>
                     @endif
@@ -282,6 +311,9 @@
                             @else
                                 {{ trans_choice(':n formulario listo.|:n formularios listos.', $ready, ['n' => $ready]) }}
                                 @if ($page->last_polled_at) {{ __('Última búsqueda: :date.', ['date' => $page->last_polled_at->format('d/m/Y H:i')]) }} @endif
+                                @if ((((array) ($page->access_result ?? []))['reception_test']['status'] ?? null) !== 'passed')
+                                    <span data-testid="reception-test-hint-{{ $page->id }}">{{ __('Recomendado antes o después de activar: «Prueba completa de recepción» (paso 4).') }}</span>
+                                @endif
                             @endif
                         </div>
                     </div>
@@ -319,6 +351,7 @@
                         {{ __('Página') }} {{ $mark($checks['page'] ?? null) }} ·
                         {{ __('listar formularios') }} {{ $mark($checks['list_forms'] ?? null) }} ·
                         {{ __('leer contactos') }} {{ $mark($checks['read_contacts'] ?? null) }} ·
+                        {{ __('prueba completa') }} {{ ['passed' => '✓', 'failed' => '✗'][((array) ($page->access_result ?? []))['reception_test']['status'] ?? ''] ?? '–' }} ·
                         {{ $page->receiving() ? __('recibiendo') : __('en pausa') }}
                         @if ($page->last_polled_at) · {{ __('última búsqueda :date', ['date' => $page->last_polled_at->format('d/m/Y H:i')]) }} @endif
                         @if ($page->last_error) <div class="mca-help" style="color:#8A1C1C">{{ $page->last_error }}</div> @endif

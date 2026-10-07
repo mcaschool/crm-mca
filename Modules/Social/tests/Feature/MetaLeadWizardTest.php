@@ -7,6 +7,7 @@ use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Modules\Audit\Models\AuditLog;
 use Modules\Catalog\Models\Program;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Crm\Models\Contact;
@@ -52,7 +53,7 @@ function mwzCompany(string $name): array
 /**
  * Meta simulado (una sola simulación por prueba que lee las respuestas vigentes).
  *
- * @param  array<string, array{0: array<string, mixed>, 1?: int}>  $o  exchange|accounts|debug|page|lead_access|forms|form_leads|lead
+ * @param  array<string, array{0: array<string, mixed>, 1?: int}>  $o  exchange|accounts|debug|page|lead_access|forms|form_leads|lead|test_create|test_delete
  */
 function mwzMeta(array $o = [], string $pageId = 'PAGE_W', array $tasks = ['MANAGE', 'ADVERTISE']): void
 {
@@ -65,6 +66,8 @@ function mwzMeta(array $o = [], string $pageId = 'PAGE_W', array $tasks = ['MANA
         'forms' => [['data' => [['id' => 'FORM_W1', 'name' => 'Solicitud de información']]]],
         'form_leads' => [['data' => []]],
         'lead' => [['platform' => 'fb', 'field_data' => [['name' => 'full_name', 'values' => ['Rosa Díaz']], ['name' => 'Teléfono de contacto', 'values' => ['+34 611 222 333']]]]],
+        'test_create' => [['id' => 'TEST_LEAD_1']],
+        'test_delete' => [['success' => true]],
     ]);
     if (app()->bound('mwz.faked')) {
         return;
@@ -75,6 +78,8 @@ function mwzMeta(array $o = [], string $pageId = 'PAGE_W', array $tasks = ['MANA
         $path = (string) parse_url($r->url(), PHP_URL_PATH);
         $fields = (string) ($r->data()['fields'] ?? '');
         $key = match (true) {
+            $r->method() === 'POST' && str_ends_with($path, '/test_leads') => 'test_create',
+            $r->method() === 'DELETE' => 'test_delete',
             str_ends_with($path, '/oauth/access_token') => 'exchange',
             str_ends_with($path, '/me/accounts') => 'accounts',
             str_ends_with($path, '/debug_token') => 'debug',
@@ -225,7 +230,7 @@ it('pausar, reanudar y «Buscar contactos ahora» funcionan desde el panel', fun
     expect(MetaLeadReceipt::query()->where('status', 'processed')->count())->toBe(2)->and(Lead::query()->count())->toBe(1); // misma persona: el CRM deduplica
 });
 
-it('transferir una Página entre empresas desde el panel: solo con control total en Meta; la otra conserva sus contactos', function () {
+it('transferir una Página: confirmación escrita, control total confirmado EN VIVO con Meta y auditoría en las dos empresas', function () {
     // Empresa A usa la Página y ya recibió un contacto.
     [$instA, $adminA, $programA] = mwzCompany('Escuela A');
     mwzMeta();
@@ -233,29 +238,102 @@ it('transferir una Página entre empresas desde el panel: solo con control total
     $pageA = mwzReceivingPage($programA);
     MetaLeadReceipt::query()->create(['leadgen_id' => 'L_OLD', 'page_id' => 'PAGE_W', 'status' => 'processed']);
 
-    // Empresa B conecta la misma Página SIN control total: no puede transferir.
+    // Empresa B conecta la misma Página SIN control total: no se le ofrece transferir.
     [$instB, $adminB] = mwzCompany('Escuela B');
     mwzMeta([], 'PAGE_W', ['ADVERTISE']);
     mwzConnect($adminB, $instB);
     $pageB = MetaLeadPage::query()->sole();
-    Livewire::actingAs($adminB)->test(LeadForms::class)
-        ->assertSee('La usa otra empresa')->assertDontSee('Transferir a mi empresa')
-        ->call('transfer', $pageB->id)->assertSee('quien conecta Meta debe tener control total');
+    Livewire::actingAs($adminB)->test(LeadForms::class)->assertSee('La usa otra empresa')->assertDontSee('Transferir a mi empresa');
 
-    // Con control total (otra persona administradora conecta desde B): transferencia.
+    // Reconecta alguien con control total: se ofrece, pero hay que confirmarlo escribiendo el nombre.
     mwzMeta([], 'PAGE_W', ['MANAGE', 'ADVERTISE']);
     mwzConnect($adminB, $instB);
-    Livewire::actingAs($adminB)->test(LeadForms::class)
+    $c = Livewire::actingAs($adminB)->test(LeadForms::class)
         ->assertSee('Transferir a mi empresa')
-        ->call('transfer', $pageB->id)->assertSee('La Página ya envía sus contactos a tu empresa.');
-    expect(MetaLeadPage::query()->sole()->only(['selected', 'access_status']))->toBe(['selected' => true, 'access_status' => 'unchecked']);
+        ->call('askTransfer', $pageB->id)->assertSee('Confirmar la transferencia')->assertSee('Escribe el nombre de la Página para confirmar:')
+        ->set('transferConfirmation', 'Otra Página')->call('confirmTransfer')
+        ->assertSee('escribe el nombre exacto de la Página');
+    expect($pageA->fresh()->selected)->toBeTrue();
 
-    // A deja de recibir de inmediato, conserva su contacto y ve el aviso.
+    // En Meta le retiraron el control total después de conectar: la comprobación EN VIVO lo impide.
+    mwzMeta([], 'PAGE_W', ['ADVERTISE']);
+    $c->set('transferConfirmation', 'academia w')->call('confirmTransfer')->assertSee('debe tener control total');
+    expect($pageA->fresh()->selected)->toBeTrue()->and(MetaLeadPage::query()->sole()->tasks)->toBe(['ADVERTISE']);
+
+    // Meta no confirma la autorización (revocada): tampoco se transfiere.
+    mwzMeta(['accounts' => [['error' => ['message' => 'Error validating access token', 'code' => 190]], 401]]);
+    $c->call('confirmTransfer')->assertSee('Meta no confirmó la autorización actual');
+    expect($pageA->fresh()->selected)->toBeTrue();
+
+    // Con control total vigente y confirmación correcta: se transfiere.
+    mwzMeta([], 'PAGE_W', ['MANAGE', 'ADVERTISE']);
+    $c->call('confirmTransfer')->assertSee('La Página ya envía sus contactos a tu empresa.')->assertSet('transferPageId', null);
+    expect(MetaLeadPage::query()->sole()->only(['selected', 'access_status', 'receiving_enabled']))->toBe(['selected' => true, 'access_status' => 'unchecked', 'receiving_enabled' => false]);
+    Http::assertSent(fn (HttpRequest $r) => str_ends_with((string) parse_url($r->url(), PHP_URL_PATH), '/me/accounts') && str_contains((string) ($r->data()['fields'] ?? ''), 'tasks'));
+
+    // Auditoría en B: quién y qué (control total confirmado con Meta).
+    $inB = AuditLog::query()->where('action', 'meta_lead_page.transferred_in')->sole();
+    expect($inB->user_id)->toBe($adminB->id)->and($inB->changes)->toMatchArray(['pagina' => 'Academia W', 'empresas_anteriores' => 1, 'control_total_confirmado_con_meta' => true]);
+
+    // A deja de recibir de inmediato, conserva su contacto, ve el aviso y queda auditado SIN datos de B.
     app(CurrentInstitution::class)->set($instA->id);
     $pageA->refresh();
     expect($pageA->selected)->toBeFalse()->and($pageA->receiving_enabled)->toBeFalse()->and($pageA->released_at)->not->toBeNull()
         ->and(MetaLeadReceipt::query()->count())->toBe(1);
+    $outA = AuditLog::query()->where('action', 'meta_lead_page.transferred_out')->sole();
+    expect($outA->user_id)->toBeNull()->and(json_encode($outA->changes, JSON_UNESCAPED_UNICODE))->not->toContain('Escuela B');
     Livewire::actingAs($adminA)->test(LeadForms::class)->assertSee('La Página pasó a otra empresa')->assertSee('Los contactos que ya recibiste siguen en tu CRM.');
+});
+
+it('prueba completa de recepción: distinta de la lectura autorizada, recorre el camino real sin dejar datos y borra el contacto de prueba', function () {
+    [$inst, $admin, $program] = mwzCompany('Academia W');
+    mwzMeta();
+    mwzConnect($admin, $inst);
+    $page = mwzReceivingPage($program);
+    $page->forceFill(['receiving_enabled' => false, 'access_status' => 'unchecked'])->save();
+
+    // Lectura autorizada (paso 4) — sin prueba completa todavía.
+    $c = Livewire::actingAs($admin)->test(LeadForms::class)->call('checkAccess', $page->id)
+        ->assertSee('Lectura de contactos autorizada por Meta')
+        ->assertSee('Prueba completa de recepción: sin hacer');
+
+    // Prueba completa: superada, sin dejar contacto, lead, recibo ni evento en el CRM.
+    $c->call('receptionTest', $page->id)->assertSee('Un contacto entraría en el CRM con el destino');
+    expect(Contact::query()->count())->toBe(0)->and(Lead::query()->count())->toBe(0)
+        ->and(MetaLeadReceipt::query()->count())->toBe(0)
+        ->and(\Modules\Crm\Models\Event::query()->where('event_type', 'meta_lead_received')->count())->toBe(0);
+    Http::assertSent(fn (HttpRequest $r) => $r->method() === 'POST' && str_ends_with((string) parse_url($r->url(), PHP_URL_PATH), '/FORM_W1/test_leads'));
+    Http::assertSent(fn (HttpRequest $r) => $r->method() === 'DELETE' && str_ends_with((string) parse_url($r->url(), PHP_URL_PATH), '/TEST_LEAD_1'));
+    expect(MetaLeadPage::query()->sole()->access_result['reception_test'])->toMatchArray(['status' => 'passed', 'form' => 'Solicitud de información'])
+        ->and(AuditLog::query()->where('action', 'meta_lead_page.reception_test')->value('changes'))->toMatchArray(['resultado' => 'passed']);
+
+    // Una nueva comprobación de acceso conserva el resultado de la prueba completa (son cosas distintas).
+    $c->call('checkAccess', $page->id)->assertSee('Prueba completa de recepción: superada');
+
+    // Meta no deja crear el contacto de prueba: la prueba falla, aunque la lectura siga autorizada.
+    mwzMeta(['test_create' => [['error' => ['message' => '(#200) Requires leads_retrieval permission', 'code' => 200]], 403]]);
+    $c->call('receptionTest', $page->id)->assertSee('Meta no permitió crear un contacto de prueba');
+    expect(MetaLeadPage::query()->sole()->access_result['reception_test']['status'])->toBe('failed')
+        ->and(MetaLeadPage::query()->sole()->access_result['checks']['read_contacts'])->toBe('ok');
+
+    // Sin formulario con destino no hay prueba completa posible.
+    MetaLeadForm::query()->update(['destination' => null, 'program_id' => null]);
+    $c->call('receptionTest', $page->id)->assertSee('asígnale un destino antes de la prueba completa');
+});
+
+it('activar y pausar la recepción, conectar y desconectar Meta quedan en la auditoría de la empresa', function () {
+    [$inst, $admin, $program] = mwzCompany('Academia W');
+    mwzMeta();
+    mwzConnect($admin, $inst);
+    $page = mwzReceivingPage($program);
+    $page->forceFill(['receiving_enabled' => false])->save();
+
+    Livewire::actingAs($admin)->test(LeadForms::class)
+        ->call('setReceiving', $page->id, true)->call('setReceiving', $page->id, false)->call('disconnect');
+
+    expect(AuditLog::query()->where('user_id', $admin->id)->orderBy('id')->pluck('action')->all())->toBe([
+        'meta.connected', 'meta_lead_page.receiving_enabled', 'meta_lead_page.receiving_paused', 'meta.disconnected',
+    ]);
 });
 
 it('reconectar desde el asistente no sustituye una conexión que funciona si la nueva falla', function () {

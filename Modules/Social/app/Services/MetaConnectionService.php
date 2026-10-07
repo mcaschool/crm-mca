@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Modules\Audit\Services\AuditService;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Social\Models\MetaConnection;
 use Modules\Social\Models\MetaLeadPage;
@@ -200,6 +201,10 @@ final class MetaConnectionService
             return $connection->fresh() ?? $connection;
         }));
 
+        app(CurrentInstitution::class)->runFor($institutionId, fn () => app(AuditService::class)->log('meta.connected', $connection, [
+            'paginas' => count($discovery->pages), 'tipo' => $connection->token_type,
+        ]));
+
         return [$connection, $discovery];
     }
 
@@ -235,6 +240,48 @@ final class MetaConnectionService
         return $connection;
     }
 
+    /**
+     * Tareas ACTUALES (consultadas en vivo a Meta) de la persona o usuario de sistema que respalda
+     * la conexión sobre una Página: null si la autorización vigente ya no incluye esa Página.
+     * Lanza RuntimeException si Meta no responde o rechaza la conexión (no se decide a ciegas).
+     *
+     * @return list<string>|null
+     */
+    public function currentPageTasks(MetaConnection $connection, string $pageId): ?array
+    {
+        if ($this->fakeMode() !== null) {
+            return $pageId === 'FAKE_PAGE_1' ? ['MANAGE', 'ADVERTISE'] : null;
+        }
+        if (! $connection->usable()) {
+            throw new RuntimeException(__('La conexión con Meta no está vigente. Pulsa «Reconectar Meta».'));
+        }
+
+        $after = null;
+        for ($page = 0; $page < 5; $page++) {
+            try {
+                $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($connection->token)->acceptJson()
+                    ->get("https://graph.facebook.com/{$this->graphVersion()}/me/accounts", array_filter(['fields' => 'id,tasks', 'limit' => 100, 'after' => $after]));
+            } catch (Throwable $e) {
+                Log::warning('social.meta.connect: error de red al confirmar tareas', ['error' => $e->getMessage()]);
+                throw new RuntimeException(__('No se pudo confirmar con Meta la autorización actual. Inténtalo de nuevo en unos minutos.'));
+            }
+            if (! $response->successful()) {
+                throw new RuntimeException(__('Meta no confirmó la autorización actual de tu empresa. Pulsa «Reconectar Meta» y vuelve a intentarlo.'));
+            }
+            foreach ((array) $response->json('data', []) as $row) {
+                if (is_array($row) && (string) ($row['id'] ?? '') === $pageId) {
+                    return array_values(array_map('strval', (array) ($row['tasks'] ?? [])));
+                }
+            }
+            $after = $response->json('paging.cursors.after');
+            if (! is_string($after) || $after === '' || $response->json('paging.next') === null) {
+                break;
+            }
+        }
+
+        return null;
+    }
+
     /** Desconectar: borra las credenciales y para la recepción, conservando la configuración. */
     public function disconnect(MetaConnection $connection): void
     {
@@ -243,6 +290,7 @@ final class MetaConnectionService
             MetaLeadPage::query()->where('meta_connection_id', $connection->getKey())
                 ->update(['page_token' => Crypt::encryptString(''), 'receiving_enabled' => false, 'access_status' => 'unchecked']);
         });
+        app(AuditService::class)->log('meta.disconnected', $connection);
     }
 
     /**

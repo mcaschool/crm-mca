@@ -143,7 +143,7 @@ it('una segunda empresa completa el alta desde el panel: conectar, elegir, asign
     $panel = Livewire::actingAs($admin)->test(LeadForms::class)
         ->assertSee('Conectada')->assertSee('Escuela B')
         ->call('selectPage', $page->id, true)->assertSee('Usada para formularios')
-        ->call('checkAccess', $page->id)->assertSee('Acceso verificado')->assertSee('Leer los contactos de un formulario');
+        ->call('checkAccess', $page->id)->assertSee('Acceso verificado')->assertSee('Lectura de contactos autorizada por Meta');
 
     $form = MetaLeadForm::query()->sole(); // traído en la misma comprobación
     expect($form->only(['form_id', 'meta_lead_page_id', 'is_active']))->toBe(['form_id' => 'FORM_B1', 'meta_lead_page_id' => $page->id, 'is_active' => false]);

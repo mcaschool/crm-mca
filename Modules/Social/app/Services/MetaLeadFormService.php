@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Modules\Social\Services;
 
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Modules\Catalog\Models\Program;
 use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Crm\Models\Lead;
 use Modules\Crm\Services\EventService;
 use Modules\Crm\Services\LeadIntake;
 use Modules\Social\Models\MetaLeadForm;
@@ -278,81 +280,163 @@ final class MetaLeadFormService
             if ($form === null || ! $form->is_active) {
                 return $this->finish($receipt, 'skipped', __('El formulario no está activado en el CRM.'));
             }
-            if (! $form->hasDestination()) {
+            if (! $form->hasDestination()) { // antes de pedir nada a Meta
                 return $this->finish($receipt, 'failed', __('Asigna un destino al formulario (un programa o «contacto general»).'));
             }
-            // Destino: un programa de la empresa (su tipo sale de la línea del catálogo; si la línea
-            // no es una conocida, la propia línea) o «contacto general» sin programa.
-            $program = $form->destination === 'program' ? Program::query()->find($form->program_id) : null;
-            if ($form->destination === 'program' && $program === null) {
-                return $this->finish($receipt, 'failed', __('El programa de destino ya no existe: asigna otro destino al formulario.'));
-            }
-            $productType = $program !== null
-                ? (self::PRODUCT_TYPES[(string) $program->line] ?? ((string) $program->line !== '' ? (string) $program->line : 'programa'))
-                : 'general';
 
             $lead = $this->fetchLead($page, $leadgenId);
             if ($lead === null) {
                 return $this->finish($receipt, 'failed', __('No se pudieron leer los datos del contacto en Meta (acceso denegado o conexión caducada).'));
             }
 
-            $fields = $this->fieldMap((array) ($lead['field_data'] ?? []));
-            $fullName = $this->pick($fields, ['full_name'], ['nombre_completo', 'nombre completo', 'nombre y apellido']);
-            $attribution = array_filter([
-                'platform' => ($lead['platform'] ?? null) === 'ig' ? 'instagram' : 'facebook',
-                'campaign' => $lead['campaign_name'] ?? null,
-                'adset' => $lead['adset_name'] ?? null,
-                'ad' => $lead['ad_name'] ?? null,
-                'form' => $form->name,
-                'organic' => (bool) ($lead['is_organic'] ?? false),
-            ], fn ($v): bool => $v !== null && $v !== '');
-
-            $data = array_filter([
-                // Campos estándar de Meta o personalizados («Teléfono», «WhatsApp», «Correo»…).
-                'email' => $this->pick($fields, ['email', 'work_email'], ['email', 'correo']),
-                'phone' => $this->pick($fields, ['phone_number', 'phone', 'work_phone_number'], ['phone', 'telefono', 'teléfono', 'celular', 'movil', 'móvil', 'whatsapp']),
-                // Formularios sin nombre (solo teléfono o correo): el contacto entra igual, «Sin nombre».
-                'first_name' => ($fields['first_name'] ?? '') !== '' ? $fields['first_name'] : ($this->firstName($fullName) ?? __('Sin nombre')),
-                'last_name' => ($fields['last_name'] ?? '') !== '' ? $fields['last_name'] : $this->lastName($fullName),
-                'country' => $fields['country'] ?? null,
-                'product_type' => $productType,
-                'program' => $program !== null ? (string) $program->code : null,
-                'source' => 'meta_lead_ads',
-                'channel' => $attribution['platform'],
-                'form' => $form->name,
-                // El formulario de Meta exige aceptar la política de privacidad; si añadió
-                // casillas propias, todas deben estar marcadas.
-                'consent' => $this->consented((array) ($lead['custom_disclaimer_responses'] ?? [])),
-                'consent_source' => 'web_form',
-            ], fn ($v): bool => $v !== null && $v !== '');
-
-            if (! isset($data['email']) && ! isset($data['phone'])) {
-                return $this->finish($receipt, 'failed', __('El contacto no trae correo ni teléfono.'));
+            [$status, $error, $crmLead, $attribution] = $this->ingestLead($form, $lead, $leadgenId);
+            if ($status !== 'processed' || $crmLead === null) {
+                return $this->finish($receipt, 'failed', (string) $error);
             }
-
-            try {
-                $result = $this->intake->ingest($data, 'meta_lead:'.$leadgenId);
-            } catch (Throwable $e) {
-                Log::warning('social.lead_forms: no se pudo registrar el lead', ['leadgen_id' => $leadgenId, 'error' => $e->getMessage()]);
-
-                return $this->finish($receipt, 'failed', __('No se pudo registrar el contacto en el CRM.'));
-            }
-
-            $crmLead = $result['lead'];
-            if ($form->bot_id !== null && $crmLead->getAttribute('bot_id') === null) {
-                $crmLead->bot_id = $form->bot_id; // asesor responsable del formulario
-                $crmLead->save();
-            }
-            $this->events->record('meta_lead_received', [
-                'contact_id' => $crmLead->contact_id,
-                'bot_id' => $crmLead->bot_id,
-                'data' => $attribution + ['program_id' => $program?->getKey(), 'destination' => $form->destination],
-            ]);
 
             $receipt->forceFill(['status' => 'processed', 'lead_id' => $crmLead->getKey(), 'attribution' => $attribution, 'error' => null])->save();
 
             return 'processed';
         });
+    }
+
+    /**
+     * Un contacto de Meta → contacto + lead del CRM en el destino del formulario (mismo camino para
+     * la recepción real y para la prueba completa). Sin recibos: los gestiona quien llama.
+     *
+     * @param  array<string, mixed>  $lead  respuesta de Meta (field_data, platform, campaña…)
+     * @return array{0: string, 1: string|null, 2: Lead|null, 3: array<string, mixed>} [estado, error legible, lead, atribución]
+     */
+    private function ingestLead(MetaLeadForm $form, array $lead, string $leadgenId): array
+    {
+        if (! $form->hasDestination()) {
+            return ['failed', __('Asigna un destino al formulario (un programa o «contacto general»).'), null, []];
+        }
+        // Destino: un programa de la empresa (su tipo sale de la línea del catálogo; si la línea
+        // no es una conocida, la propia línea) o «contacto general» sin programa.
+        $program = $form->destination === 'program' ? Program::query()->find($form->program_id) : null;
+        if ($form->destination === 'program' && $program === null) {
+            return ['failed', __('El programa de destino ya no existe: asigna otro destino al formulario.'), null, []];
+        }
+        $productType = mb_substr($program !== null
+            ? (self::PRODUCT_TYPES[(string) $program->line] ?? ((string) $program->line !== '' ? (string) $program->line : 'programa'))
+            : 'general', 0, 40); // leads.product_type es varchar(40)
+
+        $fields = $this->fieldMap((array) ($lead['field_data'] ?? []));
+        $fullName = $this->pick($fields, ['full_name'], ['nombre_completo', 'nombre completo', 'nombre y apellido']);
+        $attribution = array_filter([
+            'platform' => ($lead['platform'] ?? null) === 'ig' ? 'instagram' : 'facebook',
+            'campaign' => $lead['campaign_name'] ?? null,
+            'adset' => $lead['adset_name'] ?? null,
+            'ad' => $lead['ad_name'] ?? null,
+            'form' => $form->name,
+            'organic' => (bool) ($lead['is_organic'] ?? false),
+        ], fn ($v): bool => $v !== null && $v !== '');
+
+        $data = array_filter([
+            // Campos estándar de Meta o personalizados («Teléfono», «WhatsApp», «Correo»…).
+            'email' => $this->pick($fields, ['email', 'work_email'], ['email', 'correo']),
+            'phone' => $this->pick($fields, ['phone_number', 'phone', 'work_phone_number'], ['phone', 'telefono', 'teléfono', 'celular', 'movil', 'móvil', 'whatsapp']),
+            // Formularios sin nombre (solo teléfono o correo): el contacto entra igual, «Sin nombre».
+            'first_name' => ($fields['first_name'] ?? '') !== '' ? $fields['first_name'] : ($this->firstName($fullName) ?? __('Sin nombre')),
+            'last_name' => ($fields['last_name'] ?? '') !== '' ? $fields['last_name'] : $this->lastName($fullName),
+            'country' => $fields['country'] ?? null,
+            'product_type' => $productType,
+            'program' => $program !== null ? (string) $program->code : null,
+            'source' => 'meta_lead_ads',
+            'channel' => $attribution['platform'],
+            'form' => $form->name,
+            // El formulario de Meta exige aceptar la política de privacidad; si añadió
+            // casillas propias, todas deben estar marcadas.
+            'consent' => $this->consented((array) ($lead['custom_disclaimer_responses'] ?? [])),
+            'consent_source' => 'web_form',
+        ], fn ($v): bool => $v !== null && $v !== '');
+
+        if (! isset($data['email']) && ! isset($data['phone'])) {
+            return ['failed', __('El contacto no trae correo ni teléfono.'), null, $attribution];
+        }
+
+        try {
+            $result = $this->intake->ingest($data, 'meta_lead:'.$leadgenId);
+        } catch (Throwable $e) {
+            Log::warning('social.lead_forms: no se pudo registrar el lead', ['leadgen_id' => $leadgenId, 'error' => $e->getMessage()]);
+
+            return ['failed', __('No se pudo registrar el contacto en el CRM.'), null, $attribution];
+        }
+
+        $crmLead = $result['lead'];
+        if ($form->bot_id !== null && $crmLead->getAttribute('bot_id') === null) {
+            $crmLead->bot_id = $form->bot_id; // asesor responsable del formulario
+            $crmLead->save();
+        }
+        $this->events->record('meta_lead_received', [
+            'contact_id' => $crmLead->contact_id,
+            'bot_id' => $crmLead->bot_id,
+            'data' => $attribution + ['program_id' => $program?->getKey(), 'destination' => $form->destination],
+        ]);
+
+        return ['processed', null, $crmLead, $attribution];
+    }
+
+    /**
+     * PRUEBA COMPLETA DE RECEPCIÓN de un formulario (desde el panel, antes o después de activar):
+     * crea un contacto de prueba de Meta en el formulario, lo lee y lo pasa por el MISMO camino
+     * que un contacto real (destino, campos, contacto y lead del CRM) dentro de una transacción que
+     * se DESHACE: no deja datos en el CRM. Al final borra el contacto de prueba en Meta.
+     *
+     * Distinta de la «lectura autorizada» (Meta permite leer los contactos del formulario): esta
+     * prueba demuestra que un contacto entraría de verdad en el destino elegido.
+     *
+     * @return array{status: string, detail: string, at: string, form: string}
+     */
+    public function rehearse(MetaLeadPage $page, MetaLeadForm $form): array
+    {
+        $out = fn (string $status, string $detail): array => ['status' => $status, 'detail' => $detail, 'at' => now()->toIso8601String(), 'form' => $form->name];
+
+        if ($form->meta_lead_page_id !== $page->getKey()) {
+            return $out('failed', __('El formulario no es de esta Página.'));
+        }
+        if (! $form->hasDestination()) {
+            return $out('failed', __('Asigna un destino al formulario antes de la prueba completa.'));
+        }
+
+        try {
+            $created = Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()->asForm()
+                ->post($this->graph($form->form_id.'/test_leads'));
+        } catch (Throwable $e) {
+            Log::warning('social.lead_forms: error de red al crear el contacto de prueba', ['page' => $page->getKey(), 'error' => $e->getMessage()]);
+
+            return $out('failed', __('No se pudo contactar con Meta. Inténtalo más tarde.'));
+        }
+        $testId = (string) ($created->json('id') ?? '');
+        if (! $created->successful() || $testId === '') {
+            return $out('failed', __('Meta no permitió crear un contacto de prueba en este formulario: :why', ['why' => mb_substr((string) $created->json('error.message', ''), 0, 160)]));
+        }
+
+        try {
+            $lead = $this->fetchLead($page, $testId);
+            if ($lead === null) {
+                return $out('failed', __('Se creó el contacto de prueba, pero Meta no permitió leerlo.'));
+            }
+
+            // Mismo camino que un contacto real, sin dejar rastro: la transacción se deshace siempre.
+            DB::beginTransaction();
+            try {
+                [$status, $error] = $this->ingestLead($form, $lead, 'test:'.$testId);
+            } finally {
+                DB::rollBack();
+            }
+
+            return $status === 'processed'
+                ? $out('passed', __('Un contacto entraría en el CRM con el destino «:dest» (prueba deshecha: no quedan datos).', ['dest' => $form->destination === 'general' ? __('Contacto general') : (string) Program::query()->whereKey($form->program_id)->value('name_es')]))
+                : $out('failed', (string) $error);
+        } finally {
+            try {
+                Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()->delete($this->graph($testId));
+            } catch (Throwable) {
+                // Meta borra los contactos de prueba por su cuenta; no bloquea el resultado.
+            }
+        }
     }
 
     /** @return array<string, mixed>|null */

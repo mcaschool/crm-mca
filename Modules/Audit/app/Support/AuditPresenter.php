@@ -48,6 +48,14 @@ final class AuditPresenter
         // Catalogo de programas (alta manual desde el Centro de Conocimiento)
         'program.created' => ['label' => 'Programa creado', 'group' => 'ok'],
         'program.activated' => ['label' => 'Programa activado', 'group' => 'ok'],
+        // Formularios publicitarios (Meta)
+        'meta.connected' => ['label' => 'Meta conectado', 'group' => 'ok'],
+        'meta.disconnected' => ['label' => 'Meta desconectado', 'group' => 'warn'],
+        'meta_lead_page.transferred_in' => ['label' => 'Página transferida a esta empresa', 'group' => 'info'],
+        'meta_lead_page.transferred_out' => ['label' => 'Página transferida a otra empresa', 'group' => 'warn'],
+        'meta_lead_page.receiving_enabled' => ['label' => 'Recepción de formularios activada', 'group' => 'ok'],
+        'meta_lead_page.receiving_paused' => ['label' => 'Recepción de formularios en pausa', 'group' => 'neutral'],
+        'meta_lead_page.reception_test' => ['label' => 'Prueba completa de recepción', 'group' => 'info'],
     ];
 
     /** @var array<string, string> */
@@ -59,6 +67,8 @@ final class AuditPresenter
         'Modules\Audit\Models\AuditLog' => 'Registro',
         'Modules\Institutions\Models\Institution' => 'Institución',
         'Modules\Catalog\Models\Program' => 'Programa',
+        'Modules\Social\Models\MetaConnection' => 'Conexión con Meta',
+        'Modules\Social\Models\MetaLeadPage' => 'Página de formularios',
     ];
 
     public static function actionLabel(string $action): string

@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace Modules\Social\Services;
 
 use DomainException;
+use Illuminate\Support\Facades\DB;
+use Modules\Audit\Models\AuditLog;
+use Modules\Audit\Services\AuditService;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Social\Models\MetaLeadForm;
 use Modules\Social\Models\MetaLeadPage;
 use Modules\Social\Support\MetaLeadAccessGuidance;
+use RuntimeException;
 
 /**
  * Pasos de una Página en Formularios publicitarios (siempre en el contexto de SU empresa):
@@ -25,6 +29,8 @@ final class MetaLeadPageService
         private readonly MetaLeadAccessCheck $check,
         private readonly MetaLeadFormService $forms,
         private readonly CurrentInstitution $tenancy,
+        private readonly MetaConnectionService $connections,
+        private readonly AuditService $audit,
     ) {}
 
     /** ¿Usa esta Página otra empresa ahora mismo? */
@@ -59,22 +65,61 @@ final class MetaLeadPageService
      * ESTA empresa tiene control total de la Página (lo dice Meta, no el CRM). La otra empresa deja
      * de recibir de inmediato y conserva sus contactos anteriores; ve el aviso en su panel.
      */
-    public function transfer(MetaLeadPage $page): void
+    public function transfer(MetaLeadPage $page, string $confirmation): void
     {
-        if (! $page->available || ! ($page->metaConnection?->usable() ?? false)) {
+        // Confirmación EXPLÍCITA: el nombre exacto de la Página (lo valida el servidor, no solo la pantalla).
+        if (mb_strtolower(trim($confirmation)) !== mb_strtolower(trim($page->name))) {
+            throw new DomainException(__('Para confirmar la transferencia escribe el nombre exacto de la Página: «:name».', ['name' => $page->name]));
+        }
+        $connection = $page->metaConnection;
+        if (! $page->available || $connection === null || ! $connection->usable()) {
             throw new DomainException(__('Conecta Meta e incluye esta Página al autorizar antes de transferirla.'));
         }
-        if (! $page->fullControl()) {
+
+        // Autorización VIGENTE: se pregunta a Meta ahora, no se confía en lo guardado al conectar.
+        try {
+            $tasks = $this->connections->currentPageTasks($connection, $page->page_id);
+        } catch (RuntimeException $e) {
+            throw new DomainException($e->getMessage());
+        }
+        if ($tasks === null) {
+            throw new DomainException(__('Tu autorización actual de Meta ya no incluye esta Página. Pulsa «Reconectar Meta» y selecciónala al autorizar.'));
+        }
+        $page->forceFill(['tasks' => $tasks])->save();
+        if (! in_array('MANAGE', $tasks, true)) {
             throw new DomainException(__('Para transferir la Página, quien conecta Meta debe tener control total de ella en Meta. Pide a un administrador de la Página que conecte Meta desde tu empresa.'));
         }
 
-        $this->tenancy->runGlobally(fn () => MetaLeadPage::query()
-            ->where('page_id', $page->page_id)
-            ->where('institution_id', '!=', $page->institution_id)
-            ->where('selected', true)
-            ->update(['selected' => false, 'receiving_enabled' => false, 'released_at' => now()]));
+        DB::transaction(function () use ($page, $tasks): void {
+            $previous = $this->tenancy->runGlobally(fn () => MetaLeadPage::query()
+                ->where('page_id', $page->page_id)
+                ->where('institution_id', '!=', $page->institution_id)
+                ->where('selected', true)
+                ->get(['id', 'institution_id']));
 
-        $page->forceFill(['selected' => true, 'released_at' => null, 'access_status' => 'unchecked'])->save();
+            foreach ($previous as $row) {
+                $this->tenancy->runFor((int) $row->institution_id, function () use ($row, $page): void {
+                    $old = MetaLeadPage::query()->findOrFail($row->id);
+                    $old->forceFill(['selected' => false, 'receiving_enabled' => false, 'released_at' => now()])->save();
+                    // En la empresa que la pierde: sin usuario (es de otra empresa) y sin datos de ella.
+                    AuditLog::create([
+                        'user_id' => null,
+                        'action' => 'meta_lead_page.transferred_out',
+                        'auditable_type' => $old->getMorphClass(),
+                        'auditable_id' => (int) $old->getKey(),
+                        'changes' => ['pagina' => $page->name, 'motivo' => 'Transferida a otra empresa del CRM por una persona con control total de la Página en Meta.'],
+                        'ip' => request()->ip(),
+                    ]);
+                });
+            }
+
+            $page->forceFill(['selected' => true, 'released_at' => null, 'access_status' => 'unchecked', 'receiving_enabled' => false])->save();
+            $this->audit->log('meta_lead_page.transferred_in', $page, [
+                'pagina' => $page->name,
+                'empresas_anteriores' => $previous->count(),
+                'control_total_confirmado_con_meta' => in_array('MANAGE', $tasks, true),
+            ]);
+        });
     }
 
     /**
@@ -120,6 +165,8 @@ final class MetaLeadPageService
                 'forms' => $formCount,
                 'leads_readable' => $checks['read_contacts'] === 'ok',
                 'test_lead' => $testLead,
+                // La prueba completa de recepción es otra cosa: se conserva (con su fecha).
+                'reception_test' => ((array) ($page->access_result ?? []))['reception_test'] ?? null,
             ],
             'access_checked_at' => now(),
             // Una comprobación que ya no pasa detiene la recepción.
@@ -157,5 +204,30 @@ final class MetaLeadPageService
         }
 
         $page->forceFill(['receiving_enabled' => $on])->save();
+        $this->audit->log($on ? 'meta_lead_page.receiving_enabled' : 'meta_lead_page.receiving_paused', $page, ['pagina' => $page->name]);
+    }
+
+    /**
+     * PRUEBA COMPLETA DE RECEPCIÓN con el primer formulario elegido y con destino de la Página
+     * (ver MetaLeadFormService::rehearse). Guarda el resultado aparte de la lectura autorizada.
+     *
+     * @return array{status: string, detail: string, at: string, form: string}
+     */
+    public function receptionTest(MetaLeadPage $page): array
+    {
+        if (! ($page->metaConnection?->usable() ?? false)) {
+            throw new DomainException(__('La conexión con Meta no está vigente. Pulsa «Reconectar Meta».'));
+        }
+        $form = MetaLeadForm::query()->where('meta_lead_page_id', $page->getKey())->where('is_active', true)->orderBy('id')->get()
+            ->first(fn (MetaLeadForm $f): bool => $f->hasDestination());
+        if ($form === null) {
+            throw new DomainException(__('Elige un formulario de esta Página y asígnale un destino antes de la prueba completa.'));
+        }
+
+        $result = $this->forms->rehearse($page, $form);
+        $page->forceFill(['access_result' => ['reception_test' => $result] + (array) ($page->access_result ?? [])])->save();
+        $this->audit->log('meta_lead_page.reception_test', $page, ['pagina' => $page->name, 'formulario' => $form->name, 'resultado' => $result['status']]);
+
+        return $result;
     }
 }
