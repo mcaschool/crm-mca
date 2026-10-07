@@ -91,13 +91,19 @@ return [
     */
     'meta' => [
         /*
-        | Formularios publicitarios (Meta Lead Ads → CRM, sin intermediarios). DESACTIVADO hasta
-        | que Meta apruebe el permiso «leads_retrieval» (leer los datos de cada lead) y
-        | «pages_manage_ads» (listar los formularios de la Página); la suscripción de la Página al
-        | campo «leadgen» usa además «pages_manage_metadata». No forman parte de la revisión de la
-        | app pendiente: NO activar hasta tenerlos aprobados.
+        | Formularios publicitarios (Meta Lead Ads → CRM, sin intermediarios), POR EMPRESA y desde
+        | su panel: conectar Meta, elegir Páginas y formularios, asignar programa y asesor,
+        | comprobar el acceso y activar la recepción. Cada Página empieza APAGADA y solo se puede
+        | activar tras una comprobación verificada (lectura real de contactos). No requiere .env.
+        |
+        | Permisos de Meta que usa (los gestiona centralmente el operador de la plataforma en la
+        | configuración de Facebook Login for Business de la app y, si Meta lo exige, en su
+        | revisión): pages_show_list, pages_read_engagement, pages_manage_ads, leads_retrieval.
+        |
+        | Parada de emergencia del OPERADOR (no de cada empresa): con true ninguna empresa recibe.
+        |   SOCIAL_META_LEAD_FORMS_KILL_SWITCH=false
         */
-        'lead_forms_enabled' => (bool) env('SOCIAL_META_LEAD_FORMS_ENABLED', false),
+        'lead_forms_kill_switch' => (bool) env('SOCIAL_META_LEAD_FORMS_KILL_SWITCH', false),
 
         'login_config_id' => env('SOCIAL_META_LOGIN_CONFIG_ID'),
 

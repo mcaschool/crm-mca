@@ -20,6 +20,8 @@ final readonly class MetaDiscoveredPage
         public string $pageAccessToken,
         public ?string $instagramId = null,
         public ?string $instagramUsername = null,
+        /** @var list<string> tareas de la persona que conectó en la Página (MANAGE, ADVERTISE…) */
+        public array $tasks = [],
     ) {}
 
     public function hasInstagram(): bool

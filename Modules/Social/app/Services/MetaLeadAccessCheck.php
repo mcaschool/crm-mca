@@ -6,6 +6,7 @@ namespace Modules\Social\Services;
 
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Modules\Social\Models\MetaLeadPage;
 use Modules\Social\Models\SocialChannel;
 use Throwable;
 
@@ -33,11 +34,30 @@ final class MetaLeadAccessCheck
      */
     public function run(SocialChannel $page, ?string $formId = null, bool $createTestLead = false, bool $keepTestLead = false): array
     {
-        $steps = [];
-        $token = (string) ($page->credentials['token'] ?? '');
-        $pageId = (string) $page->external_id;
+        if ($page->provider !== 'messenger') {
+            return ['steps' => [], 'verdict' => $this->verdict([], 'La Página no tiene una conexión guardada en el CRM.')];
+        }
 
-        if ($page->provider !== 'messenger' || $token === '' || $pageId === '') {
+        return $this->check((string) $page->external_id, (string) ($page->credentials['token'] ?? ''), $formId, $createTestLead, $keepTestLead);
+    }
+
+    /**
+     * La misma comprobación para una Página de formularios publicitarios de una empresa.
+     *
+     * @return array{steps: array<int, array<string, mixed>>, verdict: array<string, array{status: string, detail: string}>}
+     */
+    public function runForLeadPage(MetaLeadPage $page, ?string $formId = null, bool $createTestLead = false, bool $keepTestLead = false): array
+    {
+        return $this->check((string) $page->page_id, (string) $page->page_token, $formId, $createTestLead, $keepTestLead);
+    }
+
+    /**
+     * @return array{steps: array<int, array<string, mixed>>, verdict: array<string, array{status: string, detail: string}>}
+     */
+    public function check(string $pageId, string $token, ?string $formId = null, bool $createTestLead = false, bool $keepTestLead = false): array
+    {
+        $steps = [];
+        if ($token === '' || $pageId === '') {
             return ['steps' => [], 'verdict' => $this->verdict([], 'La Página no tiene una conexión guardada en el CRM.')];
         }
 

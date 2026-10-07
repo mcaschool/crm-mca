@@ -5,19 +5,23 @@ declare(strict_types=1);
 namespace Modules\Social\Livewire;
 
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Social\Models\MetaConnection;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Services\MetaConnectionService;
 use RuntimeException;
+use Throwable;
 
 /**
  * «Conectar Meta» — onboarding visual (Facebook Login for Business) que descubre las
  * Páginas de Facebook (Messenger) e Instagram Professional asociado de la institución.
  *
- * Esta etapa hace SOLO login + descubrimiento + visualización: NO crea ni sobreescribe
- * canales, no toca tokens ni webhooks, y convive con la conexión Meta ya operativa. Toda
+ * La autorización termina en una CONEXIÓN de la empresa utilizable por Formularios publicitarios
+ * (MetaConnectionService::connect). NO crea ni sobreescribe canales ni webhooks: la conexión de
+ * Messenger/Instagram operativa no se toca, y una autorización fallida no sustituye a la buena. Toda
  * la lógica Graph vive en MetaConnectionService; aquí solo se coordina la UX. Los Page
  * Access Tokens nunca llegan a propiedades públicas (no se serializan al navegador): las
  * tarjetas se pintan con la proyección segura forDisplay().
@@ -103,10 +107,17 @@ class MetaConnect extends Component
             return;
         }
 
+        // Valida la autorización y la GUARDA como la conexión de la empresa (Formularios
+        // publicitarios). Si algo falla no se guarda nada y la conexión anterior sigue intacta.
         try {
-            $result = $service->discoverAssets($code, $accessToken);
+            [, $result] = $service->connect($institutionId, (int) $user->id, $code, $accessToken);
         } catch (RuntimeException $e) {
             $this->errorMessage = $e->getMessage();
+
+            return;
+        } catch (Throwable $e) {
+            Log::warning('social.meta.connect: no se pudo guardar la conexión', ['error' => $e->getMessage()]);
+            $this->errorMessage = __('No se pudo guardar la conexión con Meta. Tu conexión anterior sigue activa; inténtalo de nuevo.');
 
             return;
         }
@@ -128,9 +139,8 @@ class MetaConnect extends Component
     }
 
     /**
-     * Confirmación de la selección. En esta etapa NO persiste ningún canal: solo valida que
-     * el login y el descubrimiento funcionaron (la creación de canales llega en un bloque
-     * posterior). No toca la conexión Meta existente.
+     * Confirmación. La conexión ya quedó guardada al autorizar; no se crea ni modifica ningún
+     * canal (Messenger/Instagram siguen como estaban).
      */
     public function confirm(): void
     {
@@ -153,6 +163,7 @@ class MetaConnect extends Component
     {
         return view('social::meta-connect', [
             'selectedPage' => collect($this->pages)->firstWhere('page_id', $this->selectedPageId),
+            'connection' => MetaConnection::query()->first(), // la de esta empresa (ámbito)
         ]);
     }
 }

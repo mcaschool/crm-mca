@@ -28,3 +28,15 @@ Schedule::command('social:advisor-worker')
     ->everyMinute()
     ->withoutOverlapping(5)
     ->runInBackground();
+
+// Formularios publicitarios de Meta (por empresa): recoge los contactos nuevos de los formularios
+// activos de las Páginas que reciben (no hace nada si ninguna empresa lo activó).
+Schedule::command('social:meta-leads-poll')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10)
+    ->runInBackground();
+
+// Estado de la conexión con Meta de cada empresa (caducidad/revocación), para avisar en el panel.
+Schedule::command('social:meta-connections-check')
+    ->dailyAt('04:10')
+    ->withoutOverlapping();

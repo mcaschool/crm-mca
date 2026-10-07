@@ -4,20 +4,27 @@ declare(strict_types=1);
 
 namespace Modules\Social\Services;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Social\Models\MetaConnection;
+use Modules\Social\Models\MetaLeadPage;
 use RuntimeException;
 use Throwable;
 
 /**
  * «Conectar Meta» — capa común de onboarding vía Facebook Login for Business.
  *
- * Descubre los activos que la institución autoriza (Páginas de Facebook = Messenger, e
- * Instagram Professional asociado) reutilizando la app de Meta ya existente. Es un flujo
- * NUEVO que CONVIVE con la conexión Meta operativa: en esta etapa solo hace login +
- * descubrimiento + normalización; NO crea, sobreescribe ni toca canales, tokens ni webhooks.
+ * Descubre los activos que la empresa autoriza (Páginas de Facebook e Instagram Professional
+ * asociado) reutilizando la app de Meta de la plataforma, y GUARDA la autorización como la
+ * conexión de la empresa (meta_connections + meta_lead_pages) para Formularios publicitarios.
+ * Convive con la conexión Meta operativa: NO crea, sobreescribe ni toca canales (Messenger,
+ * Instagram, WhatsApp) ni webhooks. Una autorización fallida no sustituye a la que funciona.
  *
  * NO tiene nada que ver con WhatsApp Embedded Signup (Coexistence): son flujos separados y
  * no comparten estado. Sí comparte, deliberadamente, los MISMOS secretos de plataforma
@@ -122,6 +129,172 @@ final class MetaConnectionService
         return $this->fetchPages($token);
     }
 
+    // ----------------------------------------------------------------- conexión de la empresa
+
+    /**
+     * Completa «Conectar Meta»: valida la autorización y la GUARDA como la conexión de la empresa,
+     * con las Páginas que puede usar para formularios publicitarios (tokens cifrados).
+     *
+     * Reconectar sustituye la conexión anterior SOLO si la nueva funciona: si el intercambio, la
+     * consulta de Páginas o el guardado fallan, se lanza una excepción y lo existente sigue intacto.
+     * Nunca crea ni modifica canales (social_channels): la credencial de Messenger no se toca.
+     *
+     * @return array{0: MetaConnection, 1: MetaDiscoveryResult} la conexión guardada y lo descubierto
+     */
+    public function connect(int $institutionId, ?int $userId, string $code = '', string $accessToken = ''): array
+    {
+        if (($fake = $this->fakeMode()) !== null) {
+            $token = 'FAKE_USER_TOKEN';
+            $discovery = $this->fakeDiscovery($fake);
+            $info = [];
+        } else {
+            if ($accessToken !== '') {
+                $token = $this->longLived($accessToken); // User Access Token → larga duración si se puede
+            } elseif ($code !== '') {
+                $token = $this->exchangeCode($code);
+            } else {
+                throw new RuntimeException(__('Faltan datos de la autorización de Meta. Vuelve a iniciar el proceso.'));
+            }
+            $discovery = $this->fetchPages($token);   // si Meta no devuelve las Páginas, no se guarda nada
+            $info = $this->debugToken($token);        // metadatos (tipo, permisos, caducidad): mejor esfuerzo
+        }
+
+        $connection = app(CurrentInstitution::class)->runFor($institutionId, fn (): MetaConnection => DB::transaction(function () use ($token, $discovery, $info, $userId): MetaConnection {
+            $connection = MetaConnection::query()->firstOrNew([]);
+            $connection->fill([
+                'token' => $token,
+                'token_type' => isset($info['type']) ? (string) $info['type'] : null,
+                'meta_user_id' => isset($info['user_id']) ? (string) $info['user_id'] : null,
+                'scopes' => isset($info['scopes']) && is_array($info['scopes']) ? array_values(array_map('strval', $info['scopes'])) : null,
+                'expires_at' => $this->timestamp($info['expires_at'] ?? null),
+                'data_access_expires_at' => $this->timestamp($info['data_access_expires_at'] ?? null),
+                'status' => 'active',
+                'last_error' => null,
+                'last_checked_at' => now(),
+                'connected_by' => $userId,
+                'connected_at' => now(),
+            ])->save();
+
+            $seen = [];
+            foreach ($discovery->pages as $found) {
+                $page = MetaLeadPage::query()->firstOrNew(['page_id' => $found->pageId]);
+                $page->fill([
+                    'meta_connection_id' => $connection->getKey(),
+                    'name' => $found->name,
+                    'page_token' => $found->pageAccessToken,
+                    'tasks' => $found->tasks,
+                    'available' => true,
+                    'last_error' => null,
+                ]);
+                // Una comprobación fallida se repite con la nueva autorización (puede traer permisos).
+                if ($page->exists && $page->access_status === 'failed') {
+                    $page->access_status = 'unchecked';
+                }
+                $page->save();
+                $seen[] = $found->pageId;
+            }
+
+            // Páginas que la nueva autorización ya no incluye: dejan de recibir (sin borrar su configuración).
+            MetaLeadPage::query()->whereNotIn('page_id', $seen)->update(['available' => false, 'receiving_enabled' => false]);
+
+            return $connection->fresh() ?? $connection;
+        }));
+
+        return [$connection, $discovery];
+    }
+
+    /**
+     * Revisa la conexión con Meta (validez, permisos, caducidad) sin pedir nada al usuario.
+     * Meta no permite renovar en segundo plano: si caduca o se revoca, la empresa vuelve a conectar.
+     */
+    public function refreshStatus(MetaConnection $connection): MetaConnection
+    {
+        if ($connection->status === 'disconnected' || $connection->token === '') {
+            return $connection;
+        }
+        $info = $this->fakeMode() !== null ? ['is_valid' => true] : $this->debugToken($connection->token);
+        if ($info === []) {
+            $connection->forceFill(['last_checked_at' => now()])->save(); // Meta no respondió: sin cambios
+
+            return $connection;
+        }
+
+        $valid = (bool) ($info['is_valid'] ?? false);
+        $connection->forceFill([
+            'status' => $valid ? 'active' : 'invalid',
+            'last_error' => $valid ? null : mb_substr((string) ($info['error']['message'] ?? __('Meta indica que la conexión ya no es válida.')), 0, 255),
+            'scopes' => isset($info['scopes']) && is_array($info['scopes']) ? array_values(array_map('strval', $info['scopes'])) : $connection->scopes,
+            'expires_at' => array_key_exists('expires_at', $info) ? $this->timestamp($info['expires_at']) : $connection->expires_at,
+            'data_access_expires_at' => array_key_exists('data_access_expires_at', $info) ? $this->timestamp($info['data_access_expires_at']) : $connection->data_access_expires_at,
+            'last_checked_at' => now(),
+        ])->save();
+        if ($connection->effectiveStatus() === 'expired' && $connection->status === 'active') {
+            $connection->forceFill(['status' => 'expired'])->save();
+        }
+
+        return $connection;
+    }
+
+    /** Desconectar: borra las credenciales y para la recepción, conservando la configuración. */
+    public function disconnect(MetaConnection $connection): void
+    {
+        DB::transaction(function () use ($connection): void {
+            $connection->forceFill(['token' => '', 'status' => 'disconnected', 'last_error' => null])->save();
+            MetaLeadPage::query()->where('meta_connection_id', $connection->getKey())
+                ->update(['page_token' => Crypt::encryptString(''), 'receiving_enabled' => false, 'access_status' => 'unchecked']);
+        });
+    }
+
+    /**
+     * debug_token (solo lectura): tipo, usuario, permisos y caducidad. Con el token de la
+     * aplicación; [] si Meta no responde.
+     *
+     * @return array<string, mixed>
+     */
+    private function debugToken(string $token): array
+    {
+        $appToken = $this->appId() !== '' && $this->appSecret() !== '' ? $this->appId().'|'.$this->appSecret() : $token;
+        try {
+            $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($appToken)->acceptJson()
+                ->get("https://graph.facebook.com/{$this->graphVersion()}/debug_token", ['input_token' => $token]);
+        } catch (Throwable $e) {
+            Log::warning('social.meta.connect: debug_token sin respuesta', ['error' => $e->getMessage()]);
+
+            return [];
+        }
+        $data = $response->json('data');
+
+        return $response->successful() && is_array($data) ? $data : [];
+    }
+
+    /** User Access Token de corta duración → larga duración (60 días); si no se puede, el original. */
+    private function longLived(string $userToken): string
+    {
+        if ($this->appId() === '' || $this->appSecret() === '') {
+            return $userToken;
+        }
+        try {
+            $response = Http::timeout(self::TIMEOUT_SECONDS)->asForm()->acceptJson()
+                ->post("https://graph.facebook.com/{$this->graphVersion()}/oauth/access_token", [
+                    'grant_type' => 'fb_exchange_token',
+                    'client_id' => $this->appId(),
+                    'client_secret' => $this->appSecret(),
+                    'fb_exchange_token' => $userToken,
+                ]);
+        } catch (Throwable) {
+            return $userToken;
+        }
+        $long = $response->json('access_token');
+
+        return $response->successful() && is_string($long) && $long !== '' ? $long : $userToken;
+    }
+
+    /** Marca de tiempo de Meta (segundos; 0 = sin caducidad) → fecha o null. */
+    private function timestamp(mixed $value): ?CarbonImmutable
+    {
+        return is_numeric($value) && (int) $value > 0 ? CarbonImmutable::createFromTimestamp((int) $value) : null;
+    }
+
     /** Intercambio server-side del authorization code por el access token de usuario. */
     private function exchangeCode(string $code): string
     {
@@ -168,7 +341,7 @@ final class MetaConnectionService
                 ->withToken($token)
                 ->acceptJson()
                 ->get("https://graph.facebook.com/{$this->graphVersion()}/me/accounts", [
-                    'fields' => 'id,name,access_token,instagram_business_account{id,username}',
+                    'fields' => 'id,name,access_token,tasks,instagram_business_account{id,username}',
                     'limit' => 100,
                 ]);
         } catch (Throwable $e) {
@@ -202,6 +375,7 @@ final class MetaConnectionService
                 pageAccessToken: $pageToken,
                 instagramId: $igId !== '' ? $igId : null,
                 instagramUsername: $igUsername !== '' ? $igUsername : null,
+                tasks: array_values(array_filter(array_map('strval', is_array($row['tasks'] ?? null) ? $row['tasks'] : []))),
             );
         }
 

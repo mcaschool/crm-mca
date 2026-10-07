@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Formularios publicitarios de Facebook/Instagram (Meta Lead Ads) directos al CRM, sin
  * intermediarios. Preparado y DESACTIVADO: leer los leads requiere un permiso de Meta que aún no
- * está aprobado (ver config social.meta.lead_forms_enabled).
+ * está aprobado (ver config social.meta; hoy: activación por empresa desde el panel).
  *
  * meta_lead_forms: formularios de cada Página con su programa y asesor responsable.
  * meta_lead_receipts: un registro por lead de Meta (idempotencia por id de Meta + estado y

@@ -12,22 +12,25 @@ use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Crm\Services\EventService;
 use Modules\Crm\Services\LeadIntake;
 use Modules\Social\Models\MetaLeadForm;
+use Modules\Social\Models\MetaLeadPage;
 use Modules\Social\Models\MetaLeadReceipt;
-use Modules\Social\Models\SocialChannel;
+use Modules\Social\Support\MetaLeadAccessGuidance;
 use Throwable;
 
 /**
- * Formularios publicitarios de Facebook e Instagram (Meta Lead Ads) DIRECTOS al CRM (Meta → CRM),
- * sin intermediarios externos. Reutiliza la ingesta de leads del CRM (LeadIntake: contacto por
- * correo/teléfono, programa, deduplicación) y deja rastro de la atribución de la campaña.
+ * Formularios publicitarios de Facebook e Instagram (Meta Lead Ads) DIRECTOS al CRM, por empresa.
+ * Cada empresa conecta Meta, elige Páginas y formularios, asigna programa y asesor, comprueba el
+ * acceso y activa la recepción desde su panel. Reutiliza la ingesta de leads del CRM (LeadIntake:
+ * contacto por correo/teléfono, programa, deduplicación) y deja rastro de la atribución.
  *
- * PREPARADO Y DESACTIVADO: leer los datos de un lead exige el permiso de Meta «leads_retrieval»
- * (y, para listar los formularios de la Página, «pages_manage_ads»), que NO forma parte de la
- * revisión de la app pendiente. Mientras social.meta.lead_forms_enabled sea false: no se llama a
- * Meta, no se procesa ningún aviso y la pantalla lo explica.
+ * Recepción: sondeo programado de los formularios activos (social:meta-leads-poll), sin
+ * configuración por empresa en Meta; el aviso en tiempo real (campo «leadgen» del webhook de la
+ * Página) se procesa igual si la plataforma lo tiene suscrito. Idempotente por el id de Meta.
  *
- * Los formularios de Instagram se publican desde la Página de Facebook vinculada: llegan por la
- * misma Página (campo `platform` = ig).
+ * Solo recibe una Página que la empresa activó tras una comprobación de acceso VERIFICADA (Página,
+ * formularios y lectura real de contactos) y con la conexión vigente. El operador de la plataforma
+ * puede pararlo todo con social.meta.lead_forms_kill_switch. Los formularios de Instagram se
+ * publican desde la Página de Facebook vinculada: llegan por la misma Página (platform = ig).
  */
 final class MetaLeadFormService
 {
@@ -42,43 +45,50 @@ final class MetaLeadFormService
 
     private const TIMEOUT_SECONDS = 10;
 
+    private const LEAD_FIELDS = 'created_time,field_data,form_id,platform,is_organic,custom_disclaimer_responses';
+
+    private const AD_FIELDS = 'ad_name,adset_name,campaign_name';
+
+    /** Margen al sondear (minutos) para no perder contactos en el borde de dos ejecuciones. */
+    private const POLL_OVERLAP_MINUTES = 15;
+
     public function __construct(
         private readonly CurrentInstitution $tenancy,
         private readonly LeadIntake $intake,
         private readonly EventService $events,
+        private readonly MetaLeadAccessCheck $check,
     ) {}
 
-    public function enabled(): bool
+    /** Parada de emergencia de la PLATAFORMA (operador): ninguna empresa recibe contactos. */
+    public function killSwitch(): bool
     {
-        return (bool) config('social.meta.lead_forms_enabled', false);
+        return (bool) config('social.meta.lead_forms_kill_switch', false);
     }
 
     /**
-     * Actualiza la lista de formularios de una Página (Facebook Messenger). Mientras no haya
-     * aprobación de Meta no se consulta nada.
+     * «Actualizar formularios» de una Página de la empresa (en su contexto).
      *
-     * @return array{ok: bool, message: string}
+     * @return array{ok: bool, message: string, area: string|null}
      */
-    public function syncForms(SocialChannel $page): array
+    public function syncForms(MetaLeadPage $page): array
     {
-        if (! $this->enabled()) {
-            return ['ok' => false, 'message' => __('Pendiente de aprobación de Meta: todavía no se pueden consultar los formularios.')];
-        }
-        $token = (string) ($page->credentials['token'] ?? '');
-        if ($page->provider !== 'messenger' || $token === '' || (string) $page->external_id === '') {
-            return ['ok' => false, 'message' => __('Esta Página no está conectada correctamente.')];
+        if (! $page->selected || ! $page->available || ! ($page->metaConnection?->usable() ?? false)) {
+            return ['ok' => false, 'message' => __('Conecta Meta y elige esta Página antes de actualizar sus formularios.'), 'area' => 'token'];
         }
 
         try {
-            $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
-                ->get($this->graph((string) $page->external_id.'/leadgen_forms'), ['fields' => 'id,name,status', 'limit' => 100]);
+            $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()
+                ->get($this->graph($page->page_id.'/leadgen_forms'), ['fields' => 'id,name,status', 'limit' => 100]);
         } catch (Throwable $e) {
-            Log::warning('social.lead_forms: error de red al listar formularios', ['channel_id' => $page->id, 'error' => $e->getMessage()]);
+            Log::warning('social.lead_forms: error de red al listar formularios', ['page' => $page->getKey(), 'error' => $e->getMessage()]);
 
-            return ['ok' => false, 'message' => __('No se pudo contactar con Meta. Inténtalo más tarde.')];
+            return ['ok' => false, 'message' => __('No se pudo contactar con Meta. Inténtalo más tarde.'), 'area' => 'network'];
         }
         if (! $response->successful()) {
-            return ['ok' => false, 'message' => __('Meta no permitió consultar los formularios de esta Página (revisa la conexión y los permisos).')];
+            $area = $this->check->classify((array) $response->json('error', []));
+            $issue = ['area' => $area, 'who' => MetaLeadAccessGuidance::who($area), 'permissions' => MetaLeadAccessGuidance::permissionsIn((string) $response->json('error.message', ''))];
+
+            return ['ok' => false, 'message' => MetaLeadAccessGuidance::forCompany($issue), 'area' => $area];
         }
 
         $n = 0;
@@ -86,25 +96,121 @@ final class MetaLeadFormService
             if (! is_array($row) || ! isset($row['id'])) {
                 continue;
             }
-            MetaLeadForm::query()->updateOrCreate(
-                ['form_id' => (string) $row['id']],
-                ['social_channel_id' => $page->id, 'name' => (string) ($row['name'] ?? $row['id']), 'last_synced_at' => now()],
-            );
+            $form = MetaLeadForm::query()->firstOrNew(['form_id' => (string) $row['id']]);
+            // Un formulario es de UNA Página de la empresa: no se reasigna en silencio.
+            if ($form->exists && $form->meta_lead_page_id !== null && $form->meta_lead_page_id !== $page->getKey()) {
+                continue;
+            }
+            $form->fill(['meta_lead_page_id' => $page->getKey(), 'name' => (string) ($row['name'] ?? $row['id']), 'last_synced_at' => now()])->save();
             $n++;
         }
 
-        return ['ok' => true, 'message' => __(':n formulario(s) actualizado(s).', ['n' => $n])];
+        return ['ok' => true, 'message' => trans_choice(':n formulario actualizado.|:n formularios actualizados.', $n, ['n' => $n]), 'area' => null];
     }
 
     /**
-     * Avisos de nuevos contactos (objeto `page`, campo `leadgen`). Devuelve cuántos se trataron.
-     * Desactivado → 0 (no se toca nada).
+     * Sondeo programado: contactos nuevos de los formularios activos de las Páginas que reciben,
+     * empresa por empresa. Devuelve cuántos contactos se registraron.
+     */
+    public function poll(): int
+    {
+        if ($this->killSwitch()) {
+            return 0;
+        }
+
+        $pages = $this->tenancy->runGlobally(fn () => MetaLeadPage::query()
+            ->where('receiving_enabled', true)->where('selected', true)->where('available', true)->where('access_status', 'verified')
+            ->get(['id', 'institution_id']));
+
+        $created = 0;
+        foreach ($pages as $row) {
+            $created += $this->tenancy->runFor((int) $row->institution_id, function () use ($row): int {
+                $page = MetaLeadPage::query()->with('metaConnection')->find($row->id);
+
+                return $page !== null && $page->receiving() ? $this->pollPage($page) : 0;
+            });
+        }
+
+        return $created;
+    }
+
+    private function pollPage(MetaLeadPage $page): int
+    {
+        $created = 0;
+        $forms = MetaLeadForm::query()->where('meta_lead_page_id', $page->getKey())->where('is_active', true)->whereNotNull('program_id')->get();
+        foreach ($forms as $form) {
+            $since = max(
+                (int) ($form->receiving_since?->getTimestamp() ?? now()->getTimestamp()),
+                (int) ($page->last_polled_at?->subMinutes(self::POLL_OVERLAP_MINUTES)->getTimestamp() ?? 0),
+            );
+
+            try {
+                $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()
+                    ->get($this->graph($form->form_id.'/leads'), [
+                        'fields' => 'id,created_time',
+                        'limit' => 100,
+                        'filtering' => json_encode([['field' => 'time_created', 'operator' => 'GREATER_THAN', 'value' => $since]]),
+                    ]);
+            } catch (Throwable $e) {
+                Log::warning('social.lead_forms: error de red al sondear', ['page' => $page->getKey(), 'error' => $e->getMessage()]);
+
+                return $created; // se reintenta en la próxima ejecución
+            }
+
+            if (! $response->successful()) {
+                $this->pauseOnAccessError($page, (array) $response->json('error', []), (int) $response->status());
+
+                return $created;
+            }
+
+            foreach ((array) $response->json('data', []) as $lead) {
+                if (is_array($lead) && isset($lead['id'])
+                    && $this->processLeadgen(['leadgen_id' => (string) $lead['id'], 'form_id' => $form->form_id, 'page_id' => $page->page_id]) === 'processed') {
+                    $created++;
+                }
+            }
+        }
+
+        $page->forceFill(['last_polled_at' => now(), 'last_error' => null])->save();
+
+        return $created;
+    }
+
+    /**
+     * Meta denegó el acceso al sondear: la Página deja de recibir hasta volver a comprobarlo.
+     *
+     * @param  array<string, mixed>  $error
+     */
+    private function pauseOnAccessError(MetaLeadPage $page, array $error, int $httpStatus): void
+    {
+        $area = $this->check->classify($error);
+        if (in_array($area, ['request', 'other'], true)) {
+            Log::warning('social.lead_forms: Meta rechazó el sondeo', ['page' => $page->getKey(), 'status' => $httpStatus, 'code' => $error['code'] ?? null]);
+
+            return;
+        }
+        $issue = ['area' => $area, 'who' => MetaLeadAccessGuidance::who($area), 'permissions' => MetaLeadAccessGuidance::permissionsIn((string) ($error['message'] ?? '')),
+            'http_status' => $httpStatus, 'code' => isset($error['code']) ? (int) $error['code'] : null, 'meta_message' => mb_substr((string) ($error['message'] ?? ''), 0, 240)];
+        $result = (array) ($page->access_result ?? []);
+        $result['issues'] = [$issue];
+        $page->forceFill([
+            'access_status' => 'failed',
+            'access_result' => $result,
+            'last_error' => mb_substr(MetaLeadAccessGuidance::forCompany($issue), 0, 255),
+        ])->save();
+        if ($area === 'token') {
+            $page->metaConnection?->forceFill(['status' => 'invalid', 'last_error' => $issue['meta_message']])->save();
+        }
+    }
+
+    /**
+     * Avisos en tiempo real (objeto `page`, campo `leadgen`). Devuelve cuántos se trataron.
      *
      * @param  array<string, mixed>  $payload
      */
     public function handleWebhook(array $payload): int
     {
-        if (! $this->enabled() || ($payload['object'] ?? null) !== 'page') {
+        if ($this->killSwitch() || ($payload['object'] ?? null) !== 'page') {
             return 0;
         }
 
@@ -122,38 +228,46 @@ final class MetaLeadFormService
     }
 
     /**
-     * Un contacto nuevo de un formulario: idempotente por su id de Meta (índice único).
+     * Un contacto nuevo de un formulario: en el contexto de la empresa DUEÑA de la Página,
+     * solo si esa Página recibe y el formulario es suyo. Idempotente por su id de Meta.
      *
      * @param  array<string, mixed>  $value  {leadgen_id, form_id, page_id, ad_id?, created_time?}
-     * @return string processed | duplicate | skipped | failed | unknown_page
+     * @return string processed | duplicate | skipped | failed | unknown_page | not_receiving
      */
     public function processLeadgen(array $value): string
     {
         $leadgenId = (string) ($value['leadgen_id'] ?? '');
         $pageId = (string) ($value['page_id'] ?? '');
         $formId = (string) ($value['form_id'] ?? '');
-        if ($leadgenId === '' || $pageId === '') {
+        if ($leadgenId === '' || $pageId === '' || $this->killSwitch()) {
             return 'failed';
         }
 
-        $page = $this->tenancy->runGlobally(fn (): ?SocialChannel => SocialChannel::query()
-            ->where('provider', 'messenger')->where('external_id', $pageId)->first());
-        if ($page === null) {
-            Log::info('social.lead_forms: Página no configurada', ['page_id' => $pageId]);
+        // La Página la usa como mucho UNA empresa (se impide al elegirla).
+        $owner = $this->tenancy->runGlobally(fn (): ?MetaLeadPage => MetaLeadPage::query()
+            ->where('page_id', $pageId)->where('selected', true)->orderByDesc('receiving_enabled')->first(['id', 'institution_id']));
+        if ($owner === null) {
+            Log::info('social.lead_forms: Página sin empresa', ['page_id' => $pageId]);
 
             return 'unknown_page';
         }
 
-        return $this->tenancy->runFor((int) $page->institution_id, function () use ($page, $leadgenId, $pageId, $formId): string {
+        return $this->tenancy->runFor((int) $owner->institution_id, function () use ($owner, $leadgenId, $pageId, $formId): string {
+            $page = MetaLeadPage::query()->with('metaConnection')->find($owner->id);
+            if ($page === null || ! $page->receiving()) {
+                return 'not_receiving';
+            }
+
             try {
                 $receipt = MetaLeadReceipt::query()->create([
                     'leadgen_id' => $leadgenId, 'form_id' => $formId ?: null, 'page_id' => $pageId, 'status' => 'processing',
                 ]);
             } catch (UniqueConstraintViolationException) {
-                return 'duplicate'; // Meta reintentó el mismo aviso: ya está registrado
+                return 'duplicate'; // reintento de Meta o ya recogido por el sondeo
             }
 
-            $form = $formId !== '' ? MetaLeadForm::query()->where('form_id', $formId)->first() : null;
+            // El formulario debe ser de ESTA Página de ESTA empresa.
+            $form = $formId !== '' ? MetaLeadForm::query()->where('form_id', $formId)->where('meta_lead_page_id', $page->getKey())->first() : null;
             if ($form === null || ! $form->is_active) {
                 return $this->finish($receipt, 'skipped', __('El formulario no está activado en el CRM.'));
             }
@@ -165,7 +279,7 @@ final class MetaLeadFormService
 
             $lead = $this->fetchLead($page, $leadgenId);
             if ($lead === null) {
-                return $this->finish($receipt, 'failed', __('No se pudieron leer los datos del contacto en Meta (permiso pendiente o conexión caducada).'));
+                return $this->finish($receipt, 'failed', __('No se pudieron leer los datos del contacto en Meta (acceso denegado o conexión caducada).'));
             }
 
             $fields = $this->fieldMap((array) ($lead['field_data'] ?? []));
@@ -225,24 +339,24 @@ final class MetaLeadFormService
     }
 
     /** @return array<string, mixed>|null */
-    private function fetchLead(SocialChannel $page, string $leadgenId): ?array
+    private function fetchLead(MetaLeadPage $page, string $leadgenId): ?array
     {
-        $token = (string) ($page->credentials['token'] ?? '');
-        if ($token === '') {
-            return null;
+        // Con datos del anuncio si la conexión puede leerlos; si no, sin ellos (el contacto llega igual).
+        foreach ([self::LEAD_FIELDS.','.self::AD_FIELDS, self::LEAD_FIELDS] as $fields) {
+            try {
+                $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()
+                    ->get($this->graph($leadgenId), ['fields' => $fields]);
+            } catch (Throwable $e) {
+                Log::warning('social.lead_forms: error de red al leer el lead', ['leadgen_id' => $leadgenId, 'error' => $e->getMessage()]);
+
+                return null;
+            }
+            if ($response->successful() && is_array($response->json())) {
+                return $response->json();
+            }
         }
 
-        try {
-            $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()->get($this->graph($leadgenId), [
-                'fields' => 'created_time,field_data,form_id,ad_name,adset_name,campaign_name,platform,is_organic,custom_disclaimer_responses',
-            ]);
-        } catch (Throwable $e) {
-            Log::warning('social.lead_forms: error de red al leer el lead', ['leadgen_id' => $leadgenId, 'error' => $e->getMessage()]);
-
-            return null;
-        }
-
-        return $response->successful() && is_array($response->json()) ? $response->json() : null;
+        return null;
     }
 
     /**

@@ -30,10 +30,15 @@
                 <div class="card card-p" style="margin-top:16px;display:flex;flex-direction:column;gap:14px;align-items:flex-start">
                     <div>
                         <div style="display:flex;align-items:center;gap:8px">
-                            <span class="badge badge-off">{{ __('No conectado') }}</span>
+                            @if ($connection !== null && $connection->usable())
+                                <span class="badge badge-on" data-testid="meta-connected">{{ __('Conectado') }}</span>
+                                <span class="mca-help">{{ __('Volver a conectar sustituye la autorización solo si la nueva funciona.') }}</span>
+                            @else
+                                <span class="badge badge-off">{{ __('No conectado') }}</span>
+                            @endif
                         </div>
                         <p class="mca-sub" style="margin-top:10px;max-width:520px">
-                            {{ __('Conecta tu cuenta de Meta para detectar automáticamente tu Página de Facebook (Messenger) y tu cuenta de Instagram profesional. No tienes que buscar identificadores ni pegar tokens.') }}
+                            {{ __('Conecta tu cuenta de Meta para detectar automáticamente tus Páginas de Facebook y tu cuenta de Instagram profesional, y usarlas en Formularios publicitarios. No tienes que buscar identificadores ni pegar tokens, y tus canales actuales no se modifican.') }}
                         </p>
                     </div>
 
@@ -48,7 +53,7 @@
                                             'idle' => __('Conectar Meta'),
                                             'starting' => __('Iniciando…'),
                                             'connecting' => __('Continuar con Facebook'),
-                                            'discovering' => __('Detectando activos…'),
+                                            'discovering' => __('Guardando la conexión…'),
                                             'cancelled' => __('Cancelado'),
                                         ]),
                                         status: 'idle',
@@ -181,7 +186,7 @@
                 <div class="card card-p" style="margin-top:18px">
                     <div style="display:flex;align-items:center;gap:10px">
                         <x-ui.icon name="check" style="width:20px;height:20px;color:var(--mca-ok,#2E7D32)" />
-                        <h2 style="font-size:15px;font-weight:700;margin:0">{{ __('Activos detectados correctamente') }}</h2>
+                        <h2 style="font-size:15px;font-weight:700;margin:0">{{ __('Conexión con Meta guardada') }}</h2>
                     </div>
                     @if ($selectedPage)
                         <p class="mca-sub" style="margin-top:10px">
@@ -189,9 +194,10 @@
                         </p>
                     @endif
                     <p class="mca-sub" style="margin-top:6px">
-                        {{ __('Por ahora esto es solo una comprobación: no se creó ni modificó ningún canal, y tu conexión de Meta actual sigue intacta.') }}
+                        {{ __('Tu empresa ya puede usar estas Páginas en Formularios publicitarios. Tus canales de Messenger e Instagram no se han modificado.') }}
                     </p>
-                    <div style="margin-top:14px">
+                    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+                        <a href="{{ route('social.lead-forms') }}" class="btn btn-primary btn-sm">{{ __('Ir a Formularios publicitarios') }}</a>
                         <button type="button" wire:click="restart" class="btn btn-soft btn-sm">{{ __('Volver a empezar') }}</button>
                     </div>
                 </div>

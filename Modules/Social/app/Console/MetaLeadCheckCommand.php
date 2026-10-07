@@ -6,6 +6,7 @@ namespace Modules\Social\Console;
 
 use Illuminate\Console\Command;
 use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Social\Models\MetaLeadPage;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Services\MetaLeadAccessCheck;
 
@@ -20,7 +21,8 @@ use Modules\Social\Services\MetaLeadAccessCheck;
 class MetaLeadCheckCommand extends Command
 {
     protected $signature = 'social:meta-lead-check
-        {--channel= : Id del canal de Messenger (Página); por defecto el primero}
+        {--page= : Id de Meta de la Página de Formularios publicitarios; por defecto la primera elegida}
+        {--channel= : (heredado) Id del canal de Messenger, si no hay Páginas de formularios}
         {--form= : Id del formulario de Meta; por defecto el primero de la Página}
         {--test-lead : Crear, leer y borrar un lead de PRUEBA de Meta}
         {--keep-test-lead : No borrar el lead de prueba al terminar}';
@@ -29,26 +31,39 @@ class MetaLeadCheckCommand extends Command
 
     public function handle(MetaLeadAccessCheck $check, CurrentInstitution $tenancy): int
     {
-        $page = $tenancy->runGlobally(fn (): ?SocialChannel => SocialChannel::query()
-            ->where('provider', 'messenger')
-            ->when($this->option('channel'), fn ($q, $id) => $q->whereKey((int) $id))
-            ->orderBy('id')
-            ->first());
+        $form = $this->option('form') ? (string) $this->option('form') : null;
+        $test = (bool) $this->option('test-lead');
+        $keep = (bool) $this->option('keep-test-lead');
 
-        if ($page === null) {
-            $this->error('No hay ninguna Página de Facebook conectada.');
+        // Página de Formularios publicitarios de una empresa (conexión de «Conectar Meta»).
+        $leadPage = $this->option('channel') ? null : $tenancy->runGlobally(fn (): ?MetaLeadPage => MetaLeadPage::query()
+            ->when($this->option('page'), fn ($q, $id) => $q->where('page_id', (string) $id))
+            ->orderByDesc('selected')->orderBy('id')
+            ->first(['id', 'institution_id', 'name']));
 
-            return self::FAILURE;
+        if ($leadPage !== null) {
+            $result = $tenancy->runFor((int) $leadPage->institution_id, function () use ($check, $leadPage, $form, $test, $keep): array {
+                $page = MetaLeadPage::query()->findOrFail($leadPage->id);
+
+                return $check->runForLeadPage($page, $form, $test, $keep);
+            });
+            $this->line('Página: '.$leadPage->name.' (formularios, empresa '.$leadPage->institution_id.')');
+        } else {
+            $page = $tenancy->runGlobally(fn (): ?SocialChannel => SocialChannel::query()
+                ->where('provider', 'messenger')
+                ->when($this->option('channel'), fn ($q, $id) => $q->whereKey((int) $id))
+                ->orderBy('id')
+                ->first());
+
+            if ($page === null) {
+                $this->error('No hay ninguna Página de Facebook conectada.');
+
+                return self::FAILURE;
+            }
+
+            $result = $tenancy->runFor((int) $page->institution_id, fn (): array => $check->run($page, $form, $test, $keep));
+            $this->line('Página: '.$page->display_name.' (canal '.$page->id.')');
         }
-
-        $result = $tenancy->runFor((int) $page->institution_id, fn (): array => $check->run(
-            $page,
-            $this->option('form') ? (string) $this->option('form') : null,
-            (bool) $this->option('test-lead'),
-            (bool) $this->option('keep-test-lead'),
-        ));
-
-        $this->line('Página: '.$page->display_name.' (canal '.$page->id.')');
         foreach ($result['steps'] as $step) {
             $this->newLine();
             $mark = match ($step['ok']) {

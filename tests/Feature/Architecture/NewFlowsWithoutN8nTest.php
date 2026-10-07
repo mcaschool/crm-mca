@@ -28,6 +28,14 @@ function newFlowFiles(): array
         'Modules/Social/app/Console/AdvisorWorkerCommand.php',
         'Modules/Social/app/Console/MetaLeadCheckCommand.php',
         'Modules/Social/app/Livewire/LeadForms.php',
+        'Modules/Social/app/Livewire/MetaConnect.php',
+        'Modules/Social/app/Services/MetaConnectionService.php',
+        'Modules/Social/app/Services/MetaLeadPageService.php',
+        'Modules/Social/app/Support/MetaLeadAccessGuidance.php',
+        'Modules/Social/app/Console/MetaLeadsPollCommand.php',
+        'Modules/Social/app/Console/MetaConnectionsCheckCommand.php',
+        'Modules/Social/app/Models/MetaConnection.php',
+        'Modules/Social/app/Models/MetaLeadPage.php',
     ]);
 }
 

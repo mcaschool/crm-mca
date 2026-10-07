@@ -8,6 +8,8 @@ use Livewire\Livewire;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Institutions\Models\Institution;
 use Modules\Social\Livewire\MetaConnect;
+use Modules\Social\Models\MetaConnection;
+use Modules\Social\Models\MetaLeadPage;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Services\MetaConnectionService;
 
@@ -271,6 +273,9 @@ it('el descubrimiento lleva a la selección y NO crea ningún canal', function (
 
     expect($component->get('pages'))->toHaveCount(1)
         ->and(SocialChannel::query()->count())->toBe(0);
+    // La autorización queda guardada como la conexión de la empresa (tokens cifrados, fuera de la UI).
+    expect(MetaConnection::query()->sole()->token)->toBe('USERTOK')
+        ->and(MetaLeadPage::query()->sole()->only(['page_id', 'page_token', 'selected']))->toBe(['page_id' => 'PAGE_1', 'page_token' => 'PAGETOK_1', 'selected' => false]);
 });
 
 it('el flujo UAT (access token) descubre, no crea canales y no filtra el token', function () {
@@ -293,7 +298,10 @@ it('el flujo UAT (access token) descubre, no crea canales y no filtra el token',
 
     expect($component->get('pages'))->toHaveCount(1)
         ->and(SocialChannel::query()->count())->toBe(0);
-    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'oauth/access_token'));
+    // Sin intercambio de CÓDIGO; solo la conversión del token de usuario a larga duración.
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'oauth/access_token') && isset($request->data()['code']));
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'oauth/access_token') && ($request->data()['grant_type'] ?? null) === 'fb_exchange_token');
+    expect(MetaConnection::query()->count())->toBe(1);
 });
 
 it('un state inválido no inicia el descubrimiento', function () {

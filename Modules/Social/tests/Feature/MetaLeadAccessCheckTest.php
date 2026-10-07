@@ -10,6 +10,8 @@ use Livewire\Livewire;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Institutions\Models\Institution;
 use Modules\Social\Livewire\LeadForms;
+use Modules\Social\Models\MetaConnection;
+use Modules\Social\Models\MetaLeadPage;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Services\MetaLeadAccessCheck;
 
@@ -169,28 +171,29 @@ it('el lead de PRUEBA se crea, se lee enmascarado y se borra; nunca muestra la c
     Http::assertSentCount(6);
 });
 
-it('«Comprobar acceso» en el panel usa lenguaje llano y no activa nada', function () {
-    $page = mlcPage();
-    $admin = User::factory()->create(['institution_id' => $page->institution_id, 'role' => 'admin']);
+it('«Comprobar acceso» en el panel usa lenguaje llano, dice quién lo resuelve y no activa nada', function () {
+    $channel = mlcPage();
+    $admin = User::factory()->create(['institution_id' => $channel->institution_id, 'role' => 'admin']);
+    $connection = MetaConnection::query()->create(['token' => 'USER_TOKEN', 'status' => 'active', 'connected_at' => now()]);
+    $page = MetaLeadPage::query()->create(['meta_connection_id' => $connection->id, 'page_id' => 'page_77', 'name' => 'MCA School', 'page_token' => MLC_TOKEN, 'selected' => true]);
     mlcFake([
         'page' => [['id' => 'page_77', 'name' => 'MCA School']],
-        'lead_access' => mlcError(200, '(#200) Requires leads_retrieval permission to manage the object'),
         'forms' => [['data' => [['id' => 'f1', 'name' => 'Diplomas']]]],
         'form_leads' => mlcError(200, '(#200) Requires leads_retrieval permission to manage the object'),
     ]);
 
     $c = Livewire::actingAs($admin)->test(LeadForms::class)
-        ->assertSee('Conectar Meta')->assertSee('Elegir formularios')->assertSee('Asignar programa')
+        ->assertSee('Conectar Meta')->assertSee('Elegir Páginas y formularios')->assertSee('Asignar programa')
         ->call('checkAccess', $page->id)
-        ->assertSee('La conexión actual llega a la Página.')
-        ->assertSee('La aplicación aún no tiene permiso para leer los contactos de los formularios.')
-        ->assertSee('1 formulario encontrado en la Página.');
+        ->assertSee('Acceso con problemas')
+        ->assertSee('Lo resuelve la plataforma del CRM')
+        ->assertSee('1 formulario en la Página.');
 
-    $block = Illuminate\Support\Str::between($c->html(), 'data-testid="lead-access-'.$page->id.'"', '</ul>');
-    foreach (['token', 'webhook', 'endpoint', 'payload', 'n8n', 'leads_retrieval'] as $word) {
+    $block = Illuminate\Support\Str::between($c->html(), 'data-testid="page-issues-'.$page->id.'"', '<h4');
+    foreach (['token', 'webhook', 'endpoint', 'payload', 'n8n', 'leads_retrieval', 'http'] as $word) {
         expect(strtolower($block))->not->toContain($word);
     }
-    expect(config('social.meta.lead_forms_enabled'))->toBeFalse();
+    expect($page->fresh()->receiving_enabled)->toBeFalse();
     Http::assertNotSent(fn (HttpRequest $r) => $r->method() !== 'GET');
 });
 
