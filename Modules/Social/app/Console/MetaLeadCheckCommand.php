@@ -15,6 +15,7 @@ use Modules\Social\Services\MetaLeadAccessCheck;
  * veredicto: Página / acceso del negocio a los leads / permiso de la aplicación.
  * Por defecto solo LEE. --test-lead crea un lead de PRUEBA de Meta en el formulario, lo lee y lo
  * borra (salvo --keep-test-lead). No usa datos de prospectos reales ni cambia nada en Meta.
+ * Código de salida 1 si falla una comprobación real (Página, formularios, lectura de leads).
  */
 class MetaLeadCheckCommand extends Command
 {
@@ -50,7 +51,10 @@ class MetaLeadCheckCommand extends Command
         $this->line('Página: '.$page->display_name.' (canal '.$page->id.')');
         foreach ($result['steps'] as $step) {
             $this->newLine();
-            $this->line(($step['ok'] ? '✔ ' : '✖ ').$step['operation'].'  → HTTP '.($step['http_status'] ?? '—').($step['area'] ? '  ['.$step['area'].']' : ''));
+            $mark = match ($step['ok']) {
+                true => '✔ ', false => '✖ ', default => '– '
+            };
+            $this->line($mark.$step['operation'].'  → HTTP '.($step['http_status'] ?? '—').($step['area'] ? '  ['.$step['area'].']' : ''));
             $this->line((string) json_encode($step['response'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
@@ -59,6 +63,14 @@ class MetaLeadCheckCommand extends Command
         foreach ($result['verdict'] as $area => $v) {
             $this->line(sprintf('%-32s %-8s %s', $labels[$area], strtoupper($v['status']), $v['detail']));
         }
+
+        $this->newLine();
+        if ($check->realCheckFailed($result)) {
+            $this->error('Resultado: la comprobación real FALLÓ (ver arriba).');
+
+            return self::FAILURE;
+        }
+        $this->info('Resultado: sin fallos en las comprobaciones reales.');
 
         return self::SUCCESS;
     }
