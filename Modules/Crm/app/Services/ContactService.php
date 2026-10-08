@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\Crm\Services;
 
-use Illuminate\Support\Carbon;
 use Modules\Core\Support\PhoneNumber;
 use Modules\Crm\Exceptions\ContactIdentityConflictException;
+use Modules\Crm\Exceptions\InvalidContactDataException;
 use Modules\Crm\Models\Contact;
+use Modules\Crm\Support\ContactDataNormalizer;
 
 /**
  * Alta/enriquecimiento de contactos con identidad por EMAIL O TELÉFONO, respetando las
@@ -26,6 +27,11 @@ use Modules\Crm\Models\Contact;
  * Nunca se sobrescribe un email existente por otro distinto, ni se persiste '' (se guarda
  * NULL). El teléfono CRUDO se conserva como valor de presentación; solo el normalizado
  * (no nulo) participa en la deduplicación.
+ *
+ * TODA entrada pasa antes por ContactDataNormalizer (la capa común de todos los canales):
+ * tipos, formatos y longitudes del esquema, marcadores sintéticos de proveedores → null, sin
+ * truncar. Lo inválido se rechaza con InvalidContactDataException ANTES de buscar o escribir
+ * nada, así un dato externo nunca llega a provocar un error SQL.
  */
 class ContactService
 {
@@ -35,14 +41,14 @@ class ContactService
      * @param  bool  $strictIdentityConflict  lanza excepción si email y teléfono chocan (no fusiona)
      *
      * @throws ContactIdentityConflictException
+     * @throws InvalidContactDataException
      */
     public function createOrUpdate(array $data, bool $strictIdentityConflict = false): Contact
     {
-        $email = mb_strtolower(trim((string) ($data['email'] ?? '')));
-        $email = $email !== '' ? $email : null;
+        $data = ContactDataNormalizer::normalize($data);
 
-        $phoneRaw = trim((string) ($data['phone'] ?? ''));
-        $phoneRaw = $phoneRaw !== '' ? $phoneRaw : null;
+        $email = $data['email'] ?? null;
+        $phoneRaw = $data['phone'] ?? null;
         $assumeInternational = (bool) ($data['phone_assume_international'] ?? false);
         $phoneNormalized = $phoneRaw !== null ? PhoneNumber::normalize($phoneRaw, $assumeInternational) : null;
 
@@ -60,6 +66,12 @@ class ContactService
         // El email manda como identidad cuando está presente; si no, identifica el teléfono.
         $contact = $email !== null ? ($byEmail ?? new Contact) : ($byPhone ?? new Contact);
 
+        // Un contacto NUEVO necesita una identidad (correo o teléfono): un teléfono sintético o
+        // vacío sin correo no crea un contacto anónimo.
+        if (! $contact->exists && $email === null && $phoneRaw === null) {
+            throw new InvalidContactDataException(['email' => __('Hace falta un correo o un teléfono válido para identificar el contacto.')]);
+        }
+
         // Email: se fija solo si el contacto no tiene uno (nunca se pisa uno distinto, ni con '').
         if ($email !== null && ($contact->email === null || $contact->email === '')) {
             $contact->email = $email;
@@ -67,9 +79,14 @@ class ContactService
 
         // Enriquecimiento: solo se escriben los campos que llegan con valor.
         foreach (['first_name', 'last_name', 'country', 'preferred_language'] as $field) {
-            if (isset($data[$field]) && trim((string) $data[$field]) !== '') {
+            if (($data[$field] ?? null) !== null) {
                 $contact->{$field} = $data[$field];
             }
+        }
+        // El nombre es obligatorio en el esquema: un contacto nuevo sin nombre real (formulario
+        // sin ese campo, o nombre sintético del proveedor) entra como «Sin nombre».
+        if (! $contact->exists && ($contact->first_name ?? '') === '') {
+            $contact->first_name = __('Sin nombre');
         }
 
         // Teléfono CRUDO = presentación (siempre que llegue).
@@ -86,16 +103,8 @@ class ContactService
         // aporta la fecha real (consent_at), se respeta; si no, se sella ahora. Nunca se
         // inventa: solo se sella si `consent` llega verdadero.
         if (! empty($data['consent']) && $contact->consent_at === null) {
-            $consentAt = null;
-            if (! empty($data['consent_at'])) {
-                try {
-                    $consentAt = Carbon::parse((string) $data['consent_at']);
-                } catch (\Throwable) {
-                    $consentAt = null;
-                }
-            }
-            $contact->consent_at = $consentAt ?? now();
-            $contact->consent_source = (string) ($data['consent_source'] ?? 'widget');
+            $contact->consent_at = $data['consent_at'] ?? now(); // ya validada por el normalizador
+            $contact->consent_source = $data['consent_source'] ?? 'widget';
         }
 
         // Baja (unsubscribe): se registra el momento.

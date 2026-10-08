@@ -11,8 +11,10 @@ use Illuminate\Validation\Rule;
 use Modules\Audit\Services\AuditService;
 use Modules\Core\Support\PhoneNumber;
 use Modules\Crm\Exceptions\ContactIdentityConflictException;
+use Modules\Crm\Exceptions\InvalidContactDataException;
 use Modules\Crm\Models\Contact;
 use Modules\Crm\Services\LeadIntake;
+use Modules\Crm\Support\ContactDataNormalizer;
 use Modules\Crm\Support\LeadIntakeChannel;
 
 /**
@@ -55,10 +57,11 @@ class LeadIntakeController
             'request_id' => ['nullable', 'string', 'max:190'],
             // Identidad del contacto: email O teléfono (al menos uno). Nunca se fabrica email.
             // En WhatsApp, el teléfono (wa_id) es obligatorio; el email sigue opcional.
-            'email' => [$isWhatsApp ? 'nullable' : 'required_without:phone', 'nullable', 'email:rfc', 'max:190'],
-            'phone' => [$isWhatsApp ? 'required' : 'required_without:email', 'nullable', 'string', 'max:30'],
-            'first_name' => [$isWhatsApp ? 'required' : 'nullable', 'string', 'max:80'],
-            'last_name' => [$isWhatsApp ? 'required' : 'nullable', 'string', 'max:80'],
+            // Longitudes = las del esquema (capa común ContactDataNormalizer::MAX).
+            'email' => [$isWhatsApp ? 'nullable' : 'required_without:phone', 'nullable', 'email:rfc', 'max:'.ContactDataNormalizer::MAX['email']],
+            'phone' => [$isWhatsApp ? 'required' : 'required_without:email', 'nullable', 'string', 'max:'.ContactDataNormalizer::MAX['phone']],
+            'first_name' => [$isWhatsApp ? 'required' : 'nullable', 'string', 'max:'.ContactDataNormalizer::MAX['first_name']],
+            'last_name' => [$isWhatsApp ? 'required' : 'nullable', 'string', 'max:'.ContactDataNormalizer::MAX['last_name']],
             // País: se acepta código ISO-2 O nombre completo; el CRM lo normaliza (no rechaza
             // el lead si no lo reconoce). Se limita la longitud para no abusar del cuerpo.
             'country' => ['nullable', 'string', 'max:80'],
@@ -66,8 +69,8 @@ class LeadIntakeController
             // Señal comercial.
             'product_type' => ['nullable', Rule::in($productTypes)],
             'program' => ['nullable', 'string', 'max:150'],
-            'area' => ['nullable', 'string', 'max:100'],
-            'goal' => ['nullable', 'string', 'max:100'],
+            'area' => ['nullable', 'string', 'max:80'], // leads.area / leads.goal son varchar(80)
+            'goal' => ['nullable', 'string', 'max:80'],
             'level' => ['nullable', 'string', 'max:40'],
             'interest_level' => ['nullable', Rule::in(['low', 'medium', 'high'])],
             'source' => ['nullable', 'string', 'max:60'],
@@ -143,9 +146,16 @@ class LeadIntakeController
 
         // (6) Alta/actualización idempotente reutilizando la dedup del CRM. Un conflicto de
         // identidad (email y teléfono → contactos distintos) NO fusiona: se responde 409 y se
-        // audita sin datos personales (solo IDs y metadatos).
+        // audita sin datos personales (solo IDs y metadatos). Un dato que la capa común del CRM
+        // rechaza (formato, marcador sintético como única identidad…) → 422 con el campo.
         try {
             ['lead' => $lead, 'action' => $action, 'request_id' => $requestId] = $intake->ingest($data, $requestId);
+        } catch (InvalidContactDataException $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Datos inválidos: revisa los campos requeridos, tipos y longitudes.',
+                'errors' => array_map(fn (string $why): array => [$why], $e->errors),
+            ], 422);
         } catch (ContactIdentityConflictException $e) {
             $auditable = Contact::query()->find($e->emailContactId) ?? Contact::query()->find($e->phoneContactId);
             if ($auditable !== null) {

@@ -291,3 +291,21 @@ it('/widget/chat-widget.js se sirve por ruta con caché corta y revalidación (l
     expect((string) $this->get('/widget/celia.js')->assertOk()->headers->get('Cache-Control'))->toBe($cache);
     expect(file_exists(public_path('widget/chat-widget.js')))->toBeFalse(); // si existiera, el servidor web lo serviría estático
 });
+
+it('capa común de contactos: un nombre o apellido que no cabe → 422 en «name», sin error SQL ni contacto', function () {
+    $bot = widgetBot();
+    $session = $this->withHeaders(widgetHeaders($bot))->postJson('/api/v1/widget/session', [])->json('session_id');
+
+    // Una sola palabra de 100 caracteres pasa la regla del widget (120) pero no cabe en first_name (80).
+    $this->withHeaders(widgetHeaders($bot))->postJson('/api/v1/widget/lead', [
+        'session_id' => $session, 'name' => str_repeat('a', 100), 'email' => 'largo@example.com', 'consent' => true,
+    ])->assertStatus(422)->assertJsonValidationErrors(['name']);
+
+    $this->withHeaders(widgetHeaders($bot))->postJson('/api/v1/widget/lead', [
+        'session_id' => $session, 'name' => "  Ana\u{00A0} María  ", 'email' => 'ana@example.com', 'consent' => true,
+    ])->assertOk();
+
+    app(CurrentInstitution::class)->runFor($bot->institution_id, function () {
+        expect(Contact::query()->pluck('first_name', 'email')->all())->toBe(['ana@example.com' => 'Ana']);
+    });
+});

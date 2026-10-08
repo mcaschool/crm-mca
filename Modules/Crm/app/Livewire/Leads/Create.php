@@ -8,10 +8,12 @@ use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Modules\Crm\Enums\InterestLevel;
+use Modules\Crm\Exceptions\InvalidContactDataException;
 use Modules\Crm\Models\Lead;
 use Modules\Crm\Services\ContactService;
 use Modules\Crm\Services\EventService;
 use Modules\Crm\Services\LeadService;
+use Modules\Crm\Support\ContactDataNormalizer;
 use Modules\Institutions\Models\Bot;
 
 /**
@@ -54,14 +56,15 @@ class Create extends Component
     protected function rules(): array
     {
         return [
-            'first_name' => ['required', 'string', 'max:120'],
-            'last_name' => ['nullable', 'string', 'max:120'],
-            'email' => ['required', 'email', 'max:190'],
-            'phone' => ['nullable', 'string', 'max:40'],
-            'country' => ['nullable', 'string', 'max:2'],
+            // Longitudes = las del esquema (capa común); el formato lo remata ContactService.
+            'first_name' => ['required', 'string', 'max:'.ContactDataNormalizer::MAX['first_name']],
+            'last_name' => ['nullable', 'string', 'max:'.ContactDataNormalizer::MAX['last_name']],
+            'email' => ['required', 'email', 'max:'.ContactDataNormalizer::MAX['email']],
+            'phone' => ['nullable', 'string', 'max:'.ContactDataNormalizer::MAX['phone']],
+            'country' => ['nullable', 'string', 'size:2'],
             'preferred_language' => ['required', 'in:es,en'],
-            'area' => ['nullable', 'string', 'max:120'],
-            'goal' => ['nullable', 'string', 'max:120'],
+            'area' => ['nullable', 'string', 'max:80'], // leads.area / leads.goal son varchar(80)
+            'goal' => ['nullable', 'string', 'max:80'],
             'interest_level' => ['required', 'in:low,medium,high'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
@@ -80,14 +83,23 @@ class Create extends Component
             return null;
         }
 
-        $contact = $contacts->createOrUpdate([
-            'first_name' => $this->first_name,
-            'last_name' => $this->last_name,
-            'email' => $this->email,
-            'phone' => $this->phone,
-            'country' => $this->country,
-            'preferred_language' => $this->preferred_language,
-        ]);
+        // La capa común valida antes de escribir: lo que rechaza se muestra junto a su campo.
+        try {
+            $contact = $contacts->createOrUpdate([
+                'first_name' => $this->first_name,
+                'last_name' => $this->last_name,
+                'email' => $this->email,
+                'phone' => $this->phone,
+                'country' => $this->country,
+                'preferred_language' => $this->preferred_language,
+            ]);
+        } catch (InvalidContactDataException $e) {
+            foreach ($e->errors as $field => $why) {
+                $this->addError($field, $why);
+            }
+
+            return null;
+        }
 
         $lead = $leads->recordIntent($contact, [
             'bot_id' => $bot->getKey(),

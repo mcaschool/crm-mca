@@ -1047,5 +1047,18 @@
     "fallida el :date: :detail": "failed on :date: :detail",
     "sin hacer. Crea un contacto de prueba de Meta y lo pasa por el CRM sin guardarlo.": "not done. It creates a Meta test contact and passes it through the CRM without saving it.",
     "Recomendado antes o después de activar: «Prueba completa de recepción» (paso 4).": "Recommended before or after turning on: “Full reception test” (step 4).",
-    "prueba completa": "full test"
+    "prueba completa": "full test",
+    "Se calcula a partir del teléfono; no se escribe directamente.": "It is derived from the phone; it cannot be written directly.",
+    "Es obligatorio.": "It is required.",
+    "Debe ser texto.": "It must be text.",
+    "Contiene caracteres no válidos.": "It contains invalid characters.",
+    "Supera el máximo de :max caracteres.": "It exceeds the maximum of :max characters.",
+    "No es un correo válido.": "It is not a valid email address.",
+    "No es un teléfono válido (solo dígitos, +, espacios, guiones, puntos, paréntesis y extensión).": "It is not a valid phone number (only digits, +, spaces, hyphens, dots, parentheses and an extension).",
+    "Debe ser un código de país ISO de 2 letras.": "It must be a 2-letter ISO country code.",
+    "Debe ser «es» o «en».": "It must be “es” or “en”.",
+    "No es una fecha de consentimiento válida.": "It is not a valid consent date.",
+    "Hace falta un correo o un teléfono válido para identificar el contacto.": "A valid email or phone number is needed to identify the contact.",
+    "El contacto de Meta trae datos no válidos y no se registró (:why).": "The Meta contact has invalid data and was not recorded (:why).",
+    "El contacto entraría bien en el CRM (prueba deshecha: no quedan datos), pero Meta no confirmó el borrado del contacto de prueba. Bórralo desde la herramienta de pruebas de anuncios de clientes potenciales de Meta y repite la prueba.": "The contact would reach the CRM correctly (test undone: no data left), but Meta did not confirm deleting the test contact. Delete it from Meta’s Lead Ads Testing Tool and run the test again."
 }

@@ -8,6 +8,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Modules\Crm\Exceptions\InvalidContactDataException;
+use Modules\Crm\Models\Contact;
+use Modules\Crm\Support\ContactDataNormalizer;
 use Modules\Mcp\Support\McpContext;
 use Modules\Mcp\Support\McpToolException;
 use Modules\Mcp\Support\ModelAtlas;
@@ -225,6 +228,20 @@ final class DataTools
         foreach (array_keys($data) as $field) {
             if (in_array(strtolower((string) $field), self::WRITE_DENIED_FIELDS, true)) {
                 throw new McpToolException('El campo "'.$field.'" no es escribible vía MCP.');
+            }
+        }
+
+        // Los contactos pasan por la MISMA capa común que el resto de canales (formato y
+        // longitud del esquema, sin truncar; el teléfono normalizado se deriva, no se escribe).
+        if ($class === Contact::class) {
+            try {
+                $data = ContactDataNormalizer::forDirectWrite($data);
+            } catch (InvalidContactDataException $e) {
+                $why = [];
+                foreach ($e->errors as $field => $reason) {
+                    $why[] = $field.': '.$reason;
+                }
+                throw new McpToolException('Datos de contacto no válidos — '.implode('; ', $why));
             }
         }
 

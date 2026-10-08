@@ -311,3 +311,37 @@ it('los campos de contraseña/hash y los modelos del propio MCP no son escribibl
     expect($err2)->toBeTrue();
     expect($raw2)->toContain('mcp:client');
 });
+
+it('crm_record_create/update de Crm.Contact pasan por la capa común: sin truncar, sin error SQL y con el teléfono normalizado derivado', function () {
+    [$institution, $token] = mcpCtx();
+
+    [, $isError, $raw] = mcpTool($token, 'crm_record_create', [
+        'model' => 'Crm.Contact',
+        'data' => ['first_name' => 'Eva', 'email' => 'eva@example.test', 'phone' => '<test lead: dummy data for phone_number> 123456'],
+        'institution_id' => $institution->id,
+    ]);
+    expect($isError)->toBeTrue()->and($raw)->toContain('phone')->not->toContain('SQLSTATE');
+
+    [, $isError, $raw] = mcpTool($token, 'crm_record_create', [
+        'model' => 'Crm.Contact',
+        'data' => ['first_name' => 'Eva', 'email' => 'eva@example.test', 'phone_normalized' => '+1'],
+        'institution_id' => $institution->id,
+    ]);
+    expect($isError)->toBeTrue()->and($raw)->toContain('phone_normalized');
+
+    [$created] = mcpTool($token, 'crm_record_create', [
+        'model' => 'Crm.Contact',
+        'data' => ['first_name' => ' Eva ', 'email' => ' EVA@example.test', 'phone' => '+52 55 1234 5678', 'preferred_language' => 'es'],
+        'institution_id' => $institution->id,
+    ]);
+    $id = (int) $created['id'];
+
+    [, $isError, $raw] = mcpTool($token, 'crm_record_update', [
+        'model' => 'Crm.Contact', 'id' => $id, 'data' => ['first_name' => str_repeat('x', 81)], 'institution_id' => $institution->id,
+    ]);
+    expect($isError)->toBeTrue()->and($raw)->toContain('first_name');
+
+    $contact = app(CurrentInstitution::class)->runFor($institution->id, fn () => Contact::query()->find($id));
+    expect($contact->only(['first_name', 'email', 'phone', 'phone_normalized']))
+        ->toBe(['first_name' => 'Eva', 'email' => 'eva@example.test', 'phone' => '+52 55 1234 5678', 'phone_normalized' => '+525512345678']);
+});

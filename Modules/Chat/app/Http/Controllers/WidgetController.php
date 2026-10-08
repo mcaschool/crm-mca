@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Modules\Ai\Services\AdvisorTurn;
 use Modules\Ai\Services\AdvisorTurnResult;
 use Modules\Ai\Services\AdvisorTurnService;
@@ -19,6 +20,7 @@ use Modules\Chat\Models\ConversationOption;
 use Modules\Chat\Services\GuidedNavigationService;
 use Modules\Chat\Services\MatcherService;
 use Modules\Crm\Enums\EventType;
+use Modules\Crm\Exceptions\InvalidContactDataException;
 use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Conversation;
 use Modules\Crm\Services\ContactService;
@@ -150,14 +152,25 @@ class WidgetController extends Controller
         $firstName = (string) (Str::of($fullName)->explode(' ')->first() ?: $fullName);
         $lastName = trim(Str::of($fullName)->after($firstName)->toString());
 
-        $contact = $this->contacts->createOrUpdate([
-            'first_name' => $firstName,
-            'last_name' => $lastName !== '' ? $lastName : null,
-            'email' => $data['email'],
-            'preferred_language' => $locale,
-            'consent' => true,
-            'consent_source' => 'widget',
-        ]);
+        // La capa común valida antes de escribir (p. ej. un nombre o apellido de más de 80
+        // caracteres): el widget recibe un 422 con su propio campo, nunca un error SQL.
+        try {
+            $contact = $this->contacts->createOrUpdate([
+                'first_name' => $firstName,
+                'last_name' => $lastName !== '' ? $lastName : null,
+                'email' => $data['email'],
+                'preferred_language' => $locale,
+                'consent' => true,
+                'consent_source' => 'widget',
+            ]);
+        } catch (InvalidContactDataException $e) {
+            $asField = ['first_name' => 'name', 'last_name' => 'name'];
+            $messages = [];
+            foreach ($e->errors as $field => $why) {
+                $messages[$asField[$field] ?? 'email'][] = $why;
+            }
+            throw ValidationException::withMessages($messages);
+        }
 
         $this->conversations->attachContact($conversation, $contact);
         $this->events->record(EventType::ContactCreated, [

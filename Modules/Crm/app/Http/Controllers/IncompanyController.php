@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Modules\Audit\Services\AuditService;
+use Modules\Crm\Exceptions\InvalidContactDataException;
 use Modules\Crm\Services\IncompanyLeadIntake;
 
 /**
@@ -79,7 +80,19 @@ class IncompanyController
 
         $data = $validator->validated();
 
-        ['lead' => $lead, 'created' => $created] = $intake->upsert($data);
+        // La capa común del CRM valida el contacto (nombre ≤ 80, teléfono, correo) antes de
+        // escribir: lo que rechaza se devuelve como 422 con el campo de ESTE contrato.
+        try {
+            ['lead' => $lead, 'created' => $created] = $intake->upsert($data);
+        } catch (InvalidContactDataException $e) {
+            $asField = ['first_name' => 'nombre_contacto', 'phone' => 'whatsapp'];
+            $errors = [];
+            foreach ($e->errors as $field => $why) {
+                $errors[$asField[$field] ?? $field][] = $why;
+            }
+
+            return response()->json(['message' => 'Datos inválidos: revisa los campos requeridos, tipos y longitudes.', 'errors' => $errors], 422);
+        }
         $status = $created ? 'created' : 'updated';
 
         // Auditoría: cada lead recibido queda registrado (la IP la captura el servicio

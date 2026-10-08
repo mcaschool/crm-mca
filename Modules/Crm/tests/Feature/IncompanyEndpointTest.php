@@ -403,3 +403,15 @@ it('evento inválido o ausente → 422 (no crea nada)', function () {
 
     app(CurrentInstitution::class)->runFor($institution->id, fn () => expect(IncompanyLead::query()->count())->toBe(0));
 });
+
+it('capa común de contactos: un nombre que no cabe en el contacto o un WhatsApp no válido → 422 con el campo del contrato, sin error SQL ni lead', function () {
+    [$institution] = incompanyCtx();
+
+    // nombre_contacto admite 120 en el perfil InCompany, pero el contacto guarda 80: 422, no 500.
+    postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['nombre_contacto' => str_repeat('n', 81)]))
+        ->assertStatus(422)->assertJsonStructure(['errors' => ['nombre_contacto']]);
+    postIncompany(INCOMPANY_TOKEN, validIncompanyPayload(['whatsapp' => 'escríbeme al correo']))
+        ->assertStatus(422)->assertJsonStructure(['errors' => ['whatsapp']]);
+
+    expect(incompanyCounts($institution->id))->toMatchArray(['leads' => 0]);
+});

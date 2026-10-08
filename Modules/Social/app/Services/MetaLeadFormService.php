@@ -10,9 +10,11 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Modules\Catalog\Models\Program;
 use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Crm\Exceptions\InvalidContactDataException;
 use Modules\Crm\Models\Lead;
 use Modules\Crm\Services\EventService;
 use Modules\Crm\Services\LeadIntake;
+use Modules\Crm\Support\ContactDataNormalizer;
 use Modules\Social\Models\MetaLeadForm;
 use Modules\Social\Models\MetaLeadPage;
 use Modules\Social\Models\MetaLeadReceipt;
@@ -337,8 +339,9 @@ final class MetaLeadFormService
             // Campos estándar de Meta o personalizados («Teléfono», «WhatsApp», «Correo»…).
             'email' => $this->pick($fields, ['email', 'work_email'], ['email', 'correo']),
             'phone' => $this->pick($fields, ['phone_number', 'phone', 'work_phone_number'], ['phone', 'telefono', 'teléfono', 'celular', 'movil', 'móvil', 'whatsapp']),
-            // Formularios sin nombre (solo teléfono o correo): el contacto entra igual, «Sin nombre».
-            'first_name' => ($fields['first_name'] ?? '') !== '' ? $fields['first_name'] : ($this->firstName($fullName) ?? __('Sin nombre')),
+            // Formularios sin nombre (solo teléfono o correo): el contacto entra igual; el CRM le
+            // pone «Sin nombre» (ContactService), como a cualquier contacto nuevo sin nombre.
+            'first_name' => ($fields['first_name'] ?? '') !== '' ? $fields['first_name'] : $this->firstName($fullName),
             'last_name' => ($fields['last_name'] ?? '') !== '' ? $fields['last_name'] : $this->lastName($fullName),
             'country' => $fields['country'] ?? null,
             'product_type' => $productType,
@@ -356,10 +359,16 @@ final class MetaLeadFormService
             return ['failed', __('El contacto no trae correo ni teléfono.'), null, $attribution];
         }
 
+        // Mismo camino que cualquier canal: la capa común del CRM valida y normaliza (y rechaza
+        // sin llegar a la base de datos). Los registros llevan el campo, nunca el valor.
         try {
             $result = $this->intake->ingest($data, 'meta_lead:'.$leadgenId);
+        } catch (InvalidContactDataException $e) {
+            Log::warning('social.lead_forms: datos de contacto no válidos', ['leadgen_id' => $leadgenId, 'fields' => $e->fields()]);
+
+            return ['failed', __('El contacto de Meta trae datos no válidos y no se registró (:why).', ['why' => $e->summary()]), null, $attribution];
         } catch (Throwable $e) {
-            Log::warning('social.lead_forms: no se pudo registrar el lead', ['leadgen_id' => $leadgenId, 'error' => $e->getMessage()]);
+            Log::warning('social.lead_forms: no se pudo registrar el lead', ['leadgen_id' => $leadgenId, 'error' => class_basename($e), 'code' => $e->getCode()]);
 
             return ['failed', __('No se pudo registrar el contacto en el CRM.'), null, $attribution];
         }
@@ -413,6 +422,7 @@ final class MetaLeadFormService
             return $out('failed', __('Meta no permitió crear un contacto de prueba en este formulario: :why', ['why' => mb_substr((string) $created->json('error.message', ''), 0, 160)]));
         }
 
+        $deleteAttempted = false;
         try {
             $lead = $this->fetchLead($page, $testId);
             if ($lead === null) {
@@ -427,15 +437,35 @@ final class MetaLeadFormService
                 DB::rollBack();
             }
 
-            return $status === 'processed'
-                ? $out('passed', __('Un contacto entraría en el CRM con el destino «:dest» (prueba deshecha: no quedan datos).', ['dest' => $form->destination === 'general' ? __('Contacto general') : (string) Program::query()->whereKey($form->program_id)->value('name_es')]))
-                : $out('failed', (string) $error);
-        } finally {
-            try {
-                Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()->delete($this->graph($testId));
-            } catch (Throwable) {
-                // Meta borra los contactos de prueba por su cuenta; no bloquea el resultado.
+            if ($status !== 'processed') {
+                return $out('failed', (string) $error);
             }
+            // Última fase real: borrar el contacto de prueba en Meta. Sin borrado confirmado no se
+            // da la prueba por superada (quedaría un contacto ficticio en el formulario).
+            $deleteAttempted = true;
+            if (! $this->deleteTestLead($page, $testId)) {
+                return $out('failed', __('El contacto entraría bien en el CRM (prueba deshecha: no quedan datos), pero Meta no confirmó el borrado del contacto de prueba. Bórralo desde la herramienta de pruebas de anuncios de clientes potenciales de Meta y repite la prueba.'));
+            }
+
+            return $out('passed', __('Un contacto entraría en el CRM con el destino «:dest» (prueba deshecha: no quedan datos).', ['dest' => $form->destination === 'general' ? __('Contacto general') : (string) Program::query()->whereKey($form->program_id)->value('name_es')]));
+        } finally {
+            if (! $deleteAttempted) {
+                $this->deleteTestLead($page, $testId); // una fase anterior falló: se borra igual
+            }
+        }
+    }
+
+    /** Borra el contacto de prueba en Meta. True solo si Meta confirma el borrado. */
+    private function deleteTestLead(MetaLeadPage $page, string $testId): bool
+    {
+        try {
+            $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()->delete($this->graph($testId));
+
+            return $response->successful() && $response->json('success') !== false;
+        } catch (Throwable $e) {
+            Log::warning('social.lead_forms: no se pudo borrar el contacto de prueba', ['page' => $page->getKey(), 'error' => class_basename($e)]);
+
+            return false;
         }
     }
 
@@ -470,7 +500,10 @@ final class MetaLeadFormService
         foreach ($fieldData as $field) {
             if (is_array($field) && isset($field['name'])) {
                 $value = is_array($field['values'] ?? null) ? ($field['values'][0] ?? '') : '';
-                $map[strtolower((string) $field['name'])] = trim((string) $value);
+                // Valor ficticio de Meta (contacto de prueba: «<test lead: dummy data for …>») →
+                // vacío, con la misma regla común del CRM: nunca se toma por un dato real.
+                $value = is_scalar($value) && ! ContactDataNormalizer::isProviderPlaceholder((string) $value) ? trim((string) $value) : '';
+                $map[strtolower((string) $field['name'])] = $value;
             }
         }
 
