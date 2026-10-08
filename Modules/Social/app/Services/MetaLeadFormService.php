@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Modules\Social\Services;
 
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Modules\Catalog\Models\Program;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Crm\Exceptions\InvalidContactDataException;
+use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Lead;
 use Modules\Crm\Services\EventService;
 use Modules\Crm\Services\LeadIntake;
@@ -18,6 +20,7 @@ use Modules\Crm\Support\ContactDataNormalizer;
 use Modules\Social\Models\MetaLeadForm;
 use Modules\Social\Models\MetaLeadPage;
 use Modules\Social\Models\MetaLeadReceipt;
+use Modules\Social\Support\GraphResponse;
 use Modules\Social\Support\MetaLeadAccessGuidance;
 use Throwable;
 
@@ -48,6 +51,17 @@ final class MetaLeadFormService
     ];
 
     private const TIMEOUT_SECONDS = 10;
+
+    /** Motivo legible (sin datos técnicos) cuando no se puede confirmar la limpieza en Meta. */
+    private const CLEANUP_REASONS = [
+        'network' => 'Meta no respondió (problema de red)',
+        'token' => 'la conexión con Meta caducó o no es válida',
+        'permission' => 'Meta no da permiso para borrarlo o comprobarlo',
+        'rate_limit' => 'Meta limitó temporalmente las peticiones',
+        'platform' => 'Meta respondió con un error interno',
+        'graph' => 'Meta respondió con un error',
+        'unreadable' => 'Meta dio una respuesta no reconocida',
+    ];
 
     private const LEAD_FIELDS = 'created_time,field_data,form_id,platform,is_organic,custom_disclaimer_responses';
 
@@ -396,11 +410,15 @@ final class MetaLeadFormService
      * Distinta de la «lectura autorizada» (Meta permite leer los contactos del formulario): esta
      * prueba demuestra que un contacto entraría de verdad en el destino elegido.
      *
-     * @return array{status: string, detail: string, at: string, form: string}
+     * Solo se da por SUPERADA si todas las fases se confirman: Meta crea el contacto de prueba, el
+     * CRM lo procesa por el camino real, la transacción no deja nada y el contacto de prueba de esta
+     * ejecución desaparece de Meta (borrado confirmado o ausencia comprobada; ver cleanupTestLead).
+     *
+     * @return array{status: string, detail: string, at: string, form: string, cleanup?: string}
      */
     public function rehearse(MetaLeadPage $page, MetaLeadForm $form): array
     {
-        $out = fn (string $status, string $detail): array => ['status' => $status, 'detail' => $detail, 'at' => now()->toIso8601String(), 'form' => $form->name];
+        $out = fn (string $status, string $detail, ?string $cleanup = null): array => array_filter(['status' => $status, 'detail' => $detail, 'at' => now()->toIso8601String(), 'form' => $form->name, 'cleanup' => $cleanup], fn ($v): bool => $v !== null);
 
         if ($form->meta_lead_page_id !== $page->getKey()) {
             return $out('failed', __('El formulario no es de esta Página.'));
@@ -413,7 +431,7 @@ final class MetaLeadFormService
             $created = Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()->asForm()
                 ->post($this->graph($form->form_id.'/test_leads'));
         } catch (Throwable $e) {
-            Log::warning('social.lead_forms: error de red al crear el contacto de prueba', ['page' => $page->getKey(), 'error' => $e->getMessage()]);
+            Log::warning('social.lead_forms: error de red al crear el contacto de prueba', ['page' => $page->getKey(), 'error' => class_basename($e)]);
 
             return $out('failed', __('No se pudo contactar con Meta. Inténtalo más tarde.'));
         }
@@ -422,50 +440,124 @@ final class MetaLeadFormService
             return $out('failed', __('Meta no permitió crear un contacto de prueba en este formulario: :why', ['why' => mb_substr((string) $created->json('error.message', ''), 0, 160)]));
         }
 
-        $deleteAttempted = false;
+        $cleanupDone = false;
         try {
             $lead = $this->fetchLead($page, $testId);
             if ($lead === null) {
                 return $out('failed', __('Se creó el contacto de prueba, pero Meta no permitió leerlo.'));
             }
+            if (isset($lead['id']) && (string) $lead['id'] !== $testId) {
+                return $out('failed', __('Meta devolvió un contacto distinto del creado por esta prueba.'));
+            }
 
             // Mismo camino que un contacto real, sin dejar rastro: la transacción se deshace siempre.
+            $lastContactId = (int) Contact::query()->max('id');
             DB::beginTransaction();
             try {
-                [$status, $error] = $this->ingestLead($form, $lead, 'test:'.$testId);
+                [$status, $error, $crmLead] = $this->ingestLead($form, $lead, 'test:'.$testId);
             } finally {
                 DB::rollBack();
             }
-
-            if ($status !== 'processed') {
+            if ($status !== 'processed' || $crmLead === null) {
                 return $out('failed', (string) $error);
             }
-            // Última fase real: borrar el contacto de prueba en Meta. Sin borrado confirmado no se
-            // da la prueba por superada (quedaría un contacto ficticio en el formulario).
-            $deleteAttempted = true;
-            if (! $this->deleteTestLead($page, $testId)) {
-                return $out('failed', __('El contacto entraría bien en el CRM (prueba deshecha: no quedan datos), pero Meta no confirmó el borrado del contacto de prueba. Bórralo desde la herramienta de pruebas de anuncios de clientes potenciales de Meta y repite la prueba.'));
+            if (! $this->leftNothing($crmLead, $lastContactId, $testId)) {
+                return $out('failed', __('La prueba no pudo deshacer sus datos en el CRM. Avisa al operador de la plataforma.'));
             }
 
-            return $out('passed', __('Un contacto entraría en el CRM con el destino «:dest» (prueba deshecha: no quedan datos).', ['dest' => $form->destination === 'general' ? __('Contacto general') : (string) Program::query()->whereKey($form->program_id)->value('name_es')]));
+            // Última fase real: el contacto de prueba creado por ESTA ejecución debe desaparecer de
+            // Meta (borrado confirmado o ausencia comprobada). Si no se puede confirmar, no se supera.
+            $cleanupDone = true;
+            [$cleanup, $why] = $this->cleanupTestLead($page, $form, $testId);
+
+            return match ($cleanup) {
+                'deleted', 'absent' => $out('passed', __('Un contacto entraría en el CRM con el destino «:dest» (prueba deshecha: no quedan datos; contacto de prueba eliminado en Meta).', ['dest' => $form->destination === 'general' ? __('Contacto general') : (string) Program::query()->whereKey($form->program_id)->value('name_es')]), $cleanup),
+                'present' => $out('failed', __('El contacto entraría bien en el CRM (prueba deshecha: no quedan datos), pero Meta mantiene el contacto de prueba: no permitió borrarlo. Bórralo desde la herramienta de pruebas de anuncios de clientes potenciales de Meta y repite la prueba.'), $cleanup),
+                default => $out('failed', __('El contacto entraría bien en el CRM (prueba deshecha: no quedan datos), pero no se pudo confirmar en Meta que el contacto de prueba se borró: :why. Repite la prueba en unos minutos.', ['why' => __(self::CLEANUP_REASONS[$why] ?? self::CLEANUP_REASONS['unreadable'])]), $cleanup),
+            };
         } finally {
-            if (! $deleteAttempted) {
-                $this->deleteTestLead($page, $testId); // una fase anterior falló: se borra igual
+            if (! $cleanupDone) {
+                $this->cleanupTestLead($page, $form, $testId); // una fase anterior falló: se limpia igual
             }
         }
     }
 
-    /** Borra el contacto de prueba en Meta. True solo si Meta confirma el borrado. */
-    private function deleteTestLead(MetaLeadPage $page, string $testId): bool
+    /** ¿La transacción deshecha no dejó el lead, el contacto nuevo ni un recibo de la prueba? */
+    private function leftNothing(Lead $crmLead, int $lastContactId, string $testId): bool
+    {
+        $contactId = (int) $crmLead->contact_id;
+
+        return Lead::query()->whereKey($crmLead->getKey())->doesntExist()
+            && ($contactId <= $lastContactId || Contact::query()->whereKey($contactId)->doesntExist())
+            && MetaLeadReceipt::query()->where('leadgen_id', 'test:'.$testId)->doesntExist();
+    }
+
+    /**
+     * Limpieza VERIFICABLE del contacto de prueba creado por esta ejecución ($testId):
+     *  - deleted: Meta confirma el borrado (2xx con el cuerpo oficial de éxito);
+     *  - absent:  sin esa confirmación, una lectura del MISMO id responde «no existe» (#100/33) y una
+     *             lectura de control del formulario con el mismo token funciona (descarta que el «no
+     *             existe» sea en realidad falta de permisos o un token caído);
+     *  - present: Meta sigue devolviendo el contacto de prueba;
+     *  - unknown: permisos, token, red, límite de peticiones, error de Meta o respuesta no reconocida.
+     * Se registran el estado y los códigos de Graph (nunca el token, el id ni el mensaje).
+     *
+     * @return array{0: string, 1: string|null} [resultado, motivo si unknown]
+     */
+    private function cleanupTestLead(MetaLeadPage $page, MetaLeadForm $form, string $testId): array
+    {
+        $trace = [];
+        $delete = $this->graphRequest(fn () => Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()->delete($this->graph($testId)));
+        $trace['delete'] = $delete !== null ? GraphResponse::summary($delete) : 'network';
+        if ($delete !== null && GraphResponse::confirmsDeletion($delete)) {
+            return ['deleted', null];
+        }
+
+        // Sin confirmación explícita: se comprueba leyendo el MISMO id creado en esta ejecución.
+        $check = $this->graphRequest(fn () => Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()->get($this->graph($testId), ['fields' => 'id']));
+        $trace['verify'] = $check !== null ? GraphResponse::summary($check) : 'network';
+        [$outcome, $why] = match (true) {
+            $check === null => ['unknown', 'network'],
+            $check->successful() => is_array($check->json()) && (string) $check->json('id') === $testId ? ['present', null] : ['unknown', 'unreadable'],
+            GraphResponse::errorKind($check) !== 'not_found' => ['unknown', GraphResponse::errorKind($check)],
+            default => $this->controlRead($page, $form, $trace),
+        };
+
+        $context = ['page' => $page->getKey(), 'outcome' => $outcome, 'reason' => $why] + $trace;
+        $outcome === 'absent'
+            ? Log::info('social.lead_forms: contacto de prueba ya ausente en Meta (comprobado)', $context)
+            : Log::warning('social.lead_forms: limpieza del contacto de prueba sin confirmar', $context);
+
+        return [$outcome, $why];
+    }
+
+    /**
+     * «No existe» solo vale si el mismo token sigue leyendo el formulario de esta prueba.
+     *
+     * @param  array<string, mixed>  $trace
+     * @return array{0: string, 1: string|null}
+     */
+    private function controlRead(MetaLeadPage $page, MetaLeadForm $form, array &$trace): array
+    {
+        $control = $this->graphRequest(fn () => Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()->get($this->graph($form->form_id), ['fields' => 'id']));
+        $trace['control'] = $control !== null ? GraphResponse::summary($control) : 'network';
+        if ($control === null) {
+            return ['unknown', 'network'];
+        }
+        if (! $control->successful()) {
+            return ['unknown', GraphResponse::errorKind($control)];
+        }
+
+        return is_array($control->json()) && (string) $control->json('id') === (string) $form->form_id ? ['absent', null] : ['unknown', 'unreadable'];
+    }
+
+    /** Petición a Graph; null si no hubo respuesta (red, tiempo agotado). */
+    private function graphRequest(callable $request): ?Response
     {
         try {
-            $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($page->page_token)->acceptJson()->delete($this->graph($testId));
-
-            return $response->successful() && $response->json('success') !== false;
-        } catch (Throwable $e) {
-            Log::warning('social.lead_forms: no se pudo borrar el contacto de prueba', ['page' => $page->getKey(), 'error' => class_basename($e)]);
-
-            return false;
+            return $request();
+        } catch (Throwable) {
+            return null;
         }
     }
 

@@ -179,10 +179,10 @@ it('18b) la prueba completa usa la validación REAL y no se da por superada si f
     expect($failed['status'])->toBe('failed')->and($failed['detail'])->toContain('email');
     Http::assertSent(fn (HttpRequest $r) => $r->method() === 'DELETE'); // se borra igualmente
 
-    // Meta no confirma el borrado del contacto de prueba → no superada.
+    // Meta no confirma el borrado y la comprobación no es concluyente → no superada.
     mdnMeta(['leads' => ['TEST_N1' => mdnDummyLead()], 'test_delete' => [['error' => ['message' => 'nope']], 400]]);
     $notDeleted = app(MetaLeadFormService::class)->rehearse($page, MetaLeadForm::query()->sole());
-    expect($notDeleted['status'])->toBe('failed')->and($notDeleted['detail'])->toContain('borrado del contacto de prueba')
+    expect($notDeleted['status'])->toBe('failed')->and($notDeleted['detail'])->toContain('no se pudo confirmar en Meta')
         ->and(Contact::query()->count())->toBe(0)->and(Lead::query()->count())->toBe(0)
         ->and($page->fresh()->receiving_enabled)->toBeFalse();
 });

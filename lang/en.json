@@ -1028,7 +1028,6 @@
     "Asigna un destino al formulario antes de la prueba completa.": "Assign the form a destination before the full test.",
     "Meta no permitió crear un contacto de prueba en este formulario: :why": "Meta did not allow creating a test contact in this form: :why",
     "Se creó el contacto de prueba, pero Meta no permitió leerlo.": "The test contact was created, but Meta did not allow reading it.",
-    "Un contacto entraría en el CRM con el destino «:dest» (prueba deshecha: no quedan datos).": "A contact would enter the CRM with the destination “:dest” (test undone: no data is kept).",
     "Contacto general": "General contact",
     "No se pudo confirmar con Meta la autorización actual. Inténtalo de nuevo en unos minutos.": "The current authorization could not be confirmed with Meta. Try again in a few minutes.",
     "Meta no confirmó la autorización actual de tu empresa. Pulsa «Reconectar Meta» y vuelve a intentarlo.": "Meta did not confirm your company’s current authorization. Click “Reconnect Meta” and try again.",
@@ -1060,5 +1059,16 @@
     "No es una fecha de consentimiento válida.": "It is not a valid consent date.",
     "Hace falta un correo o un teléfono válido para identificar el contacto.": "A valid email or phone number is needed to identify the contact.",
     "El contacto de Meta trae datos no válidos y no se registró (:why).": "The Meta contact has invalid data and was not recorded (:why).",
-    "El contacto entraría bien en el CRM (prueba deshecha: no quedan datos), pero Meta no confirmó el borrado del contacto de prueba. Bórralo desde la herramienta de pruebas de anuncios de clientes potenciales de Meta y repite la prueba.": "The contact would reach the CRM correctly (test undone: no data left), but Meta did not confirm deleting the test contact. Delete it from Meta’s Lead Ads Testing Tool and run the test again."
+    "Un contacto entraría en el CRM con el destino «:dest» (prueba deshecha: no quedan datos; contacto de prueba eliminado en Meta).": "A contact would enter the CRM with the destination “:dest” (test undone: no data left; test contact deleted in Meta).",
+    "El contacto entraría bien en el CRM (prueba deshecha: no quedan datos), pero Meta mantiene el contacto de prueba: no permitió borrarlo. Bórralo desde la herramienta de pruebas de anuncios de clientes potenciales de Meta y repite la prueba.": "The contact would reach the CRM correctly (test undone: no data left), but Meta still keeps the test contact: it did not allow deleting it. Delete it from Meta’s Lead Ads Testing Tool and run the test again.",
+    "El contacto entraría bien en el CRM (prueba deshecha: no quedan datos), pero no se pudo confirmar en Meta que el contacto de prueba se borró: :why. Repite la prueba en unos minutos.": "The contact would reach the CRM correctly (test undone: no data left), but it could not be confirmed in Meta that the test contact was deleted: :why. Run the test again in a few minutes.",
+    "Meta devolvió un contacto distinto del creado por esta prueba.": "Meta returned a contact different from the one created by this test.",
+    "La prueba no pudo deshacer sus datos en el CRM. Avisa al operador de la plataforma.": "The test could not undo its data in the CRM. Tell the platform operator.",
+    "Meta no respondió (problema de red)": "Meta did not respond (network problem)",
+    "la conexión con Meta caducó o no es válida": "the Meta connection expired or is not valid",
+    "Meta no da permiso para borrarlo o comprobarlo": "Meta does not allow deleting or checking it",
+    "Meta limitó temporalmente las peticiones": "Meta temporarily limited requests",
+    "Meta respondió con un error interno": "Meta responded with an internal error",
+    "Meta respondió con un error": "Meta responded with an error",
+    "Meta dio una respuesta no reconocida": "Meta gave an unrecognized response"
 }
