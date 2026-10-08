@@ -6,6 +6,7 @@ namespace Modules\Ai\Services;
 
 use Illuminate\Support\Str;
 use Modules\Ai\Exceptions\AdvisorAiUnavailable;
+use Modules\Ai\Support\LinkGuard;
 use Modules\Catalog\Models\Program;
 use Modules\Crm\Enums\EventType;
 use Modules\Crm\Models\Contact;
@@ -81,8 +82,8 @@ class CeliaService
         // Siempre se registra lo que dijo el usuario (con el id del canal de origen, si lo hay).
         $this->messages->record($conversation, 'user', $message, 'text', [], $externalMessageId);
 
-        // Control de costos: al alcanzar el limite se deja de llamar a la IA.
-        if ($this->aiMessageCount($conversation) >= $this->limit()) {
+        // Control de costos: al alcanzar el limite (el del asesor o el general) se deja de llamar a la IA.
+        if ($this->aiMessageCount($conversation) >= $this->limit($conversation)) {
             $reply = $this->fallbackText('limit_reached', $conversation, $locale);
             $this->messages->record($conversation, 'celia', $reply, 'text');
 
@@ -126,9 +127,12 @@ class CeliaService
             $this->leadConversion->convert($contact, (int) $conversation->bot_id, 'corporate_interest');
         }
 
-        $knowledge = $this->knowledge->retrieveWithSources((int) $conversation->bot_id, $message, $locale);
+        $bot = $this->bot($conversation);
+        $precise = $bot !== null && $bot->usesPreciseRetrieval();
+        // Búsqueda precisa: los mensajes anteriores del usuario dan el TEMA ACTIVO de los seguimientos.
+        $knowledge = $this->knowledge->retrieveWithSources((int) $conversation->bot_id, $message, $locale, null, $precise ? $this->previousUserMessages($conversation) : []);
         // Prompt del asesor: el global de siempre (Celia) o su identidad e instrucciones propias.
-        $prompt = $this->prompts->build($this->bot($conversation) ?? new Bot(['uses_legacy_prompt' => true]), $locale, (string) $conversation->channel, $knowledge['text'], $corporate);
+        $prompt = $this->prompts->build($bot ?? new Bot(['uses_legacy_prompt' => true]), $locale, (string) $conversation->channel, $knowledge['text'], $corporate);
         $chat = array_merge(
             [['role' => 'system', 'content' => $prompt]],
             $this->history($conversation, $locale),
@@ -168,11 +172,24 @@ class CeliaService
         }
 
         [$reply, $action] = $this->parse($result->content);
+
+        // Búsqueda precisa: solo sobreviven los enlaces que están TEXTUALMENTE en lo recuperado.
+        $extra = [];
+        if ($precise) {
+            [$reply, $removed] = LinkGuard::keepKnown($reply, $knowledge['text']);
+            if ($removed !== []) {
+                $extra['links_removed'] = count($removed);
+            }
+            // Modo de prueba: diagnóstico de la búsqueda (palabras, línea, programa, secciones y puntaje).
+            if ($this->isTest($conversation) && (string) $conversation->channel === AdvisorTurnService::TEST_CHANNEL) {
+                $extra['retrieval'] = ($knowledge['diagnostics'] ?? []) + ($removed !== [] ? ['links_removed' => $removed] : []);
+            }
+        }
         $reply = $this->truncate($reply, $locale);
 
         // Se registra el mensaje de IA con su meta (base del AI Deflection Rate) y las fuentes de
         // conocimiento usadas (trazabilidad interna; no viajan al usuario).
-        $this->messages->record($conversation, 'celia', $reply, 'ai', array_merge($result->meta(), ['knowledge_sources' => $knowledge['sources'], 'action' => $action]));
+        $this->messages->record($conversation, 'celia', $reply, 'ai', array_merge($result->meta(), ['knowledge_sources' => $knowledge['sources'], 'action' => $action], $extra));
 
         if ($action === 'unresolved') {
             $this->recordUnresolved($conversation, $message);
@@ -277,6 +294,24 @@ class CeliaService
                 'role' => $m->sender_type === 'celia' ? 'assistant' : 'user',
                 'content' => (string) $m->content,
             ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Mensajes ANTERIORES del usuario (sin el del turno actual), del más reciente al más antiguo.
+     *
+     * @return list<string>
+     */
+    private function previousUserMessages(Conversation $conversation): array
+    {
+        return $conversation->messages()
+            ->where('sender_type', 'user')
+            ->orderByDesc('id')
+            ->offset(1)         // el turno actual ya está registrado
+            ->limit((int) config('crm.knowledge.retrieval.history_messages', 6))
+            ->pluck('content')
+            ->map(fn ($c): string => (string) $c)
             ->values()
             ->all();
     }
@@ -389,9 +424,10 @@ class CeliaService
             ->count();
     }
 
-    private function limit(): int
+    /** Respuestas de IA permitidas en la conversación: las del asesor o las generales. */
+    private function limit(Conversation $conversation): int
     {
-        return (int) config('crm.celia.message_limit', 15);
+        return $this->bot($conversation)?->aiMessageLimit() ?? (int) config('crm.celia.message_limit', 15);
     }
 
     private function truncate(string $reply, string $locale): string
@@ -434,8 +470,8 @@ class CeliaService
             'action' => $action,
             'node' => $node,
             'used_ai' => $usedAi,
-            'messages_left' => max(0, $this->limit() - $used),
-            'limit_reached' => $limitReached || $used >= $this->limit(),
+            'messages_left' => max(0, $this->limit($conversation) - $used),
+            'limit_reached' => $limitReached || $used >= $this->limit($conversation),
         ];
     }
 }

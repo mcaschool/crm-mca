@@ -358,6 +358,41 @@ return [
             'programa_academico' => 'Programa Académico',
             'base_conocimiento' => 'Base de Conocimiento',
         ],
+
+        // Búsqueda «precisa» (bots.knowledge_retrieval = precise; ver PreciseKnowledgeRanker).
+        // Todos los textos, en minúsculas y sin acentos salvo las siglas.
+        'retrieval' => [
+            // Palabras de menos de 4 letras que SÍ cuentan en la búsqueda.
+            'short_terms' => ['mba', 'ia', 'ti', 'kpi', 'seo', 'erp', 'crm', 'pmo', 'ceo', 'sst'],
+            // Siglas que se EXPANDEN a su nombre. Las de 2 letras solo cuentan en MAYÚSCULAS.
+            'acronyms' => [
+                'DA' => 'diploma avanzado',
+                'PE' => 'programa ejecutivo',
+                'RRHH' => 'recursos humanos',
+                'RH' => 'recursos humanos',
+                'TH' => 'talento humano',
+            ],
+            // Cómo se nombra cada línea (slug = knowledge_sources.category). Frases completas.
+            'line_terms' => [
+                'diplomas_avanzados' => ['diploma avanzado', 'diplomas avanzados', 'diplomado avanzado', 'diplomados avanzados', 'diplomado', 'diplomados', 'advanced diploma', 'advanced diplomas', 'DA'],
+                'programas_ejecutivos' => ['programa ejecutivo', 'programas ejecutivos', 'formacion ejecutiva', 'professional certificate', 'professional certificates', 'PE'],
+                'micro_mba' => ['micro mba', 'micromba', 'mba'],
+                'microcredenciales' => ['microcredencial', 'microcredenciales', 'microcredential', 'microcredentials'],
+                'maestrias' => ['maestria', 'maestrias', 'master', 'masters'],
+                'doctorados' => ['doctorado', 'doctorados', 'phd'],
+            ],
+            // Palabras que NO distinguen una ficha de programa de otra (no cuentan para «programa nombrado»).
+            'generic_program_words' => ['diploma', 'diplomas', 'avanzado', 'programa', 'ejecutivo', 'micro', 'mba', 'mca', 'school', 'advanced', 'professional', 'certificate', 'formacion', 'curso', 'enfasis'],
+            // Palabras vacías adicionales a las de serie (ES/EN).
+            'stopwords' => [],
+            'title_weight' => 2.0,                // el título de la sección cuenta el doble
+            'line_bonus' => 0.5,                  // sección de la línea nombrada o del tema activo
+            'named_program_bonus' => 0.6,         // sección de la ficha del programa nombrado
+            'general_document_bonus' => 0.15,     // documento general cuando no se nombra programa
+            'definition_bonus' => 0.3,            // «¿qué es…?» → secciones «Qué es…» / «Información general…»
+            'named_min_weight' => 1.5,            // rareza mínima para nombrar con poca cobertura
+            'history_messages' => 6,              // mensajes del usuario que se miran para el tema activo
+        ],
     ],
 
     /*

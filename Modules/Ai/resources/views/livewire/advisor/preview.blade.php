@@ -34,6 +34,10 @@
         .pv-tag.warn{background:var(--mca-warn-soft);color:#8A5A0C}
         .pv-tag.info{background:var(--mca-info-soft);color:var(--mca-info)}
         .pv-rate{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--mca-card-border)}
+        .pv-diag{margin-top:8px;font-size:11.5px;color:var(--mca-ink-2);line-height:1.5}
+        .pv-diag summary{cursor:pointer;font-weight:600;color:var(--mca-ink-3)}
+        .pv-diag ol{margin:4px 0 0;padding-left:18px}
+        .pv-diag li.in{font-weight:600;color:var(--mca-ink)}
         .pv-rate button{height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--mca-card-border);background:#fff;font:inherit;font-size:12px;font-weight:600;color:var(--mca-ink-2);cursor:pointer}
         .pv-rate button.ok{background:var(--mca-ok-soft);border-color:var(--mca-ok);color:var(--mca-ok)}
         .pv-rate button.bad{background:var(--mca-warn-soft);border-color:var(--mca-warn);color:#8A5A0C}
@@ -96,6 +100,22 @@
                         <span class="pv-tag info">{{ __('Transferiría a una persona') }}</span>
                     @endif
                     <div>{!! \Modules\Ai\Livewire\Advisor\Preview::formatReply((string) $m->content) !!}</div>
+                    {{-- Diagnóstico de la búsqueda precisa (solo en la prueba; nunca lo ve un usuario real) --}}
+                    @php $diag = is_array($m->meta) && is_array($m->meta['retrieval'] ?? null) ? $m->meta['retrieval'] : null; @endphp
+                    @if ($diag)
+                        <details class="pv-diag" data-testid="diagnostics-{{ $m->id }}">
+                            <summary>{{ __('Diagnóstico de la búsqueda') }}</summary>
+                            <div>{{ __('Línea') }}: <b>{{ $diag['line'] ?? '—' }}</b>@if (! empty($diag['line_source'])) ({{ $diag['line_source'] === 'question' ? __('nombrada en la pregunta') : __('tema de la conversación') }})@endif</div>
+                            @if (! empty($diag['named_programs']))<div>{{ __('Programa nombrado') }}: {{ implode(', ', $diag['named_programs']) }}</div>@endif
+                            <div>{{ __('Palabras buscadas') }}: {{ implode(', ', (array) ($diag['terms'] ?? [])) ?: '—' }}</div>
+                            <ol>
+                                @foreach ((array) ($diag['top'] ?? []) as $i => $t)
+                                    <li @class(['in' => $i < 3])>{{ $t['code'] }} · {{ $t['title'] }} · {{ $t['score'] }}</li>
+                                @endforeach
+                            </ol>
+                            @if (! empty($diag['links_removed']))<div>{{ __('Enlaces quitados (no estaban en el conocimiento)') }}: {{ implode(' ', $diag['links_removed']) }}</div>@endif
+                        </details>
+                    @endif
                     <div class="pv-rate" aria-label="{{ __('Valorar respuesta') }}">
                         <button type="button" wire:click="rate({{ $m->id }}, 'correct')" @class(['ok' => $r === 'correct'])>✓ {{ __('Correcta') }}</button>
                         <button type="button" wire:click="rate({{ $m->id }}, 'needs_improvement')" @class(['bad' => $r === 'needs_improvement'])>✎ {{ __('Necesita mejora') }}</button>

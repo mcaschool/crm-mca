@@ -130,6 +130,23 @@
                         <input type="text" wire:model.blur="model" maxlength="100" placeholder="{{ __('Ej. qwen3.7-plus') }}">
                     </div>
                 </div>
+                <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:16px">
+                    <div class="field" style="flex:2;min-width:240px;margin-bottom:0">
+                        <label for="adv-retrieval">{{ __('Búsqueda en el conocimiento') }}</label>
+                        <select id="adv-retrieval" wire:model="knowledgeRetrieval" data-testid="knowledge-retrieval">
+                            <option value="classic">{{ __('Clásica') }}</option>
+                            <option value="precise">{{ __('Precisa (recomendada si el asesor atiende varias líneas)') }}</option>
+                        </select>
+                        <div class="mca-help">{{ __('La precisa entiende variantes de las palabras, reconoce el programa nombrado, mantiene el tema en los seguimientos y solo deja enlaces que estén en el conocimiento. En «Probar asesor» muestra el diagnóstico de cada respuesta.') }}</div>
+                        @error('knowledgeRetrieval') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                    <div class="field" style="flex:1;min-width:160px;margin-bottom:0">
+                        <label for="adv-limit">{{ __('Respuestas de IA por conversación') }}</label>
+                        <input id="adv-limit" type="number" min="1" max="200" wire:model="messageLimit" placeholder="{{ (int) config('crm.celia.message_limit', 15) }}" data-testid="message-limit">
+                        <div class="mca-help">{{ __('Vacío = el valor general (:n).', ['n' => (int) config('crm.celia.message_limit', 15)]) }}</div>
+                        @error('messageLimit') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                </div>
             </div>
 
             {{-- Identidad e instrucciones: cómo es y cómo responde ESTE asesor --}}

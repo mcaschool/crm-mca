@@ -6,6 +6,7 @@ namespace Modules\Ai\Services;
 
 use Illuminate\Support\Str;
 use Modules\Ai\Models\KnowledgeSource;
+use Modules\Institutions\Models\Bot;
 
 /**
  * Recuperacion de conocimiento (Forma A: cuerpo pequeno y estable). Reune las
@@ -27,11 +28,21 @@ class KnowledgeRetriever
      * Igual que retrieve(), y además los códigos de las fuentes cuyas secciones entraron en el
      * bloque (trazabilidad interna de la respuesta; nunca se envían al usuario).
      *
-     * @return array{text: string, sources: array<int, string>}
+     * El modo lo decide CADA asesor (bots.knowledge_retrieval): «classic» es la búsqueda de
+     * siempre (Celia, sin cambios); «precise» usa PreciseKnowledgeRanker con el historial del
+     * usuario ($history: mensajes anteriores, del más reciente al más antiguo) para el tema activo
+     * y devuelve además un diagnóstico (solo para el modo de prueba; nunca viaja al usuario).
+     *
+     * @param  list<string>  $history
+     * @return array{text: string, sources: array<int, string>, diagnostics?: array<string, mixed>}
      */
-    public function retrieveWithSources(int $botId, string $question, string $locale, ?int $limit = null): array
+    public function retrieveWithSources(int $botId, string $question, string $locale, ?int $limit = null, array $history = []): array
     {
         $limit ??= (int) config('crm.celia.knowledge_sections', 3);
+
+        if (Bot::query()->whereKey($botId)->value('knowledge_retrieval') === Bot::RETRIEVAL_PRECISE) {
+            return $this->precise($botId, $question, $locale, $limit, $history);
+        }
 
         // Centro de Conocimiento: fuentes ACTIVAS asignadas a este bot en el pivote con
         // is_active=true (una fuente puede compartirse entre varios bots). Mismo orden por
@@ -80,6 +91,39 @@ class KnowledgeRetriever
                 $chosen,
             ))),
             'sources' => array_values(array_unique(array_filter(array_column($chosen, 'code')))),
+        ];
+    }
+
+    /**
+     * Búsqueda precisa: mismas fuentes activas del asesor (pivote), con su línea y tipo.
+     *
+     * @param  list<string>  $history
+     * @return array{text: string, sources: array<int, string>, diagnostics: array<string, mixed>}
+     */
+    private function precise(int $botId, string $question, string $locale, int $limit, array $history): array
+    {
+        $sources = KnowledgeSource::query()
+            ->where('knowledge_sources.status', 'active')
+            ->join('bot_knowledge_source as bks', 'bks.knowledge_source_id', '=', 'knowledge_sources.id')
+            ->where('bks.bot_id', $botId)
+            ->where('bks.is_active', true)
+            ->select('knowledge_sources.*')
+            ->get()
+            ->map(fn (KnowledgeSource $s): array => [
+                'code' => (string) $s->code,
+                'priority' => (int) ($s->priority ?? 0),
+                'category' => $s->category !== null ? (string) $s->category : null,
+                'type' => $s->type,
+                'content' => (string) $s->translate('content', $locale),
+            ])
+            ->all();
+
+        $ranked = app(PreciseKnowledgeRanker::class)->rank(array_values($sources), $question, $history, max(1, $limit));
+
+        return [
+            'text' => trim(implode("\n\n", array_map(fn (array $s): string => trim($s['title']."\n".$s['body']), $ranked['sections']))),
+            'sources' => array_values(array_unique(array_column($ranked['sections'], 'code'))),
+            'diagnostics' => $ranked['diagnostics'],
         ];
     }
 

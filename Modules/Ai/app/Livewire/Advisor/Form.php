@@ -47,6 +47,11 @@ class Form extends Component
 
     public string $model = '';
 
+    /** Búsqueda en el conocimiento (classic | precise) y respuestas de IA por conversación (vacío = general). */
+    public string $knowledgeRetrieval = Bot::RETRIEVAL_CLASSIC;
+
+    public string $messageLimit = '';
+
     /** «Identidad e instrucciones»: se combinan con las reglas institucionales (nunca las sustituyen). */
     public string $roleDescription = '';
 
@@ -95,6 +100,8 @@ class Form extends Component
             $this->restrictions = (string) $bot->restrictions;
             $this->notFoundMessage = (string) $bot->not_found_message;
             $this->handoffRules = (string) $bot->handoff_rules;
+            $this->knowledgeRetrieval = $bot->knowledge_retrieval ?: Bot::RETRIEVAL_CLASSIC;
+            $this->messageLimit = $bot->ai_message_limit !== null ? (string) $bot->ai_message_limit : '';
             $this->welcomeEs = (string) $bot->widget_welcome_es;
             $this->welcomeEn = (string) $bot->widget_welcome_en;
             $this->buttonEs = (string) $bot->widget_button_es;
@@ -118,6 +125,8 @@ class Form extends Component
             'status' => ['required', 'in:active,inactive'],
             'integrationId' => ['nullable', 'integer'],
             'model' => ['nullable', 'string', 'max:100'],
+            'knowledgeRetrieval' => ['required', 'in:'.Bot::RETRIEVAL_CLASSIC.','.Bot::RETRIEVAL_PRECISE],
+            'messageLimit' => ['nullable', 'integer', 'min:1', 'max:200'],
             // Identidad e instrucciones (texto libre, con límites razonables).
             'roleDescription' => ['nullable', 'string', 'max:255'],
             'instructions' => ['nullable', 'string', 'max:6000'],
@@ -139,6 +148,9 @@ class Form extends Component
             'welcomeEn.max' => __('Máximo :max caracteres.'),
             'buttonEs.max' => __('Máximo :max caracteres.'),
             'buttonEn.max' => __('Máximo :max caracteres.'),
+            'messageLimit.integer' => __('Escribe un número entero.'),
+            'messageLimit.min' => __('Mínimo :min.'),
+            'messageLimit.max' => __('Máximo :max.'),
         ]);
 
         $creating = $this->botId === null;
@@ -161,6 +173,8 @@ class Form extends Component
         $bot->restrictions = $this->multilineText($this->restrictions);
         $bot->not_found_message = $this->plainText($this->notFoundMessage);
         $bot->handoff_rules = $this->multilineText($this->handoffRules);
+        $bot->knowledge_retrieval = $this->knowledgeRetrieval;
+        $bot->ai_message_limit = trim($this->messageLimit) !== '' ? (int) $this->messageLimit : null;
         // Por asesor (y por tanto por institución); vacío = el texto por defecto del widget.
         $bot->widget_welcome_es = $this->plainText($this->welcomeEs);
         $bot->widget_welcome_en = $this->plainText($this->welcomeEn);

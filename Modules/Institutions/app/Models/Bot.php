@@ -38,6 +38,8 @@ use Modules\Institutions\Database\Factories\BotFactory;
  * @property string|null $not_found_message mensaje para información no encontrada
  * @property string|null $handoff_rules cuándo transferir a una persona
  * @property bool $uses_legacy_prompt asesor previo a «Identidad e instrucciones» (prompt global)
+ * @property string $knowledge_retrieval búsqueda en el conocimiento: classic (la de siempre) | precise
+ * @property int|null $ai_message_limit respuestas de IA por conversación (null = crm.celia.message_limit)
  * @property string|null $widget_welcome_es
  * @property string|null $widget_welcome_en
  * @property string|null $widget_button_es
@@ -66,6 +68,8 @@ class Bot extends Model
         'not_found_message',
         'handoff_rules',
         'uses_legacy_prompt',
+        'knowledge_retrieval',
+        'ai_message_limit',
         'type',
         'avatar_path',
         'landing_url',
@@ -87,9 +91,30 @@ class Bot extends Model
         return [
             'allowed_origins' => 'array',
             'uses_legacy_prompt' => 'boolean',
+            'ai_message_limit' => 'integer',
             'preview_token' => 'encrypted',
             'preview_token_created_at' => 'datetime',
         ];
+    }
+
+    /** Búsqueda en el conocimiento de siempre (Celia y todo asesor que no la cambie). */
+    public const RETRIEVAL_CLASSIC = 'classic';
+
+    /** Búsqueda precisa (PreciseKnowledgeRanker): rareza, variantes, programa nombrado y tema activo. */
+    public const RETRIEVAL_PRECISE = 'precise';
+
+    /** ¿Usa la búsqueda precisa? Activa también el filtro de enlaces y el diagnóstico de la prueba. */
+    public function usesPreciseRetrieval(): bool
+    {
+        return $this->knowledge_retrieval === self::RETRIEVAL_PRECISE;
+    }
+
+    /** Respuestas de IA por conversación: la del asesor, o la general (crm.celia.message_limit). */
+    public function aiMessageLimit(): int
+    {
+        return $this->ai_message_limit !== null && $this->ai_message_limit > 0
+            ? (int) $this->ai_message_limit
+            : (int) config('crm.celia.message_limit', 15);
     }
 
     /** Campos de «Identidad e instrucciones» (para saber si el asesor tiene identidad propia). */

@@ -1070,5 +1070,20 @@
     "Meta limitó temporalmente las peticiones": "Meta temporarily limited requests",
     "Meta respondió con un error interno": "Meta responded with an internal error",
     "Meta respondió con un error": "Meta responded with an error",
-    "Meta dio una respuesta no reconocida": "Meta gave an unrecognized response"
+    "Meta dio una respuesta no reconocida": "Meta gave an unrecognized response",
+    "Búsqueda en el conocimiento": "Knowledge search",
+    "Clásica": "Classic",
+    "Precisa (recomendada si el asesor atiende varias líneas)": "Precise (recommended if the advisor covers several lines)",
+    "La precisa entiende variantes de las palabras, reconoce el programa nombrado, mantiene el tema en los seguimientos y solo deja enlaces que estén en el conocimiento. En «Probar asesor» muestra el diagnóstico de cada respuesta.": "Precise search understands word variants, recognises the program being named, keeps the topic in follow-up questions and only keeps links found in the knowledge. In “Test advisor” it shows the diagnosis of each reply.",
+    "Respuestas de IA por conversación": "AI replies per conversation",
+    "Vacío = el valor general (:n).": "Empty = the general value (:n).",
+    "Escribe un número entero.": "Enter a whole number.",
+    "Mínimo :min.": "Minimum :min.",
+    "Máximo :max.": "Maximum :max.",
+    "Diagnóstico de la búsqueda": "Search diagnosis",
+    "nombrada en la pregunta": "named in the question",
+    "tema de la conversación": "conversation topic",
+    "Programa nombrado": "Named program",
+    "Palabras buscadas": "Search terms",
+    "Enlaces quitados (no estaban en el conocimiento)": "Removed links (not in the knowledge)"
 }
