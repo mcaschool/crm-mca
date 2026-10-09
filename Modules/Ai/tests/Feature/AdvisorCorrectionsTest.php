@@ -99,7 +99,8 @@ it('«Esta es la respuesta correcta» (por defecto) guarda la corrección con pr
 });
 
 it('«Solo comentario» queda como nota; pasar a comentario o a «Correcta» retira la corrección', function () {
-    [, , $token] = acrCtx();
+    [$inst, , $token] = acrCtx();
+    $this->actingAs(User::factory()->create(['institution_id' => $inst->id, 'role' => 'admin']));
     $chat = acrChat($token)->set('draft', 'cuanto cuesta el diploma avanzado')->call('send');
     $reply = acrLastReply();
 
@@ -117,6 +118,47 @@ it('«Solo comentario» queda como nota; pasar a comentario o a «Correcta» ret
 
     // La respuesta aprobada no puede ir vacía.
     $chat->call('rate', $reply->id, 'needs_improvement')->set('note', '')->call('saveNote')->assertHasErrors(['note']);
+});
+
+it('solo un administrador de asesores con sesión y de la misma institución puede aprobar; sin eso solo hay comentario', function () {
+    [$inst, $bot, $token] = acrCtx();
+    $chat = acrChat($token);
+    $greeting = acrLastReply();
+    $chat->set('draft', '¿Cuándo empiezan los diplomas avanzados?')->call('send');
+    $reply = acrLastReply();
+    $forceApprove = fn (int $messageId, string $text) => $chat->call('rate', $messageId, 'needs_improvement')
+        ->set('noteKind', 'approved')->set('note', $text)->call('saveNote');
+
+    // Sin sesión: la opción no aparece, solo «Solo comentario»; forzar la petición no crea nada.
+    $chat->call('rate', $reply->id, 'needs_improvement')->assertSet('noteKind', 'comment')->assertDontSee('Esta es la respuesta correcta');
+    $forceApprove($reply->id, 'Forzada sin sesión')->assertHasErrors(['noteKind']);
+    $forceApprove($greeting->id, 'Saludo forzado')->assertHasErrors(['noteKind']);
+    expect(AdvisorCorrection::query()->count())->toBe(0)->and($bot->fresh()->greeting_es)->toBeNull();
+
+    // Con sesión pero SIN permiso para administrar asesores (marketing): tampoco.
+    $this->actingAs(User::factory()->create(['institution_id' => $inst->id, 'role' => 'marketing']));
+    $chat->call('rate', $reply->id, 'needs_improvement')->assertSet('noteKind', 'comment')->assertDontSee('Esta es la respuesta correcta');
+    $forceApprove($reply->id, 'Forzada por marketing')->assertHasErrors(['noteKind']);
+    expect(AdvisorCorrection::query()->count())->toBe(0);
+
+    // Administrador de OTRA institución: tampoco.
+    $other = Institution::factory()->create();
+    $this->actingAs(User::factory()->create(['institution_id' => $other->id, 'role' => 'admin']));
+    $forceApprove($reply->id, 'Forzada desde otra institución')->assertHasErrors(['noteKind']);
+    expect(AdvisorCorrection::query()->count())->toBe(0);
+
+    // Administrador de asesores de ESTA institución: sí, y queda como autor.
+    $admin = User::factory()->create(['institution_id' => $inst->id, 'role' => 'admin']);
+    $this->actingAs($admin);
+    $chat->call('rate', $reply->id, 'needs_improvement')->assertSet('noteKind', 'approved')->assertSee('Esta es la respuesta correcta')
+        ->set('note', 'Puedes empezar cuando quieras.')->call('saveNote')->assertHasNoErrors();
+    expect(AdvisorCorrection::query()->sole()->user_id)->toBe($admin->id);
+
+    // Sin permiso, ni «Correcta» ni «Solo comentario» retiran la corrección aprobada.
+    $this->actingAs(User::factory()->create(['institution_id' => $inst->id, 'role' => 'marketing']));
+    $chat->call('rate', $reply->id, 'correct');
+    $chat->call('rate', $reply->id, 'needs_improvement')->set('note', 'Solo una nota.')->call('saveNote')->assertHasNoErrors();
+    expect(AdvisorCorrection::query()->count())->toBe(1);
 });
 
 it('se aplica a una pregunta equivalente del mismo tema y no a otra distinta, a otro tema ni si está desactivada', function () {
@@ -141,7 +183,8 @@ it('se aplica a una pregunta equivalente del mismo tema y no a otra distinta, a 
 });
 
 it('el saludo inicial aprobado actualiza bots.greeting_es y se usa en las conversaciones nuevas', function () {
-    [, $bot, $token] = acrCtx();
+    [$inst, $bot, $token] = acrCtx();
+    $this->actingAs(User::factory()->create(['institution_id' => $inst->id, 'role' => 'admin']));
     $chat = acrChat($token);
     $greeting = acrLastReply();   // el saludo: no hay mensaje previo del usuario
 

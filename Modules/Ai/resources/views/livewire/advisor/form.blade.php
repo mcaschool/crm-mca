@@ -307,7 +307,7 @@
                             <div style="display:flex;gap:8px"><button type="button" wire:click="saveCorrection" class="btn btn-primary btn-sm">{{ __('Guardar') }}</button><button type="button" wire:click="cancelCorrection" class="btn btn-ghost btn-sm">{{ __('Cancelar') }}</button></div>
                         @else
                             <div><strong>{{ __('Pregunta') }}:</strong> {{ $c->question }}</div>
-                            <div class="mca-help">{{ __('Tema') }}: {{ $c->topic_line ? __($lineLabels[$c->topic_line] ?? $c->topic_line) : __('General (cualquier tema)') }} · {{ $c->user?->name ?? __('Equipo (enlace de prueba)') }} · {{ $c->updated_at?->format('d/m/Y H:i') }} · {{ $c->active ? __('Activa') : __('Desactivada') }}</div>
+                            <div class="mca-help">{{ __('Tema') }}: {{ $c->topic_line ? __($lineLabels[$c->topic_line] ?? $c->topic_line) : __('General (cualquier tema)') }} · {{ $c->user?->name ?? '—' }} · {{ $c->updated_at?->format('d/m/Y H:i') }} · {{ $c->active ? __('Activa') : __('Desactivada') }}</div>
                             <div style="margin-top:4px"><strong>{{ __('Respuesta aprobada') }}:</strong> {{ $c->answer }}</div>
                             <div style="display:flex;gap:8px;margin-top:8px">
                                 <button type="button" wire:click="editCorrection({{ $c->id }})" class="btn btn-ghost btn-sm">{{ __('Editar') }}</button>

@@ -26,11 +26,12 @@ final class AdvisorCorrections
     public function __construct(private readonly PreciseKnowledgeRanker $ranker) {}
 
     /**
-     * Aprueba $text como la respuesta correcta al mensaje del asesor valorado.
+     * Aprueba $text como la respuesta correcta al mensaje del asesor valorado. $userId: quien
+     * aprueba (usuario con sesión y permiso; lo comprueba quien llama).
      *
      * @return string correction | greeting
      */
-    public function approve(AdvisorFeedback $feedback, Message $message, string $text, ?int $userId): string
+    public function approve(AdvisorFeedback $feedback, Message $message, string $text, int $userId): string
     {
         $conversation = Conversation::query()->findOrFail($message->conversation_id);
         $previousUser = $this->userMessagesBefore($conversation, (int) $message->getKey());

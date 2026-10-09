@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Ai\Livewire\Advisor;
 
+use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -51,8 +52,11 @@ class Preview extends Component
 
     public string $note = '';
 
-    /** Qué es el texto de «Necesita mejora»: approved («Esta es la respuesta correcta») | comment. */
-    public string $noteKind = 'approved';
+    /**
+     * Qué es el texto de «Necesita mejora»: approved («Esta es la respuesta correcta», solo para
+     * quien puede aprobar; ver approver()) | comment.
+     */
+    public string $noteKind = 'comment';
 
     public ?string $notice = null;
 
@@ -185,14 +189,14 @@ class Preview extends Component
             ],
         );
 
-        // «Correcta» retira una respuesta aprobada anterior de esa misma respuesta.
-        if ($rating === AdvisorFeedback::CORRECT) {
+        // «Correcta» retira una respuesta aprobada anterior de esa misma respuesta (solo quien puede aprobar).
+        if ($rating === AdvisorFeedback::CORRECT && $this->approver() !== null) {
             app(AdvisorCorrections::class)->forget($feedback);
         }
 
         $this->noteFor = $rating === AdvisorFeedback::NEEDS_IMPROVEMENT ? (int) $message->getKey() : null;
         $this->note = $this->noteFor !== null ? (string) $feedback->comment : '';
-        $this->noteKind = 'approved';
+        $this->noteKind = $this->approver() !== null ? 'approved' : 'comment';
     }
 
     /**
@@ -203,6 +207,13 @@ class Preview extends Component
     public function saveNote(AdvisorCorrections $corrections): void
     {
         $approved = $this->noteKind === 'approved';
+        $approver = $this->approver();
+        // Validación en el SERVIDOR: aprobar cambia lo que responde el asesor.
+        if ($approved && $approver === null) {
+            $this->addError('noteKind', __('Solo un administrador de asesores de esta institución, con sesión iniciada en el panel, puede aprobar respuestas.'));
+
+            return;
+        }
         $this->validate([
             'note' => [$approved ? 'required' : 'nullable', 'string', 'max:1000'],
             'noteKind' => ['required', 'in:approved,comment'],
@@ -216,18 +227,33 @@ class Preview extends Component
             return;
         }
 
-        $userId = auth()->id() !== null ? (int) auth()->id() : null;
-        $feedback->forceFill(['comment' => trim($this->note) !== '' ? trim($this->note) : null, 'user_id' => $userId])->save();
+        $feedback->forceFill(['comment' => trim($this->note) !== '' ? trim($this->note) : null, 'user_id' => auth()->id()])->save();
 
         if ($approved) {
-            $applied = $corrections->approve($feedback, $message, trim($this->note), $userId);
+            // El autor es siempre el usuario con sesión que aprueba (garantizado arriba).
+            $applied = $corrections->approve($feedback, $message, trim($this->note), (int) $approver->getKey());
             $this->notice = $applied === 'greeting'
                 ? __('Saludo inicial actualizado: el asesor ya saluda así en las conversaciones nuevas.')
                 : __('Respuesta aprobada: el asesor ya la usa para preguntas equivalentes sobre el mismo tema.');
-        } else {
+        } elseif ($approver !== null) {
+            // «Solo comentario» retira una aprobación anterior (también requiere poder aprobar).
             $corrections->forget($feedback);
         }
         $this->reset(['noteFor', 'note', 'noteKind']);
+    }
+
+    /**
+     * Quien puede APROBAR respuestas (y cambiar el saludo) desde la prueba: usuario con sesión en el
+     * panel, con el permiso de administrar asesores y de la MISMA institución del asesor. Quien solo
+     * tiene el enlace puede valorar y comentar, pero no cambiar el comportamiento del asesor.
+     */
+    private function approver(): ?User
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && $user->canManageIntegrations() && (int) $user->institution_id === (int) $this->bot()->institution_id
+            ? $user
+            : null;
     }
 
     public function render(): View
@@ -251,6 +277,7 @@ class Preview extends Component
             'messages' => $messages,
             'ratings' => $ratings,
             'started' => $conversation !== null,
+            'canApprove' => $this->approver() !== null,
         ])->title(__('Prueba de :name', ['name' => $bot->assistant_name]));
     }
 

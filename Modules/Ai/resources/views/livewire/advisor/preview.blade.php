@@ -131,10 +131,14 @@
                     </div>
                     @if ($noteFor === $m->id)
                         <div class="pv-obs">
-                            <div class="pv-kind" role="radiogroup" aria-label="{{ __('Qué es este texto') }}">
-                                <label><input type="radio" wire:model.live="noteKind" value="approved" data-testid="kind-approved"> {{ __('Esta es la respuesta correcta') }}</label>
-                                <label><input type="radio" wire:model.live="noteKind" value="comment" data-testid="kind-comment"> {{ __('Solo comentario') }}</label>
-                            </div>
+                            {{-- Aprobar solo con sesión en el panel, permiso de administrar asesores y de su institución (validado también en el servidor) --}}
+                            @if ($canApprove)
+                                <div class="pv-kind" role="radiogroup" aria-label="{{ __('Qué es este texto') }}">
+                                    <label><input type="radio" wire:model.live="noteKind" value="approved" data-testid="kind-approved"> {{ __('Esta es la respuesta correcta') }}</label>
+                                    <label><input type="radio" wire:model.live="noteKind" value="comment" data-testid="kind-comment"> {{ __('Solo comentario') }}</label>
+                                </div>
+                            @endif
+                            @error('noteKind') <span class="pv-err">{{ $message }}</span> @enderror
                             <textarea wire:model="note" maxlength="1000" placeholder="{{ $noteKind === 'approved' ? __('Escribe la respuesta que debería haber dado. El asesor la usará para preguntas equivalentes sobre el mismo tema.') : __('Observación opcional: qué faltó o qué debería haber dicho.') }}"></textarea>
                             @error('note') <span class="pv-err">{{ $message }}</span> @enderror
                             <div><button type="button" wire:click="saveNote" class="pv-btn">{{ $noteKind === 'approved' ? __('Guardar respuesta aprobada') : __('Guardar observación') }}</button></div>
