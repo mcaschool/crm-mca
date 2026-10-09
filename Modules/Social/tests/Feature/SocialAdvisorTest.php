@@ -329,7 +329,7 @@ it('cola persistente: el worker programado procesa, deja su latido y la respuest
     sadvPost('whatsapp', sadvFixture('whatsapp'));
     expect(sadvPending())->toBe(1)->and($fake->calls)->toHaveCount(0)->and(AdvisorDispatcher::workerRunning())->toBeFalse();
 
-    Artisan::call('social:advisor-worker');
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
 
     expect(sadvPending())->toBe(0)
         ->and($fake->calls)->toHaveCount(1)
@@ -338,7 +338,7 @@ it('cola persistente: el worker programado procesa, deja su latido y la respuest
 
     // Un reintento de Meta del mismo mensaje no encola ni responde otra vez.
     sadvPost('whatsapp', sadvFixture('whatsapp'));
-    Artisan::call('social:advisor-worker');
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
     expect(sadvPending())->toBe(0)->and($fake->calls)->toHaveCount(1)->and(sadvBotMessages($inst))->toHaveCount(1);
 });
 
@@ -348,7 +348,7 @@ it('si la IA falla de forma pasajera se reintenta sin duplicar mensajes y respon
     $fake->willThrow();
 
     sadvPost('instagram', sadvFixture('instagram'));
-    Artisan::call('social:advisor-worker');
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
 
     // Primer intento fallido: nada enviado, sin decisión registrada, el trabajo vuelve a la cola.
     expect(sadvBotMessages($inst))->toHaveCount(0)
@@ -357,7 +357,7 @@ it('si la IA falla de forma pasajera se reintenta sin duplicar mensajes y respon
 
     $fake->recovers();
     $this->travel(31)->seconds();
-    Artisan::call('social:advisor-worker');
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
 
     expect(sadvPending())->toBe(0)
         ->and($fake->calls)->toHaveCount(2)
@@ -375,10 +375,10 @@ it('agotados los reintentos no envía nada y deja la conversación en «Error de
     $fake->willThrow();
 
     sadvPost('messenger', sadvFixture('messenger'));
-    Artisan::call('social:advisor-worker');
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
     foreach ([31, 121, 121, 121] as $wait) {   // 5 intentos con su espera entre ellos
         $this->travel($wait)->seconds();
-        Artisan::call('social:advisor-worker');
+        Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
     }
 
     expect($fake->calls)->toHaveCount(5)
@@ -398,7 +398,7 @@ it('no contesta si, durante la espera, respondió una persona del equipo', funct
     app(CurrentInstitution::class)->runFor($inst->id, fn () => app(SocialOutboundService::class)->send($conversation->fresh(), 'Ya te atiendo yo.', $agent));
 
     $this->travel(11)->seconds();
-    Artisan::call('social:advisor-worker');
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
 
     expect($fake->calls)->toHaveCount(0)->and(sadvBotMessages($inst))->toHaveCount(0)->and(sadvPending())->toBe(0);
 });

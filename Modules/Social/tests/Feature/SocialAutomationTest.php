@@ -148,7 +148,7 @@ function sautoReady(): void
 
 function sautoRunWorker(): void
 {
-    Artisan::call('social:advisor-worker');
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
 }
 
 // ── Asignación desde la ficha del asesor ──────────────────────────────────────
@@ -937,4 +937,30 @@ it('ningún saliente queda «Enviando…» indefinidamente (asesor o persona, en
     $this->travel(181)->seconds();
     sautoReconcile();
     expect(DB::table('social_messages')->whereIn('status', ['pending', 'sending'])->count())->toBe(0);
+});
+
+// ── Worker programado: escucha la cola durante toda su ventana ────────────────
+
+it('el worker sigue escuchando: un trabajo con 2 s de retraso se responde en la MISMA ejecución', function () {
+    [$inst, $bot, $fake] = sautoCtx();
+    sautoReady();
+    app(CurrentInstitution::class)->runFor($inst->id, fn () => $bot->forceFill(['typing_delay' => 2])->save());
+
+    sautoPost('messenger', sautoMessenger('m_W1', 'Hola'));
+    $job = DB::table('jobs')->sole();
+    expect((int) $job->available_at)->toBeGreaterThan(now()->getTimestamp());   // retrasado: aún no disponible
+
+    // Comportamiento anterior (--stop-when-empty): la cola «está vacía» al empezar y termina sin responder.
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
+    expect($fake->calls)->toHaveCount(0)->and(DB::table('jobs')->count())->toBe(1);
+
+    // Producción: sigue escuchando (sleep 1 s) y lo procesa en cuanto vence, en la misma ejecución.
+    $started = microtime(true);
+    Artisan::call('social:advisor-worker', ['--max-time' => 6]);
+    $elapsed = microtime(true) - $started;
+
+    expect($fake->calls)->toHaveCount(1)
+        ->and(sautoBotMessages($inst)->sole()->status)->toBe('sent')
+        ->and(DB::table('jobs')->count())->toBe(0)
+        ->and($elapsed)->toBeGreaterThan(1.0)->toBeLessThan(15.0);   // terminó por --max-time, no colgado
 });
