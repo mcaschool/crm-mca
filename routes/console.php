@@ -29,6 +29,12 @@ Schedule::command('social:advisor-worker')
     ->withoutOverlapping(5)
     ->runInBackground();
 
+// Envíos sin confirmar (caída del worker tras llamar al proveedor): nunca quedan «Enviando…»
+// indefinidamente; no depende de que el job que envió vuelva a ejecutarse.
+Schedule::command('social:reconcile-deliveries')
+    ->everyMinute()
+    ->withoutOverlapping(5);
+
 // Formularios publicitarios de Meta (por empresa): recoge los contactos nuevos de los formularios
 // activos de las Páginas que reciben (no hace nada si ninguna empresa lo activó).
 Schedule::command('social:meta-leads-poll')

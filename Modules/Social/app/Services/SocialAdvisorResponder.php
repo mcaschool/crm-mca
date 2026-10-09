@@ -258,6 +258,8 @@ final class SocialAdvisorResponder
 
         return $this->stop($conversation, match (true) {
             $sent->status === 'failed_window' => 'window_closed',
+            // Pudo llegar: nunca se reenvía; una persona lo revisa.
+            $sent->status === 'delivery_unknown' => 'delivery_unknown',
             (bool) ($meta['send_token_invalid'] ?? false) => 'social_token_invalid',
             default => 'send_failed',
         });

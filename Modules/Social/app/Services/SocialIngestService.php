@@ -65,15 +65,16 @@ final class SocialIngestService
             $this->resolveContactProfile($channel, $m->provider, $result->conversationId);
         }
 
-        // Respuesta escrita desde la app de WhatsApp del teléfono (eco de coexistencia NUEVO; los
-        // envíos del propio CRM no generan este eco y, si llegaran, se deduplican por su wamid): es
-        // una persona respondiendo, así que el asesor deja de contestar en esa conversación.
+        // Saliente que NO es del CRM (eco NUEVO: ni su id coincide con un envío registrado ni
+        // concilia un envío sin confirmar): una persona respondió desde fuera del CRM — la app de
+        // WhatsApp del teléfono, Meta Business Suite, Messenger o Instagram. El asesor deja de
+        // contestar en esa conversación. Un eco repetido es 'duplicate' y no vuelve a pausar.
         if ($result->status === 'created' && $result->conversationId !== null && $m->direction === 'outbound'
-            && $m->senderType === 'app' && $channel->advisor_bot_id !== null) {
-            $this->context->runFor($channel->institution_id, function () use ($result): void {
+            && $m->senderType === 'app' && ! $m->fromHistory && $channel->advisor_bot_id !== null) {
+            $this->context->runFor($channel->institution_id, function () use ($result, $m): void {
                 $conversation = SocialConversation::query()->with('channel')->find($result->conversationId);
                 if ($conversation !== null) {
-                    app(SocialAutomationService::class)->humanReplied($conversation, null, 'replied_from_app');
+                    app(SocialAutomationService::class)->humanReplied($conversation, null, $m->provider === 'whatsapp' ? 'replied_from_app' : 'replied_externally');
                 }
             });
         }
@@ -150,6 +151,14 @@ final class SocialIngestService
 
             $message->status = $s->status;
             $message->save();
+
+            // Rechazo confirmado de una respuesta AUTOMÁTICA: la automatización se detiene con aviso.
+            if ($s->status === 'failed' && $message->sender_type === 'bot') {
+                $conversation = SocialConversation::query()->with('channel')->find($message->social_conversation_id);
+                if ($conversation !== null && in_array($conversation->automation_state ?? 'bot', ['bot', 'waiting_human'], true)) {
+                    app(SocialAutomationService::class)->fail($conversation, 'send_failed');
+                }
+            }
 
             return 'updated';
         });
@@ -258,6 +267,20 @@ final class SocialIngestService
             return IngestResult::duplicate($conversation->id, $existing->id);
         }
 
+        // Eco de un envío del CRM cuyo id aún no se guardó (llegó antes de registrar la respuesta de
+        // Meta, o el worker cayó tras aceptarse): lo CONCILIA en vez de crear un mensaje nuevo.
+        if ($m->direction === 'outbound' && $m->senderType === 'app') {
+            $own = $this->unconfirmedSend($conversation, $m);
+            if ($own !== null) {
+                $own->external_message_id = $m->messageExternalId;
+                $own->status = 'sent';
+                $own->ai_meta = array_merge((array) $own->ai_meta, ['reconciled_by' => 'echo', 'reconciled_at' => now()->toIso8601String()]);
+                $own->save();
+
+                return IngestResult::duplicate($conversation->id, $own->id);
+            }
+        }
+
         $message = new SocialMessage;
         $message->social_conversation_id = $conversation->id;
         $message->external_message_id = $m->messageExternalId;
@@ -285,5 +308,30 @@ final class SocialIngestService
         $conversation->save();
 
         return IngestResult::created($conversation->id, $message->id);
+    }
+
+    /**
+     * Envío del CRM que este eco confirma: en la MISMA conversación, saliente del CRM (asesor o
+     * persona del panel) SIN id del proveedor todavía y en un estado sin confirmar (pendiente,
+     * enviándose o entrega desconocida), de las últimas 24 h y con el mismo texto. El texto solo
+     * desempata entre envíos del CRM sin confirmar de esa conversación: un saliente que no
+     * corresponde a ningún envío registrado por el CRM nunca se toma como propio.
+     */
+    private function unconfirmedSend(SocialConversation $conversation, NormalizedMessage $m): ?SocialMessage
+    {
+        if ($m->body === null || trim($m->body) === '') {
+            return null;
+        }
+
+        return SocialMessage::query()
+            ->where('social_conversation_id', $conversation->id)
+            ->where('direction', 'outbound')
+            ->whereIn('sender_type', ['bot', 'agent'])
+            ->whereNull('external_message_id')
+            ->whereIn('status', SocialOutboundService::UNCONFIRMED)
+            ->where('created_at', '>=', now()->subDay())
+            ->where('body', $m->body)
+            ->orderBy('id')
+            ->first();
     }
 }

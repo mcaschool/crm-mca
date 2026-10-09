@@ -23,6 +23,9 @@ use RuntimeException;
  */
 final class SocialOutboundService
 {
+    /** Salientes del CRM aún sin confirmación del proveedor (sin id externo). */
+    public const UNCONFIRMED = ['pending', 'sending', 'delivery_unknown'];
+
     /** Proveedores con salida habilitada. */
     public const SENDABLE = ['instagram', 'messenger', 'whatsapp'];
 
@@ -45,6 +48,7 @@ final class SocialOutboundService
         $message = $this->newOutbound($conversation, 'text', $text, null, $user);
 
         // 2) Enviar a Meta y 3) reflejar el resultado.
+        $this->markSending($message);
         $result = match (true) {
             $channel === null => SendResult::failed('La conversación no tiene canal asociado.'),
             $conversation->provider === 'whatsapp' => $this->whatsapp->sendText($channel, $conversation, $text),
@@ -77,6 +81,7 @@ final class SocialOutboundService
         $channel = $conversation->channel;
         $message = $this->newOutbound($conversation, 'text', $text, null, null, 'bot');
 
+        $this->markSending($message);
         $result = match (true) {
             $channel === null => SendResult::failed('La conversación no tiene canal asociado.'),
             $conversation->provider === 'whatsapp' => $this->whatsapp->sendText($channel, $conversation, $text),
@@ -134,6 +139,7 @@ final class SocialOutboundService
             } else {
                 $attachment['provider_media_id'] = $mediaId;
                 $message->attachments = [$attachment];
+                $this->markSending($message);
                 $result = $this->whatsapp->sendMedia(
                     $channel,
                     $conversation,
@@ -198,6 +204,7 @@ final class SocialOutboundService
         ]];
         $message = $this->newOutbound($conversation, 'template', $rendered, $meta, $user);
 
+        $this->markSending($message);
         $result = $this->whatsapp->sendTemplate(
             $channel,
             $conversation,
@@ -270,9 +277,20 @@ final class SocialOutboundService
         return $message;
     }
 
+    /**
+     * Justo ANTES de llamar al proveedor queda persistido «enviándose». Así una caída del worker
+     * deja una huella inequívoca: 'pending' = el proveedor nunca se llamó (no se envió);
+     * 'sending' = pudo aceptarse (entrega desconocida). DeliveryReconciler resuelve ambos casos.
+     */
+    private function markSending(SocialMessage $message): void
+    {
+        $message->status = 'sending';
+        $message->save();
+    }
+
     private function applyResult(SocialMessage $message, SendResult $result): void
     {
-        $message->status = $result->status;                 // sent | failed | failed_window
+        $message->status = $result->status;                 // sent | failed | failed_window | delivery_unknown
         if ($result->externalId !== null && $result->externalId !== '') {
             // El id de Meta (wamid en WhatsApp) permite deduplicar echoes y, en WhatsApp,
             // reconciliar los estados sent/delivered/read/failed del webhook.

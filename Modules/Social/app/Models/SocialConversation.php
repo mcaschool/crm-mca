@@ -79,6 +79,7 @@ class SocialConversation extends Model
         'taken_over' => ['Una persona tomó la conversación', null],
         'human_replied' => ['Una persona del equipo respondió', null],
         'replied_from_app' => ['Se respondió desde la app de WhatsApp del teléfono', null],
+        'replied_externally' => ['Se respondió desde fuera del CRM (Meta Business Suite, Messenger o Instagram)', null],
         'paused_by_user' => ['Pausada por una persona del equipo', null],
         'reactivated' => ['Asesor reactivado', null],
         'contact_requested_person' => ['La persona pidió hablar con alguien del equipo', 'Responde desde la bandeja.'],
@@ -100,6 +101,7 @@ class SocialConversation extends Model
         'social_token_invalid' => ['La credencial del canal caducó o no es válida', 'Reconecta el canal en Canales.'],
         'window_closed' => ['El canal no permite responder fuera de su ventana de 24 h', 'Responde con una plantilla aprobada (WhatsApp) o espera a que la persona escriba.'],
         'send_failed' => ['El canal rechazó la respuesta automática', 'Responde desde la bandeja.'],
+        'delivery_unknown' => ['No se pudo confirmar si la respuesta automática llegó', 'Revisa la conversación en la app del canal antes de responder: no se reenvió para no duplicarla.'],
     ];
 
     /** Estado de error: la automatización se detuvo por un fallo (con motivo visible). */

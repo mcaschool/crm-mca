@@ -279,14 +279,19 @@ it('responde con el conocimiento de Sophia y deja la respuesta trazada como IA e
 // ── Duplicados, ecos, reintentos y concurrencia ───────────────────────────────
 
 it('el eco de su propia respuesta (Messenger/Instagram) no entra como mensaje del cliente ni dispara otra respuesta', function () {
-    [$inst, , $fake] = sautoCtx();
+    [$inst, , $fake] = sautoCtx(graph: [
+        'graph.facebook.com/*/me/messages' => fn (HttpRequest $r) => isset($r->data()['sender_action']) ? Http::response(['success' => true]) : Http::response(['message_id' => 'm_CRMREPLY3']),
+        '*' => Http::response([]),
+    ]);
 
     sautoPost('messenger', sautoMessenger('m_A3', 'Hola'));
-    sautoPost('messenger', sautoMessenger('m_ECHO1', 'Sí, hay cupo en el próximo grupo.', echo: true));
+    sautoPost('messenger', sautoMessenger('m_CRMREPLY3', 'Sí, hay cupo en el próximo grupo.', echo: true));   // mismo mid que devolvió Meta
 
     expect($fake->calls)->toHaveCount(1)
         ->and(app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialMessage::query()->where('direction', 'inbound')->count()))->toBe(1)
-        ->and(sautoBotMessages($inst))->toHaveCount(1);
+        ->and(app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialMessage::query()->where('direction', 'outbound')->count()))->toBe(1)
+        ->and(sautoBotMessages($inst))->toHaveCount(1)
+        ->and(sautoConversation($inst, 'messenger')->automation_state)->toBe('bot');
 });
 
 it('un reintento del job después de enviar no vuelve a enviar ni a consultar la IA', function () {
@@ -579,29 +584,36 @@ it('un reintento tras una caída DESPUÉS de que el proveedor aceptó la respues
         ->and(DB::table('jobs')->count())->toBe(0);
 });
 
-it('si el envío falla por red (Meta pudo haberlo aceptado), se marca fallido y nunca se reenvía automáticamente', function () {
+it('fallo de red: antes de conectar es «fallido»; tras conectar (Meta pudo aceptarlo) es «entrega sin confirmar»; nunca se reenvía', function (string $network, string $status, string $reason) {
     [$inst, , $fake] = sautoCtx(graph: [
-        'graph.facebook.com/*/me/messages' => function (HttpRequest $r) {
+        'graph.facebook.com/*/me/messages' => function (HttpRequest $r) use ($network) {
             if (isset($r->data()['sender_action'])) {
                 return Http::response(['success' => true]);
             }
-            throw new Illuminate\Http\Client\ConnectionException('timeout');
+            throw new Illuminate\Http\Client\ConnectionException($network);
         },
         '*' => Http::response([]),
     ]);
+    Notification::fake();
+    $admin = User::factory()->create(['institution_id' => $inst->id, 'role' => 'admin']);
     sautoPost('messenger', sautoMessenger('m_C2', 'Hola'));
     $inbound = app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialMessage::query()->where('direction', 'inbound')->sole());
 
-    expect(sautoBotMessages($inst)->sole()->status)->toBe('failed')
-        ->and(sautoConversation($inst, 'messenger')->automation_reason)->toBe('send_failed');
+    expect(sautoBotMessages($inst)->sole()->status)->toBe($status)
+        ->and(sautoConversation($inst, 'messenger')->only(['automation_state', 'automation_reason']))->toBe(['automation_state' => 'error', 'automation_reason' => $reason]);
     expect(app(CurrentInstitution::class)->runFor($inst->id, fn () => app(SocialAdvisorResponder::class)->respond($inbound->id, false)))->toBe('duplicate');
     expect(sautoBotMessages($inst))->toHaveCount(1)->and($fake->calls)->toHaveCount(1);
-});
+    Notification::assertSentToTimes($admin, AiServiceAlertNotification::class, 1);
+})->with([
+    'conexión rechazada (antes de conectar)' => ['cURL error 7: Failed to connect to graph.facebook.com port 443: Connection refused', 'failed', 'send_failed'],
+    'DNS (antes de conectar)' => ['cURL error 6: Could not resolve host: graph.facebook.com', 'failed', 'send_failed'],
+    'tiempo agotado tras conectar' => ['cURL error 28: Operation timed out after 10001 milliseconds with 0 bytes received', 'delivery_unknown', 'delivery_unknown'],
+]);
 
 it('el eco de una respuesta del propio CRM no pausa la IA; una respuesta desde el teléfono sí', function () {
     [$inst] = sautoCtx(graph: [
         'graph.facebook.com/*/demo_wa_phone/messages' => fn (HttpRequest $r) => isset($r->data()['typing_indicator']) ? Http::response(['success' => true]) : Http::response(['messages' => [['id' => 'wamid.CRMBOT1']]]),
-        'graph.facebook.com/*/me/messages' => fn () => Http::response(['message_id' => 'm_bot_'.uniqid()]),
+        'graph.facebook.com/*/me/messages' => fn (HttpRequest $r) => isset($r->data()['sender_action']) ? Http::response(['success' => true]) : Http::response(['message_id' => 'm_CRMBOT11']),
         '*' => Http::response([]),
     ]);
 
@@ -612,7 +624,7 @@ it('el eco de una respuesta del propio CRM no pausa la IA; una respuesta desde e
 
     // Messenger: el eco (is_echo) de la respuesta del CRM tampoco pausa.
     sautoPost('messenger', sautoMessenger('m_IN11', 'Hola'));
-    sautoPost('messenger', sautoMessenger('m_ECHO11', 'Sí, hay cupo en el próximo grupo.', echo: true));
+    sautoPost('messenger', sautoMessenger('m_CRMBOT11', 'Sí, hay cupo en el próximo grupo.', echo: true));   // mid que devolvió Meta al CRM
     expect(sautoConversation($inst, 'messenger')->automation_state)->toBe('bot');
 
     // Una respuesta escrita en el teléfono (wamid desconocido) sí pausa.
@@ -675,4 +687,254 @@ it('un estado de error no reintenta solo: los mensajes nuevos no consultan la IA
     expect($fake->calls)->toHaveCount(1)
         ->and(DB::table('jobs')->count())->toBe(0)
         ->and(sautoConversation($inst, 'messenger')->automation_state)->toBe('error');
+});
+
+// ── Intervención humana externa: ecos de Messenger, Instagram y Business Suite ──
+
+function sautoInstagram(string $mid, string $text, bool $echo = false, string $account = 'demo_ig_user', string $user = 'igsid_5552012'): array
+{
+    return ['object' => 'instagram', 'entry' => [['id' => $account, 'time' => now()->getTimestampMs(), 'messaging' => [[
+        'sender' => ['id' => $echo ? $account : $user], 'recipient' => ['id' => $echo ? $user : $account], 'timestamp' => now()->getTimestampMs(),
+        'message' => array_filter(['mid' => $mid, 'text' => $text, 'is_echo' => $echo ?: null]),
+    ]]]]];
+}
+
+it('eco desconocido de Messenger (Business Suite o la app de Messenger): pausa al instante con motivo visible', function () {
+    [$inst, , $fake] = sautoCtx();
+    sautoPost('messenger', sautoMessenger('m_H1', 'Hola'));
+    expect($fake->calls)->toHaveCount(1);
+
+    sautoPost('messenger', sautoMessenger('m_SUITE1', 'Hola, soy Laura; te atiendo yo.', echo: true));
+
+    $conversation = sautoConversation($inst, 'messenger');
+    expect($conversation->only(['automation_state', 'automation_reason', 'automation_changed_by']))
+        ->toBe(['automation_state' => 'human', 'automation_reason' => 'replied_externally', 'automation_changed_by' => null])
+        ->and(app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialMessage::query()->where('sender_type', 'app')->sole()->body))->toBe('Hola, soy Laura; te atiendo yo.');
+
+    sautoPost('messenger', sautoMessenger('m_H2', '¿Y el precio?'));
+    expect($fake->calls)->toHaveCount(1);   // ya no responde en paralelo con la persona
+});
+
+it('eco desconocido de Instagram: pausa al instante', function () {
+    [$inst, , $fake] = sautoCtx();
+    sautoPost('instagram', sautoInstagram('m_IGH1', 'Hola'));
+    sautoPost('instagram', sautoInstagram('m_IGSUITE1', 'Te respondo desde Instagram.', echo: true));
+
+    expect(sautoConversation($inst, 'instagram')->only(['automation_state', 'automation_reason']))->toBe(['automation_state' => 'human', 'automation_reason' => 'replied_externally']);
+    sautoPost('instagram', sautoInstagram('m_IGH2', 'Gracias'));
+    expect($fake->calls)->toHaveCount(1);
+});
+
+it('un eco repetido no crea mensajes, auditorías ni pausas duplicadas', function () {
+    [$inst] = sautoCtx();
+    sautoPost('messenger', sautoMessenger('m_D10', 'Hola'));
+    sautoPost('messenger', sautoMessenger('m_SUITE2', 'Te atiendo yo.', echo: true));
+    $first = sautoConversation($inst, 'messenger')->automation_changed_at;
+
+    $this->travel(30)->seconds();
+    sautoPost('messenger', sautoMessenger('m_SUITE2', 'Te atiendo yo.', echo: true));     // reintento de Meta
+    sautoPost('messenger', sautoMessenger('m_SUITE3', 'Otra respuesta mía.', echo: true));  // otra respuesta ya en atención humana
+
+    $conversation = sautoConversation($inst, 'messenger');
+    expect($conversation->automation_changed_at->equalTo($first))->toBeTrue()
+        ->and(app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialMessage::query()->where('external_message_id', 'm_SUITE2')->count()))->toBe(1);
+});
+
+it('aislamiento: un eco solo pausa la conversación de SU cuenta e institución', function () {
+    [$instA, , $fake] = sautoCtx();
+    $instB = Institution::factory()->create();
+    app(CurrentInstitution::class)->runFor($instB->id, fn () => SocialChannel::factory()->create([
+        'provider' => 'messenger', 'external_id' => 'page_de_b', 'is_active' => true, 'advisor_enabled' => false, 'credentials' => ['token' => 'EAAB'],
+    ]));
+
+    // Misma persona escribe a la Página de A (Messenger) y a la cuenta de Instagram de A.
+    sautoPost('messenger', sautoMessenger('m_I1', 'Hola'));
+    sautoPost('instagram', sautoInstagram('m_I2', 'Hola', user: 'psid_8887701'));
+
+    // Responde una persona desde la Página de B: no afecta a nada de A.
+    $echoB = sautoMessenger('m_I3', 'Respuesta de B', echo: true);
+    $echoB['entry'][0]['id'] = 'page_de_b';
+    $echoB['entry'][0]['messaging'][0]['sender'] = ['id' => 'page_de_b'];
+    sautoPost('messenger', $echoB);
+    // Responde una persona en Instagram de A: no pausa la conversación de Messenger de A.
+    sautoPost('instagram', sautoInstagram('m_I4', 'Te escribo desde Instagram', echo: true, user: 'psid_8887701'));
+
+    expect(sautoConversation($instA, 'messenger')->automation_state)->toBe('bot')
+        ->and(sautoConversation($instA, 'instagram')->automation_state)->toBe('human')
+        ->and(app(CurrentInstitution::class)->runFor($instB->id, fn () => SocialMessage::query()->where('external_message_id', 'm_I3')->count()))->toBe(1)
+        ->and(app(CurrentInstitution::class)->runFor($instA->id, fn () => SocialMessage::query()->where('external_message_id', 'm_I3')->count()))->toBe(0);
+});
+
+// ── Recuperación de envíos sin confirmar («Enviando…» nunca es indefinido) ─────
+
+/** Caída simulada del proceso al guardar un saliente del asesor con ese estado (una vez). */
+function sautoCrashOn(string $status): void
+{
+    $armed = true;
+    SocialMessage::saving(function (SocialMessage $m) use (&$armed, $status) {
+        if ($armed && $m->sender_type === 'bot' && $m->status === $status) {
+            $armed = false;
+            throw new RuntimeException('Caída simulada del worker.');
+        }
+    });
+}
+
+function sautoReplies(): int
+{
+    return collect(Http::recorded())->filter(fn ($p) => str_contains($p[0]->url(), 'me/messages') && ! isset($p[0]->data()['sender_action']))->count();
+}
+
+function sautoReconcile(): void
+{
+    Artisan::call('social:reconcile-deliveries');
+}
+
+it('caída ANTES de llamar al proveedor: nunca se envió → «fallido» por plazo, sin reenvío', function () {
+    [$inst, , $fake] = sautoCtx();
+    sautoReady();
+    sautoCrashOn('sending');   // muere al marcar «enviándose»: Meta no se llama
+    sautoPost('messenger', sautoMessenger('m_K1', 'Hola'));
+    sautoRunWorker();
+
+    $reply = sautoBotMessages($inst)->sole();
+    expect($reply->status)->toBe('pending')->and(sautoReplies())->toBe(0);
+
+    sautoReconcile();   // aún dentro del plazo: no se toca
+    expect($reply->fresh()->status)->toBe('pending');
+
+    $this->travel(181)->seconds();
+    sautoReconcile();
+    sautoRunWorker();   // el reintento del job no reenvía
+    expect($reply->fresh()->status)->toBe('failed')
+        ->and($reply->fresh()->ai_meta['send_status'] ?? null)->toBe('not_sent')
+        ->and(sautoConversation($inst, 'messenger')->only(['automation_state', 'automation_reason']))->toBe(['automation_state' => 'error', 'automation_reason' => 'send_failed'])
+        ->and(sautoReplies())->toBe(0)
+        ->and($fake->calls)->toHaveCount(1);
+});
+
+it('el proveedor acepta y cae el worker: sin confirmación termina en «entrega sin confirmar», pausa, una alerta y nunca reenvía', function () {
+    [$inst, , $fake] = sautoCtx();
+    sautoReady();
+    Notification::fake();
+    $admin = User::factory()->create(['institution_id' => $inst->id, 'role' => 'admin']);
+    sautoCrashOn('sent');   // Meta ya aceptó cuando el proceso muere
+    sautoPost('messenger', sautoMessenger('m_K2', 'Hola'));
+    sautoRunWorker();
+
+    $reply = sautoBotMessages($inst)->sole();
+    expect($reply->status)->toBe('sending')->and(sautoReplies())->toBe(1);
+
+    $this->travel(181)->seconds();
+    sautoReconcile();
+    sautoReconcile();   // repetido: idempotente
+    foreach ([31, 121, 121] as $wait) {   // reintentos del job: ninguno reenvía
+        $this->travel($wait)->seconds();
+        sautoRunWorker();
+    }
+    sautoPost('messenger', sautoMessenger('m_K3', '¿Sigues ahí?'));   // en error: no consulta la IA
+
+    expect($reply->fresh()->status)->toBe('delivery_unknown')
+        ->and(sautoConversation($inst, 'messenger')->only(['automation_state', 'automation_reason']))->toBe(['automation_state' => 'error', 'automation_reason' => 'delivery_unknown'])
+        ->and(sautoReplies())->toBe(1)
+        ->and($fake->calls)->toHaveCount(1);
+    Notification::assertSentToTimes($admin, AiServiceAlertNotification::class, 1);
+
+    // La bandeja lo muestra y pide revisión humana.
+    app(CurrentInstitution::class)->set($inst->id);
+    Livewire::actingAs($admin)->test(Inbox::class)->call('select', $reply->social_conversation_id)
+        ->assertSee('Entrega sin confirmar: revísala en el canal')
+        ->assertSee('No se pudo confirmar si la respuesta automática llegó')
+        ->assertSee('no se reenvió para no duplicarla');
+});
+
+it('un eco posterior confirma el envío que quedó sin confirmar (sin crear otro mensaje ni pausar)', function () {
+    [$inst] = sautoCtx(graph: [
+        'graph.facebook.com/*/me/messages' => fn (HttpRequest $r) => isset($r->data()['sender_action']) ? Http::response(['success' => true]) : Http::response(['message_id' => 'm_CRMLOST1']),
+        '*' => Http::response([]),
+    ]);
+    sautoReady();
+    sautoCrashOn('sent');
+    sautoPost('messenger', sautoMessenger('m_K4', 'Hola'));
+    sautoRunWorker();
+    $reply = sautoBotMessages($inst)->sole();
+    expect($reply->status)->toBe('sending')->and($reply->external_message_id)->toBeNull();
+
+    sautoPost('messenger', sautoMessenger('m_CRMLOST1', 'Sí, hay cupo en el próximo grupo.', echo: true));
+
+    expect($reply->fresh()->only(['status', 'external_message_id']))->toBe(['status' => 'sent', 'external_message_id' => 'm_CRMLOST1'])
+        ->and($reply->fresh()->ai_meta['reconciled_by'] ?? null)->toBe('echo')
+        ->and(app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialMessage::query()->where('direction', 'outbound')->count()))->toBe(1)
+        ->and(sautoConversation($inst, 'messenger')->automation_state)->toBe('bot');
+
+    $this->travel(181)->seconds();
+    sautoReconcile();
+    expect($reply->fresh()->status)->toBe('sent');
+});
+
+it('confirmación posterior de RECHAZO del proveedor: la respuesta pasa a fallida y la automatización se detiene', function () {
+    [$inst] = sautoCtx(graph: [
+        'graph.facebook.com/*/demo_wa_phone/messages' => fn (HttpRequest $r) => isset($r->data()['typing_indicator']) ? Http::response(['success' => true]) : Http::response(['messages' => [['id' => 'wamid.BOTREJ1']]]),
+        '*' => Http::response([]),
+    ]);
+    sautoPost('whatsapp', sautoWhatsApp(['id' => 'wamid.R1', 'type' => 'text', 'text' => ['body' => 'Hola']]));
+    expect(sautoBotMessages($inst)->sole()->status)->toBe('sent');
+
+    sautoPost('whatsapp', ['object' => 'whatsapp_business_account', 'entry' => [['id' => 'WABA_1', 'changes' => [['field' => 'messages', 'value' => [
+        'messaging_product' => 'whatsapp', 'metadata' => ['display_phone_number' => '15551230000', 'phone_number_id' => 'demo_wa_phone'],
+        'statuses' => [['id' => 'wamid.BOTREJ1', 'status' => 'failed', 'timestamp' => (string) now()->getTimestamp(), 'recipient_id' => '5215559990001', 'errors' => [['code' => 131026, 'title' => 'Message undeliverable']]]],
+    ]]]]]]);
+
+    expect(sautoBotMessages($inst)->sole()->status)->toBe('failed')
+        ->and(sautoConversation($inst, 'whatsapp')->only(['automation_state', 'automation_reason']))->toBe(['automation_state' => 'error', 'automation_reason' => 'send_failed']);
+});
+
+it('varios envíos sin confirmar de la misma cuenta: cada conversación se pausa y se genera UNA sola alerta', function () {
+    [$inst] = sautoCtx();
+    Notification::fake();
+    $admin = User::factory()->create(['institution_id' => $inst->id, 'role' => 'admin']);
+    $channel = app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialChannel::query()->where('provider', 'messenger')->firstOrFail());
+    $ids = app(CurrentInstitution::class)->runFor($inst->id, function () use ($channel) {
+        return collect(['psid_a', 'psid_b'])->map(function (string $psid) use ($channel) {
+            $conversation = SocialConversation::factory()->create(['social_channel_id' => $channel->id, 'provider' => 'messenger', 'external_conversation_id' => $psid, 'automation_state' => 'bot']);
+
+            return SocialMessage::factory()->create(['social_conversation_id' => $conversation->id, 'direction' => 'outbound', 'sender_type' => 'bot', 'status' => 'sending', 'external_message_id' => null, 'body' => 'Respuesta'])->id;
+        });
+    });
+
+    $this->travel(181)->seconds();
+    sautoReconcile();
+
+    app(CurrentInstitution::class)->runFor($inst->id, function () use ($ids) {
+        foreach ($ids as $id) {
+            $m = SocialMessage::query()->findOrFail($id);
+            expect($m->status)->toBe('delivery_unknown')
+                ->and(SocialConversation::query()->findOrFail($m->social_conversation_id)->automation_state)->toBe('error');
+        }
+    });
+    Notification::assertSentToTimes($admin, AiServiceAlertNotification::class, 1);
+});
+
+it('ningún saliente queda «Enviando…» indefinidamente (asesor o persona, en cualquier institución); los recientes no se tocan', function () {
+    [$instA] = sautoCtx();
+    $instB = Institution::factory()->create();
+    $make = function (Institution $inst, string $sender, string $status) {
+        return app(CurrentInstitution::class)->runFor($inst->id, function () use ($sender, $status) {
+            $channel = SocialChannel::query()->first() ?? SocialChannel::factory()->create(['provider' => 'messenger']);
+            $conversation = SocialConversation::factory()->create(['social_channel_id' => $channel->id, 'provider' => $channel->provider]);
+
+            return SocialMessage::factory()->create(['social_conversation_id' => $conversation->id, 'direction' => 'outbound', 'sender_type' => $sender, 'status' => $status, 'external_message_id' => null, 'body' => 'x'])->id;
+        });
+    };
+    $old = [$make($instA, 'bot', 'sending'), $make($instA, 'agent', 'pending'), $make($instB, 'agent', 'sending')];
+    $this->travel(181)->seconds();
+    $fresh = $make($instA, 'agent', 'sending');   // en curso: dentro del plazo
+
+    sautoReconcile();
+    $statuses = fn (array $ids) => DB::table('social_messages')->whereIn('id', $ids)->orderBy('id')->pluck('status')->all();
+    expect($statuses($old))->toBe(['delivery_unknown', 'failed', 'delivery_unknown'])
+        ->and($statuses([$fresh]))->toBe(['sending']);
+
+    $this->travel(181)->seconds();
+    sautoReconcile();
+    expect(DB::table('social_messages')->whereIn('status', ['pending', 'sending'])->count())->toBe(0);
 });

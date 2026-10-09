@@ -179,6 +179,16 @@ return [
     ],
 
     /*
+    | Envíos sin confirmar: pasado este plazo (segundos) sin respuesta, eco ni estado del proveedor,
+    | un saliente «pendiente» (el proveedor no llegó a llamarse) pasa a fallido y uno «enviándose»
+    | (pudo aceptarse) a «entrega sin confirmar». Nunca se reenvían. Debe superar el tiempo máximo
+    | de una petición a Meta (15 s) con holgura.
+    */
+    'delivery' => [
+        'unknown_after_seconds' => (int) env('SOCIAL_DELIVERY_UNKNOWN_AFTER_SECONDS', 180),
+    ],
+
+    /*
     | Atajo SOLO-LOCAL para verificación visual sin tokens reales de Meta: si está definido
     | (y APP_ENV=local), MetaMessageSender NO llama a la red y simula el resultado:
     |   SOCIAL_FAKE_SEND=ok | window | error

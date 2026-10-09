@@ -1184,5 +1184,9 @@
     "la IA": "the AI",
     "una persona": "a person",
     "Cuando una persona del equipo responde en una conversación, el asesor deja de responder en ella hasta que alguien lo reactive desde la bandeja.": "When a team member replies in a conversation, the advisor stops replying in it until someone reactivates it from the inbox.",
-    "La conversación siguió ocupada por otro proceso demasiado tiempo": "The conversation stayed busy with another process for too long"
+    "La conversación siguió ocupada por otro proceso demasiado tiempo": "The conversation stayed busy with another process for too long",
+    "Se respondió desde fuera del CRM (Meta Business Suite, Messenger o Instagram)": "Replied from outside the CRM (Meta Business Suite, Messenger or Instagram)",
+    "No se pudo confirmar si la respuesta automática llegó": "It could not be confirmed whether the automatic reply was delivered",
+    "Revisa la conversación en la app del canal antes de responder: no se reenvió para no duplicarla.": "Check the conversation in the channel app before replying: it was not resent to avoid duplicating it.",
+    "Entrega sin confirmar: revísala en el canal": "Delivery not confirmed: check it in the channel"
 }

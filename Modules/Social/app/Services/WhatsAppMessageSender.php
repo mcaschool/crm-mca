@@ -127,7 +127,7 @@ final class WhatsAppMessageSender
         } catch (Throwable $e) {
             Log::warning('social.send.wa: error de red', ['error' => $e->getMessage()]);
 
-            return SendResult::failed('No se pudo contactar con Meta (red).');
+            return SendResult::network($e);
         }
 
         if ($response->successful()) {

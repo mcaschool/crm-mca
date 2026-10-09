@@ -10,8 +10,13 @@ use Carbon\CarbonImmutable;
  * Traduce el payload CRUDO de Meta al formato interno (NormalizedMessage).
  *
  * Robustez: solo emite los eventos que sabemos ingerir. Todo lo demás — estados de entrega,
- * reacciones, echoes de IG/Messenger (is_echo), comentarios/feed, postbacks — se DESCARTA
- * silenciosamente. El controlador responde 200 igualmente para no gatillar reintentos.
+ * reacciones, comentarios/feed, postbacks — se DESCARTA silenciosamente. El controlador responde
+ * 200 igualmente para no gatillar reintentos.
+ *
+ * Los ECOS de Messenger/Instagram (message.is_echo) se ingieren como SALIENTES (sender 'app'): son
+ * los mensajes que la Página/cuenta envió. Si su mid es el de un envío del CRM, la ingesta lo
+ * reconoce (no duplica ni pausa); si no, es una persona respondiendo desde Meta Business Suite,
+ * Messenger o Instagram (intervención humana externa).
  *
  * Excepción (Bloque 3.1): en WhatsApp, el eco de COEXISTENCIA (field 'smb_message_echoes')
  * SÍ se ingiere, como mensaje SALIENTE originado en la app del teléfono del negocio.
@@ -255,8 +260,9 @@ final class MetaWebhookNormalizer
 
     /**
      * Messenger (object 'page') e Instagram (object 'instagram') comparten entry[].messaging[].
-     * Se ignoran echoes (is_echo), entregas/lecturas y postbacks; feed/comentarios llegan por
-     * entry[].changes[] (no messaging) → se ignoran.
+     * Entrantes del usuario y ECOS (is_echo: lo que envió la Página/cuenta, con sender = la Página y
+     * recipient = el usuario). Se ignoran entregas/lecturas y postbacks; feed/comentarios llegan
+     * por entry[].changes[] (no messaging) → se ignoran.
      *
      * @param  array<string, mixed>  $payload
      * @return array<int, NormalizedMessage>
@@ -270,11 +276,13 @@ final class MetaWebhookNormalizer
 
             foreach ($this->arr($entry, 'messaging') as $event) {
                 $message = is_array($event['message'] ?? null) ? $event['message'] : null;
-                if ($message === null || ($message['is_echo'] ?? false) === true) {
-                    continue; // no es un mensaje entrante de usuario (echo/postback/delivery/read).
+                if ($message === null) {
+                    continue; // postback/delivery/read: no es un mensaje.
                 }
+                $echo = ($message['is_echo'] ?? false) === true;
 
-                $sender = (string) ($this->obj($event, 'sender')['id'] ?? '');
+                // En un eco el contacto es el DESTINATARIO; en un entrante, el remitente.
+                $sender = (string) ($this->obj($event, $echo ? 'recipient' : 'sender')['id'] ?? '');
                 $mid = (string) ($message['mid'] ?? '');
                 if ($sender === '' || $mid === '' || $channelId === '') {
                     continue;
@@ -295,6 +303,8 @@ final class MetaWebhookNormalizer
                     body: $text,
                     attachments: $attachments === [] ? null : $attachments,
                     providerTimestamp: $this->tsFromMillis($event['timestamp'] ?? null),
+                    direction: $echo ? 'outbound' : 'inbound',
+                    senderType: $echo ? 'app' : 'contact',
                 );
             }
         }

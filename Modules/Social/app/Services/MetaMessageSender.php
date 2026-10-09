@@ -65,7 +65,7 @@ final class MetaMessageSender
         } catch (Throwable $e) {
             Log::warning('social.send: error de red', ['provider' => $provider, 'error' => $e->getMessage()]);
 
-            return SendResult::failed('No se pudo contactar con Meta (red).');
+            return SendResult::network($e);
         }
 
         if ($response->successful()) {

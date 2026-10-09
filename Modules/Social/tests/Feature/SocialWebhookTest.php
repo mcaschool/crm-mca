@@ -190,16 +190,23 @@ it('Messenger inbound: external_id que no coincide aparca; el correcto ingiere',
 // ----------------------------------------------------------------------------------
 // Eventos no soportados → 200 + ignored, sin crear mensaje
 // ----------------------------------------------------------------------------------
-it('ignora un echo (is_echo) sin crear mensaje', function () {
+it('un echo (is_echo) se registra como SALIENTE de la Página en la conversación del usuario, sin no leídos', function () {
     $institution = socialWebhookCtx();
     $payload = json_decode(fx('messenger'), true);
+    // Eco real de Meta: sender = la Página, recipient = el usuario.
+    $payload['entry'][0]['messaging'][0]['sender'] = ['id' => 'demo_fb_page'];
+    $payload['entry'][0]['messaging'][0]['recipient'] = ['id' => 'psid_8887701'];
     $payload['entry'][0]['messaging'][0]['message']['is_echo'] = true;
     $raw = (string) json_encode($payload);
 
-    postWebhook('messenger', $raw)->assertOk()->assertJsonPath('status', 'ignored');
+    postWebhook('messenger', $raw)->assertOk();
 
     app(CurrentInstitution::class)->runFor($institution->id, function () {
-        expect(SocialMessage::query()->count())->toBe(0);
+        $message = SocialMessage::query()->sole();
+        expect($message->only(['direction', 'sender_type', 'external_message_id']))
+            ->toBe(['direction' => 'outbound', 'sender_type' => 'app', 'external_message_id' => 'm_MSGR00000001'])
+            ->and($message->conversation->external_conversation_id)->toBe('psid_8887701')
+            ->and($message->conversation->unread_count)->toBe(0);
     });
 });
 

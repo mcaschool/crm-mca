@@ -240,7 +240,7 @@
                  ">
                 @forelse ($messages as $msg)
                     @php
-                        $failed = in_array($msg->status, ['failed', 'failed_window'], true);
+                        $failed = in_array($msg->status, ['failed', 'failed_window', 'delivery_unknown'], true);
                         $atts = is_array($msg->attachments) ? $msg->attachments : [];
                         $hasStoredMedia = collect($atts)->contains(fn ($a) => is_array($a) && ! empty($a['storage_path']));
                     @endphp
@@ -283,6 +283,8 @@
                             @if ($msg->direction === 'outbound')
                                 @switch($msg->status)
                                     @case('pending') · {{ __('Enviando…') }} @break
+                                    @case('sending') · {{ __('Enviando…') }} @break
+                                    @case('delivery_unknown') · <span data-testid="delivery-unknown">{{ __('Entrega sin confirmar: revísala en el canal') }}</span> @break
                                     @case('sent') · {{ __('Enviado') }} @break
                                     @case('delivered') · {{ __('Entregado') }} @break
                                     @case('read') · {{ __('Leído') }} @break
