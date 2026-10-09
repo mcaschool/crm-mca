@@ -1116,5 +1116,8 @@
     "Corrección activada.": "Correction activated.",
     "Corrección desactivada: el asesor deja de usarla.": "Correction deactivated: the advisor stops using it.",
     "Corrección eliminada.": "Correction deleted.",
-    "Solo un administrador de asesores de esta institución, con sesión iniciada en el panel, puede aprobar respuestas.": "Only an advisor administrator of this institution, signed in to the panel, can approve responses."
+    "Solo un administrador de asesores de esta institución, con sesión iniciada en el panel, puede aprobar respuestas.": "Only an advisor administrator of this institution, signed in to the panel, can approve responses.",
+    "Espera mínima antes de responder": "Minimum wait before replying",
+    "Segundos (0–8) que se muestra «está escribiendo…» como mínimo. Si la IA tarda más, la respuesta sale en cuanto llega. 0 = sin espera.": "Seconds (0–8) that “is typing…” is shown at least. If the AI takes longer, the reply appears as soon as it arrives. 0 = no wait.",
+    "Escribe un número de segundos (0 = sin espera).": "Enter a number of seconds (0 = no wait)."
 }

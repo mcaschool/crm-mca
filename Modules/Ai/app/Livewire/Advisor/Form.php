@@ -53,6 +53,9 @@ class Form extends Component
 
     public string $messageLimit = '';
 
+    /** Espera mínima «está escribiendo…» (segundos, 0–8). */
+    public string $typingDelay = '3';
+
     /** «Identidad e instrucciones»: se combinan con las reglas institucionales (nunca las sustituyen). */
     public string $roleDescription = '';
 
@@ -117,6 +120,7 @@ class Form extends Component
             $this->handoffRules = (string) $bot->handoff_rules;
             $this->knowledgeRetrieval = $bot->knowledge_retrieval ?: Bot::RETRIEVAL_CLASSIC;
             $this->messageLimit = $bot->ai_message_limit !== null ? (string) $bot->ai_message_limit : '';
+            $this->typingDelay = (string) $bot->typingDelay();
             $this->welcomeEs = (string) $bot->widget_welcome_es;
             $this->welcomeEn = (string) $bot->widget_welcome_en;
             $this->buttonEs = (string) $bot->widget_button_es;
@@ -144,6 +148,7 @@ class Form extends Component
             'model' => ['nullable', 'string', 'max:100'],
             'knowledgeRetrieval' => ['required', 'in:'.Bot::RETRIEVAL_CLASSIC.','.Bot::RETRIEVAL_PRECISE],
             'messageLimit' => ['nullable', 'integer', 'min:1', 'max:200'],
+            'typingDelay' => ['required', 'integer', 'min:0', 'max:'.Bot::TYPING_DELAY_MAX],
             // Identidad e instrucciones (texto libre, con límites razonables).
             'roleDescription' => ['nullable', 'string', 'max:255'],
             'instructions' => ['nullable', 'string', 'max:6000'],
@@ -172,6 +177,10 @@ class Form extends Component
             'messageLimit.integer' => __('Escribe un número entero.'),
             'messageLimit.min' => __('Mínimo :min.'),
             'messageLimit.max' => __('Máximo :max.'),
+            'typingDelay.required' => __('Escribe un número de segundos (0 = sin espera).'),
+            'typingDelay.integer' => __('Escribe un número entero.'),
+            'typingDelay.min' => __('Mínimo :min.'),
+            'typingDelay.max' => __('Máximo :max.'),
         ]);
 
         $creating = $this->botId === null;
@@ -196,6 +205,7 @@ class Form extends Component
         $bot->handoff_rules = $this->multilineText($this->handoffRules);
         $bot->knowledge_retrieval = $this->knowledgeRetrieval;
         $bot->ai_message_limit = trim($this->messageLimit) !== '' ? (int) $this->messageLimit : null;
+        $bot->typing_delay = (int) $this->typingDelay;
         // Por asesor (y por tanto por institución); vacío = el texto por defecto del widget.
         $bot->widget_welcome_es = $this->plainText($this->welcomeEs);
         $bot->widget_welcome_en = $this->plainText($this->welcomeEn);

@@ -34,7 +34,7 @@
 
   var state = {
     lang: 'es', sessionId: localStorage.getItem(LS_KEY) || '', captured: false, sessionReady: false,
-    assistant: 'Celia', avatarUrl: null, answers: {}, options: null,
+    assistant: 'Celia', typingDelay: 3, avatarUrl: null, answers: {}, options: null,
     screen: 'welcome', node: null, userName: null, celia: false, identity: 'institution',
     clog: null, cfoot: null, cin: null, csend: null, lastRole: null, pendingTopic: null,
     opened: false
@@ -99,6 +99,7 @@
       none: 'No encontramos coincidencia exacta. Habla con el asesor o mira el catálogo completo.',
       results: 'Programas recomendados para ti',
       online: 'En línea', close: 'Cerrar',
+      typingName: '{name} está escribiendo…', failed: 'No pude responder ahora. Inténtalo de nuevo en unos segundos.',
       teaser: 'Hola 👋 Soy Celia. ¿Te ayudo a elegir tu microcredencial?'
     },
     en: {
@@ -113,6 +114,7 @@
       none: 'No exact match. Talk to the advisor or browse the full catalog.',
       results: 'Programs recommended for you',
       online: 'Online', close: 'Close',
+      typingName: '{name} is typing…', failed: "I couldn't reply right now. Please try again in a few seconds.",
       teaser: "Hi 👋 I'm Celia. Shall I help you choose your microcredential?"
     }
   };
@@ -264,6 +266,7 @@
     '.typing{display:flex;gap:5px;align-items:center;padding:8px 2px;animation:msgIn .25s ease both}' +
     '.typing span{width:7px;height:7px;border-radius:50%;background:#b9c6d8;display:inline-block;animation:dot 1s infinite ease-in-out}' +
     '.typing span:nth-child(2){animation-delay:.15s}.typing span:nth-child(3){animation-delay:.3s}' +
+    '.typing-named{display:flex;align-items:center;gap:8px;margin-left:42px;animation:msgIn .25s ease both}.typing-named .tname{font-size:12px;color:#6b7a90}' +
     '.status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:6px 2px;animation:msgIn .25s ease both}' +
     '.status.ok{color:#2e7d32;font-weight:600}' +
     // Input
@@ -278,7 +281,7 @@
     '@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}' +
     '@keyframes dot{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-5px);opacity:1}}' +
     '@media (prefers-reduced-motion: reduce){' +
-    '.msg,.card,.typing,.status,.cw-teaser,.launcher .l-dot{animation:none}.typing span{animation:none}' +
+    '.msg,.card,.typing,.typing-named,.status,.cw-teaser,.launcher .l-dot{animation:none}.typing span{animation:none}' +
     '.opt,.faq,.primary,.gbtn,.snd,.launcher{transition:none}.clog{scroll-behavior:auto}}' +
     '</style>' +
     '<div class="cw-dock">' +
@@ -371,6 +374,8 @@
       state.sessionId = r.session_id; localStorage.setItem(LS_KEY, r.session_id);
       state.captured = !!r.contact_captured;
       if (r.bot && r.bot.assistant_name) { state.assistant = r.bot.assistant_name; }
+      // Espera mínima «está escribiendo…» del asesor (0–8 s; 0 = sin espera).
+      if (r.bot && typeof r.bot.typing_delay === 'number') { state.typingDelay = Math.max(0, Math.min(8, r.bot.typing_delay)); }
       state.avatarUrl = (r.bot && r.bot.avatar_url) ? r.bot.avatar_url : null;
       state.node = r.node || null;
       state.sessionReady = true;
@@ -458,6 +463,16 @@
   function typing() { clearLog(); state.clog.appendChild(typingEl()); smoothScroll(state.clog); }
   function logTyping() { var tp = typingEl(); tp.classList.add('tp'); state.clog.appendChild(tp); smoothScroll(state.clog); }
   function clearTyping() { var tp = state.clog.querySelector('.tp'); if (tp) { tp.parentNode.removeChild(tp); } }
+  // «{asesor} está escribiendo…»: el nombre sale SIEMPRE del asesor que responde, en el idioma elegido.
+  function logTypingNamed() {
+    var tp = el('<div class="typing-named tp" role="status" aria-live="polite"><div class="typing"><span></span><span></span><span></span></div><span class="tname"></span></div>');
+    tp.querySelector('.tname').textContent = t('typingName').replace('{name}', state.assistant);
+    state.clog.appendChild(tp); smoothScroll(state.clog);
+  }
+  // La respuesta sale cuando han pasado al menos N segundos desde el envío, o en cuanto llega si la IA tarda más.
+  function atLeast(promise, seconds) {
+    return Promise.all([Promise.resolve(promise), wait(Math.max(0, seconds) * 1000)]).then(function (a) { return a[0]; });
+  }
 
   // Burbuja con nombre del emisor y avatar (avatar solo en el 1er mensaje del bloque).
   function logBubble(text, who) {
@@ -596,15 +611,19 @@
   }
 
   function sendCelia(m) {
-    logBubble(m, 'user'); inputDisabled(true); logTyping();
-    paced(api('/celia', 'POST', { session_id: state.sessionId, message: m, website: '' })).then(function (r) {
-      celiaReply(r); inputDisabled(!!r.limit_reached);
+    logBubble(m, 'user'); inputDisabled(true); logTypingNamed();
+    atLeast(api('/celia', 'POST', { session_id: state.sessionId, message: m, website: '' }), state.typingDelay).then(function (r) {
+      celiaReply(r); inputDisabled(!!(r && r.limit_reached));
+    }).catch(function () {
+      // Error de red: el indicador desaparece y se avisa; se puede volver a escribir.
+      clearTyping(); logBubble(t('failed'), 'celia'); inputDisabled(false);
     });
   }
 
   function celiaReply(r) {
     clearTyping();
     if (r && r.reply) { logBubble(r.reply, 'celia'); }
+    else if (!r || !r.action) { logBubble(t('failed'), 'celia'); } // respuesta vacía o error del servidor
     if (r && r.action === 'start_matcher') { return startMatcher(); }
     if (r && r.action === 'buttons' && r.node) { celiaButtons(r.node); }
   }

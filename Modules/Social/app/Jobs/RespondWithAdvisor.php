@@ -6,6 +6,7 @@ namespace Modules\Social\Jobs;
 
 use Modules\Core\Jobs\TenantAwareJob;
 use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Social\Services\AdvisorTypingIndicator;
 use Modules\Social\Services\SocialAdvisorResponder;
 use Modules\Social\Support\AdvisorDispatcher;
 use Throwable;
@@ -36,6 +37,9 @@ final class RespondWithAdvisor extends TenantAwareJob
 
     protected function handleForInstitution(): void
     {
+        // El «escribiendo» del canal caduca a los ~20–25 s y el worker corre cada minuto: se renueva
+        // al empezar a preparar la respuesta (best-effort, con tiempo límite corto; no bloquea).
+        app(AdvisorTypingIndicator::class)->forMessage($this->messageId);
         $outcome = app(SocialAdvisorResponder::class)->respond($this->messageId, $this->finalAttempt());
 
         if ($outcome === SocialAdvisorResponder::RETRY && $this->job !== null) {

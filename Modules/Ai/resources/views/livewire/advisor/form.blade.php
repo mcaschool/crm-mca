@@ -146,6 +146,12 @@
                         <div class="mca-help">{{ __('Vacío = el valor general (:n).', ['n' => (int) config('crm.celia.message_limit', 15)]) }}</div>
                         @error('messageLimit') <span class="mca-err">{{ $message }}</span> @enderror
                     </div>
+                    <div class="field" style="flex:1;min-width:160px;margin-bottom:0">
+                        <label for="adv-typing">{{ __('Espera mínima antes de responder') }}</label>
+                        <input id="adv-typing" type="number" min="0" max="8" wire:model="typingDelay" data-testid="typing-delay">
+                        <div class="mca-help">{{ __('Segundos (0–8) que se muestra «está escribiendo…» como mínimo. Si la IA tarda más, la respuesta sale en cuanto llega. 0 = sin espera.') }}</div>
+                        @error('typingDelay') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
                 </div>
             </div>
 

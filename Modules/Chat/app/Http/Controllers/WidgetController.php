@@ -124,6 +124,8 @@ class WidgetController extends Controller
                 'assistant_name' => $bot->assistant_name,
                 'avatar_url' => $bot->avatarUrl(),
                 'default_language' => $bot->default_language,
+                // «Está escribiendo…»: espera mínima (s) que el navegador respeta antes de mostrar la respuesta.
+                'typing_delay' => $bot->typingDelay(),
             ],
             'contact_captured' => $conversation->contact_id !== null,
             'node' => $node !== null ? $this->guided->renderNode($node, $locale, $this->contactName($conversation)) : null,

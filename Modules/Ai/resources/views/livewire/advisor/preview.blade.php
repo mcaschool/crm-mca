@@ -1,5 +1,23 @@
 {{-- «Probar asesor»: página independiente del enlace privado. Mismo asesor real, canal de prueba. --}}
-<div class="pv-wrap">
+{{-- «Está escribiendo…»: al enviar, el mensaje del usuario y la burbuja del asesor aparecen al instante; las
+     respuestas nuevas se muestran cuando han pasado al menos min ms (o en cuanto llegan si la IA tarda más).
+     Si hay un error (aviso del servidor o fallo de red), el indicador se quita enseguida. --}}
+<div class="pv-wrap" data-testid="preview" data-typing-delay="{{ $typingDelayMs }}" x-data="{
+        min: {{ (int) $typingDelayMs }}, typing: false, hold: false, base: 0, pending: '',
+        async ask() {
+            const text = String(this.$wire.draft || '').trim();
+            if (text === '' || this.typing) { if (text === '') { this.$wire.send(); } return; }
+            this.base = Number(this.$refs.log.dataset.lastId || 0);
+            this.pending = text; this.hold = true; this.typing = true;
+            const t0 = Date.now();
+            let failed = false;
+            try { await this.$wire.send(); } catch (e) { failed = true; }
+            failed = failed || !! this.$wire.notice;
+            const rest = this.min - (Date.now() - t0);
+            if (! failed && rest > 0) { await new Promise((r) => setTimeout(r, rest)); }
+            this.hold = false; this.typing = false; this.pending = '';
+        },
+    }">
     <style>
         .pv-body{margin:0;background:var(--mca-page-bg);font-family:var(--mca-font);color:var(--mca-ink);-webkit-font-smoothing:antialiased}
         .pv-wrap{max-width:760px;margin:0 auto;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;padding:16px;box-sizing:border-box}
@@ -50,7 +68,13 @@
         .pv-form textarea{flex:1;min-height:44px;max-height:140px;border:1px solid var(--mca-card-border);border-radius:12px;padding:11px 12px;font:inherit;font-size:14px;resize:vertical;box-sizing:border-box}
         .pv-form textarea:focus,.pv-obs textarea:focus{outline:none;border-color:var(--mca-blue);box-shadow:0 0 0 3px rgba(30,90,168,.12)}
         .pv-err{color:#B42318;font-size:12.5px}
-        .pv-typing{align-self:flex-start;font-size:12.5px;color:var(--mca-ink-2)}
+        .pv-typing{align-self:flex-start;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--mca-ink-2)}
+        .pv-dots{display:inline-flex;gap:4px}
+        .pv-dots i{width:6px;height:6px;border-radius:50%;background:var(--mca-ink-3);animation:pvDot 1s infinite ease-in-out}
+        .pv-dots i:nth-child(2){animation-delay:.15s}.pv-dots i:nth-child(3){animation-delay:.3s}
+        @keyframes pvDot{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+        @media (prefers-reduced-motion: reduce){.pv-dots i{animation:none;opacity:.7}}
+        [x-cloak]{display:none !important}
         @media (max-width:560px){ .pv-wrap{padding:10px} .pv-head{flex-wrap:wrap} .pv-msg{max-width:92%} }
     </style>
 
@@ -78,7 +102,7 @@
     </div>
     <p class="pv-note">{{ __('Conversación interna de prueba con el asesor real (mismo modelo, instrucciones y conocimiento). No crea contactos ni leads, no envía nada a Instagram, Messenger ni WhatsApp y no cuenta en las métricas.') }}</p>
 
-    <main class="pv-log" aria-live="polite">
+    <main class="pv-log" aria-live="polite" x-ref="log" data-last-id="{{ (int) $messages->max('id') }}">
         {{-- Presentación del widget: los dos textos configurados del asesor --}}
         <div class="pv-teaser" data-testid="welcome">{{ $texts['welcome'] }}</div>
         @unless ($started)
@@ -90,11 +114,11 @@
 
         @foreach ($messages as $m)
             @if ($m->sender_type === 'user')
-                <div class="pv-msg user" wire:key="m-{{ $m->id }}">{{ $m->content }}</div>
+                <div class="pv-msg user" wire:key="m-{{ $m->id }}" x-show="! hold || {{ $m->id }} <= base">{{ $m->content }}</div>
             @else
                 @php $r = $ratings[$m->id] ?? null; @endphp
                 @php $intent = is_array($m->meta) ? ($m->meta['action'] ?? null) : null; @endphp
-                <div class="pv-msg bot" wire:key="m-{{ $m->id }}">
+                <div class="pv-msg bot" wire:key="m-{{ $m->id }}" x-show="! hold || {{ $m->id }} <= base">
                     {{-- Qué decidió el asesor (para evaluar límites, transferencia e información no encontrada) --}}
                     @if ($intent === 'unresolved')
                         <span class="pv-tag warn">{{ __('Información no encontrada') }}</span>
@@ -148,7 +172,14 @@
             @endif
         @endforeach
 
-        <div class="pv-typing" wire:loading wire:target="send,start">{{ __(':name está escribiendo…', ['name' => $bot->assistant_name]) }}</div>
+        {{-- Mensaje del usuario y «{asesor} está escribiendo…» al instante, mientras llega la respuesta --}}
+        <div class="pv-msg user" x-show="typing" x-cloak x-text="pending"></div>
+        <div class="pv-msg bot pv-typing" x-show="typing" x-cloak role="status" data-testid="typing">
+            <span class="pv-dots" aria-hidden="true"><i></i><i></i><i></i></span> {{ $typingText }}
+        </div>
+        <div class="pv-msg bot pv-typing" wire:loading.flex wire:target="start" role="status">
+            <span class="pv-dots" aria-hidden="true"><i></i><i></i><i></i></span> {{ $typingText }}
+        </div>
 
         @if ($notice)
             <div class="pv-alert" role="alert">{{ $notice }}</div>
@@ -156,10 +187,10 @@
     </main>
 
     @if ($started)
-        <form class="pv-form" wire:submit="send">
+        <form class="pv-form" @submit.prevent="ask()">
             <textarea wire:model="draft" maxlength="1000" rows="1" placeholder="{{ __('Escribe tu mensaje…') }}" aria-label="{{ __('Mensaje') }}"
-                      @keydown.enter.prevent="if (! $event.shiftKey) { $wire.send() }"></textarea>
-            <button type="submit" class="pv-btn primary" wire:loading.attr="disabled" wire:target="send">{{ __('Enviar') }}</button>
+                      @keydown.enter.prevent="if (! $event.shiftKey) { ask() }"></textarea>
+            <button type="submit" class="pv-btn primary" :disabled="typing">{{ __('Enviar') }}</button>
         </form>
         @error('draft') <span class="pv-err">{{ $message }}</span> @enderror
     @endif

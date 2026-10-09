@@ -46,6 +46,7 @@ use Modules\Institutions\Database\Factories\BotFactory;
  * @property string|null $widget_button_en
  * @property string|null $greeting_es saludo inicial de la conversación (vacío = el de por defecto)
  * @property string|null $greeting_en
+ * @property int $typing_delay espera mínima «está escribiendo…» en segundos (0–8)
  * @property string|null $preview_token_hash
  * @property string|null $preview_token
  * @property \Illuminate\Support\Carbon|null $preview_token_created_at
@@ -84,6 +85,7 @@ class Bot extends Model
         'widget_button_en',
         'greeting_es',
         'greeting_en',
+        'typing_delay',
         'status',
     ];
 
@@ -96,9 +98,23 @@ class Bot extends Model
             'allowed_origins' => 'array',
             'uses_legacy_prompt' => 'boolean',
             'ai_message_limit' => 'integer',
+            'typing_delay' => 'integer',
             'preview_token' => 'encrypted',
             'preview_token_created_at' => 'datetime',
         ];
+    }
+
+    /** Rango permitido de la espera mínima «está escribiendo…» (segundos). */
+    public const TYPING_DELAY_MAX = 8;
+
+    /**
+     * Espera MÍNIMA (segundos) entre el mensaje del usuario y la respuesta, mostrando «está
+     * escribiendo…». La aplica el navegador (widget, «Probar asesor») o el retraso del job (canales
+     * sociales); nunca un proceso dormido. 0 = sin espera mínima.
+     */
+    public function typingDelay(): int
+    {
+        return max(0, min(self::TYPING_DELAY_MAX, (int) ($this->typing_delay ?? 3)));
     }
 
     /** Saludo inicial propio de la conversación en ese idioma (null = el de por defecto). */

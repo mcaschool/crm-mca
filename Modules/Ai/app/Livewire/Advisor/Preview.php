@@ -278,6 +278,9 @@ class Preview extends Component
             'ratings' => $ratings,
             'started' => $conversation !== null,
             'canApprove' => $this->approver() !== null,
+            // «Está escribiendo…»: nombre del asesor que responde, en el idioma de la conversación, y su espera mínima.
+            'typingText' => __(':name está escribiendo…', ['name' => $bot->assistant_name], $this->lang),
+            'typingDelayMs' => $bot->typingDelay() * 1000,
         ])->title(__('Prueba de :name', ['name' => $bot->assistant_name]));
     }
 

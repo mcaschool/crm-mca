@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Social\Jobs\ProcessWhatsAppInboundMedia;
 use Modules\Social\Jobs\RespondWithAdvisor;
+use Modules\Social\Jobs\SendAdvisorTyping;
 use Modules\Social\Models\SocialChannel;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialMessage;
@@ -76,11 +77,16 @@ final class SocialIngestService
 
         // Asesor inteligente (APAGADO por defecto: interruptor general + cada canal): solo un
         // entrante NUEVO (nunca un reintento duplicado ni el historial). Se ENCOLA (persistente) con
-        // la espera del canal como retraso; el webhook responde ya, sin esperar a la IA ni al envío.
+        // la espera como retraso del job (la del canal o la «está escribiendo…» del asesor, la mayor;
+        // nunca un sleep); el webhook responde ya, sin esperar a la IA ni al envío. El «escribiendo»
+        // nativo del canal sale justo después de responder al webhook.
         if ($result->status === 'created' && $result->messageId !== null && $m->direction === 'inbound'
             && ! $m->fromHistory && AdvisorDispatcher::autoreplyEnabled() && SocialAdvisorResponder::channelIsAutomated($channel)) {
+            $typingDelay = $this->context->runFor($channel->institution_id, fn (): int => (int) ($channel->advisorBot?->typingDelay() ?? 0));
+            $delay = max(0, (int) $channel->advisor_reply_delay, $typingDelay);
+            SendAdvisorTyping::dispatchAfterResponse($result->messageId, $channel->institution_id);
             RespondWithAdvisor::dispatch($result->messageId, $channel->institution_id)
-                ->delay(now()->addSeconds(max(0, (int) $channel->advisor_reply_delay)));
+                ->delay(now()->addSeconds($delay));
         }
 
         return $result;

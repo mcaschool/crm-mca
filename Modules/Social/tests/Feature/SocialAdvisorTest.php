@@ -52,7 +52,8 @@ function sadvCtx(array $channelAttrs = ['advisor_enabled' => true], string $botS
 
     $inst = Institution::factory()->create();
     [$bot] = app(CurrentInstitution::class)->runFor($inst->id, function () use ($channelAttrs, $botStatus) {
-        $bot = Bot::factory()->create(['status' => $botStatus, 'assistant_name' => 'Celia']);
+        // Sin espera «está escribiendo…» del asesor: aquí manda la del canal (la del asesor se prueba en SocialTypingTest).
+        $bot = Bot::factory()->create(['status' => $botStatus, 'assistant_name' => 'Celia', 'typing_delay' => 0]);
         $integration = Integration::factory()->create(['type' => 'ai_provider', 'provider' => 'qwen', 'status' => 'active']);
         AiProcessConfig::factory()->create(['bot_id' => $bot->id, 'process' => 'conversation', 'integration_id' => $integration->id, 'model' => 'qwen-plus', 'status' => 'active']);
 
@@ -234,7 +235,7 @@ it('si la IA falla no se envía ninguna respuesta incorrecta', function () {
 
     expect(sadvBotMessages($inst))->toHaveCount(0)
         ->and(sadvConversation($inst, 'instagram')->automation_state)->toBe('waiting_human');
-    Http::assertNotSent(fn (HttpRequest $r) => str_contains($r->url(), 'me/messages'));
+    Http::assertNotSent(fn (HttpRequest $r) => str_contains($r->url(), 'me/messages') && ! isset($r->data()['sender_action'])); // «escribiendo» no es una respuesta
 });
 
 it('un canal sin remitente configurado no consulta la IA ni intenta enviar', function () {
@@ -305,7 +306,7 @@ it('el webhook confirma al instante: encola la respuesta con la espera del canal
             && abs(now()->diffInSeconds($job->delay) - 10) <= 1;
     });
     expect($fake->calls)->toHaveCount(0)->and(sadvBotMessages($inst))->toHaveCount(0);
-    Http::assertNotSent(fn (HttpRequest $r) => str_contains($r->url(), 'me/messages'));
+    Http::assertNotSent(fn (HttpRequest $r) => str_contains($r->url(), 'me/messages') && ! isset($r->data()['sender_action'])); // «escribiendo» no es una respuesta
 });
 
 it('con el interruptor general apagado (por defecto) no se encola nada aunque el canal esté activado', function () {
@@ -382,7 +383,7 @@ it('agotados los reintentos no envía nada y deja la conversación «Esperando a
         ->and(sadvPending())->toBe(0)
         ->and(sadvBotMessages($inst))->toHaveCount(0)
         ->and(sadvConversation($inst, 'messenger')->automation_state)->toBe('waiting_human');
-    Http::assertNotSent(fn (HttpRequest $r) => str_contains($r->url(), 'me/messages'));
+    Http::assertNotSent(fn (HttpRequest $r) => str_contains($r->url(), 'me/messages') && ! isset($r->data()['sender_action'])); // «escribiendo» no es una respuesta
 });
 
 it('no contesta si, durante la espera, respondió una persona del equipo', function () {
