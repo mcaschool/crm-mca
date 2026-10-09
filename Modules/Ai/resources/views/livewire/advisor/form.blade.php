@@ -293,6 +293,11 @@
             </div>
         @endif
 
+        {{-- Canales de atención automática (Web Chat, Instagram, Messenger, WhatsApp) de este asesor --}}
+        @if ($editing && $type === 'ia' && class_exists(\Modules\Social\Livewire\AdvisorChannels::class))
+            @livewire('social.advisor-channels', ['botId' => $botId], key('advisor-channels-'.$botId))
+        @endif
+
         {{-- Correcciones aprendidas: respuestas aprobadas por el equipo en «Probar asesor» --}}
         @if ($editing && $type === 'ia')
             <div class="card card-p fade" style="margin-top:22px" data-testid="corrections">

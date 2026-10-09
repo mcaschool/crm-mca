@@ -173,6 +173,9 @@ return [
     'advisor' => [
         'autoreply_enabled' => (bool) env('SOCIAL_ADVISOR_AUTOREPLY_ENABLED', false),
         'queue' => env('SOCIAL_ADVISOR_QUEUE', 'social-advisor'),
+        // Mensajes seguidos de la persona (sin respuesta entre ellos) que se atienden juntos en una
+        // sola respuesta del asesor. 1 = responder solo al último.
+        'group_max_messages' => (int) env('SOCIAL_ADVISOR_GROUP_MAX_MESSAGES', 5),
     ],
 
     /*

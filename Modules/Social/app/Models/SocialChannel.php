@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Social\Models;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -31,7 +32,9 @@ use Modules\Social\Database\Factories\SocialChannelFactory;
  * @property string|null $advisor_off_hours_message
  * @property bool $advisor_handoff_enabled transferir a una persona cuando lo pida
  * @property string|null $advisor_handoff_message
- * @property bool $advisor_pause_on_human pausar cuando responde una persona del equipo
+ * @property bool $advisor_pause_on_human (histórico: ahora SIEMPRE se pausa cuando responde una persona)
+ * @property int|null $advisor_assigned_by quién asignó/activó/desactivó el asesor por última vez
+ * @property \Illuminate\Support\Carbon|null $advisor_assigned_at
  */
 class SocialChannel extends Model
 {
@@ -79,6 +82,8 @@ class SocialChannel extends Model
         'advisor_handoff_enabled',
         'advisor_handoff_message',
         'advisor_pause_on_human',
+        'advisor_assigned_by',
+        'advisor_assigned_at',
     ];
 
     /** Esperas permitidas antes de responder (segundos). Se aplican tras confirmar el webhook. */
@@ -95,6 +100,7 @@ class SocialChannel extends Model
             'advisor_schedule' => 'array',
             'advisor_handoff_enabled' => 'boolean',
             'advisor_pause_on_human' => 'boolean',
+            'advisor_assigned_at' => 'datetime',
         ];
     }
 
@@ -134,6 +140,22 @@ class SocialChannel extends Model
     public function hasSender(): bool
     {
         return (string) ($this->credentials['token'] ?? '') !== '' && $this->canSendViaApi();
+    }
+
+    /**
+     * ¿Puede la atención automática enviar por este canal? Activo, con credencial y con una
+     * conexión utilizable (desconectado, sin terminar de configurar u offboarded: no).
+     */
+    public function automationCanSend(): bool
+    {
+        return $this->is_active && $this->hasSender()
+            && ! in_array($this->connection_status, ['disconnected', 'pending_setup', 'offboarded'], true);
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function advisorAssigner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'advisor_assigned_by');
     }
 
     /** El canal puede enviar por la API (un canal offboarded NO envía hasta reconectar). */

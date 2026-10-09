@@ -233,7 +233,7 @@
                     </div>
 
                     <div class="field">
-                        <label style="display:flex;align-items:center;gap:8px;font-weight:500"><input type="checkbox" wire:model="advisorPauseOnHuman"> {{ __('Pausar el asesor en una conversación cuando responda una persona del equipo') }}</label>
+                        <div class="mca-help">{{ __('Cuando una persona del equipo responde en una conversación, el asesor deja de responder en ella hasta que alguien lo reactive desde la bandeja.') }}</div>
                     </div>
 
                     <div style="display:flex;gap:8px">

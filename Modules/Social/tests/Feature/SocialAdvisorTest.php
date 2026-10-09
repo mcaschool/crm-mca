@@ -144,7 +144,7 @@ it('con el asesor desactivado (por defecto) no se consulta la IA ni se responde'
         ->and((int) $fresh->fresh()->advisor_reply_delay)->toBe(0)->and($fresh->fresh()->advisor_schedule)->toBeNull();
 });
 
-it('«Tomar conversación» detiene al asesor al instante y «Devolver» lo reactiva', function () {
+it('«Tomar conversación» detiene al asesor al instante y «Reactivar» lo reactiva', function () {
     [$inst, , $fake] = sadvCtx();
     $agent = User::factory()->create(['institution_id' => $inst->id, 'role' => 'admin']);
 
@@ -155,7 +155,7 @@ it('«Tomar conversación» detiene al asesor al instante y «Devolver» lo reac
     Livewire::actingAs($agent)->test(Inbox::class)->call('select', $conversation->id)
         ->assertSee('Asesor inteligente atendiendo')->assertSee('Tomar conversación')
         ->call('takeOver')
-        ->assertSee('En atención humana')->assertSee('Devolver al asesor inteligente');
+        ->assertSee('En atención humana')->assertSee('Reactivar el asesor');
     expect($conversation->fresh()->only(['automation_state', 'assigned_to']))->toBe(['automation_state' => 'human', 'assigned_to' => $agent->id])
         ->and(Conversation::query()->sole()->mode)->toBe('human'); // la memoria del asesor también
 
@@ -233,8 +233,10 @@ it('si la IA falla no se envía ninguna respuesta incorrecta', function () {
 
     sadvPost('instagram', sadvFixture('instagram'));
 
+    // Fallo no recuperable tras el último intento: «Error de automatización» con motivo visible.
     expect(sadvBotMessages($inst))->toHaveCount(0)
-        ->and(sadvConversation($inst, 'instagram')->automation_state)->toBe('waiting_human');
+        ->and(sadvConversation($inst, 'instagram')->automation_state)->toBe('error')
+        ->and(sadvConversation($inst, 'instagram')->automation_reason)->not->toBeNull();
     Http::assertNotSent(fn (HttpRequest $r) => str_contains($r->url(), 'me/messages') && ! isset($r->data()['sender_action'])); // «escribiendo» no es una respuesta
 });
 
@@ -367,22 +369,22 @@ it('si la IA falla de forma pasajera se reintenta sin duplicar mensajes y respon
         ->and(DB::table('failed_jobs')->count())->toBe(0);
 });
 
-it('agotados los reintentos no envía nada y deja la conversación «Esperando a una persona»', function () {
+it('agotados los reintentos no envía nada y deja la conversación en «Error de automatización»', function () {
     [$inst, , $fake] = sadvCtx();
     sadvPersistentQueue();
     $fake->willThrow();
 
     sadvPost('messenger', sadvFixture('messenger'));
     Artisan::call('social:advisor-worker');
-    $this->travel(31)->seconds();
-    Artisan::call('social:advisor-worker');
-    $this->travel(121)->seconds();
-    Artisan::call('social:advisor-worker');
+    foreach ([31, 121, 121, 121] as $wait) {   // 5 intentos con su espera entre ellos
+        $this->travel($wait)->seconds();
+        Artisan::call('social:advisor-worker');
+    }
 
-    expect($fake->calls)->toHaveCount(3)
+    expect($fake->calls)->toHaveCount(5)
         ->and(sadvPending())->toBe(0)
         ->and(sadvBotMessages($inst))->toHaveCount(0)
-        ->and(sadvConversation($inst, 'messenger')->automation_state)->toBe('waiting_human');
+        ->and(sadvConversation($inst, 'messenger')->automation_state)->toBe('error');
     Http::assertNotSent(fn (HttpRequest $r) => str_contains($r->url(), 'me/messages') && ! isset($r->data()['sender_action'])); // «escribiendo» no es una respuesta
 });
 
@@ -422,7 +424,7 @@ it('la configuración del canal es amigable, apagada por defecto y solo admite a
         ->assertSee('Asesor inteligente desactivado')
         ->call('editAdvisor', $channel->id)
         ->assertSee('Espera antes de responder')->assertSee('Horario de atención automática')
-        ->assertSee('Transferir a una persona')->assertSee('Pausar el asesor en una conversación cuando responda una persona del equipo')
+        ->assertSee('Transferir a una persona')->assertSee('Cuando una persona del equipo responde en una conversación')
         ->set('advisorAlways', false)->assertSee('Mensaje fuera de horario');
 
     // El panel del asesor no usa lenguaje técnico.

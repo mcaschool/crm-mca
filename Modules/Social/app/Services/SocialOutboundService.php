@@ -62,9 +62,13 @@ final class SocialOutboundService
 
     /**
      * Respuesta del ASESOR INTELIGENTE por el mismo remitente del canal (MetaMessageSender /
-     * WhatsAppMessageSender). Queda en el hilo como 'bot' (sin usuario) con el estado del envío.
+     * WhatsAppMessageSender). Queda en el hilo como 'bot' (sin usuario) con el estado del envío:
+     * solo es 'sent' si el proveedor lo aceptó. $trace: ai_bot_id, in_reply_to_id y ai_meta (proveedor,
+     * modelo, tokens, duración…); se completa con la fecha de envío o el código de error del canal.
+     *
+     * @param  array{ai_bot_id?: int|null, in_reply_to_id?: int|null, ai_meta?: array<string, mixed>}  $trace
      */
-    public function sendFromAdvisor(SocialConversation $conversation, string $text): SocialMessage
+    public function sendFromAdvisor(SocialConversation $conversation, string $text, array $trace = []): SocialMessage
     {
         if (! in_array($conversation->provider, self::SENDABLE, true)) {
             throw UnsupportedSocialProviderException::for($conversation->provider);
@@ -79,6 +83,11 @@ final class SocialOutboundService
             default => $this->sender->sendText($channel, $conversation, $text),
         };
 
+        $message->ai_bot_id = $trace['ai_bot_id'] ?? $channel?->advisor_bot_id;
+        $message->in_reply_to_id = $trace['in_reply_to_id'] ?? null;
+        $message->ai_meta = array_merge($trace['ai_meta'] ?? [], $result->status === 'sent'
+            ? ['sent_at' => now()->toIso8601String()]
+            : array_filter(['send_status' => $result->status, 'send_error_code' => $result->errorCode, 'send_token_invalid' => $result->tokenInvalid() ?: null]));
         $this->applyResult($message, $result);
         $this->touchConversation($conversation, $text, $message);
 

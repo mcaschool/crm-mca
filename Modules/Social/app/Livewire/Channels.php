@@ -281,7 +281,12 @@ class Channels extends Component
         $channel->advisor_off_hours_message = trim($this->advisorOffHoursMessage) !== '' ? trim($this->advisorOffHoursMessage) : null;
         $channel->advisor_handoff_enabled = $this->advisorHandoff;
         $channel->advisor_handoff_message = trim($this->advisorHandoffMessage) !== '' ? trim($this->advisorHandoffMessage) : null;
-        $channel->advisor_pause_on_human = $this->advisorPauseOnHuman;
+        // Siempre se pausa cuando responde una persona (obligatorio; la opción ya no se puede apagar).
+        $channel->advisor_pause_on_human = true;
+        if ($channel->isDirty(['advisor_enabled', 'advisor_bot_id'])) {
+            $channel->advisor_assigned_by = auth()->id();
+            $channel->advisor_assigned_at = now();
+        }
         $channel->save();
 
         session()->flash('status', $channel->advisor_enabled

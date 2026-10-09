@@ -24,6 +24,9 @@ use Modules\Social\Database\Factories\SocialMessageFactory;
  * @property string|null $status
  * @property string $sender_type
  * @property int|null $sent_by
+ * @property int|null $ai_bot_id asesor inteligente que generó la respuesta (sender_type 'bot')
+ * @property int|null $in_reply_to_id mensaje entrante que la originó
+ * @property array<string, mixed>|null $ai_meta proveedor, modelo, tokens, duración, categoría de error (sin contenido ni secretos)
  * @property \Illuminate\Support\Carbon|null $provider_timestamp
  * @property \Illuminate\Support\Carbon|null $created_at
  */
@@ -54,6 +57,9 @@ class SocialMessage extends Model
         'status',
         'sender_type',
         'sent_by',
+        'ai_bot_id',
+        'in_reply_to_id',
+        'ai_meta',
         'provider_timestamp',
     ];
 
@@ -61,6 +67,7 @@ class SocialMessage extends Model
     {
         return [
             'attachments' => 'array',
+            'ai_meta' => 'array',
             'provider_timestamp' => 'datetime',
         ];
     }

@@ -65,6 +65,19 @@ final class SocialIngestService
             $this->resolveContactProfile($channel, $m->provider, $result->conversationId);
         }
 
+        // Respuesta escrita desde la app de WhatsApp del teléfono (eco de coexistencia NUEVO; los
+        // envíos del propio CRM no generan este eco y, si llegaran, se deduplican por su wamid): es
+        // una persona respondiendo, así que el asesor deja de contestar en esa conversación.
+        if ($result->status === 'created' && $result->conversationId !== null && $m->direction === 'outbound'
+            && $m->senderType === 'app' && $channel->advisor_bot_id !== null) {
+            $this->context->runFor($channel->institution_id, function () use ($result): void {
+                $conversation = SocialConversation::query()->with('channel')->find($result->conversationId);
+                if ($conversation !== null) {
+                    app(SocialAutomationService::class)->humanReplied($conversation, null, 'replied_from_app');
+                }
+            });
+        }
+
         // Media de WhatsApp: el webhook trae un media ID (no URL). La descarga NO puede
         // bloquear el 200 a Meta → se despacha tras enviar la respuesta (afterResponse),
         // en un Job idempotente y best-effort: si falla, el mensaje ya quedó ingerido con

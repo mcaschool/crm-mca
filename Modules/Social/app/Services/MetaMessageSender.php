@@ -81,7 +81,7 @@ final class MetaMessageSender
 
         return $this->isOutsideWindow($code, $subcode, $message)
             ? SendResult::window($message)
-            : SendResult::failed($message);
+            : SendResult::failed($message, $code !== 0 ? $code : null);
     }
 
     /**

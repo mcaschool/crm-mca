@@ -18,11 +18,22 @@ use Throwable;
  *
  * Reintentos: si la IA falla de forma pasajera, el turno se deshace (sin respuesta enviada ni
  * mensaje duplicado) y el job vuelve a la cola; en el último intento la conversación pasa a
- * «Esperando a una persona» y no se envía nada. Idempotencia: advisor_message_receipts.
+ * «Error de automatización» (con aviso a los administradores) y no se envía nada. Idempotencia:
+ * advisor_message_receipts. Si otro worker atiende la misma conversación (turno persistente en
+ * BD), el job vuelve a la cola a los pocos segundos sin gastar IA.
  */
 final class RespondWithAdvisor extends TenantAwareJob
 {
-    public int $tries = 3;
+    public int $tries = 5;
+
+    /**
+     * Esperas crecientes cuando otro worker tiene el turno de la conversación. Suman 225 s, más que
+     * la duración máxima del turno (180 s): si aquel worker murió, su turno ya caducó antes del
+     * último intento. Los intentos son finitos ($tries): nunca hay liberaciones infinitas.
+     *
+     * @var array<int, int>
+     */
+    private const BUSY_BACKOFF = [15, 30, 60, 120];
 
     /** @var array<int, int> segundos entre intentos */
     public array $backoff = [30, 120];
@@ -44,10 +55,12 @@ final class RespondWithAdvisor extends TenantAwareJob
 
         if ($outcome === SocialAdvisorResponder::RETRY && $this->job !== null) {
             $this->release($this->backoff[max(0, $this->attempts() - 1)] ?? 120);
+        } elseif ($outcome === SocialAdvisorResponder::BUSY && $this->job !== null) {
+            $this->release(self::BUSY_BACKOFF[max(0, $this->attempts() - 1)] ?? 120);
         }
     }
 
-    /** Agotados los intentos por una excepción: se deja para una persona, sin enviar nada. */
+    /** Agotados los intentos por una excepción: pasa a error con aviso, sin enviar nada. */
     public function failed(?Throwable $e): void
     {
         $context = app(CurrentInstitution::class);

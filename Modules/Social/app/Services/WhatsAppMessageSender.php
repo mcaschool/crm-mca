@@ -146,6 +146,6 @@ final class WhatsAppMessageSender
 
         return in_array($code, self::OUTSIDE_WINDOW_CODES, true)
             ? SendResult::window($message)
-            : SendResult::failed($message);
+            : SendResult::failed($message, $code !== 0 ? $code : null);
     }
 }

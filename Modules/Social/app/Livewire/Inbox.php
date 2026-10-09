@@ -186,27 +186,38 @@ class Inbox extends Component
     /** «Tomar conversación»: una persona la atiende y el asesor inteligente deja de responder. */
     public function takeOver(SocialAutomationService $automation): void
     {
-        $conversation = $this->selectedConversation();
+        $conversation = $this->automatable();
         if ($conversation !== null) {
             $automation->takeOver($conversation, auth()->user());
         }
     }
 
-    /** «Devolver al asesor inteligente» (con confirmación en la vista). */
+    /**
+     * «Reactivar el asesor» (con confirmación en la vista): solo con el asesor activado en la cuenta.
+     * Contesta únicamente a los mensajes que lleguen a partir de ahora, nunca a los antiguos.
+     */
     public function returnToAdvisor(SocialAutomationService $automation): void
     {
-        $conversation = $this->selectedConversation();
+        $conversation = $this->automatable();
         if ($conversation !== null && $conversation->channel?->advisor_enabled) {
-            $automation->returnToAdvisor($conversation);
+            $automation->returnToAdvisor($conversation, auth()->user());
         }
     }
 
     public function pauseAutomation(SocialAutomationService $automation): void
     {
-        $conversation = $this->selectedConversation();
+        $conversation = $this->automatable();
         if ($conversation !== null) {
-            $automation->pause($conversation);
+            $automation->pause($conversation, auth()->user());
         }
+    }
+
+    /** Conversación seleccionada (scope de institución) y usuario con permiso para atenderla. */
+    private function automatable(): ?SocialConversation
+    {
+        abort_unless(auth()->user()?->canWorkCrm() ?? false, 403);
+
+        return $this->selectedConversation();
     }
 
     private function selectedConversation(): ?SocialConversation
@@ -267,7 +278,7 @@ class Inbox extends Component
             ->get();
 
         $selected = $this->selectedId !== null
-            ? SocialConversation::query()->with('channel')->find($this->selectedId)
+            ? SocialConversation::query()->with(['channel.advisorBot', 'automationChanger'])->find($this->selectedId)
             : null;
 
         $messages = $selected !== null
@@ -315,6 +326,8 @@ class Inbox extends Component
             'waTemplates' => $waTemplates,
             'waOffboarded' => $waOffboarded,
             'waChosen' => $waChosen,
+            // ¿El último mensaje saliente lo envió la IA o una persona?
+            'lastOutbound' => $messages->where('direction', 'outbound')->last(),
         ]);
     }
 }

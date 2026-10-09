@@ -37,6 +37,11 @@
         .sb-auto__state--waiting_human{background:#FBF0DC;color:#8A5A0C}
         .sb-auto__state--human{background:#E5F4EE;color:#1F7A55}
         .sb-auto__state--paused{background:#EEF1F5;color:#5A6B84}
+        .sb-auto__state--error{background:#FBE7E5;color:#8A1C1C}
+        .sb-auto__agent{font-size:12px;color:var(--sb-muted,#6b7a90);white-space:nowrap}
+        .sb-auto-note{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:8px 20px;border-bottom:1px solid var(--sb-line);font-size:12.5px;background:#FAFBFD;color:#4A5568}
+        .sb-auto-note--error{background:#FDF3F2;color:#8A1C1C}
+        .sb-auto-note b{font-weight:700}
         .sb-auto__btn{height:30px;padding:0 12px;border-radius:9px;border:1px solid var(--sb-line);background:#fff;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;color:inherit}
         .sb-auto__btn--primary{background:#1E5AA8;border-color:#1E5AA8;color:#fff}
         .sb-bot-tag{display:block;font-size:11px;font-weight:700;opacity:.8;margin-bottom:3px}
@@ -178,23 +183,44 @@
                         {{ $selected->channel?->providerLabel() }} · {{ $selected->channel?->display_name }}
                     </small>
                 </span>
-                {{-- Asesor inteligente del canal: estado visible y control humano --}}
-                @if ($selected->channel?->advisor_enabled)
-                    @php $autoState = $selected->automation_state ?? 'bot'; @endphp
+                {{-- Asesor inteligente de la cuenta: asesor, estado visible y control humano --}}
+                @php $autoChannel = $selected->channel; $autoState = $selected->automation_state ?? 'bot'; @endphp
+                @if ($autoChannel?->advisor_bot_id !== null && ($autoChannel->advisor_enabled || $autoState !== 'bot'))
                     <span class="sb-auto">
+                        <span class="sb-auto__agent" data-testid="automation-agent">
+                            {{ $autoChannel->advisorBot?->assistant_name ?? __('Asesor inteligente') }}{{ $autoChannel->advisor_enabled ? '' : ' · '.__('desactivado en esta cuenta') }}
+                        </span>
                         <span class="sb-auto__state sb-auto__state--{{ $autoState }}" data-testid="automation-state">{{ $selected->automationLabel() }}</span>
                         @if ($autoState !== 'human')
                             <button type="button" class="sb-auto__btn sb-auto__btn--primary" wire:click="takeOver">{{ __('Tomar conversación') }}</button>
                         @endif
                         @if ($autoState === 'bot')
                             <button type="button" class="sb-auto__btn" wire:click="pauseAutomation">{{ __('Pausar automatización') }}</button>
-                        @else
-                            <button type="button" class="sb-auto__btn" wire:click="returnToAdvisor"
-                                    wire:confirm="{{ __('¿Devolver la conversación al asesor inteligente? Volverá a responder él automáticamente.') }}">{{ __('Devolver al asesor inteligente') }}</button>
+                        @elseif ($autoChannel->advisor_enabled)
+                            <button type="button" class="sb-auto__btn" wire:click="returnToAdvisor" data-testid="reactivate"
+                                    wire:confirm="{{ __('¿Reactivar el asesor inteligente en esta conversación? Solo responderá a los mensajes nuevos, no a los anteriores.') }}">{{ __('Reactivar el asesor') }}</button>
                         @endif
                     </span>
                 @endif
             </header>
+
+            @if ($autoChannel?->advisor_bot_id !== null && ($autoState !== 'bot' || $lastOutbound !== null))
+                {{-- Motivo, quién/cuándo, acción recomendada y si el último mensaje lo envió la IA o una persona --}}
+                <div class="sb-auto-note {{ $autoState === 'error' ? 'sb-auto-note--error' : '' }}" data-testid="automation-note">
+                    @if ($autoState !== 'bot' && $selected->automationReasonLabel())
+                        <span><b>{{ $selected->automationReasonLabel() }}</b></span>
+                    @endif
+                    @if ($selected->automation_changed_at)
+                        <span>{{ $selected->automationChanger?->name ?? __('Sistema') }} · {{ $selected->automation_changed_at->diffForHumans() }}</span>
+                    @endif
+                    @if ($autoState !== 'bot' && $selected->automationAction())
+                        <span>{{ __('Acción recomendada:') }} {{ $selected->automationAction() }}</span>
+                    @endif
+                    @if ($lastOutbound !== null)
+                        <span data-testid="last-sender">{{ __('Último mensaje enviado por') }} {{ $lastOutbound->sender_type === 'bot' ? __('la IA') : __('una persona') }}</span>
+                    @endif
+                </div>
+            @endif
 
             @if ($waOffboarded)
                 <div class="sb-offboard">
@@ -245,7 +271,7 @@
                             @endif
                         @endforeach
                         @if ($msg->sender_type === 'bot')
-                            <span class="sb-bot-tag">{{ __('Asesor inteligente') }}</span>
+                            <span class="sb-bot-tag" data-testid="ai-tag">{{ __('Asesor inteligente') }} · {{ __('IA') }}</span>
                         @endif
                         @if ($msg->body !== null && $msg->body !== '')
                             {!! nl2br(e($msg->body)) !!}

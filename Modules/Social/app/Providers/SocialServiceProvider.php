@@ -10,6 +10,7 @@ use Modules\Social\Console\AdvisorWorkerCommand;
 use Modules\Social\Console\MetaConnectionsCheckCommand;
 use Modules\Social\Console\MetaLeadCheckCommand;
 use Modules\Social\Console\MetaLeadsPollCommand;
+use Modules\Social\Livewire\AdvisorChannels;
 use Modules\Social\Livewire\Channels;
 use Modules\Social\Livewire\Inbox;
 use Modules\Social\Livewire\MetaConnect;
@@ -58,6 +59,7 @@ class SocialServiceProvider extends ModuleServiceProvider
         Livewire::component('social.inbox', Inbox::class);
         Livewire::component('social.publisher', Publisher::class);
         Livewire::component('social.channels', Channels::class);
+        Livewire::component('social.advisor-channels', AdvisorChannels::class);
         Livewire::component('social.meta-connect', MetaConnect::class);
     }
 }
