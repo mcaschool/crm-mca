@@ -45,6 +45,7 @@ class CeliaService
         private readonly LeadConversionService $leadConversion,
         private readonly ProgramAssignmentService $programAssignments,
         private readonly AdvisorPromptBuilder $prompts,
+        private readonly AdvisorCorrections $corrections,
     ) {}
 
     /**
@@ -129,10 +130,16 @@ class CeliaService
 
         $bot = $this->bot($conversation);
         $precise = $bot !== null && $bot->usesPreciseRetrieval();
-        // Búsqueda precisa: los mensajes anteriores del usuario dan el TEMA ACTIVO de los seguimientos.
-        $knowledge = $this->knowledge->retrieveWithSources((int) $conversation->bot_id, $message, $locale, null, $precise ? $this->previousUserMessages($conversation) : []);
+        // Mensajes anteriores del usuario: dan el TEMA ACTIVO de los seguimientos.
+        $history = $this->previousUserMessages($conversation);
+        // Respuesta APROBADA por el equipo para una pregunta equivalente del mismo tema (cualquier asesor).
+        $match = $this->corrections->match((int) $conversation->bot_id, $message, $history, $locale);
+        $approved = $match !== null && $match['applied']
+            ? ['question' => (string) $match['correction']->question, 'answer' => (string) $match['correction']->answer]
+            : null;
+        $knowledge = $this->knowledge->retrieveWithSources((int) $conversation->bot_id, $message, $locale, null, $precise ? $history : []);
         // Prompt del asesor: el global de siempre (Celia) o su identidad e instrucciones propias.
-        $prompt = $this->prompts->build($bot ?? new Bot(['uses_legacy_prompt' => true]), $locale, (string) $conversation->channel, $knowledge['text'], $corporate);
+        $prompt = $this->prompts->build($bot ?? new Bot(['uses_legacy_prompt' => true]), $locale, (string) $conversation->channel, $knowledge['text'], $corporate, $approved);
         $chat = array_merge(
             [['role' => 'system', 'content' => $prompt]],
             $this->history($conversation, $locale),
@@ -173,15 +180,28 @@ class CeliaService
 
         [$reply, $action] = $this->parse($result->content);
 
-        // Búsqueda precisa: solo sobreviven los enlaces que están TEXTUALMENTE en lo recuperado.
+        $preview = $this->isTest($conversation) && (string) $conversation->channel === AdvisorTurnService::TEST_CHANNEL;
         $extra = [];
+        if ($approved !== null) {
+            $extra['correction'] = ['id' => (int) $match['correction']->getKey(), 'score' => $match['score']];
+        }
+        // Modo de prueba: si se comprobaron respuestas aprobadas, cuál fue la mejor y si se aplicó.
+        if ($preview && $match !== null) {
+            $extra['correction_check'] = [
+                'id' => (int) $match['correction']->getKey(), 'question' => (string) $match['correction']->question,
+                'score' => $match['score'], 'threshold' => $match['threshold'], 'applied' => $match['applied'], 'line' => $match['line'],
+            ];
+        }
+
+        // Búsqueda precisa: solo sobreviven los enlaces que están TEXTUALMENTE en lo recuperado o en
+        // la respuesta aprobada que se aplicó.
         if ($precise) {
-            [$reply, $removed] = LinkGuard::keepKnown($reply, $knowledge['text']);
+            [$reply, $removed] = LinkGuard::keepKnown($reply, $knowledge['text'].($approved !== null ? "\n".$approved['answer'] : ''));
             if ($removed !== []) {
                 $extra['links_removed'] = count($removed);
             }
             // Modo de prueba: diagnóstico de la búsqueda (palabras, línea, programa, secciones y puntaje).
-            if ($this->isTest($conversation) && (string) $conversation->channel === AdvisorTurnService::TEST_CHANNEL) {
+            if ($preview) {
                 $extra['retrieval'] = ($knowledge['diagnostics'] ?? []) + ($removed !== [] ? ['links_removed' => $removed] : []);
             }
         }
@@ -213,9 +233,13 @@ class CeliaService
         // Celia (prompt global) conserva su saludo; un asesor con identidad propia se presenta con
         // SU función, sin hablar de Microcredenciales.
         $custom = $bot !== null && ! $bot->usesGlobalPrompt();
-        $parts = [$custom
-            ? $this->trans('celia.greeting_custom', $locale, ['name' => $name, 'advisor' => $advisor, 'role' => $this->roleOf($bot, $locale)])
-            : $this->trans('celia.greeting', $locale, ['name' => $name, 'advisor' => $advisor])];
+        // Saludo propio del asesor (ficha o respuesta aprobada en «Probar asesor»), si lo tiene.
+        $own = $bot?->greeting($locale);
+        $parts = [match (true) {
+            $own !== null => str_replace(':name', $name, $own),
+            $custom => $this->trans('celia.greeting_custom', $locale, ['name' => $name, 'advisor' => $advisor, 'role' => $this->roleOf($bot, $locale)]),
+            default => $this->trans('celia.greeting', $locale, ['name' => $name, 'advisor' => $advisor]),
+        }];
 
         $viewed = $this->viewedPrograms($contact, (int) $conversation->bot_id, $locale);
         if ($viewed !== []) {

@@ -34,12 +34,18 @@ final class AdvisorPromptBuilder
         private readonly CurrentInstitution $tenancy,
     ) {}
 
-    public function build(Bot $bot, string $locale, string $channel, string $knowledge, bool $corporate = false): string
+    /**
+     * @param  array{question: string, answer: string}|null  $approved  respuesta aprobada por el
+     *                                                                  equipo para esta pregunta
+     *                                                                  (va como PRIMER bloque)
+     */
+    public function build(Bot $bot, string $locale, string $channel, string $knowledge, bool $corporate = false, ?array $approved = null): string
     {
         $locale = $locale === 'en' ? 'en' : 'es';
+        $first = $approved !== null ? $this->approvedBlock($locale, $approved)."\n\n" : '';
 
         if ($bot->usesGlobalPrompt()) {
-            return $this->globalPrompt($locale, $channel, $knowledge, $corporate);
+            return $first.$this->globalPrompt($locale, $channel, $knowledge, $corporate);
         }
 
         $institution = $this->institutionName($bot);
@@ -55,7 +61,23 @@ final class AdvisorPromptBuilder
         }
         $parts[] = $this->safetyAndHandoff($bot, $locale, $channel);
 
-        return implode("\n\n", $parts);
+        return $first.implode("\n\n", $parts);
+    }
+
+    /**
+     * Respuesta aprobada por el equipo: se sigue fielmente en contenido (datos, condiciones y
+     * enlaces) y cuenta como conocimiento autorizado; solo se adapta el saludo o la conexión.
+     *
+     * @param  array{question: string, answer: string}  $approved
+     */
+    private function approvedBlock(string $locale, array $approved): string
+    {
+        $question = $this->clean($approved['question']);
+        $answer = $this->clean($approved['answer']);
+
+        return $locale === 'en'
+            ? "RESPONSE APPROVED BY THE TEAM (it prevails for this question and counts as authorized knowledge):\nReference question: {$question}\nApproved response: {$answer}\nFollow it faithfully in content (facts, conditions and links); adapt only the greeting or how it connects with the conversation."
+            : "RESPUESTA APROBADA POR EL EQUIPO (prevalece para esta pregunta y cuenta como conocimiento autorizado):\nPregunta de referencia: {$question}\nRespuesta aprobada: {$answer}\nSíguela fielmente en su contenido (datos, condiciones y enlaces); adapta solo el saludo o la conexión con la conversación.";
     }
 
     /** El prompt de siempre (Celia). Web Chat y pruebas: sin ningún añadido. */

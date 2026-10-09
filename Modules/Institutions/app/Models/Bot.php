@@ -44,6 +44,8 @@ use Modules\Institutions\Database\Factories\BotFactory;
  * @property string|null $widget_welcome_en
  * @property string|null $widget_button_es
  * @property string|null $widget_button_en
+ * @property string|null $greeting_es saludo inicial de la conversación (vacío = el de por defecto)
+ * @property string|null $greeting_en
  * @property string|null $preview_token_hash
  * @property string|null $preview_token
  * @property \Illuminate\Support\Carbon|null $preview_token_created_at
@@ -80,6 +82,8 @@ class Bot extends Model
         'widget_welcome_en',
         'widget_button_es',
         'widget_button_en',
+        'greeting_es',
+        'greeting_en',
         'status',
     ];
 
@@ -95,6 +99,14 @@ class Bot extends Model
             'preview_token' => 'encrypted',
             'preview_token_created_at' => 'datetime',
         ];
+    }
+
+    /** Saludo inicial propio de la conversación en ese idioma (null = el de por defecto). */
+    public function greeting(string $locale): ?string
+    {
+        $text = trim((string) $this->{'greeting_'.($locale === 'en' ? 'en' : 'es')});
+
+        return $text !== '' ? $text : null;
     }
 
     /** Búsqueda en el conocimiento de siempre (Celia y todo asesor que no la cambie). */

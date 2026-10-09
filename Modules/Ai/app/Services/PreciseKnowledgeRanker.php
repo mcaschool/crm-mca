@@ -43,19 +43,7 @@ final class PreciseKnowledgeRanker
         $terms = KnowledgeText::queryTerms($question);
 
         // Línea: la nombrada en la pregunta; si no nombra ninguna, la del tema activo.
-        $explicit = KnowledgeText::linesMentioned($question);
-        $active = null;
-        if ($explicit === []) {
-            foreach ($history as $previous) {
-                $lines = KnowledgeText::linesMentioned((string) $previous);
-                if ($lines !== []) {
-                    $active = count($lines) === 1 ? $lines[0] : null; // un mensaje que compara líneas no fija tema
-
-                    break;
-                }
-            }
-        }
-        $line = count($explicit) === 1 ? $explicit[0] : ($explicit === [] ? $active : null);
+        ['line' => $line, 'source' => $lineSource] = $this->topic($question, $history);
 
         $named = $this->namedPrograms($sources, $terms, $line);
         $relevance = $this->bm25($sections, $terms);
@@ -95,11 +83,74 @@ final class PreciseKnowledgeRanker
             'diagnostics' => [
                 'terms' => $terms,
                 'line' => $line,
-                'line_source' => $line === null ? null : ($explicit !== [] ? 'question' : 'conversation'),
+                'line_source' => $lineSource,
                 'named_programs' => array_keys($named),
                 'top' => array_map(fn (array $s): array => ['code' => $s['code'], 'title' => Str::limit(ltrim($s['title'], '# '), 80), 'score' => $s['score']], array_slice($sections, 0, 5)),
             ],
         ];
+    }
+
+    /**
+     * Línea en curso: la que nombra la pregunta (si nombra una sola) o, si no nombra ninguna, la
+     * del TEMA ACTIVO (el mensaje anterior más reciente que nombre una sola línea). Si la pregunta
+     * compara líneas, ninguna.
+     *
+     * @param  list<string>  $history  mensajes anteriores del usuario, del más reciente al más antiguo
+     * @return array{line: ?string, source: ?string} source: question | conversation | null
+     */
+    public function topic(string $question, array $history = []): array
+    {
+        $explicit = KnowledgeText::linesMentioned($question);
+        if ($explicit !== []) {
+            return count($explicit) === 1 ? ['line' => $explicit[0], 'source' => 'question'] : ['line' => null, 'source' => null];
+        }
+        foreach ($history as $previous) {
+            $lines = KnowledgeText::linesMentioned((string) $previous);
+            if ($lines !== []) {
+                // Un mensaje que compara líneas no fija tema.
+                return count($lines) === 1 ? ['line' => $lines[0], 'source' => 'conversation'] : ['line' => null, 'source' => null];
+            }
+        }
+
+        return ['line' => null, 'source' => null];
+    }
+
+    /**
+     * Parecido (0..1) entre una pregunta y otras (las de las respuestas aprobadas): coseno de sus
+     * CONCEPTOS (raíces con sinónimos agrupados) ponderados por rareza. La rareza se mide sobre
+     * $corpus (las secciones del conocimiento del asesor) más las propias preguntas, para que una
+     * palabra muy repetida («programa», «diploma») pese poco y una distintiva pese mucho.
+     *
+     * @param  list<string>  $candidates
+     * @param  list<string>  $corpus
+     * @return list<float>
+     */
+    public function questionSimilarity(string $question, array $candidates, array $corpus = []): array
+    {
+        $q = KnowledgeText::concepts($question);
+        $docs = array_map(fn (string $c): array => KnowledgeText::concepts($c), $candidates);
+        if ($q === [] || $docs === []) {
+            return array_fill(0, count($candidates), 0.0);
+        }
+
+        $all = array_merge([$q], $docs, array_map(fn (string $t): array => array_values(array_unique(KnowledgeText::concepts($t))), $corpus));
+        $n = count($all);
+        $df = [];
+        foreach ($all as $terms) {
+            foreach (array_unique($terms) as $t) {
+                $df[$t] = ($df[$t] ?? 0) + 1;
+            }
+        }
+        $w = fn (string $t): float => log(1 + ($n - $df[$t] + 0.5) / ($df[$t] + 0.5));
+        $norm = fn (array $terms): float => sqrt(array_sum(array_map(fn (string $t): float => $w($t) ** 2, $terms)));
+        $qNorm = $norm($q);
+
+        return array_map(function (array $terms) use ($q, $w, $norm, $qNorm): float {
+            $shared = array_intersect($q, $terms);
+            $den = $qNorm * $norm($terms);
+
+            return $den > 0 ? round(array_sum(array_map(fn (string $t): float => $w($t) ** 2, $shared)) / $den, 4) : 0.0;
+        }, $docs);
     }
 
     /**

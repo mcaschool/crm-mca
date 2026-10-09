@@ -222,6 +222,19 @@
                     </div>
                 </div>
                 <div class="mca-help" style="margin-top:10px">{{ __('El widget ya instalado en la web los recibe al cargar la página (no hace falta cambiar el código incrustado). El indicador «En línea» no cambia.') }}</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:16px">
+                    <div class="field" style="margin-bottom:0">
+                        <label for="adv-greeting-es">{{ __('Saludo inicial de la conversación') }} <span class="mca-help" style="display:inline">· {{ __('Español') }}</span></label>
+                        <textarea id="adv-greeting-es" wire:model="greetingEs" rows="2" maxlength="500" data-testid="greeting-es"></textarea>
+                        @error('greetingEs') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label for="adv-greeting-en">{{ __('Saludo inicial de la conversación') }} <span class="mca-help" style="display:inline">· English</span></label>
+                        <textarea id="adv-greeting-en" wire:model="greetingEn" rows="2" maxlength="500"></textarea>
+                        @error('greetingEn') <span class="mca-err">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+                <div class="mca-help" style="margin-top:6px">{{ __('Primer mensaje del asesor al empezar a conversar. Vacío = el saludo por defecto. También lo cambia una respuesta aprobada sobre el saludo en «Probar asesor».') }}</div>
             </div>
         @endif
 
@@ -260,7 +273,7 @@
                 @if ($feedback && ($feedback['correct'] + $feedback['needs_improvement']) > 0)
                     <div class="mca-section">
                         <h3 style="font-size:14px">{{ __('Valoraciones del equipo') }}</h3>
-                        <p class="mca-sub">{{ __(':ok correctas · :bad necesitan mejora. Sirven para corregir fuentes o instrucciones; no cambian nada automáticamente.', ['ok' => $feedback['correct'], 'bad' => $feedback['needs_improvement']]) }}</p>
+                        <p class="mca-sub">{{ __(':ok correctas · :bad necesitan mejora. Las marcadas como «Esta es la respuesta correcta» pasan a «Correcciones aprendidas»; los comentarios no cambian nada automáticamente.', ['ok' => $feedback['correct'], 'bad' => $feedback['needs_improvement']]) }}</p>
                         @foreach ($feedback['recent'] as $f)
                             <div style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:6px;font-size:13px">
                                 <div class="mca-help">{{ \Illuminate\Support\Str::limit((string) $f->message?->content, 160) }}</div>
@@ -271,6 +284,41 @@
                         @endforeach
                     </div>
                 @endif
+            </div>
+        @endif
+
+        {{-- Correcciones aprendidas: respuestas aprobadas por el equipo en «Probar asesor» --}}
+        @if ($editing && $type === 'ia')
+            <div class="card card-p fade" style="margin-top:22px" data-testid="corrections">
+                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">
+                    <h3><x-ui.icon name="check" class="ic" style="width:17px;height:17px" /> {{ __('Correcciones aprendidas') }}</h3>
+                    <p class="mca-sub">{{ __('Respuestas aprobadas por el equipo en «Probar asesor». El asesor las sigue al instante en preguntas equivalentes del mismo tema. Desactiva o elimina las que ya no correspondan.') }}</p>
+                </div>
+                @forelse ($corrections as $c)
+                    <div wire:key="corr-{{ $c->id }}" style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:8px;font-size:13px;{{ $c->active ? '' : 'opacity:.6' }}">
+                        @if ($editingCorrectionId === $c->id)
+                            <div class="field"><label>{{ __('Pregunta') }}</label><textarea wire:model="correctionQuestion" rows="2" maxlength="1000"></textarea>@error('correctionQuestion') <span class="mca-err">{{ $message }}</span> @enderror</div>
+                            <div class="field"><label>{{ __('Tema') }}</label>
+                                <select wire:model="correctionTopic">
+                                    <option value="">{{ __('General (cualquier tema)') }}</option>
+                                    @foreach ($lineLabels as $slug => $label)<option value="{{ $slug }}">{{ __($label) }}</option>@endforeach
+                                </select>@error('correctionTopic') <span class="mca-err">{{ $message }}</span> @enderror</div>
+                            <div class="field"><label>{{ __('Respuesta aprobada') }}</label><textarea wire:model="correctionAnswer" rows="4" maxlength="1000"></textarea>@error('correctionAnswer') <span class="mca-err">{{ $message }}</span> @enderror</div>
+                            <div style="display:flex;gap:8px"><button type="button" wire:click="saveCorrection" class="btn btn-primary btn-sm">{{ __('Guardar') }}</button><button type="button" wire:click="cancelCorrection" class="btn btn-ghost btn-sm">{{ __('Cancelar') }}</button></div>
+                        @else
+                            <div><strong>{{ __('Pregunta') }}:</strong> {{ $c->question }}</div>
+                            <div class="mca-help">{{ __('Tema') }}: {{ $c->topic_line ? __($lineLabels[$c->topic_line] ?? $c->topic_line) : __('General (cualquier tema)') }} · {{ $c->user?->name ?? __('Equipo (enlace de prueba)') }} · {{ $c->updated_at?->format('d/m/Y H:i') }} · {{ $c->active ? __('Activa') : __('Desactivada') }}</div>
+                            <div style="margin-top:4px"><strong>{{ __('Respuesta aprobada') }}:</strong> {{ $c->answer }}</div>
+                            <div style="display:flex;gap:8px;margin-top:8px">
+                                <button type="button" wire:click="editCorrection({{ $c->id }})" class="btn btn-ghost btn-sm">{{ __('Editar') }}</button>
+                                <button type="button" wire:click="toggleCorrection({{ $c->id }})" class="btn btn-ghost btn-sm">{{ $c->active ? __('Desactivar') : __('Activar') }}</button>
+                                <button type="button" wire:click="deleteCorrection({{ $c->id }})" wire:confirm="{{ __('¿Eliminar esta corrección? El asesor dejará de usarla.') }}" class="btn btn-soft btn-sm">{{ __('Eliminar') }}</button>
+                            </div>
+                        @endif
+                    </div>
+                @empty
+                    <p class="mca-help" style="margin:0">{{ __('Aún no hay correcciones. En «Probar asesor», marca «Necesita mejora» en una respuesta y escribe la respuesta correcta.') }}</p>
+                @endforelse
             </div>
         @endif
 

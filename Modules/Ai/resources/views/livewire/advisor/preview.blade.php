@@ -35,6 +35,8 @@
         .pv-tag.info{background:var(--mca-info-soft);color:var(--mca-info)}
         .pv-rate{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--mca-card-border)}
         .pv-diag{margin-top:8px;font-size:11.5px;color:var(--mca-ink-2);line-height:1.5}
+        .pv-kind{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:6px;font-size:12.5px;color:var(--mca-ink-2)}
+        .pv-kind label{display:flex;align-items:center;gap:5px;cursor:pointer}
         .pv-diag summary{cursor:pointer;font-weight:600;color:var(--mca-ink-3)}
         .pv-diag ol{margin:4px 0 0;padding-left:18px}
         .pv-diag li.in{font-weight:600;color:var(--mca-ink)}
@@ -102,9 +104,15 @@
                     <div>{!! \Modules\Ai\Livewire\Advisor\Preview::formatReply((string) $m->content) !!}</div>
                     {{-- Diagnóstico de la búsqueda precisa (solo en la prueba; nunca lo ve un usuario real) --}}
                     @php $diag = is_array($m->meta) && is_array($m->meta['retrieval'] ?? null) ? $m->meta['retrieval'] : null; @endphp
-                    @if ($diag)
+                    @php $check = is_array($m->meta) && is_array($m->meta['correction_check'] ?? null) ? $m->meta['correction_check'] : null; @endphp
+                    @if ($diag || $check)
                         <details class="pv-diag" data-testid="diagnostics-{{ $m->id }}">
                             <summary>{{ __('Diagnóstico de la búsqueda') }}</summary>
+                            @if ($check)
+                                <div data-testid="correction-{{ $m->id }}">{{ __('Respuesta aprobada') }}: <b>{{ $check['applied'] ? __('aplicada') : __('no aplicada') }}</b>
+                                    · #{{ $check['id'] }} «{{ \Illuminate\Support\Str::limit((string) $check['question'], 80) }}» · {{ __('parecido') }} {{ $check['score'] }} ({{ __('umbral') }} {{ $check['threshold'] }})</div>
+                            @endif
+                            @if ($diag)
                             <div>{{ __('Línea') }}: <b>{{ $diag['line'] ?? '—' }}</b>@if (! empty($diag['line_source'])) ({{ $diag['line_source'] === 'question' ? __('nombrada en la pregunta') : __('tema de la conversación') }})@endif</div>
                             @if (! empty($diag['named_programs']))<div>{{ __('Programa nombrado') }}: {{ implode(', ', $diag['named_programs']) }}</div>@endif
                             <div>{{ __('Palabras buscadas') }}: {{ implode(', ', (array) ($diag['terms'] ?? [])) ?: '—' }}</div>
@@ -114,6 +122,7 @@
                                 @endforeach
                             </ol>
                             @if (! empty($diag['links_removed']))<div>{{ __('Enlaces quitados (no estaban en el conocimiento)') }}: {{ implode(' ', $diag['links_removed']) }}</div>@endif
+                            @endif
                         </details>
                     @endif
                     <div class="pv-rate" aria-label="{{ __('Valorar respuesta') }}">
@@ -122,9 +131,13 @@
                     </div>
                     @if ($noteFor === $m->id)
                         <div class="pv-obs">
-                            <textarea wire:model="note" maxlength="1000" placeholder="{{ __('Observación opcional: qué faltó o qué debería haber dicho.') }}"></textarea>
+                            <div class="pv-kind" role="radiogroup" aria-label="{{ __('Qué es este texto') }}">
+                                <label><input type="radio" wire:model.live="noteKind" value="approved" data-testid="kind-approved"> {{ __('Esta es la respuesta correcta') }}</label>
+                                <label><input type="radio" wire:model.live="noteKind" value="comment" data-testid="kind-comment"> {{ __('Solo comentario') }}</label>
+                            </div>
+                            <textarea wire:model="note" maxlength="1000" placeholder="{{ $noteKind === 'approved' ? __('Escribe la respuesta que debería haber dado. El asesor la usará para preguntas equivalentes sobre el mismo tema.') : __('Observación opcional: qué faltó o qué debería haber dicho.') }}"></textarea>
                             @error('note') <span class="pv-err">{{ $message }}</span> @enderror
-                            <div><button type="button" wire:click="saveNote" class="pv-btn">{{ __('Guardar observación') }}</button></div>
+                            <div><button type="button" wire:click="saveNote" class="pv-btn">{{ $noteKind === 'approved' ? __('Guardar respuesta aprobada') : __('Guardar observación') }}</button></div>
                         </div>
                     @endif
                 </div>

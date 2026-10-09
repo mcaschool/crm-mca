@@ -137,6 +137,61 @@ final class KnowledgeText
         return $lines;
     }
 
+    /**
+     * Conceptos de una pregunta para COMPARAR preguntas (correcciones aprobadas): sus raíces de
+     * búsqueda con los sinónimos configurados reducidos a su clave («empiezan», «comenzar» →
+     * «inicio»; «cuándo», «fechas» → «fecha»). Sin repetidos.
+     *
+     * @return list<string>
+     */
+    public static function concepts(string $text): array
+    {
+        $map = self::synonymMap();
+        $skip = self::comparisonNoise();
+        $concepts = array_map(fn (string $t): string => $map[$t] ?? $t, array_filter(self::queryTerms($text), fn (string $t): bool => ! isset($skip[$t])));
+
+        return array_values(array_unique($concepts));
+    }
+
+    /**
+     * Raíces que no cuentan al COMPARAR preguntas: las de corrections.ignore y las que nombran una
+     * línea (de la línea se ocupa el tema activo, no el parecido).
+     *
+     * @return array<string, true>
+     */
+    private static function comparisonNoise(): array
+    {
+        $words = (array) config('crm.knowledge.corrections.ignore', []);
+        foreach ((array) config('crm.knowledge.retrieval.line_terms', []) as $phrases) {
+            foreach ((array) $phrases as $phrase) {
+                $words[] = (string) $phrase;
+            }
+        }
+        $noise = [];
+        foreach ($words as $word) {
+            foreach (self::terms(self::expandAcronyms((string) $word)) as $stem) {
+                $noise[$stem] = true;
+            }
+        }
+
+        return $noise;
+    }
+
+    /** @return array<string, string> raíz => clave del grupo de sinónimos */
+    private static function synonymMap(): array
+    {
+        $map = [];
+        foreach ((array) config('crm.knowledge.corrections.synonyms', []) as $key => $words) {
+            foreach ((array) $words as $word) {
+                foreach (self::terms((string) $word) as $stem) {
+                    $map[$stem] = (string) $key;
+                }
+            }
+        }
+
+        return $map;
+    }
+
     /** ¿Pregunta qué ES algo o pide información general? («qué es…», «qué son…», «información de…», «what is…») */
     public static function asksDefinition(string $question): bool
     {

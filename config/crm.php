@@ -393,6 +393,27 @@ return [
             'named_min_weight' => 1.5,            // rareza mínima para nombrar con poca cobertura
             'history_messages' => 6,              // mensajes del usuario que se miran para el tema activo
         ],
+
+        // Respuestas aprobadas por el equipo desde «Probar asesor» (advisor_corrections). Una
+        // pregunta nueva aplica una corrección si su PARECIDO con la pregunta de la corrección
+        // (coseno de términos ponderados por rareza, con sinónimos agrupados) llega al umbral y
+        // el tema activo coincide. Los sinónimos SOLO se usan para comparar preguntas (no en la
+        // búsqueda del conocimiento). Palabras sin acentos; cada grupo se reduce a su clave.
+        'corrections' => [
+            'threshold' => 0.6,
+            // Palabras que no distinguen una pregunta de otra (además de las vacías). Las que nombran
+            // la línea («diploma avanzado», «Micro MBA»…) tampoco cuentan: de eso se ocupa el tema activo.
+            'ignore' => ['cuanto', 'cuanta', 'cuantos', 'cuantas', 'how'],
+            'synonyms' => [
+                'inicio' => ['inicio', 'iniciar', 'inician', 'inicia', 'empezar', 'empiezan', 'empieza', 'empiezo', 'comenzar', 'comienzan', 'comienza', 'comienzo', 'arrancar', 'arranca', 'start', 'starts', 'begin', 'begins'],
+                'fecha' => ['fecha', 'fechas', 'cuando', 'calendario', 'proximo', 'proxima', 'proximos', 'proximas', 'siguiente', 'siguientes', 'date', 'dates', 'when', 'next', 'upcoming'],
+                'precio' => ['precio', 'precios', 'costo', 'costos', 'coste', 'cuesta', 'cuestan', 'valor', 'vale', 'arancel', 'inversion', 'price', 'cost', 'costs'],
+                'pago' => ['pago', 'pagos', 'pagar', 'cuota', 'cuotas', 'plazos', 'financiar', 'financiacion', 'financiamiento', 'diferir', 'payment', 'payments', 'installments'],
+                'duracion' => ['duracion', 'dura', 'duran', 'tarda', 'tardan', 'demora', 'long'],
+                'requisito' => ['requisito', 'requisitos', 'documento', 'documentos', 'documentacion', 'requirements'],
+                'inscripcion' => ['inscripcion', 'inscribir', 'inscribirme', 'inscribo', 'matricula', 'matricular', 'matricularme', 'enroll', 'register'],
+            ],
+        ],
     ],
 
     /*

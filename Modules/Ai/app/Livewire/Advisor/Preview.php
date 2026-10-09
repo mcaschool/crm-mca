@@ -11,6 +11,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Modules\Ai\Models\AdvisorFeedback;
+use Modules\Ai\Services\AdvisorCorrections;
 use Modules\Ai\Services\AdvisorPreviewLinkService;
 use Modules\Ai\Services\AdvisorTurn;
 use Modules\Ai\Services\AdvisorTurnService;
@@ -49,6 +50,9 @@ class Preview extends Component
     public ?int $noteFor = null;
 
     public string $note = '';
+
+    /** Qué es el texto de «Necesita mejora»: approved («Esta es la respuesta correcta») | comment. */
+    public string $noteKind = 'approved';
 
     public ?string $notice = null;
 
@@ -181,23 +185,49 @@ class Preview extends Component
             ],
         );
 
+        // «Correcta» retira una respuesta aprobada anterior de esa misma respuesta.
+        if ($rating === AdvisorFeedback::CORRECT) {
+            app(AdvisorCorrections::class)->forget($feedback);
+        }
+
         $this->noteFor = $rating === AdvisorFeedback::NEEDS_IMPROVEMENT ? (int) $message->getKey() : null;
         $this->note = $this->noteFor !== null ? (string) $feedback->comment : '';
+        $this->noteKind = 'approved';
     }
 
-    public function saveNote(): void
+    /**
+     * Guarda el texto de «Necesita mejora»: como RESPUESTA APROBADA (se aplica al instante a las
+     * preguntas equivalentes del mismo tema; si lo corregido es el saludo, pasa a ser el saludo del
+     * asesor) o como simple comentario, igual que antes.
+     */
+    public function saveNote(AdvisorCorrections $corrections): void
     {
-        $this->validate(['note' => ['nullable', 'string', 'max:1000']], ['note.max' => __('Máximo 1000 caracteres.')]);
+        $approved = $this->noteKind === 'approved';
+        $this->validate([
+            'note' => [$approved ? 'required' : 'nullable', 'string', 'max:1000'],
+            'noteKind' => ['required', 'in:approved,comment'],
+        ], [
+            'note.required' => __('Escribe la respuesta correcta.'),
+            'note.max' => __('Máximo 1000 caracteres.'),
+        ]);
         $message = $this->noteFor !== null ? $this->advisorMessage($this->noteFor) : null;
-        if ($message === null) {
+        $feedback = $message !== null ? AdvisorFeedback::query()->where('message_id', $message->getKey())->first() : null;
+        if ($message === null || $feedback === null) {
             return;
         }
 
-        AdvisorFeedback::query()->where('message_id', $message->getKey())->update([
-            'comment' => trim($this->note) !== '' ? trim($this->note) : null,
-            'user_id' => auth()->id(),
-        ]);
-        $this->reset(['noteFor', 'note']);
+        $userId = auth()->id() !== null ? (int) auth()->id() : null;
+        $feedback->forceFill(['comment' => trim($this->note) !== '' ? trim($this->note) : null, 'user_id' => $userId])->save();
+
+        if ($approved) {
+            $applied = $corrections->approve($feedback, $message, trim($this->note), $userId);
+            $this->notice = $applied === 'greeting'
+                ? __('Saludo inicial actualizado: el asesor ya saluda así en las conversaciones nuevas.')
+                : __('Respuesta aprobada: el asesor ya la usa para preguntas equivalentes sobre el mismo tema.');
+        } else {
+            $corrections->forget($feedback);
+        }
+        $this->reset(['noteFor', 'note', 'noteKind']);
     }
 
     public function render(): View

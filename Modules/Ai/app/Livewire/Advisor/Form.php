@@ -11,6 +11,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
+use Modules\Ai\Models\AdvisorCorrection;
 use Modules\Ai\Models\AdvisorFeedback;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Services\AdvisorDeletionService;
@@ -74,6 +75,20 @@ class Form extends Component
 
     public string $buttonEn = '';
 
+    /** Saludo inicial de la conversación (ES/EN). Vacío = el saludo por defecto. */
+    public string $greetingEs = '';
+
+    public string $greetingEn = '';
+
+    /** «Correcciones aprendidas»: la que se está editando (null = ninguna). */
+    public ?int $editingCorrectionId = null;
+
+    public string $correctionQuestion = '';
+
+    public string $correctionAnswer = '';
+
+    public string $correctionTopic = '';
+
     public mixed $avatar = null;
 
     /** @var array<int, mixed> */
@@ -106,6 +121,8 @@ class Form extends Component
             $this->welcomeEn = (string) $bot->widget_welcome_en;
             $this->buttonEs = (string) $bot->widget_button_es;
             $this->buttonEn = (string) $bot->widget_button_en;
+            $this->greetingEs = (string) $bot->greeting_es;
+            $this->greetingEn = (string) $bot->greeting_en;
 
             $cfg = AiProcessConfig::query()->where('bot_id', $this->botId)->where('process', 'conversation')->first();
             $this->integrationId = $cfg?->integration_id;
@@ -139,11 +156,15 @@ class Form extends Component
             'welcomeEn' => ['nullable', 'string', 'max:200', 'not_regex:/<[^>]*>/'],
             'buttonEs' => ['nullable', 'string', 'max:40', 'not_regex:/<[^>]*>/'],
             'buttonEn' => ['nullable', 'string', 'max:40', 'not_regex:/<[^>]*>/'],
+            'greetingEs' => ['nullable', 'string', 'max:500', 'not_regex:/<[^>]*>/'],
+            'greetingEn' => ['nullable', 'string', 'max:500', 'not_regex:/<[^>]*>/'],
         ], [
             'welcomeEs.not_regex' => __('El texto no admite HTML ni etiquetas.'),
             'welcomeEn.not_regex' => __('El texto no admite HTML ni etiquetas.'),
             'buttonEs.not_regex' => __('El texto no admite HTML ni etiquetas.'),
             'buttonEn.not_regex' => __('El texto no admite HTML ni etiquetas.'),
+            'greetingEs.not_regex' => __('El texto no admite HTML ni etiquetas.'),
+            'greetingEn.not_regex' => __('El texto no admite HTML ni etiquetas.'),
             'welcomeEs.max' => __('Máximo :max caracteres.'),
             'welcomeEn.max' => __('Máximo :max caracteres.'),
             'buttonEs.max' => __('Máximo :max caracteres.'),
@@ -180,6 +201,8 @@ class Form extends Component
         $bot->widget_welcome_en = $this->plainText($this->welcomeEn);
         $bot->widget_button_es = $this->plainText($this->buttonEs);
         $bot->widget_button_en = $this->plainText($this->buttonEn);
+        $bot->greeting_es = $this->multilineText($this->greetingEs);
+        $bot->greeting_en = $this->multilineText($this->greetingEn);
         $bot->save();
 
         $this->botId = $bot->getKey();
@@ -331,6 +354,72 @@ class Form extends Component
         session()->flash('status', __('Sincronizado: :created nuevas, :updated actualizadas.', ['created' => $report['created'], 'updated' => $report['updated']]));
     }
 
+    /** «Correcciones aprendidas»: abre la edición de una respuesta aprobada de ESTE asesor. */
+    public function editCorrection(int $id): void
+    {
+        $correction = $this->correction($id);
+        $this->editingCorrectionId = (int) $correction->getKey();
+        $this->correctionQuestion = (string) $correction->question;
+        $this->correctionAnswer = (string) $correction->answer;
+        $this->correctionTopic = (string) $correction->topic_line;
+        $this->resetErrorBag();
+    }
+
+    public function cancelCorrection(): void
+    {
+        $this->reset(['editingCorrectionId', 'correctionQuestion', 'correctionAnswer', 'correctionTopic']);
+    }
+
+    public function saveCorrection(): void
+    {
+        if ($this->editingCorrectionId === null) {
+            return;
+        }
+        $correction = $this->correction($this->editingCorrectionId);
+        $this->validate([
+            'correctionQuestion' => ['required', 'string', 'max:1000'],
+            'correctionAnswer' => ['required', 'string', 'max:1000'],
+            'correctionTopic' => ['nullable', 'in:'.implode(',', array_keys((array) config('crm.knowledge.lines', [])))],
+        ], [
+            'correctionQuestion.required' => __('Escribe la pregunta.'),
+            'correctionAnswer.required' => __('Escribe la respuesta aprobada.'),
+            'correctionQuestion.max' => __('Máximo :max caracteres.'),
+            'correctionAnswer.max' => __('Máximo :max caracteres.'),
+        ]);
+        $correction->forceFill([
+            'question' => trim($this->correctionQuestion),
+            'answer' => trim($this->correctionAnswer),
+            'topic_line' => $this->correctionTopic !== '' ? $this->correctionTopic : null,
+        ])->save();
+        $this->cancelCorrection();
+        session()->flash('status', __('Corrección actualizada.'));
+    }
+
+    public function toggleCorrection(int $id): void
+    {
+        $correction = $this->correction($id);
+        $correction->forceFill(['active' => ! $correction->active])->save();
+        session()->flash('status', $correction->active ? __('Corrección activada.') : __('Corrección desactivada: el asesor deja de usarla.'));
+    }
+
+    public function deleteCorrection(int $id): void
+    {
+        $this->correction($id)->delete();
+        if ($this->editingCorrectionId === $id) {
+            $this->cancelCorrection();
+        }
+        session()->flash('status', __('Corrección eliminada.'));
+    }
+
+    /** Corrección de ESTE asesor (y de la institución activa, por el scope global); si no, 404. */
+    private function correction(int $id): AdvisorCorrection
+    {
+        abort_unless((bool) auth()->user()?->canManageIntegrations(), 403);
+        abort_if($this->botId === null, 404);
+
+        return AdvisorCorrection::query()->where('bot_id', $this->botId)->findOrFail($id);
+    }
+
     /** Abre el modal de confirmacion (solo si es eliminable). */
     public function confirmDelete(AdvisorDeletionService $guard): void
     {
@@ -410,6 +499,8 @@ class Form extends Component
             'widgetDefaults' => ['es' => (array) config('crm.widget.default_texts.es'), 'en' => (array) config('crm.widget.default_texts.en')],
             'previewUrl' => $bot !== null ? app(AdvisorPreviewLinkService::class)->url($bot) : null,
             'feedback' => $bot !== null ? $this->feedbackSummary($bot) : null,
+            'corrections' => $bot === null ? collect() : AdvisorCorrection::query()->with('user:id,name')->where('bot_id', $bot->getKey())->orderByDesc('id')->get(),
+            'lineLabels' => (array) config('crm.knowledge.lines', []),
         ]);
     }
 
