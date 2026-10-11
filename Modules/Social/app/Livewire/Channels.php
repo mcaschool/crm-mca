@@ -10,7 +10,9 @@ use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Modules\Core\Support\SecretMasker;
 use Modules\Institutions\Models\Bot;
+use Modules\Social\Exceptions\AdvisorAssignmentConflict;
 use Modules\Social\Models\SocialChannel;
+use Modules\Social\Services\AdvisorChannelAssignment;
 use Modules\Social\Support\AdvisorDispatcher;
 
 /**
@@ -236,7 +238,7 @@ class Channels extends Component
         $this->resetErrorBag();
     }
 
-    public function saveAdvisor(): void
+    public function saveAdvisor(AdvisorChannelAssignment $assignment): void
     {
         $channel = SocialChannel::query()->findOrFail((int) $this->advisorChannelId);
         $this->authorize('update', $channel);
@@ -270,24 +272,29 @@ class Channels extends Component
             return;
         }
 
-        $channel->advisor_enabled = $this->advisorEnabled;
-        $channel->advisor_bot_id = $botId;
-        $channel->advisor_reply_delay = $this->advisorDelay;
-        $channel->advisor_schedule = $this->advisorAlways ? null : [
-            'days' => array_values(array_map('intval', $this->advisorDays)),
-            'from' => $this->advisorFrom,
-            'to' => $this->advisorTo,
-        ];
-        $channel->advisor_off_hours_message = trim($this->advisorOffHoursMessage) !== '' ? trim($this->advisorOffHoursMessage) : null;
-        $channel->advisor_handoff_enabled = $this->advisorHandoff;
-        $channel->advisor_handoff_message = trim($this->advisorHandoffMessage) !== '' ? trim($this->advisorHandoffMessage) : null;
-        // Siempre se pausa cuando responde una persona (obligatorio; la opción ya no se puede apagar).
-        $channel->advisor_pause_on_human = true;
-        if ($channel->isDirty(['advisor_enabled', 'advisor_bot_id'])) {
-            $channel->advisor_assigned_by = auth()->id();
-            $channel->advisor_assigned_at = now();
+        // Se guarda con la fila bloqueada y, si activa el asesor o lo cambia, con el corte de
+        // AdvisorChannelAssignment (nunca se responde lo recibido antes).
+        try {
+            $channel = $assignment->configure($channel, auth()->user(), function (SocialChannel $locked) use ($botId): void {
+                $locked->advisor_enabled = $this->advisorEnabled;
+                $locked->advisor_bot_id = $botId;
+                $locked->advisor_reply_delay = $this->advisorDelay;
+                $locked->advisor_schedule = $this->advisorAlways ? null : [
+                    'days' => array_values(array_map('intval', $this->advisorDays)),
+                    'from' => $this->advisorFrom,
+                    'to' => $this->advisorTo,
+                ];
+                $locked->advisor_off_hours_message = trim($this->advisorOffHoursMessage) !== '' ? trim($this->advisorOffHoursMessage) : null;
+                $locked->advisor_handoff_enabled = $this->advisorHandoff;
+                $locked->advisor_handoff_message = trim($this->advisorHandoffMessage) !== '' ? trim($this->advisorHandoffMessage) : null;
+                // Siempre se pausa cuando responde una persona (obligatorio; la opción ya no se puede apagar).
+                $locked->advisor_pause_on_human = true;
+            });
+        } catch (AdvisorAssignmentConflict $e) {
+            $this->addError('advisorEnabled', $e->getMessage());
+
+            return;
         }
-        $channel->save();
 
         session()->flash('status', $channel->advisor_enabled
             ? __('Asesor inteligente activado en :channel.', ['channel' => $channel->display_name])

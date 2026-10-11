@@ -1188,5 +1188,15 @@
     "Se respondió desde fuera del CRM (Meta Business Suite, Messenger o Instagram)": "Replied from outside the CRM (Meta Business Suite, Messenger or Instagram)",
     "No se pudo confirmar si la respuesta automática llegó": "It could not be confirmed whether the automatic reply was delivered",
     "Revisa la conversación en la app del canal antes de responder: no se reenvió para no duplicarla.": "Check the conversation in the channel app before replying: it was not resent to avoid duplicating it.",
-    "Entrega sin confirmar: revísala en el canal": "Delivery not confirmed: check it in the channel"
+    "Entrega sin confirmar: revísala en el canal": "Delivery not confirmed: check it in the channel",
+    "Catálogo (datos del sistema)": "Catalog (system data)",
+    "Consulta fuera de sus fuentes": "Question outside its sources",
+    "Enlace oficial": "Official link",
+    "Página pública que el asesor comparte al listar los programas de esta línea. Solo https.": "Public page the advisor shares when listing this line's programs. https only.",
+    "Respuesta aprobada (literal)": "Approved response (verbatim)",
+    "el asesor sigue atendiendo; si vuelve a ocurrir, pasará la conversación a una persona.": "the advisor keeps attending; if it happens again, the conversation will be passed to a person.",
+    "El enlace oficial debe ser una dirección https:// válida.": "The official link must be a valid https:// address.",
+    "El enlace oficial es demasiado largo.": "The official link is too long.",
+    "Enlace oficial guardado.": "Official link saved.",
+    "El asesor está terminando un turno anterior en esta conversación. Vuelve a intentarlo en unos segundos.": "The advisor is finishing a previous turn in this conversation. Please try again in a few seconds."
 }

@@ -38,10 +38,16 @@ final class AdvisorPromptBuilder
      * @param  array{question: string, answer: string}|null  $approved  respuesta aprobada por el
      *                                                                  equipo para esta pregunta
      *                                                                  (va como PRIMER bloque)
+     * @param  string|null  $catalogIndex  índice del catálogo activo del asesor (AdvisorCatalog): va tras
+     *                                     el conocimiento, para que la IA no confunda las secciones
+     *                                     recuperadas con el catálogo completo
      */
-    public function build(Bot $bot, string $locale, string $channel, string $knowledge, bool $corporate = false, ?array $approved = null): string
+    public function build(Bot $bot, string $locale, string $channel, string $knowledge, bool $corporate = false, ?array $approved = null, ?string $catalogIndex = null): string
     {
         $locale = $locale === 'en' ? 'en' : 'es';
+        if ($catalogIndex !== null && $catalogIndex !== '') {
+            $knowledge = ($knowledge !== '' ? $knowledge."\n\n" : '').$catalogIndex;
+        }
         $first = $approved !== null ? $this->approvedBlock($locale, $approved)."\n\n" : '';
 
         if ($bot->usesGlobalPrompt()) {

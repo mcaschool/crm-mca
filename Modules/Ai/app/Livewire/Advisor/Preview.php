@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
+use Modules\Ai\Models\AdvisorCorrection;
 use Modules\Ai\Models\AdvisorFeedback;
 use Modules\Ai\Services\AdvisorCorrections;
 use Modules\Ai\Services\AdvisorPreviewLinkService;
@@ -270,12 +271,17 @@ class Preview extends Component
             ->whereIn('message_id', $messages->pluck('id'))
             ->pluck('rating', 'message_id');
 
+        // Pregunta de referencia de las respuestas aprobadas comprobadas: la traza solo guarda su id.
+        $checkedIds = $messages->map(fn (Message $m): ?int => is_array($m->meta) && isset($m->meta['correction_check']['id']) ? (int) $m->meta['correction_check']['id'] : null)->filter()->unique()->values();
+        $correctionQuestions = $checkedIds->isEmpty() ? collect() : AdvisorCorrection::query()->whereIn('id', $checkedIds)->pluck('question', 'id');
+
         return view('ai::livewire.advisor.preview', [
             'bot' => $bot,
             'avatarUrl' => $bot->avatarUrl(),
             'texts' => $bot->effectiveWidgetTexts($this->lang),
             'messages' => $messages,
             'ratings' => $ratings,
+            'correctionQuestions' => $correctionQuestions,
             'started' => $conversation !== null,
             'canApprove' => $this->approver() !== null,
             // «Está escribiendo…»: nombre del asesor que responde, en el idioma de la conversación, y su espera mínima.

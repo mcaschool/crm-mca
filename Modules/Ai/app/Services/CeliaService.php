@@ -46,6 +46,7 @@ class CeliaService
         private readonly ProgramAssignmentService $programAssignments,
         private readonly AdvisorPromptBuilder $prompts,
         private readonly AdvisorCorrections $corrections,
+        private readonly AdvisorCatalog $catalog,
     ) {}
 
     /**
@@ -130,16 +131,44 @@ class CeliaService
 
         $bot = $this->bot($conversation);
         $precise = $bot !== null && $bot->usesPreciseRetrieval();
+        $preview = $this->isTest($conversation) && (string) $conversation->channel === AdvisorTurnService::TEST_CHANNEL;
         // Mensajes anteriores del usuario: dan el TEMA ACTIVO de los seguimientos.
         $history = $this->previousUserMessages($conversation);
-        // Respuesta APROBADA por el equipo para una pregunta equivalente del mismo tema (cualquier asesor).
+
+        // 1) CATÁLOGO («¿qué programas tienen?»): gana la base de datos. La lista sale de los
+        //    programas activos asignados al asesor y el enlace oficial de knowledge_sources.url, sin
+        //    IA y nunca de las secciones recuperadas (que no son el catálogo completo).
+        if ($precise) {
+            $catalog = $this->catalog->answer((int) $conversation->bot_id, $message, $locale, (string) $conversation->channel, $this->previousCatalog($conversation));
+            if ($catalog !== null) {
+                return $this->deterministic($conversation, $contact, $catalog['reply'], 'catalog', [
+                    'catalog' => $catalog['trace'],
+                    'knowledge_sources' => array_values(array_filter(array_merge([$catalog['trace']['link_source'] ?? null], array_values((array) ($catalog['trace']['link_sources'] ?? []))))),
+                ]);
+            }
+        }
+
+        // 2) Respuesta APROBADA por el equipo para una pregunta equivalente del mismo tema (cualquier
+        //    asesor): prevalece LITERALMENTE, sin IA, en web, prueba, WhatsApp y Messenger. Solo si su
+        //    idioma no es el de la conversación, la IA la sigue como bloque prioritario del prompt.
         $match = $this->corrections->match((int) $conversation->bot_id, $message, $history, $locale);
+        $check = $match !== null ? [
+            'id' => (int) $match['correction']->getKey(), 'score' => $match['score'], 'threshold' => $match['threshold'],
+            'applied' => $match['applied'], 'line' => $match['line'], 'fragment' => $match['fragment'], 'language' => $match['language'],
+        ] : null;
+        if ($match !== null && $match['applied'] && ($match['language'] === null || $match['language'] === $locale)) {
+            return $this->deterministic($conversation, $contact, (string) $match['correction']->answer, 'approved', [
+                'correction' => ['id' => $check['id'], 'score' => $check['score']],
+                'correction_check' => $check + ['verbatim' => true],
+            ]);
+        }
         $approved = $match !== null && $match['applied']
             ? ['question' => (string) $match['correction']->question, 'answer' => (string) $match['correction']->answer]
             : null;
         $knowledge = $this->knowledge->retrieveWithSources((int) $conversation->bot_id, $message, $locale, null, $precise ? $history : []);
-        // Prompt del asesor: el global de siempre (Celia) o su identidad e instrucciones propias.
-        $prompt = $this->prompts->build($bot ?? new Bot(['uses_legacy_prompt' => true]), $locale, (string) $conversation->channel, $knowledge['text'], $corporate, $approved);
+        // Prompt del asesor: el global de siempre (Celia) o su identidad e instrucciones propias. En la
+        // búsqueda precisa lleva además el índice del catálogo activo (cantidad de programas por línea).
+        $prompt = $this->prompts->build($bot ?? new Bot(['uses_legacy_prompt' => true]), $locale, (string) $conversation->channel, $knowledge['text'], $corporate, $approved, $precise ? $this->catalog->promptIndex((int) $conversation->bot_id, $locale) : null);
         $chat = array_merge(
             [['role' => 'system', 'content' => $prompt]],
             $this->history($conversation, $locale),
@@ -180,17 +209,14 @@ class CeliaService
 
         [$reply, $action] = $this->parse($result->content);
 
-        $preview = $this->isTest($conversation) && (string) $conversation->channel === AdvisorTurnService::TEST_CHANNEL;
         $extra = [];
         if ($approved !== null) {
             $extra['correction'] = ['id' => (int) $match['correction']->getKey(), 'score' => $match['score']];
         }
-        // Modo de prueba: si se comprobaron respuestas aprobadas, cuál fue la mejor y si se aplicó.
-        if ($preview && $match !== null) {
-            $extra['correction_check'] = [
-                'id' => (int) $match['correction']->getKey(), 'question' => (string) $match['correction']->question,
-                'score' => $match['score'], 'threshold' => $match['threshold'], 'applied' => $match['applied'], 'line' => $match['line'],
-            ];
+        // Traza interna en TODOS los canales (no viaja al usuario): la mejor respuesta aprobada
+        // comprobada, su puntuación, el umbral y si se aplicó. Sin copiar su texto.
+        if ($check !== null) {
+            $extra['correction_check'] = $check + ['verbatim' => false];
         }
 
         // Búsqueda precisa: solo sobreviven los enlaces que están TEXTUALMENTE en lo recuperado o en
@@ -200,10 +226,13 @@ class CeliaService
             if ($removed !== []) {
                 $extra['links_removed'] = count($removed);
             }
-            // Modo de prueba: diagnóstico de la búsqueda (palabras, línea, programa, secciones y puntaje).
-            if ($preview) {
-                $extra['retrieval'] = ($knowledge['diagnostics'] ?? []) + ($removed !== [] ? ['links_removed' => $removed] : []);
-            }
+            // Diagnóstico compacto de la búsqueda en todos los canales (línea, programa nombrado y
+            // secciones con su puntaje: códigos y títulos, nunca contenido). Las palabras buscadas
+            // y los enlaces quitados, solo en la prueba.
+            $diagnostics = (array) ($knowledge['diagnostics'] ?? []);
+            $extra['retrieval'] = $preview
+                ? $diagnostics + ($removed !== [] ? ['links_removed' => $removed] : [])
+                : array_intersect_key($diagnostics, array_flip(['line', 'line_source', 'named_programs', 'top']));
         }
         $reply = $this->truncate($reply, $locale);
 
@@ -220,6 +249,35 @@ class CeliaService
         $this->detectProgramInterest($conversation, $contact, $reply);
 
         return $this->response($conversation, reply: $reply, action: $action, usedAi: true);
+    }
+
+    /**
+     * Respuesta DETERMINISTA (catálogo o respuesta aprobada literal): sin IA, no gasta tokens ni
+     * cuenta para el límite de mensajes con IA; queda registrada con su traza compacta.
+     *
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private function deterministic(Conversation $conversation, ?Contact $contact, string $reply, string $action, array $meta): array
+    {
+        $this->messages->record($conversation, 'celia', $reply, 'text', array_merge(['action' => $action, 'used_ai' => false], $meta));
+        $this->detectProgramInterest($conversation, $contact, $reply);
+
+        return $this->response($conversation, reply: $reply, action: $action, usedAi: false);
+    }
+
+    /**
+     * Traza de catálogo de la respuesta ANTERIOR del asesor (para entender «los ejecutivos» como
+     * respuesta a «¿cuál te gustaría consultar?»).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function previousCatalog(Conversation $conversation): ?array
+    {
+        $last = $conversation->messages()->where('sender_type', 'celia')->orderByDesc('id')->first();
+        $catalog = is_array($last?->meta) ? ($last->meta['catalog'] ?? null) : null;
+
+        return is_array($catalog) ? $catalog : null;
     }
 
     // --- Contexto / saludo -------------------------------------------------

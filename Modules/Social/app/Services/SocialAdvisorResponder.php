@@ -130,14 +130,9 @@ final class SocialAdvisorResponder
         if (! $conversation->advisorMayReply()) {
             return $skip('human');
         }
-        // Activar la cuenta (o reasignarla) no contesta lo antiguo: solo mensajes llegados después.
-        if ($channel->advisor_assigned_at !== null && $message->created_at !== null && $message->created_at->lt($channel->advisor_assigned_at)) {
-            return $skip('before_activation');
-        }
-        // Reactivar no contesta lo antiguo: solo mensajes llegados DESPUÉS del último cambio de estado.
-        if ($conversation->automation_changed_at !== null && $message->created_at !== null && $message->created_at->lt($conversation->automation_changed_at)) {
-            return $skip('before_reactivation');
-        }
+        // Activar/reasignar la cuenta o reactivar la conversación no contesta lo antiguo: lo recibido
+        // antes quedó con su recibo de corte (AdvisorCutoff) y ya salió arriba como «duplicate». No se
+        // comparan horas (precisión de segundos).
         // Nunca se contesta un mensaje viejo ni uno con otro más nuevo detrás (ese lo contestará
         // su propio job, agrupando a este).
         if ($this->isStale($conversation, $message)) {
@@ -211,10 +206,11 @@ final class SocialAdvisorResponder
             'unavailable' => $this->stop($conversation, 'ai_not_configured'),
             // Límite de la conversación: no se responde y pasa a una persona.
             'limit_reached' => $this->toPerson($conversation, 'limit_reached'),
-            // El asesor transfiere (sus reglas) o no encuentra la respuesta en sus fuentes: contesta
-            // con lo que tiene (sin inventar) y la conversación queda a la espera de una persona.
+            // El asesor transfiere (sus reglas): contesta con lo que tiene y queda a la espera de una persona.
             'handoff' => $this->sendThenWait($conversation, (string) $result->reply, $trace, 'advisor_handoff'),
-            'unresolved' => $this->sendThenWait($conversation, (string) $result->reply, $trace, 'unresolved'),
+            // No lo encuentra en sus fuentes: responde con honestidad y SIGUE atendiendo; solo el
+            // segundo «unresolved» consecutivo pasa a una persona (con el mensaje de transferencia).
+            'unresolved' => $this->unresolved($conversation, $channel, $message, (string) $result->reply, $trace),
             default => $this->send($conversation, (string) $result->reply, $trace),
         };
     }
@@ -278,6 +274,57 @@ final class SocialAdvisorResponder
         return $outcome;
     }
 
+    /**
+     * «Unresolved»: la respuesta honesta sale siempre y el asesor sigue activo. Si es el SEGUNDO
+     * consecutivo, además se envía claramente el mensaje de transferencia configurado y solo
+     * entonces la conversación pasa a «Esperando a una persona» (nunca en silencio).
+     *
+     * @param  array{ai_bot_id: int|null, in_reply_to_id: int, ai_meta: array<string, mixed>}  $trace
+     */
+    private function unresolved(SocialConversation $conversation, SocialChannel $channel, SocialMessage $message, string $reply, array $trace): string
+    {
+        $consecutive = $this->previousUnresolved($conversation, $message);
+        $outcome = $this->send($conversation, $reply, $trace);
+        if ($outcome !== 'replied' && $outcome !== 'empty') {
+            return $outcome; // no se pudo enviar: ya quedó en error con su motivo
+        }
+        if (! $consecutive) {
+            return 'unresolved';
+        }
+
+        $this->sendHandoffMessage($conversation, $channel, $message);
+        $this->automation->waitForPerson($conversation, 'unresolved');
+
+        return 'handoff';
+    }
+
+    /**
+     * ¿El turno anterior del asesor en esta conversación fue también «unresolved» y sigue contando?
+     * Se deriva de la traza existente (ai_meta), sin estado nuevo. Cuenta solo si:
+     *  - la última respuesta saliente ANTES de este mensaje es del asesor y fue «unresolved» (una
+     *    respuesta resuelta, de catálogo, una corrección aplicada, una transferencia o una persona
+     *    del equipo respondiendo en medio la reinician);
+     *  - no hubo después ningún cambio de estado (reactivación, toma, pausa…): queda marcado en su
+     *    propia traza (ai_meta.streak_reset), exacto aunque ocurra en el MISMO segundo;
+     *  - entre ella y este mensaje no pasaron más de social.advisor.unresolved_window_minutes (30).
+     */
+    private function previousUnresolved(SocialConversation $conversation, SocialMessage $message): bool
+    {
+        $previous = SocialMessage::query()
+            ->where('social_conversation_id', $conversation->getKey())
+            ->where('direction', 'outbound')
+            ->where('id', '<', $message->getKey())
+            ->orderByDesc('id')
+            ->first();
+        if ($previous === null || $previous->sender_type !== 'bot' || ($previous->ai_meta['kind'] ?? null) !== 'unresolved' || isset($previous->ai_meta['streak_reset'])) {
+            return false;
+        }
+        $window = max(1, (int) config('social.advisor.unresolved_window_minutes', 30));
+        $at = $message->created_at ?? now();
+
+        return $previous->created_at !== null && $previous->created_at->gte($at->copy()->subMinutes($window));
+    }
+
     private function toPerson(SocialConversation $conversation, string $reason): string
     {
         $this->automation->waitForPerson($conversation, $reason);
@@ -320,8 +367,8 @@ final class SocialAdvisorResponder
 
     /**
      * Texto del turno: los mensajes de texto que la persona envió seguidos desde la última
-     * respuesta (máximo social.advisor.group_max_messages, y solo los recientes y posteriores a la
-     * última reactivación), en orden. Así no se contesta por separado a cada fragmento.
+     * respuesta (máximo social.advisor.group_max_messages, solo los recientes y nunca los anteriores
+     * a un corte), en orden. Así no se contesta por separado a cada fragmento.
      */
     private function groupedText(SocialConversation $conversation, SocialMessage $message): string
     {
@@ -331,11 +378,8 @@ final class SocialAdvisorResponder
             ->where('direction', 'outbound')
             ->max('id');
         $since = now()->subMinutes(self::MAX_AGE_MINUTES);
-        if ($conversation->automation_changed_at !== null && $conversation->automation_changed_at->gt($since)) {
-            $since = $conversation->automation_changed_at;
-        }
 
-        $parts = SocialMessage::query()
+        $candidates = SocialMessage::query()
             ->where('social_conversation_id', $conversation->getKey())
             ->where('direction', 'inbound')
             ->where('sender_type', 'contact')
@@ -345,6 +389,13 @@ final class SocialAdvisorResponder
             ->where('created_at', '>=', $since)
             ->orderByDesc('id')
             ->limit($max)
+            ->get(['id', 'external_message_id', 'body']);
+        // Los recibidos antes de un corte (reactivación, activación o reasignación) nunca se agrupan.
+        $cut = $this->turns->cutOffAmong((int) $conversation->institution_id, (string) $conversation->provider,
+            $candidates->pluck('external_message_id')->filter()->map(fn ($id): string => (string) $id)->values()->all());
+
+        $parts = $candidates
+            ->reject(fn (SocialMessage $m): bool => in_array((string) $m->external_message_id, $cut, true))
             ->pluck('body')
             ->reverse()
             ->map(fn ($body): string => trim((string) $body))
@@ -387,12 +438,22 @@ final class SocialAdvisorResponder
     {
         $meta = $result->replyMessageId !== null ? (array) (Message::query()->find($result->replyMessageId)->meta ?? []) : [];
         $safe = array_intersect_key($meta, array_flip(['provider', 'model', 'latency_ms', 'input_tokens', 'output_tokens', 'reasoning_tokens']));
+        // Traza COMPACTA (identificadores, códigos, títulos, puntuaciones y decisiones; nunca el
+        // contenido de las fuentes ni de las respuestas aprobadas).
+        $sections = array_slice(array_map(fn ($t): string => (string) ($t['title'] ?? ''), (array) ($meta['retrieval']['top'] ?? [])), 0, 3);
+        $compact = array_filter([
+            'knowledge_sources' => array_values(array_map('strval', (array) ($meta['knowledge_sources'] ?? []))),
+            'sections' => array_values(array_filter($sections)),
+            'correction' => is_array($meta['correction_check'] ?? null) ? $meta['correction_check'] : null,
+            'catalog' => is_array($meta['catalog'] ?? null) ? $meta['catalog'] : null,
+        ], fn ($v): bool => $v !== null && $v !== []);
 
         return [
             'ai_bot_id' => $channel->advisor_bot_id,
             'in_reply_to_id' => (int) $message->getKey(),
-            'ai_meta' => array_merge($safe, [
+            'ai_meta' => array_merge($safe, $compact, [
                 'kind' => $result->status,
+                'intent' => $result->intent,
                 'used_ai' => $result->usedAi,
                 'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
                 'sources' => count($result->sources),

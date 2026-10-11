@@ -124,6 +124,10 @@
                         <span class="pv-tag warn">{{ __('Información no encontrada') }}</span>
                     @elseif ($intent === 'handoff')
                         <span class="pv-tag info">{{ __('Transferiría a una persona') }}</span>
+                    @elseif ($intent === 'catalog')
+                        <span class="pv-tag info" data-testid="tag-catalog">{{ __('Catálogo (datos del sistema)') }}</span>
+                    @elseif ($intent === 'approved')
+                        <span class="pv-tag info" data-testid="tag-approved">{{ __('Respuesta aprobada (literal)') }}</span>
                     @endif
                     <div>{!! \Modules\Ai\Livewire\Advisor\Preview::formatReply((string) $m->content) !!}</div>
                     {{-- Diagnóstico de la búsqueda precisa (solo en la prueba; nunca lo ve un usuario real) --}}
@@ -134,7 +138,7 @@
                             <summary>{{ __('Diagnóstico de la búsqueda') }}</summary>
                             @if ($check)
                                 <div data-testid="correction-{{ $m->id }}">{{ __('Respuesta aprobada') }}: <b>{{ $check['applied'] ? __('aplicada') : __('no aplicada') }}</b>
-                                    · #{{ $check['id'] }} «{{ \Illuminate\Support\Str::limit((string) $check['question'], 80) }}» · {{ __('parecido') }} {{ $check['score'] }} ({{ __('umbral') }} {{ $check['threshold'] }})</div>
+                                    · #{{ $check['id'] }} «{{ \Illuminate\Support\Str::limit((string) ($correctionQuestions[$check['id']] ?? ''), 80) }}» · {{ __('parecido') }} {{ $check['score'] }} ({{ __('umbral') }} {{ $check['threshold'] }})</div>
                             @endif
                             @if ($diag)
                             <div>{{ __('Línea') }}: <b>{{ $diag['line'] ?? '—' }}</b>@if (! empty($diag['line_source'])) ({{ $diag['line_source'] === 'question' ? __('nombrada en la pregunta') : __('tema de la conversación') }})@endif</div>

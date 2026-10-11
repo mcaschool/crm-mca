@@ -32,4 +32,10 @@ final class AdvisorAssignmentConflict extends RuntimeException
     {
         return new self($reason);
     }
+
+    /** Un worker tiene el turno de una conversación de la cuenta: no se cambió nada; reintentar. */
+    public static function busy(string $message): self
+    {
+        return new self($message);
+    }
 }

@@ -29,4 +29,16 @@ return [
     'default_role' => 'asistente virtual de la institución',
     'limit_reached_custom' => 'Hemos conversado bastante y no quiero hacerte esperar. Si necesitas más detalle, el equipo de la institución puede ayudarte.',
     'ai_unavailable_custom' => 'Ahora mismo no puedo responder en detalle. Inténtalo de nuevo en unos minutos, por favor.',
+
+    // Catálogo (preguntas de listado): se construye desde los programas activos asignados al asesor.
+    'catalog_list' => 'Estos son los :count :line disponibles:',
+    'catalog_list_one' => 'Este es el programa de :line disponible:',
+    'catalog_link' => 'Puedes verlos todos aquí: :url',
+    'catalog_link_one' => 'Más información aquí: :url',
+    'catalog_list_closing' => '¿Te interesa alguno en particular?',
+    'catalog_compact' => 'Tenemos :count :line disponibles.',
+    'catalog_compact_closing' => 'Dime cuál te interesa y te doy los detalles.',
+    'catalog_summary_intro' => 'Estas son nuestras líneas académicas disponibles:',
+    'catalog_summary_count' => '{1} :count programa|[2,*] :count programas',
+    'catalog_summary_question' => '¿Cuál te gustaría consultar?',
 ];

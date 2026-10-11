@@ -388,6 +388,18 @@
                     <button type="button" wire:click="closeDrawer" class="kc-icon-btn" aria-label="{{ __('Cerrar') }}"><x-ui.icon name="x" /></button>
                 </div>
                 <div class="kc-drawer-body">
+                    {{-- Enlace oficial: lo usa el asesor en las respuestas de catálogo de esta línea --}}
+                    <form wire:submit="saveUrl" class="kc-field" data-testid="official-link">
+                        <span class="kc-field-label">{{ __('Enlace oficial') }}</span>
+                        <div style="display:flex; gap:.5rem; align-items:center">
+                            <input type="url" wire:model="viewingUrl" class="kc-input" placeholder="https://" maxlength="500" @disabled(! $canEditUrl) style="flex:1">
+                            @if ($canEditUrl)
+                                <button type="submit" class="kc-btn kc-btn-primary kc-btn-sm">{{ __('Guardar') }}</button>
+                            @endif
+                        </div>
+                        <small class="kc-sub">{{ __('Página pública que el asesor comparte al listar los programas de esta línea. Solo https.') }}</small>
+                        @error('viewingUrl') <span class="kc-err">{{ $message }}</span> @enderror
+                    </form>
                     @if ($viewingSections !== [])
                         <nav class="kc-drawer-nav">
                             <h5>{{ __('Secciones') }}</h5>

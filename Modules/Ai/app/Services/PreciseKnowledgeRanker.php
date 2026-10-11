@@ -127,6 +127,9 @@ final class PreciseKnowledgeRanker
      */
     public function questionSimilarity(string $question, array $candidates, array $corpus = []): array
     {
+        // Erratas de la pregunta («tuenen», «disponibel»): se corrigen contra el vocabulario del
+        // conocimiento del asesor y de las propias preguntas aprobadas antes de comparar.
+        $question = KnowledgeText::correctTypos($question, KnowledgeText::vocabulary(array_merge($candidates, $corpus)));
         $q = KnowledgeText::concepts($question);
         $docs = array_map(fn (string $c): array => KnowledgeText::concepts($c), $candidates);
         if ($q === [] || $docs === []) {

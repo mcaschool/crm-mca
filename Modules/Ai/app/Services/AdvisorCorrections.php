@@ -7,6 +7,7 @@ namespace Modules\Ai\Services;
 use Modules\Ai\Models\AdvisorCorrection;
 use Modules\Ai\Models\AdvisorFeedback;
 use Modules\Ai\Models\KnowledgeSource;
+use Modules\Ai\Support\TextLanguage;
 use Modules\Crm\Models\Conversation;
 use Modules\Crm\Models\Message;
 use Modules\Institutions\Models\Bot;
@@ -74,8 +75,12 @@ final class AdvisorCorrections
      * Corrección aplicable a la pregunta: activa, del mismo asesor, del mismo tema (o general) y
      * con parecido ≥ umbral. Devuelve también la mejor candidata aunque no llegue (diagnóstico).
      *
+     * Varios mensajes seguidos agrupados en un turno (uno por línea): se compara el texto completo
+     * y también cada fragmento por separado, y gana la mejor coincidencia ('fragment' indica cuál:
+     * 'all' o el número de línea, desde 1). 'language': idioma de la corrección (o null).
+     *
      * @param  list<string>  $history  mensajes anteriores del usuario, del más reciente al más antiguo
-     * @return array{applied: bool, correction: AdvisorCorrection, score: float, threshold: float, line: ?string}|null
+     * @return array{applied: bool, correction: AdvisorCorrection, score: float, threshold: float, line: ?string, fragment: int|string, language: ?string}|null
      */
     public function match(int $botId, string $question, array $history, string $locale): ?array
     {
@@ -91,13 +96,25 @@ final class AdvisorCorrections
             return null;
         }
 
-        $scores = $this->ranker->questionSimilarity($question, $eligible->pluck('question')->map(fn ($q): string => (string) $q)->all(), $this->corpus($botId, $locale));
+        $texts = ['all' => $question];
+        $fragments = array_values(array_filter(array_map('trim', preg_split('/\r?\n/', $question) ?: []), fn (string $f): bool => $f !== ''));
+        if (count($fragments) > 1) {
+            foreach ($fragments as $i => $fragment) {
+                $texts[$i + 1] = $fragment;
+            }
+        }
+
+        $questions = $eligible->pluck('question')->map(fn ($q): string => (string) $q)->all();
+        $corpus = $this->corpus($botId, $locale);
         $best = null;
-        foreach ($eligible as $i => $correction) {
-            // Mayor parecido; en empate, la del tema exacto y después la más reciente.
-            $key = [$scores[$i], $correction->topic_line !== null ? 1 : 0, (int) $correction->getKey()];
-            if ($best === null || $key > $best['key']) {
-                $best = ['key' => $key, 'correction' => $correction, 'score' => $scores[$i]];
+        foreach ($texts as $fragment => $text) {
+            $scores = $this->ranker->questionSimilarity($text, $questions, $corpus);
+            foreach ($eligible as $i => $correction) {
+                // Mayor parecido; en empate, la del tema exacto, la más reciente y el texto completo.
+                $key = [$scores[$i], $correction->topic_line !== null ? 1 : 0, (int) $correction->getKey(), $fragment === 'all' ? 1 : 0];
+                if ($best === null || $key > $best['key']) {
+                    $best = ['key' => $key, 'correction' => $correction, 'score' => $scores[$i], 'fragment' => $fragment];
+                }
             }
         }
         $threshold = (float) config('crm.knowledge.corrections.threshold', 0.6);
@@ -108,7 +125,26 @@ final class AdvisorCorrections
             'score' => $best['score'],
             'threshold' => $threshold,
             'line' => $line,
+            'fragment' => $best['fragment'],
+            'language' => $this->languageOf($best['correction']),
         ];
+    }
+
+    /**
+     * Idioma de una corrección: ante todo, el de su propio texto (pregunta y respuesta, con el
+     * detector de idioma); la conversación de «Probar asesor» donde se aprobó solo desempata o
+     * suple cuando el texto no da señal (y puede no existir ya).
+     */
+    public function languageOf(AdvisorCorrection $correction): ?string
+    {
+        $detected = TextLanguage::detect($correction->question.' '.$correction->answer);
+        if ($detected !== null) {
+            return $detected;
+        }
+        $feedback = $correction->feedback_id !== null ? AdvisorFeedback::query()->find($correction->feedback_id) : null;
+        $language = $feedback !== null ? Conversation::query()->find($feedback->conversation_id)?->language : null;
+
+        return in_array($language, ['es', 'en'], true) ? $language : null;
     }
 
     /**

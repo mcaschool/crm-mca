@@ -84,18 +84,18 @@ it('«Esta es la respuesta correcta» (por defecto) guarda la corrección con pr
         ->and($c->answer)->toContain(ACR_LINK)
         ->and(AdvisorFeedback::query()->sole()->comment)->toContain('se pueden iniciar cuando quieras');
 
-    // Pregunta EQUIVALENTE en el mismo tema: la corrección va como PRIMER bloque del prompt.
-    $fake->willReturn(json_encode(['reply' => 'Puedes empezar cuando quieras: '.ACR_LINK.' .', 'action' => 'answer'], JSON_UNESCAPED_SLASHES));
+    // Pregunta EQUIVALENTE en el mismo tema: la respuesta aprobada sale LITERALMENTE (datos,
+    // condiciones y enlaces intactos), sin llamar a la IA.
+    $calls = count($fake->calls);
     $chat->set('draft', '¿Cuándo empiezan?')->call('send');
-    $prompt = end($fake->calls)['messages'][0]['content'];
-    expect($prompt)->toStartWith('RESPUESTA APROBADA POR EL EQUIPO')->toContain('Pregunta de referencia: ¿Cuáles son las próximas fechas de inicio?')
-        ->toContain('Síguela fielmente en su contenido');
     $msg = acrLastReply();
-    // LinkGuard (búsqueda precisa) acepta el enlace de la respuesta aprobada aunque no esté en el conocimiento.
-    expect($msg->content)->toContain(ACR_LINK)
+    expect(count($fake->calls))->toBe($calls)
+        ->and($msg->content)->toBe($c->answer)
+        ->and($msg->meta['action'])->toBe('approved')
         ->and($msg->meta['correction'])->toMatchArray(['id' => $c->id, 'score' => 1.0])
-        ->and($msg->meta['correction_check'])->toMatchArray(['applied' => true, 'line' => 'diplomas_avanzados']);
-    $chat->assertSee('Respuesta aprobada')->assertSee('aplicada');
+        ->and($msg->meta['correction_check'])->toMatchArray(['applied' => true, 'line' => 'diplomas_avanzados', 'verbatim' => true])
+        ->and((string) json_encode($msg->meta, JSON_UNESCAPED_UNICODE))->not->toContain('se pueden iniciar');   // la traza no copia el texto
+    $chat->assertSee('Respuesta aprobada')->assertSee('aplicada')->assertSee('¿Cuáles son las próximas fechas de inicio?');
 });
 
 it('«Solo comentario» queda como nota; pasar a comentario o a «Correcta» retira la corrección', function () {
@@ -221,7 +221,8 @@ it('las correcciones también valen para un asesor con búsqueda clásica', func
     acrCorrection($bot, '¿En cuántas cuotas puedo pagar?', null, 'Hasta en 3 pagos.');
     acrChat($token)->set('draft', 'en cuantos pagos')->call('send');
 
-    expect(end($fake->calls)['messages'][0]['content'])->toStartWith('RESPUESTA APROBADA POR EL EQUIPO')->toContain('Hasta en 3 pagos.');
+    // También literal y sin IA con la búsqueda clásica.
+    expect($fake->calls)->toHaveCount(0)->and(acrLastReply()->content)->toBe('Hasta en 3 pagos.');
 });
 
 it('panel «Correcciones aprendidas»: lista, edita, desactiva y elimina; solo administración y solo de ESTE asesor', function () {

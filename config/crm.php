@@ -296,6 +296,17 @@ return [
         'message_limit' => (int) env('CRM_CELIA_MESSAGE_LIMIT', 15),
         // Longitud maxima de la respuesta (caracteres).
         'max_reply_chars' => (int) env('CRM_CELIA_MAX_REPLY_CHARS', 900),
+        // Respuestas de CATÁLOGO (se construyen sin IA): límite seguro por canal, con margen sobre
+        // el del proveedor (Messenger 2000, Instagram 1000, WhatsApp 4096). Si la lista no cabe,
+        // se responde la versión compacta (cantidad + enlace), nunca una lista cortada.
+        'catalog_max_chars' => [
+            'messenger' => 1900,
+            'instagram' => 950,
+            'whatsapp' => 4000,
+            'web' => 1500,
+            'preview' => 1500,
+            'default' => 1500,
+        ],
         // La carpeta de conocimiento es el disco 'knowledge' (storage/app/knowledge),
         // definido en config/filesystems.php. El panel "Sincronizar" la reprocesa.
         // Cuantas secciones de KB (por relevancia) se envian al modelo (control de costo).

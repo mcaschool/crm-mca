@@ -176,6 +176,9 @@ return [
         // Mensajes seguidos de la persona (sin respuesta entre ellos) que se atienden juntos en una
         // sola respuesta del asesor. 1 = responder solo al último.
         'group_max_messages' => (int) env('SOCIAL_ADVISOR_GROUP_MAX_MESSAGES', 5),
+        // Dos respuestas «no está en mis fuentes» seguidas dentro de esta ventana (minutos) pasan la
+        // conversación a una persona; la primera deja al asesor activo.
+        'unresolved_window_minutes' => (int) env('SOCIAL_ADVISOR_UNRESOLVED_WINDOW_MINUTES', 30),
     ],
 
     /*

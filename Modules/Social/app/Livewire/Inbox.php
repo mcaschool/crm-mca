@@ -199,8 +199,9 @@ class Inbox extends Component
     public function returnToAdvisor(SocialAutomationService $automation): void
     {
         $conversation = $this->automatable();
-        if ($conversation !== null && $conversation->channel?->advisor_enabled) {
-            $automation->returnToAdvisor($conversation, auth()->user());
+        if ($conversation !== null && $conversation->channel?->advisor_enabled
+            && ! $automation->returnToAdvisor($conversation, auth()->user())) {
+            $this->addError('reactivate', __('El asesor está terminando un turno anterior en esta conversación. Vuelve a intentarlo en unos segundos.'));
         }
     }
 

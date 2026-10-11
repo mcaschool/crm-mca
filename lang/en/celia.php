@@ -24,4 +24,16 @@ return [
     'default_role' => "the institution's virtual assistant",
     'limit_reached_custom' => "We've talked quite a bit and I don't want to keep you waiting. If you need more detail, the institution's team can help you.",
     'ai_unavailable_custom' => 'I cannot answer in detail right now. Please try again in a few minutes.',
+
+    // Catalog (listing questions): built from the active programs assigned to the advisor.
+    'catalog_list' => 'These are the :count available :line:',
+    'catalog_list_one' => 'This is the available :line program:',
+    'catalog_link' => 'You can see them all here: :url',
+    'catalog_link_one' => 'More information here: :url',
+    'catalog_list_closing' => 'Are you interested in any of them?',
+    'catalog_compact' => 'We have :count available :line.',
+    'catalog_compact_closing' => 'Tell me which one interests you and I will give you the details.',
+    'catalog_summary_intro' => 'These are our available academic lines:',
+    'catalog_summary_count' => '{1} :count program|[2,*] :count programs',
+    'catalog_summary_question' => 'Which one would you like to explore?',
 ];

@@ -192,6 +192,55 @@ final class KnowledgeText
         return $map;
     }
 
+    /**
+     * Corrige ERRATAS de un texto contra un vocabulario conocido: una palabra de 5 o más letras que
+     * no está en el vocabulario ni es una palabra vacía se sustituye por la conocida a distancia de
+     * edición 1 («tuenen» → «tienen», «disponibel» → «disponible»). Determinista: ante varias
+     * candidatas gana la primera en orden alfabético. Devuelve las palabras normalizadas.
+     *
+     * @param  array<string, true>  $vocabulary  palabras normalizadas conocidas
+     */
+    public static function correctTypos(string $text, array $vocabulary): string
+    {
+        $stop = self::stopwords();
+        $known = $vocabulary + $stop;
+        $out = [];
+        foreach (self::words($text) as $w) {
+            if (strlen($w) >= 5 && ! isset($known[$w])) {
+                $len = strlen($w);
+                $best = null;
+                foreach ($known as $candidate => $_) {
+                    $candidate = (string) $candidate;
+                    if (abs(strlen($candidate) - $len) <= 1 && levenshtein($w, $candidate) === 1 && ($best === null || strcmp($candidate, $best) < 0)) {
+                        $best = $candidate;
+                    }
+                }
+                $w = $best ?? $w;
+            }
+            $out[] = $w;
+        }
+
+        return implode(' ', $out);
+    }
+
+    /**
+     * Vocabulario normalizado (palabras únicas) de unos textos, para corregir erratas.
+     *
+     * @param  list<string>  $texts
+     * @return array<string, true>
+     */
+    public static function vocabulary(array $texts): array
+    {
+        $vocabulary = [];
+        foreach ($texts as $text) {
+            foreach (self::words($text) as $w) {
+                $vocabulary[$w] = true;
+            }
+        }
+
+        return $vocabulary;
+    }
+
     /** ¿Pregunta qué ES algo o pide información general? («qué es…», «qué son…», «información de…», «what is…») */
     public static function asksDefinition(string $question): bool
     {

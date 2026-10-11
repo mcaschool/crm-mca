@@ -199,6 +199,7 @@
                         @elseif ($autoChannel->advisor_enabled)
                             <button type="button" class="sb-auto__btn" wire:click="returnToAdvisor" data-testid="reactivate"
                                     wire:confirm="{{ __('¿Reactivar el asesor inteligente en esta conversación? Solo responderá a los mensajes nuevos, no a los anteriores.') }}">{{ __('Reactivar el asesor') }}</button>
+                            @error('reactivate') <span class="sb-attach__err" data-testid="reactivate-error">{{ $message }}</span> @enderror
                         @endif
                     </span>
                 @endif
@@ -218,6 +219,11 @@
                     @endif
                     @if ($lastOutbound !== null)
                         <span data-testid="last-sender">{{ __('Último mensaje enviado por') }} {{ $lastOutbound->sender_type === 'bot' ? __('la IA') : __('una persona') }}</span>
+                    @endif
+                    {{-- Nota INTERNA (nunca la ve el contacto), derivada de la traza: el asesor respondió sin
+                         tener el dato en sus fuentes y sigue atendiendo; un segundo seguido lo transfiere. --}}
+                    @if ($autoState === 'bot' && $lastOutbound?->sender_type === 'bot' && is_array($lastOutbound->ai_meta) && ($lastOutbound->ai_meta['kind'] ?? null) === 'unresolved' && ! isset($lastOutbound->ai_meta['streak_reset']))
+                        <span data-testid="unresolved-note"><b>{{ __('Consulta fuera de sus fuentes') }}</b> · {{ __('el asesor sigue atendiendo; si vuelve a ocurrir, pasará la conversación a una persona.') }}</span>
                     @endif
                 </div>
             @endif

@@ -80,6 +80,14 @@ class Library extends Component
     /** @var array<int, string> */
     public array $viewingSections = [];
 
+    /**
+     * «Enlace oficial» de la fuente (knowledge_sources.url): la página pública que el asesor
+     * comparte en las respuestas de catálogo de su línea. Solo https; vacío = sin enlace.
+     */
+    public string $viewingUrl = '';
+
+    public bool $canEditUrl = false;
+
     // Modal de borrado.
     public ?int $deletingId = null;
 
@@ -270,11 +278,41 @@ class Library extends Component
         $this->viewingName = (string) $source->name;
         $this->viewingHtml = Str::markdown($content, ['html_input' => 'strip', 'allow_unsafe_links' => false]);
         $this->viewingSections = $this->extractSections($content);
+        $this->viewingUrl = (string) $source->url;
+        $this->canEditUrl = (bool) auth()->user()?->can('update', $source);
+        $this->resetErrorBag('viewingUrl');
+    }
+
+    /**
+     * Guarda el «Enlace oficial» de la fuente abierta. Solo URLs https (o vacío para quitarlo);
+     * la re-sincronización de la biblioteca no lo pisa (no toca knowledge_sources.url).
+     */
+    public function saveUrl(): void
+    {
+        if ($this->viewingId === null) {
+            return;
+        }
+        $source = KnowledgeSource::query()->findOrFail($this->viewingId);
+        $this->authorize('update', $source);
+
+        $this->viewingUrl = trim($this->viewingUrl);
+        $this->validate(
+            ['viewingUrl' => ['nullable', 'string', 'max:500', 'url:https']],
+            [
+                'viewingUrl.url' => __('El enlace oficial debe ser una dirección https:// válida.'),
+                'viewingUrl.max' => __('El enlace oficial es demasiado largo.'),
+            ],
+        );
+
+        $source->url = $this->viewingUrl !== '' ? $this->viewingUrl : null;
+        $source->save();
+        session()->flash('status', __('Enlace oficial guardado.'));
     }
 
     public function closeDrawer(): void
     {
-        $this->reset(['viewingId', 'viewingName', 'viewingHtml', 'viewingSections']);
+        $this->reset(['viewingId', 'viewingName', 'viewingHtml', 'viewingSections', 'viewingUrl', 'canEditUrl']);
+        $this->resetErrorBag('viewingUrl');
     }
 
     public function render(): View

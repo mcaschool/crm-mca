@@ -106,6 +106,13 @@ class AdvisorTurnService
     }
 
     /** ¿Ya hay una decisión (respuesta u omisión) para este mensaje externo? */
+    /** Recibos de CORTE (omitidos para siempre): mensajes recibidos antes de reactivar una conversación o de activar/reasignar el asesor de la cuenta. */
+    public const RECEIPT_BEFORE_REACTIVATION = 'before_reactivation';
+
+    public const RECEIPT_BEFORE_ACTIVATION = 'before_activation';
+
+    public const RECEIPT_CUTOFFS = [self::RECEIPT_BEFORE_REACTIVATION, self::RECEIPT_BEFORE_ACTIVATION];
+
     public function alreadyHandled(int $institutionId, string $channel, string $externalMessageId): bool
     {
         return $this->tenancy->runFor($institutionId, fn (): bool => AdvisorMessageReceipt::query()
@@ -128,6 +135,55 @@ class AdvisorTurnService
 
             return true;
         });
+    }
+
+    /**
+     * CORTE (reactivación de una conversación o activación/reasignación del asesor de la cuenta; lo
+     * establece Social\Services\AdvisorCutoff): los mensajes externos indicados, recibidos antes,
+     * quedan omitidos para siempre con el mismo índice único de idempotencia. Los que aún no tenían
+     * decisión reciben un recibo $status; los que ya estaban omitidos ('skipped') pasan a $status
+     * para que tampoco se agrupen con mensajes posteriores. Los ya respondidos o en curso ('done',
+     * 'processing') y los de otro corte no se tocan. Va dentro de la transacción del corte.
+     *
+     * @param  list<string>  $externalMessageIds
+     */
+    public function recordCutoff(int $institutionId, string $channel, array $externalMessageIds, string $status): void
+    {
+        if (! in_array($status, self::RECEIPT_CUTOFFS, true)) {
+            throw new InvalidArgumentException("Estado de corte no válido: {$status}");
+        }
+        $ids = array_values(array_unique(array_filter($externalMessageIds, fn (string $id): bool => $id !== '')));
+        if ($ids === []) {
+            return;
+        }
+        $this->tenancy->runFor($institutionId, function () use ($institutionId, $channel, $ids, $status): void {
+            $now = now();
+            foreach (array_chunk($ids, 500) as $chunk) {
+                AdvisorMessageReceipt::query()->insertOrIgnore(array_map(fn (string $id): array => [
+                    'institution_id' => $institutionId, 'channel' => $channel, 'external_message_id' => $id,
+                    'status' => $status, 'created_at' => $now, 'updated_at' => $now,
+                ], $chunk));
+                AdvisorMessageReceipt::query()->where('channel', $channel)->whereIn('external_message_id', $chunk)
+                    ->where('status', 'skipped')->update(['status' => $status, 'updated_at' => $now]);
+            }
+        });
+    }
+
+    /**
+     * De los mensajes externos indicados, los que quedaron ANTES de un corte (reactivación o activación).
+     *
+     * @param  list<string>  $externalMessageIds
+     * @return list<string>
+     */
+    public function cutOffAmong(int $institutionId, string $channel, array $externalMessageIds): array
+    {
+        if ($externalMessageIds === []) {
+            return [];
+        }
+
+        return $this->tenancy->runFor($institutionId, fn (): array => AdvisorMessageReceipt::query()
+            ->where('channel', $channel)->whereIn('external_message_id', $externalMessageIds)
+            ->whereIn('status', self::RECEIPT_CUTOFFS)->pluck('external_message_id')->map(fn ($id): string => (string) $id)->all());
     }
 
     /** Traspasa la conversación a una persona: desde aquí el asesor no responde en paralelo. */

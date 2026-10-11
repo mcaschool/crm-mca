@@ -195,7 +195,7 @@ it('filtro de enlaces: solo quedan las URL que están textualmente en lo recuper
     expect(app(CeliaService::class)->handle(pkrConversation($classic), null, 'pagos', 'es')['reply'])->toContain('https://inventado.example/x');
 });
 
-it('el diagnóstico de la búsqueda solo se guarda en la conversación de prueba, nunca en un canal real', function () {
+it('el diagnóstico completo de la búsqueda solo se guarda en la prueba; en un canal real, una traza compacta sin las palabras buscadas', function () {
     $bot = pkrBot(Bot::RETRIEVAL_PRECISE);
     pkrAi($bot, 'Hasta en 3 pagos.');
 
@@ -205,7 +205,9 @@ it('el diagnóstico de la búsqueda solo se guarda en la conversación de prueba
     $metaOf = fn (Conversation $c) => Message::query()->where('conversation_id', $c->id)->where('sender_type', 'celia')->first()->meta;
     expect($metaOf($preview)['retrieval'])->toHaveKeys(['terms', 'line', 'top'])
         ->and($metaOf($preview)['retrieval']['top'][0]['code'])->toBe('DA-INFORMACION-GENERAL')
-        ->and($metaOf($web))->not->toHaveKey('retrieval');
+        ->and($metaOf($web)['retrieval'])->toHaveKeys(['line', 'top'])
+        ->and($metaOf($web)['retrieval'])->not->toHaveKey('terms')
+        ->and($metaOf($web)['retrieval']['top'][0])->toHaveKeys(['code', 'title', 'score'])->not->toHaveKey('body');
 });
 
 it('el límite de respuestas de IA es por asesor; sin valor propio se usa el general', function () {
