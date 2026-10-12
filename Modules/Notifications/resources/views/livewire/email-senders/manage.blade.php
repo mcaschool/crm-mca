@@ -98,7 +98,7 @@
                         <div>
                             <div style="font-weight:700;font-size:15px;color:var(--ink)">{{ $sender->name }}
                                 @if ($sender->status !== 'active')<span class="mca-help" style="font-weight:600">· inactivo</span>@endif
-                                @if ($sender->agenda_default)<span class="mca-help" style="font-weight:600;color:var(--mca-blue, #1E5AA8)">· remitente de la Agenda</span>@endif
+                                @if ($sender->agenda_default)<span class="mca-help" style="font-weight:600;color:var(--mca-blue, #1E5AA8)">· remitente del Calendario</span>@endif
                             </div>
                             <div class="mca-help" style="margin-top:2px;display:flex;align-items:center;gap:6px"><x-ui.icon name="mail" class="ic" style="width:13px;height:13px" /> {{ $sender->from_address }}</div>
                             <div class="mca-help" style="margin-top:4px">
@@ -115,7 +115,7 @@
                         </div>
                         <div style="display:flex;gap:8px;flex-wrap:wrap">
                             @if ($sender->status === 'active' && ! $sender->agenda_default)
-                                <button type="button" wire:click="useForAgenda({{ $sender->id }})" class="btn btn-ghost btn-sm"><x-ui.icon name="calendar" class="ic" style="width:14px;height:14px" /> Usar para la Agenda</button>
+                                <button type="button" wire:click="useForAgenda({{ $sender->id }})" class="btn btn-ghost btn-sm"><x-ui.icon name="calendar" class="ic" style="width:14px;height:14px" /> Usar para el Calendario</button>
                             @endif
                             <button type="button" wire:click="edit({{ $sender->id }})" class="btn btn-ghost btn-sm"><x-ui.icon name="pencil" class="ic" style="width:14px;height:14px" /> Editar</button>
                             <button type="button" wire:click="delete({{ $sender->id }})" wire:confirm="¿Eliminar el remitente “{{ $sender->name }}”?" class="btn btn-ghost btn-sm"><x-ui.icon name="trash" class="ic" style="width:14px;height:14px" /> Eliminar</button>

@@ -33,7 +33,7 @@
             @if ($canCreate)
                 <a href="{{ route('crm.agenda.create', ['lead' => $lead->id]) }}" class="ghost solid" style="padding:6px 10px;font-size:12.5px"><x-ui.icon name="plus" class="i14" /> {{ __('Programar actividad') }}</a>
             @endif
-            <a href="{{ route('crm.agenda.index') }}" class="ghost" style="padding:6px 10px;font-size:12.5px"><x-ui.icon name="calendar" class="i14" /> {{ __('Abrir Agenda') }}</a>
+            <a href="{{ route('crm.agenda.index') }}" class="ghost" style="padding:6px 10px;font-size:12.5px"><x-ui.icon name="calendar" class="i14" /> {{ __('Abrir Calendario') }}</a>
         </div>
     @endif
 </div>

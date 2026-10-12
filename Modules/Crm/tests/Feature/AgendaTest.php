@@ -658,7 +658,7 @@ it('el inicio muestra los 6 indicadores enlazados (propios del asesor) y «Mi ag
 
 // 18 · Sin selector de línea ------------------------------------------------------------------
 
-it('el menú ya no muestra el selector «Microcredenciales · Línea activa» y ofrece Agenda en Captación', function () {
+it('el menú ya no muestra el selector «Microcredenciales · Línea activa» y ofrece Calendario en Captación', function () {
     $i = agInst();
     agCtx($i);
     $admin = agUser($i, 'admin', null);
@@ -667,5 +667,32 @@ it('el menú ya no muestra el selector «Microcredenciales · Línea activa» y 
         ->assertDontSee('Línea activa')
         ->assertDontSee('mca-switcher')
         ->assertSee(route('crm.agenda.index'), false)
-        ->assertSeeInOrder(['CAPTACIÓN', 'Contactos', 'Agenda']);
+        ->assertSeeInOrder(['CAPTACIÓN', 'Contactos', 'Calendario']);
+});
+
+// 19 · Acceso directo desde el calendario ------------------------------------------------------
+
+it('cada actividad del calendario abre su detalle y muestra «Unirse»/«Abrir WhatsApp» solo con enlace aplicable', function () {
+    $i = agInst();
+    agCtx($i);
+    $u = agUser($i);
+    agProfile($u, ['whatsapp_number' => '+57 300 123 4567']);
+    $slot = fn (int $h) => ['starts_at' => agAt("2026-10-19 {$h}:00"), 'ends_at' => agAt("2026-10-19 {$h}:30")];
+    $meet = agCreate($u, ['title' => 'Con Meet'] + $slot(8));
+    $wa = agCreate($u, ['title' => 'Con WhatsApp', 'medium' => 'whatsapp', 'type' => 'call'] + $slot(9));
+    $phone = agCreate($u, ['title' => 'Por teléfono', 'medium' => 'phone', 'type' => 'call'] + $slot(10));
+    $cancelled = agCreate($u, ['title' => 'Cancelada con Meet'] + $slot(11));
+    app(ActivityService::class)->cancel($cancelled, $u);
+
+    foreach (['week', 'list'] as $view) {
+        $html = Livewire::actingAs($u)->test(Index::class, ['view' => $view])->html();
+        foreach ([$meet, $wa, $phone, $cancelled] as $a) {
+            expect($html)->toContain('href="'.route('crm.agenda.show', $a).'"'); // el detalle sigue abriéndose
+        }
+        expect($html)->toContain('href="https://meet.google.com/abc-defg-hij" target="_blank" rel="noopener noreferrer"')
+            ->and(substr_count($html, 'https://meet.google.com/abc-defg-hij'))->toBe(1) // la cancelada no ofrece acceso
+            ->and($html)->toContain(e((string) $wa->joinUrl()))
+            ->and($html)->toContain('Abrir WhatsApp')
+            ->and(substr_count($html, 'class="ag-join'))->toBe(2); // ni teléfono ni cancelada
+    }
 });

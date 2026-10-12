@@ -4,7 +4,7 @@
 
     <div style="max-width:860px">
         <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <a href="{{ route('crm.agenda.index') }}" class="ghost"><x-ui.icon name="chevron-left" class="i15" /> {{ __('Agenda') }}</a>
+            <a href="{{ route('crm.agenda.index') }}" class="ghost"><x-ui.icon name="chevron-left" class="i15" /> {{ __('Calendario') }}</a>
             @if ($canPickUser)
                 <div style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)">
                     {{ __('Perfil de') }}

@@ -79,10 +79,10 @@
                         @endif
                         @forelse ($items as $a)
                             @php $s = $a->starts_at->copy()->setTimezone($tz); $e = $a->ends_at->copy()->setTimezone($tz); @endphp
-                            <a href="{{ route('crm.agenda.show', $a) }}" class="ag-row" wire:key="row-{{ $a->id }}">
+                            <div class="ag-row" wire:key="row-{{ $a->id }}">
                                 <div class="when">{{ $s->format('H:i') }}<small>{{ __('hasta') }} {{ $e->format('H:i') }}</small></div>
                                 <div class="what">
-                                    <div class="t">{{ $a->title }}</div>
+                                    <a href="{{ route('crm.agenda.show', $a) }}" class="t ag-open">{{ $a->title }}</a>
                                     <div class="s">
                                         <span><x-ui.icon name="user" class="i12" /> {{ $a->relatedName() ?? __('Sin lead/contacto') }}</span>
                                         <span><x-ui.icon name="user-cog" class="i12" /> {{ $a->assignee?->name ?? '—' }}</span>
@@ -90,8 +90,11 @@
                                         <span>{{ $a->type->label() }}</span>
                                     </div>
                                 </div>
-                                <div class="st"><span class="ag-badge {{ $a->status->value }}">{{ $a->status->label() }}</span></div>
-                            </a>
+                                <div class="st">
+                                    <span class="ag-badge {{ $a->status->value }}">{{ $a->status->label() }}</span>
+                                    @include('crm::livewire.agenda.partials.join', ['a' => $a, 'compact' => false])
+                                </div>
+                            </div>
                         @empty
                             <div class="empty">{{ __('No hay actividades este día.') }}</div>
                         @endforelse

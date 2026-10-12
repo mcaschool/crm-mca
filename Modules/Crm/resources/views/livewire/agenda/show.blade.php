@@ -11,7 +11,7 @@
 
     <div style="max-width:1120px">
         <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap">
-            <a href="{{ route('crm.agenda.index', ['date' => $start->toDateString()]) }}" class="ghost"><x-ui.icon name="chevron-left" class="i15" /> {{ __('Agenda') }}</a>
+            <a href="{{ route('crm.agenda.index', ['date' => $start->toDateString()]) }}" class="ghost"><x-ui.icon name="chevron-left" class="i15" /> {{ __('Calendario') }}</a>
         </div>
 
         @if ($notice !== '')

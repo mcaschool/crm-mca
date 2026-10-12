@@ -37,6 +37,18 @@
 .crm-page .ag-item.st-cancelled .h{color:#6B7C93}
 .crm-page .ag-item.st-no_show{background:#FDF6E7;border-color:#F2DFB0;border-left-color:#B7791F}
 .crm-page .ag-item.st-no_show .h{color:#B7791F}
+/* Toda la tarjeta/fila abre el detalle (enlace «estirado» del título); el botón de acceso queda por encima. */
+.crm-page .ag-item,.crm-page .ag-row{position:relative}
+.crm-page .ag-item .t.ag-open,.crm-page .ag-row .t.ag-open{display:block;color:inherit;text-decoration:none}
+.crm-page .ag-open::after{content:"";position:absolute;inset:0;border-radius:inherit}
+.crm-page .ag-open:focus-visible{outline:none}
+.crm-page .ag-open:focus-visible::after{outline:2px solid var(--blue-3);outline-offset:1px}
+.crm-page .ag-join{position:relative;z-index:1;display:inline-flex;align-items:center;gap:4px;margin-top:5px;padding:3px 8px;border-radius:999px;background:var(--blue);color:#fff;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;line-height:1.3}
+.crm-page .ag-join:hover{background:var(--blue-deep)}
+.crm-page .ag-join .ic{color:#fff}
+.crm-page .ag-join.only-ic{padding:3px 5px;margin-top:3px}
+.crm-page .ag-row .st{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.crm-page .ag-row .st .ag-join{margin-top:0}
 .crm-page .ag-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:999px;padding:2px 8px;background:#E8F1FD;color:#1E5AA8;white-space:nowrap}
 .crm-page .ag-badge.completed{background:#E3F5EA;color:#1E8E5A}
 .crm-page .ag-badge.cancelled{background:#EEF1F5;color:#6B7C93}
@@ -135,7 +147,7 @@
   .crm-page .ag-cell{min-height:0;border-right:none}
   .crm-page .ag-cell.out,.crm-page .ag-cell.emptyday{display:none}
   .crm-page .ag-row{grid-template-columns:80px minmax(0,1fr)}
-  .crm-page .ag-row .st{grid-column:2}
+  .crm-page .ag-row .st{grid-column:2;justify-content:flex-start}
   .crm-page .ag-form{grid-template-columns:1fr;padding:16px}
   .crm-page .ag-kv{grid-template-columns:1fr;gap:2px}
   .crm-page .ag-kv .v{margin-bottom:8px}

@@ -168,7 +168,7 @@ class Manage extends Component
             $sender->forceFill(['agenda_default' => true])->save();
         });
 
-        session()->flash('status', "La Agenda enviará sus correos desde {$sender->from_address}.");
+        session()->flash('status', "El Calendario enviará sus correos desde {$sender->from_address}.");
     }
 
     /** Envia un correo de prueba por el SMTP del remitente y sella el resultado. */

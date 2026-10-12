@@ -201,7 +201,7 @@
 
                 {{-- Agenda --}}
                 <div class="ic-card">
-                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="calendar" class="i15" /></span><h2>{{ __('Agenda') }}</h2></div>
+                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="calendar" class="i15" /></span><h2>{{ __('Calendario') }}</h2></div>
                     <div class="ic-body" style="padding:12px 18px 16px"><livewire:crm.agenda.lead-activities :lead-id="$lead->id" :key="'lead-agenda-ic-'.$lead->id" /></div>
                 </div>
 
@@ -504,7 +504,7 @@
 
                     {{-- Agenda --}}
                     <div class="block">
-                        <h3><x-ui.icon name="calendar" class="i14" /> {{ __('Agenda') }}</h3>
+                        <h3><x-ui.icon name="calendar" class="i14" /> {{ __('Calendario') }}</h3>
                         <livewire:crm.agenda.lead-activities :lead-id="$lead->id" :key="'lead-agenda-'.$lead->id" />
                     </div>
 

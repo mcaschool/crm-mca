@@ -56,7 +56,7 @@
             @endcan
             @can('viewAny', \Modules\Crm\Models\Activity::class)
                 <a href="{{ route('crm.agenda.index') }}" class="mca-nav-item {{ request()->routeIs('crm.agenda.*') ? 'on' : '' }}">
-                    <x-ui.icon name="calendar" /> {{ __('Agenda') }}
+                    <x-ui.icon name="calendar" /> {{ __('Calendario') }}
                 </a>
             @endcan
             @if (auth()->user()?->canSendEmail())
