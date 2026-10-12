@@ -91,7 +91,7 @@ it('sin marca: usa el único activo; con varios sin marca o con la marca inactiv
     $this->artisan('crm:agenda-reminders')->assertSuccessful();
     $row = ActivityReminder::query()->where('activity_id', $a->id)->where('recipient_type', 'guest')->sole();
     expect($row->status)->toBe('pending')->and($row->attempts)->toBe(1)
-        ->and($row->last_error)->toBe('Hay varios remitentes activos y ninguno está marcado para la Agenda.');
+        ->and($row->last_error)->toBe('Hay varios remitentes activos y ninguno está marcado para el Calendario.');
 
     // Se marca uno explícitamente → el reintento sale por él.
     Livewire::actingAs(snAdmin($i))->test(Manage::class)->call('useForAgenda', $only->id);

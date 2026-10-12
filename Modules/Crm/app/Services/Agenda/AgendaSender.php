@@ -29,13 +29,13 @@ class AgendaSender
         $sender = $active()->where('agenda_default', true)->first();
         if ($sender === null) {
             if (EmailSender::query()->where('institution_id', $institutionId)->where('agenda_default', true)->exists()) {
-                return $this->fail('El remitente marcado para la Agenda está inactivo.');
+                return $this->fail('El remitente marcado para el Calendario está inactivo.');
             }
             $candidates = $active()->limit(2)->get();
             if ($candidates->count() !== 1) {
                 return $this->fail($candidates->isEmpty()
                     ? 'La institución no tiene ningún remitente activo.'
-                    : 'Hay varios remitentes activos y ninguno está marcado para la Agenda.');
+                    : 'Hay varios remitentes activos y ninguno está marcado para el Calendario.');
             }
             $sender = $candidates->first();
         }
@@ -44,7 +44,7 @@ class AgendaSender
             || (string) $sender->secret('host', '') === ''
             || (string) $sender->secret('username', '') === ''
             || (string) $sender->secret('password', '') === '') {
-            return $this->fail('El remitente de la Agenda no tiene la configuración SMTP completa.');
+            return $this->fail('El remitente del Calendario no tiene la configuración SMTP completa.');
         }
 
         return $sender;
