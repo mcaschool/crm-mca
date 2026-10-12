@@ -6,6 +6,7 @@ namespace Modules\Ai\Services;
 
 use Illuminate\Support\Str;
 use Modules\Ai\Models\KnowledgeSource;
+use Modules\Ai\Support\KnowledgeTaxonomy;
 use Modules\Institutions\Models\Bot;
 
 /**
@@ -29,9 +30,14 @@ class KnowledgeRetriever
      * bloque (trazabilidad interna de la respuesta; nunca se envían al usuario).
      *
      * El modo lo decide CADA asesor (bots.knowledge_retrieval): «classic» es la búsqueda de
-     * siempre (Celia, sin cambios); «precise» usa PreciseKnowledgeRanker con el historial del
-     * usuario ($history: mensajes anteriores, del más reciente al más antiguo) para el tema activo
-     * y devuelve además un diagnóstico (solo para el modo de prueba; nunca viaja al usuario).
+     * siempre (Celia); «precise» usa PreciseKnowledgeRanker con el historial del usuario ($history:
+     * mensajes anteriores, del más reciente al más antiguo) para el tema activo y devuelve además un
+     * diagnóstico (solo para el modo de prueba; nunca viaja al usuario).
+     *
+     * En la clásica, las fichas de programa («programa_academico») solo compiten si la pregunta (o,
+     * en una continuación breve, el contexto reciente de $history) identifica UN programa: entonces
+     * solo la suya; si no identifica ninguno o es ambigua, ninguna (ProgramMentions::scope). Las bases
+     * generales compiten siempre. Una ficha irrelevante nunca llega a los fragmentos del modelo.
      *
      * @param  list<string>  $history
      * @return array{text: string, sources: array<int, string>, diagnostics?: array<string, mixed>}
@@ -60,9 +66,18 @@ class KnowledgeRetriever
             return ['text' => '', 'sources' => []];
         }
 
+        // Fichas de programa: solo la del programa identificado (pregunta o contexto), o ninguna.
+        $programs = $sources->filter(fn (KnowledgeSource $s): bool => $s->type === KnowledgeTaxonomy::TYPE_PROGRAM)
+            ->map(fn (KnowledgeSource $s): array => ['code' => (string) $s->code, 'type' => $s->type, 'category' => $s->category, 'content' => (string) $s->translate('content', $locale)])
+            ->values()->all();
+        $allowed = $programs === [] ? null : app(ProgramMentions::class)->scope($programs, $question, $history)['code'];
+
         /** @var array<int, array{title: string, body: string, priority: int, code: string}> $sections */
         $sections = [];
         foreach ($sources as $source) {
+            if ($source->type === KnowledgeTaxonomy::TYPE_PROGRAM && (string) $source->code !== $allowed) {
+                continue;
+            }
             $content = (string) $source->translate('content', $locale);
             foreach ($this->splitSections($content) as $section) {
                 $sections[] = $section + ['priority' => (int) ($source->priority ?? 0), 'code' => (string) $source->code];
@@ -75,10 +90,12 @@ class KnowledgeRetriever
 
         $tokens = $this->tokenize($question);
 
-        // Puntua cada seccion por solape de palabras con la pregunta; desempata por prioridad.
-        usort($sections, function (array $a, array $b) use ($tokens): int {
-            $sa = $this->score($a, $tokens);
-            $sb = $this->score($b, $tokens);
+        // Puntua cada seccion por solape de palabras con la pregunta; desempata por prioridad. Las
+        // secciones de la ficha del programa identificado suman 1 (como la ficha nombrada en la
+        // precisa): una continuación breve («¿cuánto dura?») o solo el código no la pierden por empate.
+        usort($sections, function (array $a, array $b) use ($tokens, $allowed): int {
+            $sa = $this->score($a, $tokens) + ($allowed !== null && $a['code'] === $allowed ? 1 : 0);
+            $sb = $this->score($b, $tokens) + ($allowed !== null && $b['code'] === $allowed ? 1 : 0);
 
             return $sa === $sb ? ($b['priority'] <=> $a['priority']) : ($sb <=> $sa);
         });

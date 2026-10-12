@@ -1198,5 +1198,12 @@
     "El enlace oficial debe ser una dirección https:// válida.": "The official link must be a valid https:// address.",
     "El enlace oficial es demasiado largo.": "The official link is too long.",
     "Enlace oficial guardado.": "Official link saved.",
-    "El asesor está terminando un turno anterior en esta conversación. Vuelve a intentarlo en unos segundos.": "The advisor is finishing a previous turn in this conversation. Please try again in a few seconds."
+    "El asesor está terminando un turno anterior en esta conversación. Vuelve a intentarlo en unos segundos.": "The advisor is finishing a previous turn in this conversation. Please try again in a few seconds.",
+    "fila sin código": "row without code",
+    "código repetido en el Excel": "code repeated in the spreadsheet",
+    "no es una microcredencial (Tipo: «:type»)": "not a microcredential (Type: «:type»)",
+    "faltan campos obligatorios: :fields": "missing required fields: :fields",
+    "el programa :code no existe en el catálogo de esta institución": "program :code does not exist in this institution's catalog",
+    "el programa :code no es de la línea Microcredenciales": "program :code is not in the Microcredentials line",
+    "el programa :code está inactivo: no se crea su ficha": "program :code is inactive: its knowledge sheet is not created"
 }

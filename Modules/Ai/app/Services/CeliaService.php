@@ -165,7 +165,9 @@ class CeliaService
         $approved = $match !== null && $match['applied']
             ? ['question' => (string) $match['correction']->question, 'answer' => (string) $match['correction']->answer]
             : null;
-        $knowledge = $this->knowledge->retrieveWithSources((int) $conversation->bot_id, $message, $locale, null, $precise ? $history : []);
+        // El historial reciente del usuario da el TEMA ACTIVO en ambas búsquedas (en la clásica, el
+        // programa de una pregunta de seguimiento). Solo afecta a la recuperación, no al prompt.
+        $knowledge = $this->knowledge->retrieveWithSources((int) $conversation->bot_id, $message, $locale, null, $history);
         // Prompt del asesor: el global de siempre (Celia) o su identidad e instrucciones propias. En la
         // búsqueda precisa lleva además el índice del catálogo activo (cantidad de programas por línea).
         $prompt = $this->prompts->build($bot ?? new Bot(['uses_legacy_prompt' => true]), $locale, (string) $conversation->channel, $knowledge['text'], $corporate, $approved, $precise ? $this->catalog->promptIndex((int) $conversation->bot_id, $locale) : null);

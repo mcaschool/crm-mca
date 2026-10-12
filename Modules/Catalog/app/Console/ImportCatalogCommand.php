@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Modules\Catalog\Console;
 
 use Illuminate\Console\Command;
+use Modules\Catalog\Console\Concerns\ResolvesCatalogInput;
 use Modules\Catalog\Services\CatalogImporter;
 use Modules\Catalog\Services\ImportReport;
 use Modules\Core\Tenancy\CurrentInstitution;
-use Modules\Institutions\Models\Institution;
 
 /**
  * Importa el catalogo desde el Excel del cliente. Idempotente (upsert por code).
@@ -18,6 +18,8 @@ use Modules\Institutions\Models\Institution;
  */
 class ImportCatalogCommand extends Command
 {
+    use ResolvesCatalogInput;
+
     protected $signature = 'catalog:import {file : Ruta al archivo .xlsx} {--institution= : ID de institucion (opcional si solo hay una)}';
 
     protected $description = 'Importa/actualiza el catalogo de programas desde un Excel (hoja "Catalogo").';
@@ -43,36 +45,6 @@ class ImportCatalogCommand extends Command
         $this->printReport($report);
 
         return self::SUCCESS;
-    }
-
-    private function resolvePath(string $file): ?string
-    {
-        foreach ([$file, base_path($file), storage_path('app/'.$file)] as $candidate) {
-            if (is_file($candidate)) {
-                return $candidate;
-            }
-        }
-
-        return null;
-    }
-
-    private function resolveInstitution(CurrentInstitution $context): ?int
-    {
-        $option = $this->option('institution');
-        if ($option !== null) {
-            return (int) $option;
-        }
-
-        /** @var array<int, int> $ids */
-        $ids = $context->runGlobally(fn () => Institution::query()->pluck('id')->all());
-
-        if (count($ids) === 1) {
-            return (int) $ids[0];
-        }
-
-        $this->error('Hay '.count($ids).' instituciones; especifica --institution=ID.');
-
-        return null;
     }
 
     private function printReport(ImportReport $report): void

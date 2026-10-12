@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Ai\Services;
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Support\KnowledgeTaxonomy;
@@ -22,6 +23,9 @@ use Modules\Catalog\Models\Program;
  * previo con el mismo código (sin duplicados en disco). Después, un único syncLibrary().
  *
  * NO asigna a agentes: quien llama decide (la ficha asigna al agente; Biblioteca no).
+ *
+ * Dos entradas al MISMO pipeline: ingest() (archivos subidos) e ingestDocuments() (documentos
+ * .md generados por un importador, p. ej. MicrocredentialKnowledgeImporter desde el Excel).
  */
 class KnowledgeIngestService
 {
@@ -50,6 +54,50 @@ class KnowledgeIngestService
      */
     public function ingest(array $files, ?array $classification = null): array
     {
+        $documents = [];
+        foreach ($files as $doc) {
+            if ($doc instanceof UploadedFile) {
+                $documents[] = [
+                    'filename' => (string) $doc->getClientOriginalName(),
+                    'size' => (int) $doc->getSize(),
+                    'raw' => fn (): string => (string) file_get_contents((string) $doc->getRealPath()),
+                ];
+            }
+        }
+
+        return $this->process($documents, $classification);
+    }
+
+    /**
+     * Documentos .md GENERADOS (no subidos): mismas validaciones, colocación en
+     * biblioteca/{linea}/, sincronización y clasificación que ingest().
+     *
+     * 'folder' (opcional): subcarpeta dentro de biblioteca/{linea}/ (p. ej. la de la institución
+     * dueña, para que dos instituciones con el mismo código nunca compartan archivo).
+     *
+     * @param  array<int, array{filename: string, content: string, folder?: string}>  $documents
+     * @param  array{type: string, line: string, program_id?: ?int, auto_program?: bool}|null  $classification
+     * @return array{results: array<int, array{file: string, result: string, reason: string, program: ?string}>, codes: array<int, string>}
+     *
+     * @throws InvalidArgumentException si la clasificación no es válida
+     */
+    public function ingestDocuments(array $documents, ?array $classification = null): array
+    {
+        return $this->process(array_map(fn (array $d): array => [
+            'filename' => $d['filename'],
+            'size' => strlen($d['content']),
+            'raw' => fn (): string => $d['content'],
+            'folder' => $d['folder'] ?? null,
+        ], $documents), $classification);
+    }
+
+    /**
+     * @param  array<int, array{filename: string, size: int, raw: callable(): string, folder?: ?string}>  $documents
+     * @param  array{type: string, line: string, program_id?: ?int, auto_program?: bool}|null  $classification
+     * @return array{results: array<int, array{file: string, result: string, reason: string, program: ?string}>, codes: array<int, string>}
+     */
+    private function process(array $documents, ?array $classification): array
+    {
         if ($classification !== null) {
             $classification = $this->validateClassification($classification);
         }
@@ -59,27 +107,24 @@ class KnowledgeIngestService
             : null;
 
         $results = [];
-        /** @var array<int, array{code: string, category: string, filename: string, doc: UploadedFile, program_id: ?int, program: ?string}> $valid */
+        /** @var array<int, array{code: string, category: string, filename: string, folder: ?string, raw: string, program_id: ?int, program: ?string}> $valid */
         $valid = [];
 
-        foreach ($files as $doc) {
-            if (! $doc instanceof UploadedFile) {
-                continue;
-            }
-            $original = (string) $doc->getClientOriginalName();
+        foreach ($documents as $doc) {
+            $original = $doc['filename'];
 
             if (strtolower((string) pathinfo($original, PATHINFO_EXTENSION)) !== 'md') {
                 $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => __('No es un archivo .md.'), 'program' => null];
 
                 continue;
             }
-            if ((int) $doc->getSize() > self::MAX_BYTES) {
+            if ($doc['size'] > self::MAX_BYTES) {
                 $results[] = ['file' => $original, 'result' => 'Rechazado', 'reason' => __('Supera el límite de 512 KB.'), 'program' => null];
 
                 continue;
             }
 
-            $raw = (string) file_get_contents((string) $doc->getRealPath());
+            $raw = ($doc['raw'])();
             $info = $this->sync->inspect($raw, $original);
 
             if (! $info['has_code_meta']) {
@@ -134,7 +179,8 @@ class KnowledgeIngestService
                 'code' => (string) $info['code'],
                 'category' => $category ?? KnowledgeAssignmentService::NO_CATEGORY,
                 'filename' => $this->sanitizeFilename($original),
-                'doc' => $doc,
+                'folder' => isset($doc['folder']) && $doc['folder'] !== '' ? (string) preg_replace('/[^A-Za-z0-9._-]+/', '_', (string) $doc['folder']) : null,
+                'raw' => $raw,
                 'program_id' => $program !== null ? (int) $program->getKey() : null,
                 'program' => $program !== null ? $program->code.' · '.$program->name_es : null,
             ];
@@ -144,7 +190,7 @@ class KnowledgeIngestService
         // en disco aunque cambie el nombre) y se coloca el nuevo en biblioteca/{categoria}/.
         foreach ($valid as $item) {
             $this->sync->deleteFilesForCode($item['code']);
-            $item['doc']->storeAs('biblioteca/'.$item['category'], $item['filename'], 'knowledge');
+            Storage::disk('knowledge')->put('biblioteca/'.$item['category'].'/'.($item['folder'] !== null ? $item['folder'].'/' : '').$item['filename'], $item['raw']);
         }
 
         // Un solo syncLibrary tras colocar todos; el resultado se mapea por código.

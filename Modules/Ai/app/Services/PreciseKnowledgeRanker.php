@@ -260,61 +260,7 @@ final class PreciseKnowledgeRanker
      */
     private function namedPrograms(array $sources, array $terms, ?string $line): array
     {
-        if ($terms === []) {
-            return [];
-        }
-        $generic = array_fill_keys(KnowledgeText::terms(implode(' ', (array) config('crm.knowledge.retrieval.generic_program_words', []))), true);
-
-        $distinctive = [];
-        foreach ($sources as $source) {
-            if (($source['type'] ?? null) !== 'programa_academico') {
-                continue;
-            }
-            $title = preg_match('/^#\s+(.+)$/m', (string) $source['content'], $m) === 1 ? $m[1] : (string) $source['code'];
-            $title = (string) preg_replace('/\s[—–-]\s.*$/u', '', $title); // «Nombre — Diploma Avanzado» → «Nombre»
-            $words = array_values(array_unique(array_filter(KnowledgeText::terms($title), fn (string $t): bool => ! isset($generic[$t]))));
-            if ($words !== []) {
-                $distinctive[$source['code']] = ['words' => $words, 'category' => $source['category']];
-            }
-        }
-        if ($distinctive === []) {
-            return [];
-        }
-
-        // Rareza de cada palabra distintiva entre las fichas (una palabra de muchas fichas pesa poco).
-        $df = [];
-        foreach ($distinctive as $d) {
-            foreach ($d['words'] as $w) {
-                $df[$w] = ($df[$w] ?? 0) + 1;
-            }
-        }
-        $count = count($distinctive);
-        $idf = fn (string $w): float => log(1 + ($count - $df[$w] + 0.5) / ($df[$w] + 0.5));
-
-        $candidates = [];
-        foreach ($distinctive as $code => $d) {
-            $matched = array_values(array_intersect($d['words'], $terms));
-            if ($matched === []) {
-                continue;
-            }
-            $weight = array_sum(array_map($idf, $matched));
-            $coverage = $weight / max(0.0001, array_sum(array_map($idf, $d['words'])));
-            $candidates[$code] = ['weight' => $weight, 'coverage' => $coverage, 'in_line' => $line !== null && $d['category'] === $line];
-        }
-        if ($candidates === []) {
-            return [];
-        }
-
-        uasort($candidates, fn (array $a, array $b): int => [$b['weight'], $b['in_line'], $b['coverage']] <=> [$a['weight'], $a['in_line'], $a['coverage']]);
-        $best = reset($candidates);
-        $named = [];
-        foreach ($candidates as $code => $c) {
-            // Solo las de máxima coincidencia (con tolerancia) y que cubran bastante su nombre.
-            if ($c['weight'] >= $best['weight'] * 0.999 && ($c['coverage'] >= 0.34 || $c['weight'] >= (float) config('crm.knowledge.retrieval.named_min_weight', 1.5))) {
-                $named[$code] = round(min(1.0, 0.5 + $c['coverage'] / 2), 4);
-            }
-        }
-
-        return $named;
+        // Detector compartido con la búsqueda clásica (un solo algoritmo de candidatas).
+        return app(ProgramMentions::class)->named($sources, $terms, $line);
     }
 }

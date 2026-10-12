@@ -8,8 +8,8 @@ use Illuminate\Support\Str;
 use Modules\Ai\Support\KnowledgeTaxonomy;
 use Modules\Catalog\Models\Program;
 use Modules\Catalog\Models\ProgramCategory;
+use Modules\Catalog\Support\CatalogSheet;
 use Modules\Catalog\Support\TagParser;
-use OpenSpout\Reader\XLSX\Reader;
 use RuntimeException;
 
 /**
@@ -20,112 +20,30 @@ use RuntimeException;
  *   haya, se marcan inactivas / para revision y se reportan; nunca falla en seco.
  * - Requiere una institucion activa en el contexto (lo fija el comando).
  *
- * NO importa la columna "Aprendizajes" (el detalle vive en la web).
+ * La lectura de la hoja es la compartida (CatalogSheet). La columna "Aprendizajes" NO la usa
+ * este importador: alimenta las fuentes de conocimiento de cada microcredencial
+ * (MicrocredentialKnowledgeImporter, comando catalog:import-knowledge).
  */
 class CatalogImporter
 {
-    /** field => posibles cabeceras normalizadas (minusculas, sin acentos). */
-    private const COLUMNS = [
-        'code' => ['id'],
-        // idnumber del curso en Moodle: enlaza el programa con los leads InCompany (n8n).
-        'course_idnumber' => ['idnumber', 'course_idnumber', 'id moodle', 'idnumber moodle', 'id number'],
-        'name_es' => ['nombre del programa', 'nombre'],
-        'credential_en' => ['microcredencial que otorga', 'microcredencial', 'credencial'],
-        'category' => ['area'],
-        // Línea de formación (programs.line): «Microcredencial», «Programa Ejecutivo», …
-        'line' => ['tipo', 'linea', 'linea de formacion'],
-        'duration' => ['duracion'],
-        'modality' => ['modalidad'],
-        'description' => ['descripcion'],
-        'url' => ['url'],
-        'status' => ['activo', 'estado'],
-        'order' => ['peso', 'orden'],
-        'tags' => ['etiquetas', 'etiqueta', 'tags'],
-    ];
-
+    /**
+     * @throws RuntimeException si no existe el archivo o no tiene la hoja "Catalogo"
+     */
     public function import(string $path): ImportReport
     {
-        if (! is_file($path)) {
-            throw new RuntimeException("No existe el archivo: {$path}");
-        }
-
         $report = new ImportReport;
-        $reader = new Reader;
-        $reader->open($path);
 
-        try {
-            foreach ($reader->getSheetIterator() as $sheet) {
-                if (Str::ascii(mb_strtolower($sheet->getName())) !== 'catalogo') {
-                    continue;
-                }
-
-                $this->importSheet($sheet, $report);
-
-                return $report;
-            }
-        } finally {
-            $reader->close();
+        foreach (CatalogSheet::rows($path) as $row) {
+            $this->importRow($row['fields'], $row['row'], $report);
         }
 
-        throw new RuntimeException('No se encontro la hoja "Catalogo" en el archivo.');
+        return $report;
     }
 
-    private function importSheet(\OpenSpout\Reader\XLSX\Sheet $sheet, ImportReport $report): void
+    /** @param  array<string, string>  $fields  campo => texto (CatalogSheet) */
+    private function importRow(array $fields, int $rowNumber, ImportReport $report): void
     {
-        $map = [];
-        $rowNumber = 0;
-
-        foreach ($sheet->getRowIterator() as $row) {
-            $rowNumber++;
-            /** @var array<int, mixed> $cells */
-            $cells = $row->toArray();
-
-            if ($rowNumber === 1) {
-                $map = $this->mapHeaders($cells);
-
-                continue;
-            }
-
-            // Fila totalmente vacia: se ignora en silencio.
-            if ($this->isBlankRow($cells)) {
-                continue;
-            }
-
-            $this->importRow($cells, $map, $rowNumber, $report);
-        }
-    }
-
-    /**
-     * @param  array<int, mixed>  $headerCells
-     * @return array<string, int>
-     */
-    private function mapHeaders(array $headerCells): array
-    {
-        $normalized = [];
-        foreach ($headerCells as $index => $value) {
-            $normalized[$index] = Str::ascii(mb_strtolower(trim((string) $value)));
-        }
-
-        $map = [];
-        foreach (self::COLUMNS as $field => $candidates) {
-            foreach ($normalized as $index => $header) {
-                if (in_array($header, $candidates, true)) {
-                    $map[$field] = $index;
-                    break;
-                }
-            }
-        }
-
-        return $map;
-    }
-
-    /**
-     * @param  array<int, mixed>  $cells
-     * @param  array<string, int>  $map
-     */
-    private function importRow(array $cells, array $map, int $rowNumber, ImportReport $report): void
-    {
-        $code = $this->cell($cells, $map, 'code');
+        $code = $this->cell($fields, 'code');
 
         if ($code === '') {
             $report->skipped($rowNumber, 'fila sin ID (code)');
@@ -133,13 +51,13 @@ class CatalogImporter
             return;
         }
 
-        $nameEs = $this->cell($cells, $map, 'name_es');
-        $description = $this->cell($cells, $map, 'description');
-        $url = $this->cell($cells, $map, 'url');
-        [$status, $statusBlank] = $this->mapStatus($this->cell($cells, $map, 'status'));
-        [$durationEs, $durationEn] = $this->splitBilingual($this->cell($cells, $map, 'duration'));
-        [$modalityEs, $modalityEn] = $this->splitBilingual($this->cell($cells, $map, 'modality'));
-        $parsed = TagParser::parse($this->cell($cells, $map, 'tags'));
+        $nameEs = $this->cell($fields, 'name_es');
+        $description = $this->cell($fields, 'description');
+        $url = $this->cell($fields, 'url');
+        [$status, $statusBlank] = $this->mapStatus($this->cell($fields, 'status'));
+        [$durationEs, $durationEn] = CatalogSheet::splitBilingual($this->cell($fields, 'duration'));
+        [$modalityEs, $modalityEn] = CatalogSheet::splitBilingual($this->cell($fields, 'modality'));
+        $parsed = TagParser::parse($this->cell($fields, 'tags'));
 
         // Calidad de datos: se importa con lo que haya, pero se marca y reporta.
         $reasons = [];
@@ -177,7 +95,7 @@ class CatalogImporter
         }
 
         // idnumber de Moodle: solo se escribe si viene con valor (no borra el existente).
-        $idnumber = $this->cell($cells, $map, 'course_idnumber');
+        $idnumber = $this->cell($fields, 'course_idnumber');
         if ($idnumber !== '') {
             $program->course_idnumber = $idnumber;
         }
@@ -185,10 +103,10 @@ class CatalogImporter
         $program->name_es = $nameEs;
         // name_en se deja VACIO a proposito: se completa en el panel. credential_en
         // queda como punto de partida disponible para ese trabajo.
-        $program->credential_en = $this->cell($cells, $map, 'credential_en') ?: null;
+        $program->credential_en = $this->cell($fields, 'credential_en') ?: null;
         // Línea desde «Tipo» (solo si la celda trae algo; vacía = no se toca). Un tipo que no
         // corresponde a ninguna línea de la lista fija se importa con line NULL y se reporta.
-        $type = $this->cell($cells, $map, 'line');
+        $type = $this->cell($fields, 'line');
         if ($type !== '') {
             $program->line = KnowledgeTaxonomy::lineFromLabel($type);
             if ($program->line === null) {
@@ -199,7 +117,7 @@ class CatalogImporter
         // Las áreas solo existen en Microcredenciales: en cualquier otra línea la columna Area
         // se ignora (ni se asigna ni se crea el área; el category_id guardado no se toca).
         if (Program::lineHasAreas($program->line)) {
-            $program->category_id = $this->resolveCategory($this->cell($cells, $map, 'category'));
+            $program->category_id = $this->resolveCategory($this->cell($fields, 'category'));
         }
         $program->level = $parsed['level'];
         $program->goal = $parsed['goal'];
@@ -211,7 +129,7 @@ class CatalogImporter
         $program->short_description_es = $description ?: null;
         $program->url = $url;
         $program->status = $status;
-        $program->display_order = (int) $this->cell($cells, $map, 'order');
+        $program->display_order = (int) $this->cell($fields, 'order');
         $program->save();
 
         // Sincroniza etiquetas libres (idempotente: se reemplazan).
@@ -241,40 +159,10 @@ class CatalogImporter
         return (int) $category->getKey();
     }
 
-    /**
-     * @param  array<int, mixed>  $cells
-     * @param  array<string, int>  $map
-     */
-    private function cell(array $cells, array $map, string $field): string
+    /** @param  array<string, string>  $fields */
+    private function cell(array $fields, string $field): string
     {
-        if (! array_key_exists($field, $map)) {
-            return '';
-        }
-
-        $value = $cells[$map[$field]] ?? '';
-
-        return trim((string) $value);
-    }
-
-    /**
-     * "6 semanas / 6 weeks" -> ['6 semanas', '6 weeks']; "6 semanas" -> ['6 semanas', null].
-     *
-     * @return array{0: ?string, 1: ?string}
-     */
-    private function splitBilingual(string $raw): array
-    {
-        $raw = trim($raw);
-        if ($raw === '') {
-            return [null, null];
-        }
-
-        if (str_contains($raw, '/')) {
-            [$es, $en] = array_map('trim', explode('/', $raw, 2));
-
-            return [$es !== '' ? $es : null, $en !== '' ? $en : null];
-        }
-
-        return [$raw, null];
+        return $fields[$field] ?? '';
     }
 
     /**
@@ -294,19 +182,5 @@ class CatalogImporter
 
         // Cualquier otro valor (no, 0, inactivo, desconocido) -> inactivo por seguridad.
         return ['inactive', false];
-    }
-
-    /**
-     * @param  array<int, mixed>  $cells
-     */
-    private function isBlankRow(array $cells): bool
-    {
-        foreach ($cells as $value) {
-            if (trim((string) $value) !== '') {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Support\KnowledgeTaxonomy;
+use Modules\Core\Tenancy\CurrentInstitution;
 
 /**
  * Sincroniza archivos .md del disco 'knowledge' con la tabla knowledge_sources (biblioteca
@@ -24,9 +25,17 @@ use Modules\Ai\Support\KnowledgeTaxonomy;
  *    biblioteca + asigna la fuente a ESE bot en el pivote (sin pisar el bot_id existente).
  *  - syncLibrary(): biblioteca central en 'biblioteca/{categoria}/*.md' (sin bot; la
  *    asignación a bots se hace aparte con KnowledgeAssignmentService).
+ *
+ * AISLAMIENTO: el disco 'knowledge' es uno solo para toda la instalación. Un .md con el campo
+ * «Institucion: {id}» en su comentario de metadatos PERTENECE a esa institución: para cualquier
+ * otra no es candidato en ninguna operación (sync, syncLibrary, búsqueda y borrado por código).
+ * Los .md antiguos sin ese campo se comportan como siempre (compatibilidad).
  */
 class KnowledgeSyncService
 {
+    /** Campo de metadatos con el id de la institución dueña del .md. */
+    public const INSTITUTION_META = 'Institucion';
+
     /**
      * Flujo LEGADO (por asesor): upsert por code + asignación al bot en el pivote. NO
      * sobrescribe el bot_id de una fuente existente (Precisión A).
@@ -48,6 +57,9 @@ class KnowledgeSyncService
             }
 
             $raw = (string) $disk->get($file);
+            if (! $this->belongsHere($raw)) {
+                continue; // de otra institución: ni se lee como candidato
+            }
             if (trim($raw) === '') {
                 $skipped++;
                 $files[] = ['file' => basename($file), 'code' => '', 'action' => 'skipped', 'language' => ''];
@@ -118,6 +130,9 @@ class KnowledgeSyncService
             }
 
             $raw = (string) $disk->get($file);
+            if (! $this->belongsHere($raw)) {
+                continue; // de otra institución: ni se lee como candidato
+            }
             if (trim($raw) === '') {
                 $skipped++;
                 $files[] = ['file' => basename($file), 'code' => '', 'action' => 'skipped', 'category' => null];
@@ -171,22 +186,101 @@ class KnowledgeSyncService
         $disk = Storage::disk('knowledge');
         $deleted = 0;
 
+        foreach ($this->filesForCode($code) as $file) {
+            $disk->delete($file);
+            Log::info('knowledge.file_deleted', ['path' => $file, 'code' => $code]);
+            $deleted++;
+        }
+
+        return $deleted;
+    }
+
+    /**
+     * Rutas (en el disco 'knowledge', incluidas las carpetas legadas) de TODOS los .md de ESTA
+     * institución (o antiguos sin institución) cuyo código, parseado igual que en el upsert, es
+     * exactamente $code.
+     *
+     * @return list<string>
+     */
+    public function filesForCode(string $code): array
+    {
+        $disk = Storage::disk('knowledge');
+        $found = [];
+
         foreach ($disk->allFiles() as $file) {
             if (! Str::endsWith(strtolower($file), '.md')) {
                 continue;
             }
             $raw = (string) $disk->get($file);
-            if (trim($raw) === '') {
-                continue;
-            }
-            if ($this->parse($raw, basename($file))['code'] === $code) {
-                $disk->delete($file);
-                Log::info('knowledge.file_deleted', ['path' => $file, 'code' => $code]);
-                $deleted++;
+            if (trim($raw) !== '' && $this->belongsHere($raw) && $this->parse($raw, basename($file))['code'] === $code) {
+                $found[] = $file;
             }
         }
 
-        return $deleted;
+        return $found;
+    }
+
+    /**
+     * El mismo .md con «Prioridad: $priority» en su comentario de metadatos: reemplaza el valor
+     * si el campo existe o lo añade al final del comentario. Null si no hay comentario de
+     * metadatos (no se inventa uno). Idempotente.
+     */
+    public function withPriority(string $raw, int $priority): ?string
+    {
+        return $this->withMeta($raw, 'Prioridad', (string) $priority);
+    }
+
+    /** El mismo .md marcado como de la institución $institutionId (ver INSTITUTION_META). */
+    public function withInstitution(string $raw, int $institutionId): ?string
+    {
+        return $this->withMeta($raw, self::INSTITUTION_META, (string) $institutionId);
+    }
+
+    /** Institución dueña del .md (campo «Institucion»), o null si es un .md antiguo sin ella. */
+    public function institutionOf(string $raw): ?string
+    {
+        $owner = $this->metaValue($raw, self::INSTITUTION_META);
+
+        return $owner !== null && $owner !== '' ? $owner : null;
+    }
+
+    /**
+     * ¿Es candidato para la institución activa? Sí si no declara institución (compatibilidad) o
+     * declara exactamente la activa. Sin institución activa, ningún .md marcado lo es.
+     */
+    public function belongsHere(string $raw): bool
+    {
+        $owner = $this->institutionOf($raw);
+        if ($owner === null) {
+            return true;
+        }
+        $current = app(CurrentInstitution::class)->id();
+
+        return $current !== null && $owner === (string) $current;
+    }
+
+    /**
+     * Fija «$key: $value» en el comentario de metadatos: reemplaza el valor si el campo existe o lo
+     * añade al final. Null si no hay comentario de metadatos (no se inventa uno). Idempotente.
+     */
+    private function withMeta(string $raw, string $key, string $value): ?string
+    {
+        if (preg_match('/<!--(.+?)-->/s', $raw, $block, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+        $wanted = Str::of($key)->lower()->ascii()->toString();
+        $fields = preg_split('/([·|])/u', $block[1][0], -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+        $found = false;
+        foreach ($fields as $i => $field) {
+            $parts = explode(':', $field, 2);
+            if (count($parts) === 2 && Str::of($parts[0])->trim()->lower()->ascii()->toString() === $wanted) {
+                $fields[$i] = $parts[0].': '.$value.(preg_match('/\s+$/u', $parts[1], $m) === 1 ? $m[0] : '');
+                $found = true;
+            }
+        }
+        $inner = $found ? implode('', $fields) : rtrim($block[1][0]).' · '.$key.': '.$value.' ';
+
+        return substr_replace($raw, $inner, $block[1][1], strlen($block[1][0]));
     }
 
     /**
