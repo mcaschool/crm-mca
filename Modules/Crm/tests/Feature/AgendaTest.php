@@ -35,6 +35,7 @@ use Modules\Crm\Services\Agenda\ScheduleConflictException;
 use Modules\Institutions\Models\Bot;
 use Modules\Institutions\Models\Institution;
 use Modules\Notifications\Mail\OutboundEmail;
+use Modules\Notifications\Models\EmailSender;
 
 /*
 | Agenda (Fase 1). Lunes 19/10/2026; el asesor trabaja en America/Bogota (UTC−5, sin
@@ -60,6 +61,10 @@ function agUser(Institution $i, string $role = 'admissions', ?string $department
 function agCtx(Institution $i): void
 {
     app(CurrentInstitution::class)->set($i->id);
+    // Remitente propio de la institución (único activo → remitente de la Agenda).
+    if (EmailSender::query()->doesntExist()) {
+        EmailSender::factory()->create();
+    }
 }
 
 /** @param  array<string,mixed>  $attrs */

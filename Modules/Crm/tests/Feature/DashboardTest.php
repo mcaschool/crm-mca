@@ -89,8 +89,21 @@ it('los widgets reflejan datos reales (leads nuevos y corporativo)', function ()
     $view = Livewire::test(Dashboard::class)
         ->assertSee('Nuevos sin contactar')
         ->assertSee('3')  // 3 leads nuevos
-        ->assertSee('Empresa'); // etiqueta corporativa en la lista de leads nuevos
+        ->assertSee('Interés corporativo');
     expect($view->viewData('kpis')['new']['n'])->toBe(3);
+});
+
+it('admin y admisiones conservan Conversaciones hoy e Interés corporativo junto a los 6 indicadores', function () {
+    foreach ([['admin', null], ['admissions', 'Admisiones']] as [$role, $dept]) {
+        $this->actingAs(dashUser($role, $dept));
+        $view = Livewire::test(Dashboard::class)
+            ->assertSee('Conversaciones hoy')
+            ->assertSee('Interés corporativo')
+            ->assertSee(route('crm.leads.index', ['corporate' => 1]));
+        foreach (['Nuevos sin contactar', 'Tareas vencidas', 'Agenda de hoy', 'Próximos 7 días', 'En seguimiento', 'Matriculados del mes', 'Mi agenda de hoy'] as $label) {
+            $view->assertSee($label);
+        }
+    }
 });
 
 it('la grafica Leads por area cuenta por area con datos reales', function () {

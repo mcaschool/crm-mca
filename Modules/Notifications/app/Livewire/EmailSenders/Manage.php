@@ -6,6 +6,7 @@ namespace Modules\Notifications\Livewire\EmailSenders;
 
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -151,6 +152,23 @@ class Manage extends Component
         $this->authorize('delete', $sender);
         $sender->delete();
         session()->flash('status', 'Remitente eliminado.');
+    }
+
+    /**
+     * Marca el remitente (activo) que usará la Agenda de ESTA institución; desmarca el
+     * resto. Solo uno por institución; el scope global impide tocar otra institución.
+     */
+    public function useForAgenda(int $id): void
+    {
+        $sender = EmailSender::query()->where('status', 'active')->findOrFail($id);
+        $this->authorize('update', $sender);
+
+        DB::transaction(function () use ($sender): void {
+            EmailSender::query()->where('id', '!=', $sender->getKey())->update(['agenda_default' => false]);
+            $sender->forceFill(['agenda_default' => true])->save();
+        });
+
+        session()->flash('status', "La Agenda enviará sus correos desde {$sender->from_address}.");
     }
 
     /** Envia un correo de prueba por el SMTP del remitente y sella el resultado. */

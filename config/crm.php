@@ -467,5 +467,8 @@ return [
         'default_timezone' => (string) env('CRM_AGENDA_TIMEZONE', 'UTC'),
         // Recordatorios marcados por defecto al crear (minutos antes).
         'default_reminders' => [60],
+        // true = los correos salen por el SMTP real del remitente de Agenda. Por defecto
+        // solo en producción; en local/pruebas se usa el transporte «log» (nunca SMTP real).
+        'sender_smtp' => (bool) env('CRM_AGENDA_SENDER_SMTP', env('APP_ENV') === 'production'),
     ],
 ];

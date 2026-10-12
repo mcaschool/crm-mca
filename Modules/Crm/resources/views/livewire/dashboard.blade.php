@@ -91,6 +91,8 @@
                             <div><div class="num">{{ $kpis[$k]['n'] }}</div><div class="lab">{{ __($label) }}</div></div>
                         </a>
                     @endforeach
+                    <div class="card kpi"><div class="top"><div class="kic b-info"><x-ui.icon name="message-circle" /></div></div><div><div class="num">{{ $counts['conversationsToday'] }}</div><div class="lab">Conversaciones hoy</div></div></div>
+                    <a class="card kpi gold" href="{{ route('crm.leads.index', ['corporate' => 1]) }}" style="text-decoration:none;color:inherit" title="Ver los leads con interés corporativo"><div class="top"><div class="kic b-gold"><x-ui.icon name="building-2" /></div><x-ui.icon name="chevron-right" class="i14" style="color:var(--muted)" /></div><div><div class="num">{{ $counts['corporate'] }}</div><div class="lab">Interés corporativo</div></div></a>
             @endswitch
         </div>
 
@@ -140,8 +142,8 @@
                 .mca-home .ag-trow .m{font-size:12px;color:var(--mca-ink-3);margin-top:1px}
                 .mca-home .ag-trow .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
                 .mca-home .ag-trow .acts .btn{padding:6px 10px;font-size:12.5px}
-                .mca-home .kpis:has(> [data-kpi]){grid-template-columns:repeat(6,1fr)}
-                @media(max-width:1300px){.mca-home .kpis:has(> [data-kpi]){grid-template-columns:repeat(3,1fr)}}
+                .mca-home .kpis:has(> [data-kpi]){grid-template-columns:repeat(4,1fr)}
+                @media(max-width:1100px){.mca-home .kpis:has(> [data-kpi]){grid-template-columns:repeat(2,1fr)}}
                 @media(max-width:760px){
                     .mca-home .kpis:has(> [data-kpi]){grid-template-columns:repeat(2,1fr)}
                     .mca-home .ag-trow{flex-wrap:wrap}

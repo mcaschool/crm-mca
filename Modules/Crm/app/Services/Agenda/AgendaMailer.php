@@ -13,7 +13,6 @@ use Modules\Crm\Models\Activity;
 use Modules\Crm\Models\ActivityGuest;
 use Modules\Institutions\Models\Institution;
 use Modules\Notifications\Mail\OutboundEmail;
-use Modules\Notifications\Models\EmailSender;
 use Modules\Notifications\Services\SenderMailer;
 use Throwable;
 
@@ -22,9 +21,10 @@ use Throwable;
  * invitación, actualización (reprogramación), cancelación, retirada de invitado,
  * recordatorio y aviso al asesor. Adjunta un .ics válido (REQUEST o CANCEL).
  *
- * Sale por el primer remitente activo de la institución (su SMTP propio) o, si no hay,
- * por el correo por defecto del sistema. Un fallo NUNCA se propaga: devuelve false y el
- * detalle técnico queda solo en lastError()/log interno (jamás llega al invitado).
+ * Sale SOLO por el remitente de Agenda de la propia institución (ver AgendaSender), con
+ * su SMTP en producción (crm.agenda.sender_smtp) y por el transporte «log» en el resto de
+ * entornos. Sin remitente válido no se envía nada. Un fallo NUNCA se propaga: devuelve
+ * false y el detalle técnico queda solo en lastError()/log interno (jamás llega al invitado).
  */
 class AgendaMailer
 {
@@ -32,6 +32,7 @@ class AgendaMailer
 
     public function __construct(
         private readonly SenderMailer $senders,
+        private readonly AgendaSender $senderFor,
         private readonly IcsBuilder $ics,
         private readonly WhatsappLink $whatsapp,
     ) {}
@@ -63,10 +64,18 @@ class AgendaMailer
         $tmp = null;
 
         try {
-            $sender = EmailSender::query()->where('status', 'active')->orderBy('name')->first();
+            $sender = $this->senderFor->resolve();
+            if ($sender === null) {
+                // Sin remitente válido de ESTA institución: no se envía nada (ni por otro
+                // remitente ni por el correo del sistema); queda como fallo reintentable.
+                $this->lastError = (string) $this->senderFor->problem();
+                Log::warning('agenda.mail_no_sender', ['activity_id' => $activity->getKey(), 'kind' => $kind, 'error' => $this->lastError]);
+
+                return false;
+            }
             $institution = Institution::query()->find($activity->institution_id);
             $institutionName = (string) ($institution->name ?? config('app.name'));
-            $fromAddress = $sender !== null ? $sender->from_address : (string) config('mail.from.address');
+            $fromAddress = $sender->from_address;
             $advisorName = (string) ($activity->assignee->name ?? $institutionName);
 
             $t = $this->strings($locale);
@@ -99,10 +108,12 @@ class AgendaMailer
                 ];
             }
 
-            if ($sender !== null) {
+            if ((bool) config('crm.agenda.sender_smtp', false)) {
                 $this->senders->send($sender, $to, $subject, $html, $files);
             } else {
-                Mail::to($to)->send(new OutboundEmail($fromAddress, $institutionName, $subject, $html, $files));
+                // Fuera de producción: transporte local seguro (log; en pruebas, Mail::fake),
+                // jamás el SMTP real del remitente. Mismo «De» y mismo contenido.
+                Mail::mailer('log')->to($to)->send(new OutboundEmail($fromAddress, $sender->name, $subject, $html, $files));
             }
 
             return true;

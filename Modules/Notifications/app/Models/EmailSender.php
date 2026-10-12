@@ -21,6 +21,7 @@ use Modules\Notifications\Database\Factories\EmailSenderFactory;
  * @property string $name
  * @property string $from_address
  * @property string $status
+ * @property bool $agenda_default
  * @property \Illuminate\Support\Carbon|null $last_tested_at
  * @property bool|null $last_test_ok
  * @property string|null $last_test_message
@@ -56,6 +57,7 @@ class EmailSender extends Model
             'config_preview' => 'array',
             'last_tested_at' => 'datetime',
             'last_test_ok' => 'boolean',
+            'agenda_default' => 'boolean',
         ];
     }
 
