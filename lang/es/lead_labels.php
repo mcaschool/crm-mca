@@ -21,4 +21,13 @@ return [
         'pricing' => 'Precio / inscripción',
         'manual' => 'Alta manual',
     ],
+    'product_type' => [
+        'microcredential' => 'Microcredencial',
+        'microcredencial' => 'Microcredencial',
+        'incompany' => 'InCompany',
+        'maestria' => 'Maestría',
+        'diploma_avanzado' => 'Diploma avanzado',
+        'estancia_internacional' => 'Estancia internacional',
+        'programa_ejecutivo' => 'Programa ejecutivo',
+    ],
 ];

@@ -47,6 +47,9 @@
                     <span x-show="n > 0" x-text="n"
                           style="margin-left:auto;min-width:18px;height:18px;padding:0 6px;border-radius:10px;background:#C9A84C;color:#241a05;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">{{ $crmBadges['leads'] ?: '' }}</span>
                 </a>
+                <a href="{{ route('crm.pipeline') }}" class="mca-nav-item {{ request()->routeIs('crm.pipeline') ? 'on' : '' }}">
+                    <x-ui.icon name="funnel" /> {{ __('Pipeline Comercial') }}
+                </a>
                 <a href="{{ route('crm.contacts.index') }}" class="mca-nav-item {{ request()->routeIs('crm.contacts.*') || request()->routeIs('crm.conversations.*') ? 'on' : '' }}"
                    x-data="{ n: {{ $crmBadges['contacts'] }} }" x-on:crm-badges-updated.window="n = $event.detail.contacts ?? n">
                     <x-ui.icon name="contact" /> {{ __('Contactos') }}

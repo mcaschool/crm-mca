@@ -32,4 +32,5 @@ return [
     'lead_transferred' => 'Seguimiento transferido',
     'recontacted' => 'Volvió a contactar',
     'email_sent' => 'Correo enviado',
+    'lead_status_changed' => 'Etapa comercial cambiada',
 ];

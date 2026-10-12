@@ -32,4 +32,5 @@ return [
     'lead_transferred' => 'Follow-up transferred',
     'recontacted' => 'Reached out again',
     'email_sent' => 'Email sent',
+    'lead_status_changed' => 'Sales stage changed',
 ];

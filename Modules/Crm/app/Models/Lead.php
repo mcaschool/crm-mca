@@ -110,6 +110,17 @@ class Lead extends Model
         return \Illuminate\Support\Str::of($this->source)->replace(['_', '-'], ' ')->ucfirst()->toString();
     }
 
+    /** Tipo de producto legible y bilingüe; los códigos sin etiqueta se humanizan. */
+    public function productLabel(?string $locale = null): string
+    {
+        $key = 'lead_labels.product_type.'.$this->product_type;
+        if (trans()->has($key, $locale)) {
+            return (string) trans($key, [], $locale);
+        }
+
+        return \Illuminate\Support\Str::of((string) $this->product_type)->replace(['_', '-'], ' ')->ucfirst()->toString();
+    }
+
     /**
      * Quién CAPTÓ el lead, según la fuente real (no el bot al que se atribuye por esquema).
      * Los leads del Recomendador InCompany (source=incompany_web) llegan por formulario/n8n

@@ -142,6 +142,8 @@ $panel->group(function () {
     Route::get('/crm/leads', LeadsIndex::class)->name('crm.leads.index');
     Route::get('/crm/leads/create', LeadsCreate::class)->name('crm.leads.create');
     Route::get('/crm/leads/{lead}', LeadsShow::class)->name('crm.leads.show');
+    // Pipeline Comercial (Kanban por etapa; mismas reglas que la ficha del lead).
+    Route::get('/crm/pipeline', \Modules\Crm\Livewire\Pipeline\Board::class)->name('crm.pipeline');
     Route::get('/crm/contacts', ContactsIndex::class)->name('crm.contacts.index');
     Route::get('/crm/contacts/{contact}', ContactsShow::class)->name('crm.contacts.show');
     Route::get('/crm/conversations/{conversation}', ConversationsShow::class)->name('crm.conversations.show');

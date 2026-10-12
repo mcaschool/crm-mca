@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Modules\Crm\Services;
 
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use Modules\Audit\Services\AuditService;
 use Modules\Crm\Enums\InterestLevel;
 use Modules\Crm\Enums\LeadStatus;
 use Modules\Crm\Models\Contact;
@@ -63,17 +65,43 @@ class LeadService
     }
 
     /**
-     * Cambio manual de estado desde el panel. 'enrolled' es TERMINAL: no admite
-     * mas transiciones (la entrega al SGA es de un modulo futuro).
+     * Cambio manual de etapa desde el panel (ficha del lead y Pipeline: misma regla). 'enrolled'
+     * es TERMINAL: no admite mas transiciones (la entrega al SGA es de un modulo futuro).
+     *
+     * Se aplica con la fila BLOQUEADA y, si se indica $expected (la etapa que el usuario veia),
+     * se rechaza cuando otro usuario la cambio antes: nunca se sobrescribe un cambio concurrente.
+     * Deja rastro: evento `lead_status_changed` (append-only) y auditoria (anterior, nueva,
+     * usuario y fecha). Mismo estado = sin cambios ni rastro.
      */
-    public function changeStatus(Lead $lead, LeadStatus $status): Lead
+    public function changeStatus(Lead $lead, LeadStatus $status, ?LeadStatus $expected = null): Lead
     {
-        if ($lead->status->isTerminal()) {
-            throw new InvalidArgumentException("El lead esta en estado terminal ({$lead->status->value}) y no puede cambiar.");
-        }
+        $fresh = DB::transaction(function () use ($lead, $status, $expected): Lead {
+            /** @var Lead $fresh */
+            $fresh = Lead::query()->whereKey($lead->getKey())->lockForUpdate()->firstOrFail();
+            $from = $fresh->status;
+            if ($expected !== null && $from !== $expected) {
+                throw new LeadTransitionException('stale', "El lead cambio de estado ({$from->value}) antes de aplicar el cambio.");
+            }
+            if ($from->isTerminal()) {
+                throw new LeadTransitionException('terminal', "El lead esta en estado terminal ({$from->value}) y no puede cambiar.");
+            }
+            if ($from === $status) {
+                return $fresh;
+            }
 
-        $lead->status = $status;
-        $lead->save();
+            $fresh->status = $status;
+            $fresh->save();
+            $this->events->record('lead_status_changed', [
+                'contact_id' => $fresh->contact_id,
+                'bot_id' => $fresh->bot_id,
+                'data' => ['lead_id' => $fresh->id, 'from' => $from->value, 'to' => $status->value, 'by_user_id' => auth()->id()],
+            ]);
+            app(AuditService::class)->log('lead.status_changed', $fresh, ['from' => $from->value, 'to' => $status->value]);
+
+            return $fresh;
+        });
+
+        $lead->setRawAttributes($fresh->getAttributes(), true);
 
         return $lead;
     }

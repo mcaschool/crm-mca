@@ -146,12 +146,13 @@ class Show extends Component
         $this->statusMenuOpen = false;
 
         try {
-            $service->changeStatus($lead, LeadStatus::from($status));
+            // Etapa que el usuario veía: si otro la cambió antes, no se sobrescribe (igual que el Pipeline).
+            $service->changeStatus($lead, LeadStatus::from($status), LeadStatus::tryFrom($this->status));
             $this->status = $status;
             session()->flash('status', __('Estado actualizado.'));
         } catch (InvalidArgumentException $e) {
-            $this->status = $lead->status->value;
-            $this->addError('status', $e->getMessage());
+            $this->status = ($lead->fresh() ?? $lead)->status->value;
+            $this->addError('status', $e instanceof \Modules\Crm\Services\LeadTransitionException && $e->reason === 'stale' ? $e->userMessage() : $e->getMessage());
         }
     }
 

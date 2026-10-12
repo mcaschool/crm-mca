@@ -76,6 +76,7 @@ class CrmServiceProvider extends ModuleServiceProvider
         Livewire::component('crm.leads.index', LeadsIndex::class);
         Livewire::component('crm.leads.create', LeadsCreate::class);
         Livewire::component('crm.leads.show', LeadsShow::class);
+        Livewire::component('crm.pipeline.board', \Modules\Crm\Livewire\Pipeline\Board::class);
         Livewire::component('crm.conversations.show', ConversationsShow::class);
         Livewire::component('crm.dashboard', Dashboard::class);
         Livewire::component('crm.new-lead-notifier', NewLeadNotifier::class);

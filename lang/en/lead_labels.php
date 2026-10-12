@@ -21,4 +21,13 @@ return [
         'pricing' => 'Pricing / enrollment',
         'manual' => 'Manual entry',
     ],
+    'product_type' => [
+        'microcredential' => 'Microcredential',
+        'microcredencial' => 'Microcredential',
+        'incompany' => 'InCompany',
+        'maestria' => "Master's degree",
+        'diploma_avanzado' => 'Advanced diploma',
+        'estancia_internacional' => 'International stay',
+        'programa_ejecutivo' => 'Executive program',
+    ],
 ];
