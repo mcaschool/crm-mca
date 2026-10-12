@@ -69,6 +69,27 @@ Route::get('/asesores/prueba/{token}', \Modules\Ai\Livewire\Advisor\Preview::cla
     ->middleware('throttle:60,1')
     ->name('advisors.preview');
 
+/*
+| Reservas PÚBLICAS del Calendario (sin sesión del CRM). La URL identifica institución, asesor
+| y tipo de reunión por alias legibles; la gestión de una reserva usa un token aleatorio de 48
+| caracteres buscado por su hash. CSRF (grupo web), límites por IP y defensas anti-automatismos.
+*/
+Route::middleware(['setlocale'])->prefix('reservar')
+    ->where(['token' => '[A-Za-z0-9]{48}', 'institution' => '(?!gestion$)[a-z0-9-]{1,80}', 'advisor' => '[a-z0-9-]{1,80}', 'type' => '[a-z0-9-]{1,80}'])
+    ->group(function () {
+        $c = \Modules\Crm\Http\Controllers\PublicBookingController::class;
+        Route::get('/gestion/{token}', [$c, 'manage'])->middleware('throttle:booking-read')->name('booking.manage');
+        Route::get('/gestion/{token}/evento.ics', [$c, 'ics'])->middleware('throttle:booking-read')->name('booking.ics');
+        Route::post('/gestion/{token}/cancelar', [$c, 'cancel'])->middleware('throttle:booking-submit')->name('booking.cancel');
+        Route::get('/gestion/{token}/reprogramar', [$c, 'rescheduleForm'])->middleware('throttle:booking-read')->name('booking.reschedule');
+        Route::get('/gestion/{token}/horarios', [$c, 'rescheduleSlots'])->middleware('throttle:booking-read')->name('booking.reschedule.slots');
+        Route::post('/gestion/{token}/reprogramar', [$c, 'reschedule'])->middleware('throttle:booking-submit')->name('booking.reschedule.store');
+        Route::get('/{institution}/{advisor}', [$c, 'advisor'])->middleware('throttle:booking-read')->name('booking.advisor');
+        Route::get('/{institution}/{advisor}/{type}', [$c, 'type'])->middleware('throttle:booking-read')->name('booking.type');
+        Route::get('/{institution}/{advisor}/{type}/horarios', [$c, 'slotsForType'])->middleware('throttle:booking-read')->name('booking.slots');
+        Route::post('/{institution}/{advisor}/{type}', [$c, 'store'])->middleware('throttle:booking-submit')->name('booking.store');
+    });
+
 $panel = Route::middleware(['auth', 'institution.user', 'setlocale', 'can:access-panel', \App\Http\Middleware\EnsureTwoFactorEnabled::class]);
 
 if ($domain = config('crm.panel_domain')) {
@@ -126,6 +147,7 @@ $panel->group(function () {
     Route::get('/crm/agenda/profile', AgendaProfile::class)->name('crm.agenda.profile');
     Route::get('/crm/agenda/{activity}', AgendaShow::class)->whereNumber('activity')->name('crm.agenda.show');
     Route::get('/crm/agenda/{activity}/edit', AgendaForm::class)->whereNumber('activity')->name('crm.agenda.edit');
+    Route::get('/crm/plantillas-calendario', \Modules\Crm\Livewire\Agenda\CalendarTemplatesManage::class)->name('crm.calendar-templates');
 
     // Bandeja social unificada (Livewire full-page; acceso canWorkCrm, gated en mount).
     Route::get('/social/bandeja', \Modules\Social\Livewire\Inbox::class)->name('social.inbox');

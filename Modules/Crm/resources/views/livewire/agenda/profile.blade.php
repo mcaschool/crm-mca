@@ -81,5 +81,7 @@
                 <button type="submit" class="ghost solid" wire:loading.attr="disabled"><x-ui.icon name="check" class="i15" /> {{ __('Guardar perfil') }}</button>
             </div>
         </form>
+
+        <livewire:crm.agenda.booking-settings :owner-id="$ownerId" :key="'booking-settings-'.$ownerId" />
     </div>
 </div>

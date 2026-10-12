@@ -90,6 +90,7 @@ class ActivityService
                     'idempotency_key' => $key,
                 ]);
                 $activity->meeting_link = $this->snapshotLink($medium, $profile);
+                $activity->meeting_room_hash = $this->roomHashFor($medium, $activity->meeting_link);
                 $activity->uid = Str::uuid()->toString().'@'.(parse_url((string) config('app.url'), PHP_URL_HOST) ?: 'crm.local');
                 $activity->save();
                 $this->syncReminders($activity);
@@ -168,6 +169,7 @@ class ActivityService
             if ($medium !== $before['medium'] || $assigneeChanged) {
                 $profile = MeetingProfile::forUser($fresh->assigned_to_user_id);
                 $fresh->meeting_link = $this->snapshotLink($medium, $profile);
+                $fresh->meeting_room_hash = $this->roomHashFor($medium, $fresh->meeting_link);
                 if ($medium === ActivityMedium::InPerson && ! $fresh->location) {
                     $fresh->location = $profile->address;
                 }
@@ -548,6 +550,11 @@ class ActivityService
             ActivityMedium::Phone => $profile->phone ? (PhoneNumber::normalize($profile->phone) ?? $profile->phone) : null,
             default => null,
         };
+    }
+
+    private function roomHashFor(ActivityMedium $medium, ?string $link): ?string
+    {
+        return in_array($medium, [ActivityMedium::GoogleMeet, ActivityMedium::Zoom], true) ? Activity::roomHash($link) : null;
     }
 
     /** @return array<int,int> */

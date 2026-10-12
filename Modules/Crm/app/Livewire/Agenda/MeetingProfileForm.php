@@ -108,6 +108,7 @@ class MeetingProfileForm extends Component
         $this->whatsappNumber = (string) $profile->whatsapp_number;
         $this->phone = (string) $profile->phone;
         $this->saved = true;
+        $this->dispatch('meeting-profile-saved');
     }
 
     public static function validMeetUrl(string $url): bool

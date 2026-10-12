@@ -25,6 +25,8 @@ use Modules\Crm\Enums\ActivityMedium;
  * @property string|null $phone
  * @property string|null $address
  * @property bool $is_active
+ * @property bool $booking_enabled
+ * @property string|null $booking_slug
  * @property int $default_duration_minutes
  * @property int $buffer_before_minutes
  * @property int $buffer_after_minutes
@@ -39,7 +41,7 @@ class MeetingProfile extends Model
 
     protected $fillable = [
         'institution_id', 'user_id', 'timezone', 'default_medium', 'meet_url', 'zoom_url',
-        'whatsapp_number', 'phone', 'address', 'is_active', 'default_duration_minutes',
+        'whatsapp_number', 'phone', 'address', 'is_active', 'booking_enabled', 'booking_slug', 'default_duration_minutes',
         'buffer_before_minutes', 'buffer_after_minutes', 'min_notice_minutes', 'max_horizon_days',
     ];
 
@@ -47,6 +49,7 @@ class MeetingProfile extends Model
         'timezone' => 'UTC',
         'default_medium' => 'google_meet',
         'is_active' => true,
+        'booking_enabled' => false,
         'default_duration_minutes' => 30,
         'buffer_before_minutes' => 0,
         'buffer_after_minutes' => 0,
@@ -63,6 +66,7 @@ class MeetingProfile extends Model
             'whatsapp_number' => 'encrypted',
             'phone' => 'encrypted',
             'is_active' => 'boolean',
+            'booking_enabled' => 'boolean',
         ];
     }
 

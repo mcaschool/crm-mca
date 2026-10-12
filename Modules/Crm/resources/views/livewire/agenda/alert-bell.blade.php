@@ -20,7 +20,7 @@
                     @php($d = $n->data)
                     <a href="{{ isset($d['activity_id']) ? route('crm.agenda.show', $d['activity_id']) : route('crm.agenda.index') }}"
                        style="display:block;text-decoration:none;color:inherit;padding:10px 14px;border-bottom:1px solid var(--line);{{ $n->read_at === null ? 'background:#F1F6FC' : '' }}">
-                        <div style="font-size:11px;font-weight:700;color:#1E5AA8;text-transform:uppercase;letter-spacing:.05em">{{ ($d['kind'] ?? '') === 'reminder' ? __('Recordatorio') : __('Actividad asignada') }}</div>
+                        <div style="font-size:11px;font-weight:700;color:#1E5AA8;text-transform:uppercase;letter-spacing:.05em">{{ ['reminder' => __('Recordatorio'), 'booking' => __('Nueva reserva'), 'booking_rescheduled' => __('Reserva reprogramada'), 'booking_cancelled' => __('Reserva cancelada')][$d['kind'] ?? ''] ?? __('Actividad asignada') }}</div>
                         <div style="font-size:12.5px;font-weight:600;margin-top:2px">{{ $d['title'] ?? '' }}</div>
                         @if (! empty($d['starts_at']))
                             <div style="font-size:11.5px;color:var(--muted);margin-top:2px">{{ \Illuminate\Support\Carbon::parse($d['starts_at'])->setTimezone($d['timezone'] ?? 'UTC')->format('d/m H:i') }} ({{ $d['timezone'] ?? 'UTC' }})</div>

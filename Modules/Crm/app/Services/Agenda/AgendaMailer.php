@@ -40,9 +40,105 @@ class AgendaMailer
     /** @param  string  $kind  invitation · update · cancelled · removed · reminder */
     public function toGuest(Activity $activity, ActivityGuest $guest, string $kind): bool
     {
+        // El visitante de una reserva pública recibe las plantillas del Calendario (confirmación,
+        // reprogramación y cancelación) con sus enlaces de gestión.
+        $booking = $activity->booking;
+        $bookingKind = ['invitation' => 'booking_confirmation', 'update' => 'booking_rescheduled', 'cancelled' => 'booking_cancelled'][$kind] ?? null;
+        if ($booking !== null && $bookingKind !== null && strcasecmp($booking->visitor_email, $guest->email) === 0) {
+            $mailer = app(\Modules\Crm\Services\Booking\BookingMailer::class);
+            $ok = $mailer->toVisitor($booking, $bookingKind);
+            $this->lastError = $mailer->lastError();
+
+            return $ok;
+        }
+
         $locale = $guest->language === 'en' ? 'en' : 'es';
 
         return $this->send($activity, $guest->email, $guest->name, $locale, $kind);
+    }
+
+    /**
+     * Envía un correo ya compuesto por el remitente de Agenda de la institución (o el transporte
+     * seguro fuera de producción), con el .ics de la actividad si se pide. Nunca lanza excepción.
+     *
+     * @param  string|null  $ics  null · 'request' · 'cancel'
+     */
+    public function deliver(Activity $activity, string $to, string $toName, string $subject, string $html, ?string $ics = null, string $icsDescription = '', string $kind = 'custom'): bool
+    {
+        $this->lastError = null;
+        $tmp = null;
+
+        try {
+            $sender = $this->senderFor->resolve();
+            if ($sender === null) {
+                $this->lastError = (string) $this->senderFor->problem();
+                Log::warning('agenda.mail_no_sender', ['activity_id' => $activity->getKey(), 'kind' => $kind, 'error' => $this->lastError]);
+
+                return false;
+            }
+
+            $files = [];
+            if ($ics !== null) {
+                $cancel = $ics === 'cancel';
+                $content = $this->icsFor($activity, $sender->from_address, $toName, $to, $icsDescription, $cancel);
+                $tmp = tempnam(sys_get_temp_dir(), 'ics');
+                if ($tmp === false) {
+                    throw new \RuntimeException('No se pudo crear el .ics temporal.');
+                }
+                file_put_contents($tmp, $content);
+                $files[] = [
+                    'path' => $tmp,
+                    'name' => $cancel ? 'cancelacion.ics' : 'invitacion.ics',
+                    'mime' => 'text/calendar; charset=UTF-8; method='.($cancel ? 'CANCEL' : 'REQUEST'),
+                ];
+            }
+
+            if ((bool) config('crm.agenda.sender_smtp', false)) {
+                $this->senders->send($sender, $to, $subject, $html, $files);
+            } else {
+                Mail::mailer('log')->to($to)->send(new OutboundEmail($sender->from_address, $sender->name, $subject, $html, $files));
+            }
+
+            return true;
+        } catch (Throwable $e) {
+            $this->lastError = Str::limit(class_basename($e).': '.$e->getMessage(), 240);
+            Log::warning('agenda.mail_failed', ['activity_id' => $activity->getKey(), 'kind' => $kind, 'error' => $this->lastError]);
+
+            return false;
+        } finally {
+            if (is_string($tmp) && is_file($tmp)) {
+                @unlink($tmp);
+            }
+        }
+    }
+
+    /** .ics de la actividad para un asistente (organizador: el remitente de Agenda o el correo del sistema). */
+    public function icsFor(Activity $activity, ?string $organizerEmail, string $attendeeName, string $attendeeEmail, string $description, bool $cancel): string
+    {
+        $organizerEmail ??= $this->senderFor->resolve()->from_address ?? (string) config('mail.from.address');
+        $link = $this->accessLink($activity, 'es')['link'];
+
+        return $this->ics->build($activity, [
+            'organizer_name' => (string) ($activity->assignee->name ?? config('app.name')),
+            'organizer_email' => $organizerEmail,
+            'attendee_name' => $attendeeName,
+            'attendee_email' => $attendeeEmail,
+            'description' => $description,
+            'location' => $activity->location,
+            'url' => $link,
+        ], $cancel);
+    }
+
+    /**
+     * Enlace de acceso a la reunión según el medio (Meet/Zoom, wa.me, tel:) y su etiqueta.
+     *
+     * @return array{link:?string,label:?string}
+     */
+    public function accessLink(Activity $activity, string $locale): array
+    {
+        $d = $this->details($activity, $locale, '');
+
+        return ['link' => $d['link'], 'label' => $d['link_label']];
     }
 
     /** @param  string  $kind  assigned · reminder */
@@ -60,73 +156,20 @@ class AgendaMailer
 
     private function send(Activity $activity, string $to, string $toName, string $locale, string $kind): bool
     {
-        $this->lastError = null;
-        $tmp = null;
+        // Sin remitente válido de ESTA institución deliver() no envía nada (ni por otro remitente
+        // ni por el correo del sistema): queda como fallo reintentable.
+        $institution = Institution::query()->find($activity->institution_id);
+        $institutionName = (string) ($institution->name ?? config('app.name'));
+        $advisorName = (string) ($activity->assignee->name ?? $institutionName);
 
-        try {
-            $sender = $this->senderFor->resolve();
-            if ($sender === null) {
-                // Sin remitente válido de ESTA institución: no se envía nada (ni por otro
-                // remitente ni por el correo del sistema); queda como fallo reintentable.
-                $this->lastError = (string) $this->senderFor->problem();
-                Log::warning('agenda.mail_no_sender', ['activity_id' => $activity->getKey(), 'kind' => $kind, 'error' => $this->lastError]);
+        $t = $this->strings($locale);
+        $data = $this->details($activity, $locale, $toName);
+        $when = $data['date'].' '.$data['time'];
+        $subject = str_replace([':title', ':when'], [$activity->title, $when], $t['subject_'.$kind]);
+        $html = $this->html($t, $kind, $institutionName, $advisorName, $activity, $data);
+        $ics = $kind === 'reminder' ? null : (in_array($kind, ['cancelled', 'removed'], true) ? 'cancel' : 'request');
 
-                return false;
-            }
-            $institution = Institution::query()->find($activity->institution_id);
-            $institutionName = (string) ($institution->name ?? config('app.name'));
-            $fromAddress = $sender->from_address;
-            $advisorName = (string) ($activity->assignee->name ?? $institutionName);
-
-            $t = $this->strings($locale);
-            $data = $this->details($activity, $locale, $toName);
-            $when = $data['date'].' '.$data['time'];
-            $subject = str_replace([':title', ':when'], [$activity->title, $when], $t['subject_'.$kind]);
-            $html = $this->html($t, $kind, $institutionName, $advisorName, $activity, $data);
-
-            $files = [];
-            if ($kind !== 'reminder') {
-                $cancel = in_array($kind, ['cancelled', 'removed'], true);
-                $content = $this->ics->build($activity, [
-                    'organizer_name' => $advisorName,
-                    'organizer_email' => $fromAddress,
-                    'attendee_name' => $toName,
-                    'attendee_email' => $to,
-                    'description' => $this->icsDescription($activity, $data, $t),
-                    'location' => $activity->location,
-                    'url' => $data['link'],
-                ], $cancel);
-                $tmp = tempnam(sys_get_temp_dir(), 'ics');
-                if ($tmp === false) {
-                    throw new \RuntimeException('No se pudo crear el .ics temporal.');
-                }
-                file_put_contents($tmp, $content);
-                $files[] = [
-                    'path' => $tmp,
-                    'name' => $cancel ? 'cancelacion.ics' : 'invitacion.ics',
-                    'mime' => 'text/calendar; charset=UTF-8; method='.($cancel ? 'CANCEL' : 'REQUEST'),
-                ];
-            }
-
-            if ((bool) config('crm.agenda.sender_smtp', false)) {
-                $this->senders->send($sender, $to, $subject, $html, $files);
-            } else {
-                // Fuera de producción: transporte local seguro (log; en pruebas, Mail::fake),
-                // jamás el SMTP real del remitente. Mismo «De» y mismo contenido.
-                Mail::mailer('log')->to($to)->send(new OutboundEmail($fromAddress, $sender->name, $subject, $html, $files));
-            }
-
-            return true;
-        } catch (Throwable $e) {
-            $this->lastError = Str::limit(class_basename($e).': '.$e->getMessage(), 240);
-            Log::warning('agenda.mail_failed', ['activity_id' => $activity->getKey(), 'kind' => $kind, 'error' => $this->lastError]);
-
-            return false;
-        } finally {
-            if (is_string($tmp) && is_file($tmp)) {
-                @unlink($tmp);
-            }
-        }
+        return $this->deliver($activity, $to, $toName, $subject, $html, $ics, $this->icsDescription($activity, $data, $t), $kind);
     }
 
     /**

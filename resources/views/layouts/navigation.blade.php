@@ -134,6 +134,11 @@
                 </a>
             @endcan
             @if (auth()->user()?->canManageSettings())
+                <a href="{{ route('crm.calendar-templates') }}" class="mca-nav-item {{ request()->routeIs('crm.calendar-templates') ? 'on' : '' }}">
+                    <x-ui.icon name="calendar" /> {{ __('Plantillas de Calendario') }}
+                </a>
+            @endif
+            @if (auth()->user()?->canManageSettings())
                 <a href="{{ route('settings.index') }}" class="mca-nav-item {{ request()->routeIs('settings.*') ? 'on' : '' }}">
                     <x-ui.icon name="user-cog" /> {{ __('Ajustes') }}
                 </a>

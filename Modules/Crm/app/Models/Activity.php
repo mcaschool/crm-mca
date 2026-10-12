@@ -37,6 +37,7 @@ use Modules\Crm\Enums\ActivityType;
  * @property string|null $outcome
  * @property string|null $location
  * @property string|null $meeting_link
+ * @property string|null $meeting_room_hash
  * @property array<int,int>|null $reminders
  * @property string $uid
  * @property int $ics_sequence
@@ -64,7 +65,7 @@ class Activity extends Model
     protected $fillable = [
         'institution_id', 'lead_id', 'contact_id', 'assigned_to_user_id', 'created_by_user_id',
         'title', 'type', 'medium', 'starts_at', 'ends_at', 'timezone', 'priority', 'status',
-        'description', 'outcome', 'location', 'meeting_link', 'reminders', 'uid',
+        'description', 'outcome', 'location', 'meeting_link', 'meeting_room_hash', 'reminders', 'uid',
         'ics_sequence', 'reschedule_count', 'completed_at', 'cancelled_at',
         'exception_by_user_id', 'exception_at', 'exception_reason', 'idempotency_key',
     ];
@@ -139,6 +140,23 @@ class Activity extends Model
     public function reschedules(): HasMany
     {
         return $this->hasMany(ActivityReschedule::class);
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Relations\HasOne<Booking, $this> */
+    public function booking(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Booking::class);
+    }
+
+    /** sha256 del enlace de sala (Meet/Zoom) normalizado, para detectar salas simultáneas. */
+    public static function roomHash(?string $link): ?string
+    {
+        $link = is_string($link) ? strtolower(trim($link)) : '';
+        if ($link === '' || ! str_starts_with($link, 'https://')) {
+            return null;
+        }
+
+        return hash('sha256', rtrim(strtok($link, '#') ?: $link, '/'));
     }
 
     /** @return HasMany<ActivityReminder, $this> */

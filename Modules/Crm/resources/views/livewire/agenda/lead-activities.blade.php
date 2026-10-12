@@ -34,6 +34,21 @@
                 <a href="{{ route('crm.agenda.create', ['lead' => $lead->id]) }}" class="ghost solid" style="padding:6px 10px;font-size:12.5px"><x-ui.icon name="plus" class="i14" /> {{ __('Programar actividad') }}</a>
             @endif
             <a href="{{ route('crm.agenda.index') }}" class="ghost" style="padding:6px 10px;font-size:12.5px"><x-ui.icon name="calendar" class="i14" /> {{ __('Abrir Calendario') }}</a>
+            @if ($canCreate)
+                <button type="button" class="ghost" style="padding:6px 10px;font-size:12.5px" wire:click="generateBookingLink"><x-ui.icon name="external-link" class="i14" /> {{ __('Enlace de reserva') }}</button>
+            @endif
         </div>
+        @if ($bookingUrl !== '')
+            <div x-data="{ copied: false }" style="margin-top:8px;background:#F1F6FC;border:1px solid #D9E6F6;border-radius:10px;padding:8px 10px">
+                <div style="overflow-wrap:anywhere;font-size:12px">{{ $bookingUrl }}</div>
+                <button type="button" style="margin-top:6px;border:none;background:none;color:#1E5AA8;font-weight:600;cursor:pointer;padding:0;font-size:12px"
+                        x-on:click="navigator.clipboard.writeText(@js($bookingUrl)); copied = true; setTimeout(() => copied = false, 1500)">
+                    <span x-show="!copied">{{ __('Copiar enlace') }}</span><span x-show="copied">{{ __('Copiado') }}</span>
+                </button>
+            </div>
+        @endif
+        @if ($bookingNotice !== '')
+            <p style="color:#61748F;font-size:11.5px;margin:6px 0 0">{{ $bookingNotice }}</p>
+        @endif
     @endif
 </div>

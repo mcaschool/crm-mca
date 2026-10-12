@@ -11,8 +11,10 @@ use Illuminate\Support\Str;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Crm\Models\ActivityGuest;
 use Modules\Crm\Models\ActivityReminder;
+use Modules\Crm\Models\Booking;
 use Modules\Crm\Notifications\AgendaNotification;
 use Modules\Crm\Services\Agenda\AgendaMailer;
+use Modules\Crm\Services\Booking\BookingService;
 use Throwable;
 
 /**
@@ -59,6 +61,31 @@ class SendAgendaRemindersCommand extends Command
         }
 
         $this->info("Recordatorios: {$sent} enviados · {$failed} fallidos/reintento · {$skipped} omitidos.");
+
+        // Reservas públicas cuyos correos (confirmación o aviso al asesor) fallaron: reintento seguro
+        // (cada envío se reclama de forma atómica; nunca crea otra reserva ni duplica correos).
+        /** @var array<int,array{id:int,institution_id:int}> $pending */
+        $pending = $context->runGlobally(fn () => Booking::query()
+            ->where(fn ($q) => $q->whereNull('confirmation_sent_at')->orWhereNull('advisor_mailed_at'))
+            ->where('mail_attempts', '<', Booking::MAX_MAIL_ATTEMPTS)
+            ->where('created_at', '<=', now()->subMinute())
+            ->where('created_at', '>=', now()->subDays(2))
+            ->whereHas('activity', fn ($q) => $q->where('status', 'scheduled'))
+            ->limit(50)
+            ->get(['id', 'institution_id'])
+            ->map(fn (Booking $b) => ['id' => (int) $b->id, 'institution_id' => (int) $b->institution_id])
+            ->all());
+        foreach ($pending as $row) {
+            $context->runFor($row['institution_id'], function () use ($row): void {
+                $booking = Booking::query()->find($row['id']);
+                if ($booking !== null) {
+                    app(BookingService::class)->sendPostBookingMails($booking);
+                }
+            });
+        }
+        if ($pending !== []) {
+            $this->info('Reservas con correos reintentados: '.count($pending).'.');
+        }
 
         return self::SUCCESS;
     }

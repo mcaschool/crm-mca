@@ -23,9 +23,45 @@ class LeadActivities extends Component
     #[Locked]
     public int $leadId;
 
+    public string $bookingUrl = '';
+
+    public string $bookingNotice = '';
+
     public function mount(int $leadId): void
     {
         $this->leadId = $leadId;
+    }
+
+    /**
+     * Enlace de reserva CONTEXTUAL para este lead: la reserva hecha con él queda vinculada al lead
+     * sin exponer su id ni sus datos (token aleatorio; solo se guarda su hash; caduca).
+     */
+    public function generateBookingLink(\Modules\Crm\Services\Booking\BookingPublisher $publisher): void
+    {
+        $user = auth()->user();
+        abort_unless($user !== null && $user->can('create', Activity::class), 403);
+        $lead = Lead::query()->findOrFail($this->leadId);
+        abort_unless($user->can('view', $lead), 403);
+
+        $profile = \Modules\Crm\Models\MeetingProfile::forUser($user->id);
+        $institution = \Modules\Institutions\Models\Institution::query()->find($lead->institution_id);
+        if ($institution === null || ! $publisher->advisorCanReceive($user, $profile)) {
+            $this->bookingUrl = '';
+            $this->bookingNotice = __('Activa tu enlace de reservas en Calendario › Perfil de reuniones para generar enlaces.');
+
+            return;
+        }
+
+        $token = \Illuminate\Support\Str::random(48);
+        \Modules\Crm\Models\BookingLink::query()->create([
+            'lead_id' => $lead->id,
+            'user_id' => $user->id,
+            'created_by_user_id' => $user->id,
+            'token_hash' => \Modules\Crm\Models\Booking::hashToken($token),
+            'expires_at' => now()->addDays(\Modules\Crm\Models\BookingLink::TTL_DAYS),
+        ]);
+        $this->bookingUrl = route('booking.advisor', [$institution->getAttribute('slug'), $profile->booking_slug]).'?ref='.$token;
+        $this->bookingNotice = __('Enlace válido durante :n días. Las reservas hechas con él se vinculan a este lead.', ['n' => \Modules\Crm\Models\BookingLink::TTL_DAYS]);
     }
 
     public function render(): View

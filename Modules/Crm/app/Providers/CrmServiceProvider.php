@@ -88,12 +88,19 @@ class CrmServiceProvider extends ModuleServiceProvider
         Livewire::component('crm.agenda.profile', AgendaProfile::class);
         Livewire::component('crm.agenda.lead-activities', AgendaLeadActivities::class);
         Livewire::component('crm.agenda.alert-bell', AgendaAlertBell::class);
+        Livewire::component('crm.agenda.booking-settings', \Modules\Crm\Livewire\Agenda\BookingSettings::class);
+        Livewire::component('crm.agenda.calendar-templates', \Modules\Crm\Livewire\Agenda\CalendarTemplatesManage::class);
 
         // Rate limit del endpoint público InCompany: por IP (anti-inundación de leads
         // falsos). El exceso responde 429 (throttle:incompany en la ruta).
         RateLimiter::for('incompany', fn (Request $request) => Limit::perMinute(
             (int) config('crm.incompany.rate_per_min', 20)
         )->by($request->ip()));
+
+        // Reservas públicas del Calendario: lectura (páginas y huecos) y envío (reservar,
+        // cancelar, reprogramar) limitados por IP; el envío también se limita por correo.
+        RateLimiter::for('booking-read', fn (Request $request) => Limit::perMinute(120)->by($request->ip()));
+        RateLimiter::for('booking-submit', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
 
         // Rate limit del endpoint público GENERAL de captación de leads: por IP.
         // El exceso responde 429 (throttle:lead-intake en la ruta).
