@@ -81,7 +81,7 @@
                     @foreach ([
                         'new' => ['Nuevos sin contactar', 'user-plus', 'b-blue'],
                         'overdue' => ['Tareas vencidas', 'alert-triangle', 'b-warn'],
-                        'today' => ['Agenda de hoy', 'calendar', 'b-info'],
+                        'today' => ['Actividades de hoy', 'calendar', 'b-info'],
                         'next7' => ['Próximos 7 días', 'clock', 'b-blue'],
                         'followup' => ['En seguimiento', 'trending-up', 'b-warn'],
                         'enrolledMonth' => ['Matriculados del mes', 'graduation-cap', 'b-ok'],
@@ -100,7 +100,7 @@
             <div class="card ag-today">
                 <div class="card-h">
                     <div class="hi"><x-ui.icon name="calendar" /></div>
-                    <h3>{{ __('Mi agenda de hoy') }}</h3>
+                    <h3>{{ __('Mi calendario de hoy') }}</h3>
                     @if ($agendaToday->isNotEmpty())<span class="pill">{{ $agendaToday->count() }}</span>@endif
                     <a class="btn ghost" href="{{ route('crm.agenda.create') }}" style="padding:6px 10px"><x-ui.icon name="plus" /> {{ __('Nueva actividad') }}</a>
                 </div>

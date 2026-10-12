@@ -43,7 +43,12 @@
 .crm-page .ag-open::after{content:"";position:absolute;inset:0;border-radius:inherit}
 .crm-page .ag-open:focus-visible{outline:none}
 .crm-page .ag-open:focus-visible::after{outline:2px solid var(--blue-3);outline-offset:1px}
-.crm-page .ag-join{position:relative;z-index:1;display:inline-flex;align-items:center;gap:4px;margin-top:5px;padding:3px 8px;border-radius:999px;background:var(--blue);color:#fff;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;line-height:1.3}
+.crm-page .ag-join{position:relative;z-index:1;display:inline-flex;align-items:center;gap:4px;margin-top:5px;padding:3px 8px;border-radius:999px;background:var(--blue);color:#fff;font-size:11px;font-weight:600;text-decoration:none;line-height:1.3;max-width:100%;box-sizing:border-box;white-space:nowrap}
+.crm-page .ag-join .ic{flex:0 0 auto}
+/* Columnas de día estrechas (semana en pantallas medianas): el botón queda solo con icono (title y
+   aria-label conservan «Unirse»/«Abrir WhatsApp»); con espacio suficiente muestra el texto completo. */
+.crm-page .ag-dbody{container-type:inline-size}
+@container (max-width:150px){.crm-page .ag-join span{display:none}.crm-page .ag-join{padding:3px 6px}}
 .crm-page .ag-join:hover{background:var(--blue-deep)}
 .crm-page .ag-join .ic{color:#fff}
 .crm-page .ag-join.only-ic{padding:3px 5px;margin-top:3px}

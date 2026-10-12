@@ -119,7 +119,7 @@ class Dashboard extends Component
     }
 
     /**
-     * «Mi agenda de hoy»: actividades asignadas al usuario que empiezan hoy en su zona
+     * «Mi calendario de hoy»: actividades asignadas al usuario que empiezan hoy en su zona
      * horaria, sin las canceladas.
      *
      * @return Collection<int, Activity>
@@ -140,7 +140,7 @@ class Dashboard extends Component
             ->get();
     }
 
-    /** Completar desde «Mi agenda de hoy» (re-autoriza en el servidor). */
+    /** Completar desde «Mi calendario de hoy» (re-autoriza en el servidor). */
     public function completeActivity(int $id, ActivityService $service): void
     {
         $activity = Activity::query()->findOrFail($id);

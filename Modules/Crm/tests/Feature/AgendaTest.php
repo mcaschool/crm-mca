@@ -615,7 +615,7 @@ it('envía cada recordatorio una sola vez, nada si está cancelada y registra fa
 
 // 17 · Dashboard ------------------------------------------------------------------------------
 
-it('el inicio muestra los 6 indicadores enlazados (propios del asesor) y «Mi agenda de hoy»', function () {
+it('el inicio muestra los 6 indicadores enlazados (propios del asesor) y «Mi calendario de hoy»', function () {
     $i = agInst();
     agCtx($i);
     $admin = agUser($i, 'admin', null);
@@ -631,7 +631,7 @@ it('el inicio muestra los 6 indicadores enlazados (propios del asesor) y «Mi ag
     $overdue = agCreate($advisor, ['title' => 'Vencida', 'starts_at' => agAt('2026-10-19 01:00'), 'ends_at' => agAt('2026-10-19 01:30')], confirm: true);
 
     $adminView = Livewire::actingAs($admin)->test(Dashboard::class);
-    foreach (['Nuevos sin contactar', 'Tareas vencidas', 'Agenda de hoy', 'Próximos 7 días', 'En seguimiento', 'Matriculados del mes'] as $label) {
+    foreach (['Nuevos sin contactar', 'Tareas vencidas', 'Actividades de hoy', 'Próximos 7 días', 'En seguimiento', 'Matriculados del mes'] as $label) {
         $adminView->assertSee($label);
     }
     $adminView->assertDontSee('Total de registros')->assertDontSee('Puntuación promedio')
@@ -644,7 +644,7 @@ it('el inicio muestra los 6 indicadores enlazados (propios del asesor) y «Mi ag
     $k = $mine->viewData('kpis');
     expect($k['new']['n'])->toBe(1)->and($k['new']['url'])->toContain('mine=1')
         ->and($k['followup']['n'])->toBe(0)->and($k['today']['n'])->toBe(2)->and($k['next7']['n'])->toBe(1);
-    $mine->assertSee('Mi agenda de hoy')->assertSee('Demo de hoy')->assertDontSee('Demo ajena')
+    $mine->assertSee('Mi calendario de hoy')->assertSee('Demo de hoy')->assertDontSee('Demo ajena')
         ->assertSee('https://meet.google.com/abc-defg-hij', false)
         ->assertSee(route('crm.agenda.show', ['activity' => $today->id, 'panel' => 'reschedule']), false)
         ->call('completeActivity', $today->id);

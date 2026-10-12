@@ -100,7 +100,7 @@ it('admin y admisiones conservan Conversaciones hoy e Interés corporativo junto
             ->assertSee('Conversaciones hoy')
             ->assertSee('Interés corporativo')
             ->assertSee(route('crm.leads.index', ['corporate' => 1]));
-        foreach (['Nuevos sin contactar', 'Tareas vencidas', 'Agenda de hoy', 'Próximos 7 días', 'En seguimiento', 'Matriculados del mes', 'Mi agenda de hoy'] as $label) {
+        foreach (['Nuevos sin contactar', 'Tareas vencidas', 'Actividades de hoy', 'Próximos 7 días', 'En seguimiento', 'Matriculados del mes', 'Mi calendario de hoy'] as $label) {
             $view->assertSee($label);
         }
     }
