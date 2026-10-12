@@ -50,7 +50,7 @@
                     <div class="vr-line">
                         @if ($isZoom)
                             {{ __('Permiso para dirigirla') }}:
-                            <b>{{ $room->host_status === 'advisor_host' ? __('Sí: el asesor es el anfitrión') : __('No: anfitrión institucional') }}</b>
+                            <b>{{ $room->host_status === 'advisor_host' ? __('Sí: el asesor es el anfitrión') : __('No: el asesor no es el anfitrión') }}</b>
                         @else
                             {{ __('Asignación') }}:
                             <b>{{ $room->host_status === 'assigned' ? __('Coanfitrión asignado') : __('Sin coanfitrión') }}</b>

@@ -116,24 +116,22 @@ class ZoomClient
     }
 
     /**
-     * Crea una reunión permanente (tipo 3, sin hora fija) para el anfitrión indicado.
+     * Crea una reunión permanente (tipo 3, sin hora fija) cuyo anfitrión es el propio asesor (usuario
+     * con licencia de la cuenta). Sala de espera activa y sin «unirse antes que el anfitrión»: el
+     * asesor la inicia y admite a los invitados. Nunca se relaja la seguridad de la reunión.
      *
      * @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool}
      */
-    public function createMeeting(Integration $integration, string $hostId, string $topic, string $agenda, bool $advisorIsHost): array
+    public function createMeeting(Integration $integration, string $hostId, string $topic, string $agenda): array
     {
-        $settings = $advisorIsHost
-            // El asesor es anfitrión con su licencia: sala de espera, él admite a los invitados.
-            ? ['waiting_room' => true, 'join_before_host' => false]
-            // Anfitrión institucional: el asesor no puede iniciarla; se habilita la opción oficial
-            // «unirse antes que el anfitrión» y el acceso queda protegido por el código de acceso.
-            : ['waiting_room' => false, 'join_before_host' => true, 'jbh_time' => 0];
         $response = $this->api($integration, 'post', '/users/'.rawurlencode($hostId).'/meetings', [
             'topic' => Str::limit($topic, 190, ''),
             'type' => 3,
             'agenda' => Str::limit($agenda, 1900, ''),
             'default_password' => true,
-            'settings' => $settings + [
+            'settings' => [
+                'waiting_room' => true,
+                'join_before_host' => false,
                 'host_video' => true,
                 'participant_video' => false,
                 'mute_upon_entry' => true,

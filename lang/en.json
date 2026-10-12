@@ -1548,8 +1548,6 @@
     "Sala de :name": ":name's room",
     "Sala permanente del CRM.": "Permanent CRM room.",
     "El asesor es el anfitrión con su licencia de la cuenta institucional: inicia la reunión y admite a los invitados desde la sala de espera.": "The advisor is the host with their license on the institutional account: they start the meeting and admit guests from the waiting room.",
-    "Anfitrión institucional: el asesor no puede iniciar ni dirigir la reunión; entra como participante (unirse antes que el anfitrión) y comparte la capacidad del anfitrión.": "Institutional host: the advisor cannot start or lead the meeting; they join as a participant (join before host) and share the host's capacity.",
-    "Anfitrión institucional: la cuenta no permite unirse antes que el anfitrión, así que la reunión solo empieza cuando la inicia el anfitrión institucional. Mantén un enlace manual si el asesor debe dirigirla.": "Institutional host: the account does not allow joining before the host, so the meeting only starts when the institutional host starts it. Keep a manual link if the advisor must lead it.",
     "Solo la administración gestiona las salas institucionales.": "Only administrators manage institutional rooms.",
     "Proveedor no válido.": "Invalid provider.",
     "Credenciales guardadas. Conecta la cuenta institucional para dar el consentimiento.": "Credentials saved. Connect the institutional account to grant consent.",
@@ -1626,7 +1624,6 @@
     "sin enlace": "no link",
     "Permiso para dirigirla": "Permission to lead it",
     "Sí: el asesor es el anfitrión": "Yes: the advisor is the host",
-    "No: anfitrión institucional": "No: institutional host",
     "Asignación": "Assignment",
     "El perfil usa un enlace manual. Se conserva hasta que la administración lo reemplace por la sala institucional.": "The profile uses a manual link. It is kept until an administrator replaces it with the institutional room.",
     "Abrir Zoom": "Open Zoom",
@@ -1640,5 +1637,10 @@
     "Conectar la cuenta institucional": "Connect the institutional account",
     "Procesos de IA": "AI processes",
     "Sin configurar.": "Not configured.",
-    "Configurar": "Configure"
+    "Configurar": "Configure",
+    "El asesor no es un usuario con licencia de la cuenta de Zoom institucional, así que no podría iniciar ni dirigir la reunión. No se ha creado ninguna sala: asígnale una licencia en Zoom o mantén su enlace manual.": "The advisor is not a licensed user on the institutional Zoom account, so they could not start or lead the meeting. No room was created: assign them a Zoom license or keep their manual link.",
+    "El asesor no es el anfitrión: no puede iniciarla ni dirigirla («unirse antes» no lo convierte en anfitrión y la sala de espera lo impide), así que no se considera operativa. Usa un enlace manual o regenérala cuando tenga licencia.": "The advisor is not the host: they cannot start or lead it (“join before host” does not make them host and the waiting room prevents it), so it is not considered operational. Use a manual link or regenerate it once they have a license.",
+    "El asesor es el anfitrión con su licencia, pero la cuenta de Zoom no aplicó la sala de espera solicitada. Revisa la configuración de la cuenta.": "The advisor is the host with their license, but the Zoom account did not apply the requested waiting room. Check the account settings.",
+    "El asesor no es anfitrión": "Advisor is not host",
+    "No: el asesor no es el anfitrión": "No: the advisor is not the host"
 }

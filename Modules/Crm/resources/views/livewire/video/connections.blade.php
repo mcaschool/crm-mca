@@ -51,7 +51,7 @@
             'assigned' => __('Coanfitrión asignado'),
             'failed' => __('Sin coanfitrión'),
             'advisor_host' => __('El asesor es anfitrión'),
-            'institutional_host' => __('Anfitrión institucional'),
+            'not_host', 'institutional_host' => __('El asesor no es anfitrión'),
             default => '—',
         };
     @endphp

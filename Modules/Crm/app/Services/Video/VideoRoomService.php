@@ -186,13 +186,13 @@ class VideoRoomService
     /** @return array<string,mixed> */
     private function createZoom(Integration $integration, User $advisor, string $marker): array
     {
-        // ¿El asesor es usuario CON LICENCIA de la misma cuenta? Entonces es el anfitrión (opción
-        // oficial). Si no, la reunión es del anfitrión institucional y el asesor no puede dirigirla.
-        $own = $this->call($integration, 'zoom.user', fn () => $this->zoom->user($integration, (string) $advisor->email));
-        $advisorIsHost = $own !== null && $own['type'] === 2;
-        $hostId = $advisorIsHost ? $own['id'] : (string) $integration->secret('host_user_id', '');
-        if ($hostId === '') {
-            $hostId = $this->call($integration, 'zoom.test', fn () => $this->zoom->test($integration))['id'];
+        // Solo se crea si el asesor es usuario CON LICENCIA de la cuenta institucional: entonces es el
+        // anfitrión real de su reunión. «Unirse antes que el anfitrión» no convierte a nadie en
+        // anfitrión y la sala de espera lo bloquea, así que sin licencia no se crea ninguna sala
+        // (se informa y el perfil conserva su enlace manual).
+        $hostId = $this->licensedAdvisorId($integration, $advisor);
+        if ($hostId === null) {
+            throw new VideoProviderException('advisor_not_host', 'zoom: el asesor no es usuario con licencia de la cuenta');
         }
 
         $meeting = $this->call($integration, 'zoom.find', fn () => $this->zoom->findByMarker($integration, $hostId, $marker))
@@ -201,7 +201,6 @@ class VideoRoomService
                 $hostId,
                 __('Sala de :name', ['name' => $advisor->name]),
                 __('Sala permanente del CRM.').' '.$marker,
-                $advisorIsHost,
             ));
         if ($meeting['host_id'] !== $hostId) {
             throw new VideoProviderException('invalid_response', 'zoom.create: anfitrión inesperado');
@@ -212,9 +211,17 @@ class VideoRoomService
             'join_url' => $meeting['join_url'],
             'join_url_hash' => (string) Activity::roomHash($meeting['join_url']),
             'host_key' => 'zoom:'.$hostId,
-            'host_status' => $advisorIsHost ? 'advisor_host' : 'institutional_host',
-            'host_note' => $this->zoomNote($advisorIsHost, $meeting['join_before_host']),
+            'host_status' => 'advisor_host',
+            'host_note' => $this->zoomNote(true, $meeting['waiting_room']),
         ];
+    }
+
+    /** Id de Zoom del asesor si es usuario activo y CON LICENCIA de la cuenta institucional. */
+    private function licensedAdvisorId(Integration $integration, User $advisor): ?string
+    {
+        $own = $this->call($integration, 'zoom.user', fn () => $this->zoom->user($integration, (string) $advisor->email));
+
+        return $own !== null && $own['type'] === 2 ? $own['id'] : null;
     }
 
     private function refresh(VideoRoom $room, Integration $integration): VideoRoom
@@ -233,9 +240,16 @@ class VideoRoomService
                 }
             } else {
                 $meeting = $this->call($integration, 'zoom.get', fn () => $this->zoom->getMeeting($integration, $room->remote_id));
-                $ok = Activity::roomHash($meeting['join_url']) === $room->join_url_hash;
-                $updates = ['status' => $ok ? 'active' : 'error', 'last_error' => $ok ? null : 'El enlace de la reunión no coincide.',
-                    'host_note' => $this->zoomNote($room->host_status === 'advisor_host', $meeting['join_before_host'])];
+                $user = User::query()->find($room->user_id);
+                // Operativa solo si el asesor sigue siendo, con licencia, el anfitrión de ESA reunión.
+                $isHost = $user !== null && $this->licensedAdvisorId($integration, $user) === $meeting['host_id'];
+                $linkOk = Activity::roomHash($meeting['join_url']) === $room->join_url_hash;
+                $updates = [
+                    'status' => $linkOk && $isHost ? 'active' : 'error',
+                    'last_error' => ! $linkOk ? 'El enlace de la reunión no coincide.' : ($isHost ? null : 'El asesor no es el anfitrión de la reunión.'),
+                    'host_status' => $isHost ? 'advisor_host' : 'not_host',
+                    'host_note' => $this->zoomNote($isHost, $meeting['waiting_room']),
+                ];
             }
         } catch (VideoProviderException $e) {
             if ($e->kind !== 'not_found') {
@@ -249,15 +263,15 @@ class VideoRoomService
         return $room;
     }
 
-    private function zoomNote(bool $advisorIsHost, bool $joinBeforeHost): string
+    private function zoomNote(bool $advisorIsHost, bool $waitingRoom): string
     {
-        if ($advisorIsHost) {
-            return __('El asesor es el anfitrión con su licencia de la cuenta institucional: inicia la reunión y admite a los invitados desde la sala de espera.');
-        }
+        $note = match (true) {
+            ! $advisorIsHost => __('El asesor no es el anfitrión: no puede iniciarla ni dirigirla («unirse antes» no lo convierte en anfitrión y la sala de espera lo impide), así que no se considera operativa. Usa un enlace manual o regenérala cuando tenga licencia.'),
+            $waitingRoom => __('El asesor es el anfitrión con su licencia de la cuenta institucional: inicia la reunión y admite a los invitados desde la sala de espera.'),
+            default => __('El asesor es el anfitrión con su licencia, pero la cuenta de Zoom no aplicó la sala de espera solicitada. Revisa la configuración de la cuenta.'),
+        };
 
-        return $joinBeforeHost
-            ? __('Anfitrión institucional: el asesor no puede iniciar ni dirigir la reunión; entra como participante (unirse antes que el anfitrión) y comparte la capacidad del anfitrión.')
-            : __('Anfitrión institucional: la cuenta no permite unirse antes que el anfitrión, así que la reunión solo empieza cuando la inicia el anfitrión institucional. Mantén un enlace manual si el asesor debe dirigirla.');
+        return Str::limit($note, 250);
     }
 
     /**
