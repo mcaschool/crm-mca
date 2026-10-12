@@ -3,6 +3,7 @@
     <div class="mca-panel" style="padding:22px 26px 34px">
         <div class="mca-toolbar">
             <div class="sp"></div>
+            <a href="{{ route('integrations.video') }}" class="btn btn-ghost btn-sm">{{ __('Videoconferencias') }}</a>
             <a href="{{ route('integrations.ai-processes') }}" class="btn btn-ghost btn-sm">{{ __('Procesos de IA') }}</a>
         </div>
 

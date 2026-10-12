@@ -38,6 +38,7 @@ use Modules\Crm\Enums\ActivityType;
  * @property string|null $location
  * @property string|null $meeting_link
  * @property string|null $meeting_room_hash
+ * @property string|null $video_host_key
  * @property array<int,int>|null $reminders
  * @property string $uid
  * @property int $ics_sequence
@@ -65,7 +66,7 @@ class Activity extends Model
     protected $fillable = [
         'institution_id', 'lead_id', 'contact_id', 'assigned_to_user_id', 'created_by_user_id',
         'title', 'type', 'medium', 'starts_at', 'ends_at', 'timezone', 'priority', 'status',
-        'description', 'outcome', 'location', 'meeting_link', 'meeting_room_hash', 'reminders', 'uid',
+        'description', 'outcome', 'location', 'meeting_link', 'meeting_room_hash', 'video_host_key', 'reminders', 'uid',
         'ics_sequence', 'reschedule_count', 'completed_at', 'cancelled_at',
         'exception_by_user_id', 'exception_at', 'exception_reason', 'idempotency_key',
     ];

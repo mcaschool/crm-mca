@@ -90,6 +90,8 @@ class CrmServiceProvider extends ModuleServiceProvider
         Livewire::component('crm.agenda.alert-bell', AgendaAlertBell::class);
         Livewire::component('crm.agenda.booking-settings', \Modules\Crm\Livewire\Agenda\BookingSettings::class);
         Livewire::component('crm.agenda.calendar-templates', \Modules\Crm\Livewire\Agenda\CalendarTemplatesManage::class);
+        Livewire::component('crm.agenda.video-rooms', \Modules\Crm\Livewire\Agenda\VideoRooms::class);
+        Livewire::component('crm.video.connections', \Modules\Crm\Livewire\Video\Connections::class);
 
         // Rate limit del endpoint público InCompany: por IP (anti-inundación de leads
         // falsos). El exceso responde 429 (throttle:incompany en la ruta).

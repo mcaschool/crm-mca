@@ -115,6 +115,10 @@ $panel->group(function () {
     Route::get('/integrations', IntegrationsIndex::class)->name('integrations.index');
     Route::get('/integrations/{type}/configure', IntegrationsConfigure::class)->name('integrations.configure');
     Route::get('/ai-processes', AiProcessesManage::class)->name('integrations.ai-processes');
+    // Videoconferencias institucionales (Google Meet + Zoom), solo Admin por Policy.
+    Route::get('/integrations/videoconferencias', \Modules\Crm\Livewire\Video\Connections::class)->name('integrations.video');
+    Route::get('/integrations/videoconferencias/google/conectar', [\Modules\Crm\Http\Controllers\GoogleMeetOAuthController::class, 'start'])->name('integrations.video.google.connect');
+    Route::get('/integrations/videoconferencias/google/callback', [\Modules\Crm\Http\Controllers\GoogleMeetOAuthController::class, 'callback'])->name('integrations.video.google.callback');
 
     // Asesores Inteligentes (lista + crear/editar). Lista visible a todos los roles
     // del panel; crear/editar es solo de Administrador (gating en el componente Form).

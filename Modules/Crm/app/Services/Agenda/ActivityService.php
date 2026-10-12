@@ -24,8 +24,10 @@ use Modules\Crm\Models\ActivityReschedule;
 use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Lead;
 use Modules\Crm\Models\MeetingProfile;
+use Modules\Crm\Models\VideoRoom;
 use Modules\Crm\Notifications\AgendaNotification;
 use Modules\Crm\Services\EventService;
+use Modules\Crm\Services\Video\VideoCapacity;
 
 /**
  * Reglas de negocio de la agenda. Toda escritura que afecta al horario de un asesor ocurre
@@ -41,6 +43,7 @@ class ActivityService
         private readonly AgendaMailer $mailer,
         private readonly EventService $events,
         private readonly CurrentInstitution $context,
+        private readonly VideoCapacity $capacity,
     ) {}
 
     /**
@@ -67,11 +70,14 @@ class ActivityService
                     return [$existing, false];
                 }
 
-                $check = $this->availability->check($assignee->id, $start, $end);
+                $profile = MeetingProfile::forUser($assignee->id);
+                $link = $this->snapshotLink($medium, $profile);
+                $hostKey = $this->capacity->hostKeyForLink($medium, $link);
+                $this->lockVideoHost($hostKey);
+                $check = $this->availability->check($assignee->id, $start, $end, null, $hostKey);
                 $activity = new Activity;
                 $this->applyException($activity, $check, $actor, $confirmException, $exceptionReason);
 
-                $profile = MeetingProfile::forUser($assignee->id);
                 $activity->fill([
                     'lead_id' => $leadId,
                     'contact_id' => $contactId,
@@ -89,8 +95,9 @@ class ActivityService
                     'reminders' => $this->reminderOffsets($data['reminders'] ?? config('crm.agenda.default_reminders', [])),
                     'idempotency_key' => $key,
                 ]);
-                $activity->meeting_link = $this->snapshotLink($medium, $profile);
-                $activity->meeting_room_hash = $this->roomHashFor($medium, $activity->meeting_link);
+                $activity->meeting_link = $link;
+                $activity->meeting_room_hash = $this->roomHashFor($medium, $link);
+                $activity->video_host_key = $hostKey;
                 $activity->uid = Str::uuid()->toString().'@'.(parse_url((string) config('app.url'), PHP_URL_HOST) ?: 'crm.local');
                 $activity->save();
                 $this->syncReminders($activity);
@@ -142,13 +149,18 @@ class ActivityService
 
             $timesChanged = ! $fresh->starts_at->eq($start) || ! $fresh->ends_at->eq($end);
             $assigneeChanged = (int) $assignee?->id !== $fresh->assigned_to_user_id;
-            if ($timesChanged || $assigneeChanged) {
-                $check = $this->availability->check((int) $assignee?->id, $start, $end, $fresh->id);
+            $before = ['title' => $fresh->title, 'medium' => $fresh->medium, 'location' => $fresh->location];
+            $medium = isset($data['medium']) ? ActivityMedium::from((string) $data['medium']) : $fresh->medium;
+            $relink = $medium !== $before['medium'] || $assigneeChanged;
+            $profile = $relink ? MeetingProfile::forUser((int) $assignee?->id) : null;
+            $link = $profile !== null ? $this->snapshotLink($medium, $profile) : $fresh->meeting_link;
+            $hostKey = $profile !== null ? $this->capacity->hostKeyForLink($medium, $link) : $fresh->video_host_key;
+            if ($timesChanged || $assigneeChanged || $hostKey !== $fresh->video_host_key) {
+                $this->lockVideoHost($hostKey);
+                $check = $this->availability->check((int) $assignee?->id, $start, $end, $fresh->id, $hostKey);
                 $this->applyException($fresh, $check, $actor, $confirmException, $exceptionReason);
             }
 
-            $before = ['title' => $fresh->title, 'medium' => $fresh->medium, 'location' => $fresh->location];
-            $medium = isset($data['medium']) ? ActivityMedium::from((string) $data['medium']) : $fresh->medium;
             $fresh->fill(array_filter([
                 'title' => isset($data['title']) ? trim((string) $data['title']) : null,
                 'type' => isset($data['type']) ? ActivityType::from((string) $data['type']) : null,
@@ -166,10 +178,10 @@ class ActivityService
             [$fresh->lead_id, $fresh->contact_id] = $links;
             $fresh->medium = $medium;
             $fresh->assigned_to_user_id = (int) $assignee?->id;
-            if ($medium !== $before['medium'] || $assigneeChanged) {
-                $profile = MeetingProfile::forUser($fresh->assigned_to_user_id);
-                $fresh->meeting_link = $this->snapshotLink($medium, $profile);
-                $fresh->meeting_room_hash = $this->roomHashFor($medium, $fresh->meeting_link);
+            if ($profile !== null) {
+                $fresh->meeting_link = $link;
+                $fresh->meeting_room_hash = $this->roomHashFor($medium, $link);
+                $fresh->video_host_key = $hostKey;
                 if ($medium === ActivityMedium::InPerson && ! $fresh->location) {
                     $fresh->location = $profile->address;
                 }
@@ -493,6 +505,56 @@ class ActivityService
         if (! $activity->isScheduled()) {
             throw ValidationException::withMessages(['activity' => __('Solo se pueden modificar actividades programadas.')]);
         }
+    }
+
+    /**
+     * Serializa las escrituras que consumen la capacidad de un mismo anfitrión de Zoom (aunque
+     * sean de asesores distintos). Siempre después del bloqueo del asesor: orden fijo, sin interbloqueos.
+     */
+    private function lockVideoHost(?string $hostKey): void
+    {
+        if ($hostKey !== null) {
+            VideoRoom::query()->where('host_key', $hostKey)->orderBy('id')->lockForUpdate()->get(['id']);
+        }
+    }
+
+    /**
+     * Operación explícita: pone el enlace de la sala institucional en una actividad FUTURA y
+     * programada que aún no tiene enlace. Nunca toca actividades con enlace (ni pasadas). Si la
+     * sala o la capacidad del anfitrión ya están ocupadas a esa hora, no la cambia. Avisa a los
+     * invitados con la actualización (misma vía de siempre: .ics con SEQUENCE nueva).
+     */
+    public function attachRoomLink(Activity $activity, VideoRoom $room): bool
+    {
+        $medium = $room->provider === 'zoom' ? ActivityMedium::Zoom : ActivityMedium::GoogleMeet;
+        $done = DB::transaction(function () use ($activity, $room, $medium): bool {
+            $this->lockAdvisor($activity->assigned_to_user_id);
+            $this->lockVideoHost($room->host_key);
+            /** @var Activity|null $fresh */
+            $fresh = Activity::query()->whereKey($activity->id)->lockForUpdate()->first();
+            if ($fresh === null || ! $fresh->isScheduled() || $fresh->medium !== $medium || $fresh->meeting_link
+                || $fresh->assigned_to_user_id !== $room->user_id || ! $fresh->starts_at->isFuture()) {
+                return false;
+            }
+            $roomBusy = Activity::query()->scheduled()->where('meeting_room_hash', $room->join_url_hash)->whereKeyNot($fresh->id)
+                ->where('starts_at', '<', $fresh->ends_at)->where('ends_at', '>', $fresh->starts_at)->exists();
+            if ($roomBusy || ($room->host_key !== null && ! $this->capacity->fits($room->host_key, $fresh->starts_at, $fresh->ends_at, $fresh->id))) {
+                return false;
+            }
+            $fresh->meeting_link = $room->join_url;
+            $fresh->meeting_room_hash = $room->join_url_hash;
+            $fresh->video_host_key = $room->host_key;
+            $fresh->ics_sequence++;
+            $fresh->save();
+            $activity->setRawAttributes($fresh->getAttributes(), true);
+
+            return true;
+        });
+        if ($done) {
+            $this->notifyGuests($activity, 'update');
+        }
+
+        return $done;
     }
 
     /** Serializa las escrituras de horario de un mismo asesor. */

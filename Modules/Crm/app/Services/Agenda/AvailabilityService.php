@@ -10,6 +10,7 @@ use Modules\Crm\Models\Activity;
 use Modules\Crm\Models\AvailabilityException;
 use Modules\Crm\Models\AvailabilityRule;
 use Modules\Crm\Models\MeetingProfile;
+use Modules\Crm\Services\Video\VideoCapacity;
 
 /**
  * Disponibilidad de un asesor calculada SOLO con reglas internas: intervalos semanales,
@@ -23,7 +24,10 @@ use Modules\Crm\Models\MeetingProfile;
  */
 class AvailabilityService
 {
-    public function check(int $userId, Carbon $start, Carbon $end, ?int $ignoreActivityId = null): AvailabilityCheck
+    /**
+     * @param  string|null  $videoHostKey  anfitrión de Zoom de la sala institucional (capacidad simultánea compartida)
+     */
+    public function check(int $userId, Carbon $start, Carbon $end, ?int $ignoreActivityId = null, ?string $videoHostKey = null): AvailabilityCheck
     {
         $profile = MeetingProfile::forUser($userId);
         $start = $start->copy()->utc();
@@ -43,6 +47,10 @@ class AvailabilityService
         $hours = $this->hoursIssue($userId, $profile->timezone, $start, $end);
         if ($hours !== null) {
             $issues[] = $hours;
+        }
+
+        if ($videoHostKey !== null && ! app(VideoCapacity::class)->fits($videoHostKey, $start, $end, $ignoreActivityId)) {
+            $issues[] = 'video_capacity';
         }
 
         $conflicts = $this->conflicts($userId, $start, $end, $profile->buffer_before_minutes, $profile->buffer_after_minutes, $ignoreActivityId);

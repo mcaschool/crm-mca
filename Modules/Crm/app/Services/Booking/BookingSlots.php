@@ -10,19 +10,23 @@ use Modules\Crm\Models\Activity;
 use Modules\Crm\Models\AvailabilityException;
 use Modules\Crm\Models\AvailabilityRule;
 use Modules\Crm\Models\MeetingProfile;
+use Modules\Crm\Services\Video\VideoCapacity;
 
 /**
  * Huecos reservables públicamente de un asesor en un rango (UTC), calculados SOLO con la
  * disponibilidad del Calendario (Fase 1): intervalos semanales en su zona horaria (con horario
  * de verano), excepciones y ausencias, actividades programadas con sus márgenes, antelación
  * mínima y horizonte máximo. Además aplica una política conservadora de sala: una misma sala de
- * Meet/Zoom no admite dos reuniones simultáneas, aunque sean de asesores distintos.
+ * Meet/Zoom no admite dos reuniones simultáneas, aunque sean de asesores distintos; y en salas
+ * institucionales de Zoom, la capacidad simultánea del anfitrión (VideoCapacity).
  *
  * Para visitantes NO existe la excepción manual: un asesor sin horario configurado no ofrece huecos.
  * Carga reglas, excepciones y actividades una sola vez por consulta.
  */
 class BookingSlots
 {
+    public function __construct(private readonly VideoCapacity $capacity) {}
+
     /**
      * @return array<int,Carbon> inicios en UTC, ordenados
      */
@@ -62,6 +66,10 @@ class BookingSlots
             ->where('starts_at', '<', $to->copy()->addMinutes($duration))
             ->where('ends_at', '>', $from)
             ->get(['id', 'starts_at', 'ends_at']);
+        // Zoom institucional: la capacidad simultánea del anfitrión se comparte entre asesores.
+        $hostKey = $this->capacity->hostKeyForRoomHash($roomHash);
+        $hostBusy = $hostKey === null ? new Collection : $this->capacity->busy($hostKey, $from, $to->copy()->addMinutes($duration), $ignoreActivityId);
+        $hostLimit = $hostKey === null ? 0 : $this->capacity->limit();
 
         $slots = [];
         for ($day = $firstDay->copy(); $day->lte($lastDay); $day->addDay()) {
@@ -104,6 +112,9 @@ class BookingSlots
                         if ($a->starts_at->lt($end) && $a->ends_at->gt($start)) {
                             continue 2;
                         }
+                    }
+                    if ($hostKey !== null && ! $this->capacity->fitsIn($hostBusy, $start, $end, $hostLimit)) {
+                        continue;
                     }
                     $slots[$start->getTimestamp()] = $start;
                 }

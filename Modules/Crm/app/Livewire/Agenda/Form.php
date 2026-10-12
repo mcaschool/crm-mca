@@ -23,6 +23,7 @@ use Modules\Crm\Services\Agenda\ActivityService;
 use Modules\Crm\Services\Agenda\AgendaDirectory;
 use Modules\Crm\Services\Agenda\AvailabilityService;
 use Modules\Crm\Services\Agenda\ScheduleConflictException;
+use Modules\Crm\Services\Video\VideoCapacity;
 
 /**
  * Crear y editar una actividad. La disponibilidad se comprueba al mostrar (aviso en vivo
@@ -234,7 +235,9 @@ class Form extends Component
         if ($this->date !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->date) && $this->validTimezone()) {
             if (preg_match('/^\d{2}:\d{2}$/', $this->time) && $this->duration >= 5) {
                 [$start, $end] = $this->interval();
-                $check = $availability->check($advisorId, $start, $end, $this->activityId);
+                $medium = ActivityMedium::tryFrom($this->medium) ?? ActivityMedium::None;
+                $hostKey = app(VideoCapacity::class)->hostKeyForLink($medium, MeetingProfile::forUser($advisorId)->linkFor($medium));
+                $check = $availability->check($advisorId, $start, $end, $this->activityId, $hostKey);
             }
             $profileTz = MeetingProfile::forUser($advisorId)->timezone;
             $slots = $profileTz === $this->timezone

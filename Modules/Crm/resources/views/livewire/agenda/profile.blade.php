@@ -82,6 +82,8 @@
             </div>
         </form>
 
+        <livewire:crm.agenda.video-rooms :owner-id="$ownerId" :key="'video-rooms-'.$ownerId" />
+
         <livewire:crm.agenda.booking-settings :owner-id="$ownerId" :key="'booking-settings-'.$ownerId" />
     </div>
 </div>

@@ -471,4 +471,35 @@ return [
         // solo en producción; en local/pruebas se usa el transporte «log» (nunca SMTP real).
         'sender_smtp' => (bool) env('CRM_AGENDA_SENDER_SMTP', env('APP_ENV') === 'production'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Videoconferencias institucionales (Calendario · Fase 2)
+    |--------------------------------------------------------------------------
+    | Una conexión de Google Meet (OAuth 2.0 + PKCE) y una de Zoom (Server-to-Server
+    | OAuth) por institución; credenciales cifradas en `integrations`. Aquí solo van
+    | endpoints oficiales, tiempos de espera y límites, nunca credenciales.
+    */
+    'video' => [
+        'timeout' => (int) env('CRM_VIDEO_HTTP_TIMEOUT', 10),
+        'retries' => 2,
+        'google' => [
+            'auth_url' => 'https://accounts.google.com/o/oauth2/v2/auth',
+            'token_url' => 'https://oauth2.googleapis.com/token',
+            'revoke_url' => 'https://oauth2.googleapis.com/revoke',
+            'userinfo_url' => 'https://openidconnect.googleapis.com/v1/userinfo',
+            'api_url' => 'https://meet.googleapis.com/v2',
+            // Mínimos: identificar la cuenta + crear/gestionar SOLO los espacios creados por la app.
+            'scopes' => ['openid', 'email', 'https://www.googleapis.com/auth/meetings.space.created'],
+        ],
+        'zoom' => [
+            'token_url' => 'https://zoom.us/oauth/token',
+            'revoke_url' => 'https://zoom.us/oauth/revoke',
+            'api_url' => 'https://api.zoom.us/v2',
+            // Reuniones simultáneas por anfitrión: 1 por defecto; el máximo autorizado lo fija
+            // la licencia (Pro 1; Business/Education/Enterprise hasta 2). No se puede superar.
+            'default_concurrency' => 1,
+            'max_concurrency' => (int) env('CRM_ZOOM_MAX_CONCURRENCY', 2),
+        ],
+    ],
 ];

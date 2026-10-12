@@ -15,7 +15,7 @@ use Modules\Crm\Models\Activity;
 final class AvailabilityCheck
 {
     /**
-     * @param  array<int,string>  $issues  códigos: outside_hours · absence · notice · horizon · past
+     * @param  array<int,string>  $issues  códigos: outside_hours · absence · notice · horizon · past · video_capacity
      * @param  Collection<int,Activity>  $conflicts
      */
     public function __construct(
@@ -37,6 +37,7 @@ final class AvailabilityCheck
             'notice' => __('No respeta la antelación mínima configurada.'),
             'horizon' => __('Supera el horizonte máximo de programación.'),
             'past' => __('La hora de inicio ya pasó.'),
+            'video_capacity' => __('Supera la capacidad simultánea de Zoom del anfitrión institucional.'),
         ];
         $out = array_map(fn (string $c) => $map[$c] ?? $c, $this->issues);
 

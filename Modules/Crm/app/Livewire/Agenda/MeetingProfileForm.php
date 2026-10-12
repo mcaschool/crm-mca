@@ -8,6 +8,7 @@ use DateTimeZone;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Modules\Core\Support\PhoneNumber;
 use Modules\Crm\Enums\ActivityMedium;
@@ -59,6 +60,15 @@ class MeetingProfileForm extends Component
             'address' => (string) $p->address,
             'isActive' => (bool) $p->is_active,
         ]);
+    }
+
+    /** La administración asignó una sala institucional: el formulario muestra el enlace vigente. */
+    #[On('video-room-assigned')]
+    public function reloadLinks(): void
+    {
+        $p = MeetingProfile::forUser($this->ownerId);
+        $this->meetUrl = (string) $p->meet_url;
+        $this->zoomUrl = (string) $p->zoom_url;
     }
 
     public function save(): void
