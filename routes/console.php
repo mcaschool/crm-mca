@@ -42,6 +42,12 @@ Schedule::command('social:meta-leads-poll')
     ->withoutOverlapping(10)
     ->runInBackground();
 
+// Agenda: recordatorios vencidos (24 h / 1 h / 15 min) al asesor y a los invitados. Idempotente
+// (cada recordatorio se reclama de forma atómica antes de enviarse).
+Schedule::command('crm:agenda-reminders')
+    ->everyMinute()
+    ->withoutOverlapping(5);
+
 // Estado de la conexión con Meta de cada empresa (caducidad/revocación), para avisar en el panel.
 Schedule::command('social:meta-connections-check')
     ->dailyAt('04:10')

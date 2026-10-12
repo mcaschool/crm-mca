@@ -56,6 +56,10 @@ class Index extends Component
     #[Url(as: 'corporate')]
     public string $corp = '';
 
+    /** 'month' = actualizados este mes (p. ej. «Matriculados del mes» del inicio). */
+    #[Url]
+    public string $period = '';
+
     public function mount(): void
     {
         $this->authorize('viewAny', Lead::class);
@@ -72,7 +76,7 @@ class Index extends Component
     public function updated(string $property): void
     {
         // Cualquier cambio de filtro vuelve a la primera pagina.
-        if (in_array($property, ['search', 'status', 'advisor', 'area', 'mine', 'corp'], true)) {
+        if (in_array($property, ['search', 'status', 'advisor', 'area', 'mine', 'corp', 'period'], true)) {
             $this->resetPage();
         }
     }
@@ -100,6 +104,7 @@ class Index extends Component
             ->when($this->advisor !== '', fn (Builder $q) => $q->where('bot_id', (int) $this->advisor))
             ->when($this->area !== '', fn (Builder $q) => $q->where('area', $this->area))
             ->when($this->mine === '1', fn (Builder $q) => $q->where('assigned_to_user_id', auth()->id()))
+            ->when($this->period === 'month', fn (Builder $q) => $q->where('updated_at', '>=', now()->startOfMonth()))
             ->when($this->corp === '1', fn (Builder $q) => $q->where(function (Builder $sub): void {
                 // Corporativo por CATEGORIA (marca de primer nivel) o por el evento
                 // de interes corporativo registrado en la conversacion.

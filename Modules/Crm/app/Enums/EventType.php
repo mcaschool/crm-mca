@@ -24,6 +24,11 @@ enum EventType: string
     case Recontacted = 'recontacted';
     case IncompanyRutaGenerada = 'incompany_ruta_generada';
     case IncompanySolicitaContacto = 'incompany_solicita_contacto';
+    // Agenda: solo la referencia a la actividad (sus datos viven en crm_activities).
+    case ActivityScheduled = 'activity_scheduled';
+    case ActivityRescheduled = 'activity_rescheduled';
+    case ActivityCompleted = 'activity_completed';
+    case ActivityCancelled = 'activity_cancelled';
 
     /** @return array<int,string> */
     public static function values(): array

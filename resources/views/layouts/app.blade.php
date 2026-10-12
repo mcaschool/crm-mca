@@ -77,6 +77,9 @@
                     {{-- Aviso in-app de leads nuevos (sondeo ~10s): campana = toggle de sonido + pop-up. --}}
                     <livewire:crm.new-lead-notifier />
 
+                    {{-- Avisos internos de la agenda (actividad asignada y recordatorios). --}}
+                    <livewire:crm.agenda.alert-bell />
+
                     {{-- Campana de alertas de IA (solo administradores): servicio caído/restablecido. --}}
                     <livewire:ai.ai-alert-bell />
 

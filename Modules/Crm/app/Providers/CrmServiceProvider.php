@@ -13,6 +13,14 @@ use Livewire\Livewire;
 use Modules\Crm\Console\PurgeRetentionCommand;
 use Modules\Crm\Console\RelinkIncompanyProgramsCommand;
 use Modules\Crm\Console\ResetDemoCommand;
+use Modules\Crm\Console\SendAgendaRemindersCommand;
+use Modules\Crm\Livewire\Agenda\AlertBell as AgendaAlertBell;
+use Modules\Crm\Livewire\Agenda\Availability as AgendaAvailability;
+use Modules\Crm\Livewire\Agenda\Form as AgendaForm;
+use Modules\Crm\Livewire\Agenda\Index as AgendaIndex;
+use Modules\Crm\Livewire\Agenda\LeadActivities as AgendaLeadActivities;
+use Modules\Crm\Livewire\Agenda\MeetingProfileForm as AgendaProfile;
+use Modules\Crm\Livewire\Agenda\Show as AgendaShow;
 use Modules\Crm\Livewire\Contacts\Index as ContactsIndex;
 use Modules\Crm\Livewire\Contacts\Show as ContactsShow;
 use Modules\Crm\Livewire\Conversations\Show as ConversationsShow;
@@ -21,8 +29,10 @@ use Modules\Crm\Livewire\Leads\Create as LeadsCreate;
 use Modules\Crm\Livewire\Leads\Index as LeadsIndex;
 use Modules\Crm\Livewire\Leads\Show as LeadsShow;
 use Modules\Crm\Livewire\NewLeadNotifier;
+use Modules\Crm\Models\Activity;
 use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Lead;
+use Modules\Crm\Policies\ActivityPolicy;
 use Modules\Crm\Policies\ContactPolicy;
 use Modules\Crm\Policies\LeadPolicy;
 use Nwidart\Modules\Support\ModuleServiceProvider;
@@ -48,6 +58,7 @@ class CrmServiceProvider extends ModuleServiceProvider
         PurgeRetentionCommand::class,
         RelinkIncompanyProgramsCommand::class,
         ResetDemoCommand::class,
+        SendAgendaRemindersCommand::class,
     ];
 
     /**
@@ -68,6 +79,15 @@ class CrmServiceProvider extends ModuleServiceProvider
         Livewire::component('crm.conversations.show', ConversationsShow::class);
         Livewire::component('crm.dashboard', Dashboard::class);
         Livewire::component('crm.new-lead-notifier', NewLeadNotifier::class);
+
+        Gate::policy(Activity::class, ActivityPolicy::class);
+        Livewire::component('crm.agenda.index', AgendaIndex::class);
+        Livewire::component('crm.agenda.form', AgendaForm::class);
+        Livewire::component('crm.agenda.show', AgendaShow::class);
+        Livewire::component('crm.agenda.availability', AgendaAvailability::class);
+        Livewire::component('crm.agenda.profile', AgendaProfile::class);
+        Livewire::component('crm.agenda.lead-activities', AgendaLeadActivities::class);
+        Livewire::component('crm.agenda.alert-bell', AgendaAlertBell::class);
 
         // Rate limit del endpoint público InCompany: por IP (anti-inundación de leads
         // falsos). El exceso responde 429 (throttle:incompany en la ruta).

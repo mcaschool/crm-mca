@@ -77,14 +77,78 @@
                     <div class="card kpi"><div class="top"><div class="kic b-warn"><x-ui.icon name="percent" /></div></div><div><div class="num">{{ $conversion }}%</div><div class="lab">Conversión</div></div></div>
                     <a class="card kpi gold" href="{{ route('crm.leads.index', ['corporate' => 1]) }}" style="text-decoration:none;color:inherit" title="Ver los leads con interés corporativo"><div class="top"><div class="kic b-gold"><x-ui.icon name="building-2" /></div><x-ui.icon name="chevron-right" class="i14" style="color:var(--muted)" /></div><div><div class="num">{{ $counts['corporate'] }}</div><div class="lab">Interés corporativo</div></div></a>
                     @break
-                @default {{-- admin / admisiones --}}
-                    <div class="card kpi"><div class="top"><div class="kic b-blue"><x-ui.icon name="user-plus" /></div></div><div><div class="num">{{ $counts['new'] }}</div><div class="lab">Nuevos sin contactar</div></div></div>
-                    <div class="card kpi"><div class="top"><div class="kic b-warn"><x-ui.icon name="clock" /></div></div><div><div class="num">{{ $counts['followup'] }}</div><div class="lab">En seguimiento</div></div></div>
-                    <div class="card kpi"><div class="top"><div class="kic b-info"><x-ui.icon name="message-circle" /></div></div><div><div class="num">{{ $counts['conversationsToday'] }}</div><div class="lab">Conversaciones hoy</div></div></div>
-                    <div class="card kpi"><div class="top"><div class="kic b-ok"><x-ui.icon name="graduation-cap" /></div></div><div><div class="num">{{ $counts['enrolledMonth'] }}</div><div class="lab">Matriculados (mes)</div></div></div>
-                    <a class="card kpi gold" href="{{ route('crm.leads.index', ['corporate' => 1]) }}" style="text-decoration:none;color:inherit" title="Ver los leads con interés corporativo"><div class="top"><div class="kic b-gold"><x-ui.icon name="building-2" /></div><x-ui.icon name="chevron-right" class="i14" style="color:var(--muted)" /></div><div><div class="num">{{ $counts['corporate'] }}</div><div class="lab">Interés corporativo</div></div></a>
+                @default {{-- admin / admisiones: cada indicador abre su listado filtrado --}}
+                    @foreach ([
+                        'new' => ['Nuevos sin contactar', 'user-plus', 'b-blue'],
+                        'overdue' => ['Tareas vencidas', 'alert-triangle', 'b-warn'],
+                        'today' => ['Agenda de hoy', 'calendar', 'b-info'],
+                        'next7' => ['Próximos 7 días', 'clock', 'b-blue'],
+                        'followup' => ['En seguimiento', 'trending-up', 'b-warn'],
+                        'enrolledMonth' => ['Matriculados del mes', 'graduation-cap', 'b-ok'],
+                    ] as $k => [$label, $icon, $tone])
+                        <a class="card kpi" href="{{ $kpis[$k]['url'] }}" style="text-decoration:none;color:inherit" data-kpi="{{ $k }}">
+                            <div class="top"><div class="kic {{ $tone }}"><x-ui.icon name="{{ $icon }}" /></div><x-ui.icon name="chevron-right" class="i14" style="color:var(--muted);width:14px;height:14px" /></div>
+                            <div><div class="num">{{ $kpis[$k]['n'] }}</div><div class="lab">{{ __($label) }}</div></div>
+                        </a>
+                    @endforeach
             @endswitch
         </div>
+
+        @if ($agendaToday !== null)
+            <div class="card ag-today">
+                <div class="card-h">
+                    <div class="hi"><x-ui.icon name="calendar" /></div>
+                    <h3>{{ __('Mi agenda de hoy') }}</h3>
+                    @if ($agendaToday->isNotEmpty())<span class="pill">{{ $agendaToday->count() }}</span>@endif
+                    <a class="btn ghost" href="{{ route('crm.agenda.create') }}" style="padding:6px 10px"><x-ui.icon name="plus" /> {{ __('Nueva actividad') }}</a>
+                </div>
+                <div class="card-b">
+                    @forelse ($agendaToday as $a)
+                        @php
+                            $s = $a->starts_at->copy()->setTimezone($agendaTz);
+                            $join = $a->isScheduled() ? $a->joinUrl() : null;
+                        @endphp
+                        <div class="ag-trow" wire:key="today-{{ $a->id }}">
+                            <div class="h">{{ $s->format('H:i') }}</div>
+                            <div class="tx">
+                                <a href="{{ route('crm.agenda.show', $a) }}" class="n">{{ $a->title }}</a>
+                                <div class="m">{{ $a->relatedName() ?? __('Sin lead/contacto') }} · {{ $a->medium->label() }} · {{ $a->status->label() }}</div>
+                            </div>
+                            <div class="acts">
+                                @if ($join)
+                                    <a class="btn primary" href="{{ $join }}" target="_blank" rel="noopener noreferrer">{{ __('Unirse') }}</a>
+                                @endif
+                                @if ($a->isScheduled())
+                                    <button type="button" class="btn ghost" wire:click="completeActivity({{ $a->id }})" wire:loading.attr="disabled">{{ __('Completar') }}</button>
+                                    <a class="btn ghost" href="{{ route('crm.agenda.show', ['activity' => $a->id, 'panel' => 'reschedule']) }}">{{ __('Reprogramar') }}</a>
+                                @endif
+                                <a class="btn ghost" href="{{ route('crm.agenda.show', $a) }}">{{ __('Ver detalle') }}</a>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="empty">{{ __('No tienes actividades para hoy.') }}</div>
+                    @endforelse
+                </div>
+            </div>
+            <style>
+                .mca-home .ag-today .card-h .btn{margin-left:auto}
+                .mca-home .ag-trow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:11px}
+                .mca-home .ag-trow:hover{background:#F7F9FC}
+                .mca-home .ag-trow .h{font-weight:700;color:var(--mca-blue);width:48px;flex-shrink:0;font-size:14px}
+                .mca-home .ag-trow .tx{flex:1;min-width:0}
+                .mca-home .ag-trow .n{font-size:14px;font-weight:600;color:inherit;text-decoration:none}
+                .mca-home .ag-trow .m{font-size:12px;color:var(--mca-ink-3);margin-top:1px}
+                .mca-home .ag-trow .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+                .mca-home .ag-trow .acts .btn{padding:6px 10px;font-size:12.5px}
+                .mca-home .kpis:has(> [data-kpi]){grid-template-columns:repeat(6,1fr)}
+                @media(max-width:1300px){.mca-home .kpis:has(> [data-kpi]){grid-template-columns:repeat(3,1fr)}}
+                @media(max-width:760px){
+                    .mca-home .kpis:has(> [data-kpi]){grid-template-columns:repeat(2,1fr)}
+                    .mca-home .ag-trow{flex-wrap:wrap}
+                    .mca-home .ag-trow .acts{width:100%;justify-content:flex-start;padding-left:60px}
+                }
+            </style>
+        @endif
 
         {{-- Filas por persona --}}
         @switch($persona)

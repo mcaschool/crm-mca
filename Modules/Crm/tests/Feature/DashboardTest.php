@@ -86,10 +86,11 @@ it('los widgets reflejan datos reales (leads nuevos y corporativo)', function ()
     }
     Event::factory()->create(['contact_id' => $contacts[0]->id, 'bot_id' => $bot->id, 'event_type' => 'corporate_interest']);
 
-    Livewire::test(Dashboard::class)
+    $view = Livewire::test(Dashboard::class)
         ->assertSee('Nuevos sin contactar')
         ->assertSee('3')  // 3 leads nuevos
-        ->assertSee('Interés corporativo');
+        ->assertSee('Empresa'); // etiqueta corporativa en la lista de leads nuevos
+    expect($view->viewData('kpis')['new']['n'])->toBe(3);
 });
 
 it('la grafica Leads por area cuenta por area con datos reales', function () {

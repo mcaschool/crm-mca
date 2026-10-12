@@ -47,6 +47,13 @@
                     <a href="{{ route('crm.leads.index') }}" style="color:var(--blue);font-weight:600;text-decoration:none">Quitar filtro</a>
                 </div>
             @endif
+            @if ($mine === '1' || $period === 'month')
+                <div style="display:flex;align-items:center;gap:8px;padding:10px 4px 2px;font-size:13px;color:var(--muted)">
+                    <x-ui.icon name="filter" class="i14" />
+                    {{ trim(($mine === '1' ? __('Solo tus leads asignados.') : '').' '.($period === 'month' ? __('Solo los actualizados este mes.') : '')) }}
+                    <a href="{{ route('crm.leads.index') }}" style="color:var(--blue);font-weight:600;text-decoration:none">{{ __('Quitar filtro') }}</a>
+                </div>
+            @endif
 
             <table>
                 <thead>

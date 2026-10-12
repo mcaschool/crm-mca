@@ -25,15 +25,6 @@
 /* separación clara logo -> switcher */
 .mca-brand-gap{height:22px}
 
-/* switcher de línea de producto (tarjeta delimitada; preparada para más líneas) */
-.mca-switcher{background:var(--mca-card);border:1px solid var(--mca-nav-border);border-radius:var(--mca-radius-sm);
-  padding:11px 12px;display:flex;align-items:center;gap:10px;cursor:default;box-shadow:var(--mca-shadow-sm)}
-.mca-switcher .sic{width:32px;height:32px;border-radius:9px;background:var(--mca-blue-soft);color:var(--mca-blue);display:grid;place-items:center;flex-shrink:0}
-.mca-switcher .tx{flex:1;min-width:0}
-.mca-switcher .t1{font-size:13.5px;font-weight:600;color:var(--mca-ink)}
-.mca-switcher .t2{font-size:11px;color:var(--mca-ink-3);margin-top:1px}
-.mca-switcher .chev{color:var(--mca-ink-3);flex-shrink:0}
-
 /* grupos de navegación delimitados */
 .mca-nav{margin-top:20px;display:flex;flex-direction:column;gap:6px;flex:1;overflow-y:auto}
 .mca-nav::-webkit-scrollbar{width:6px}

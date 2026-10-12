@@ -11,9 +11,14 @@ use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Modules\Crm\Enums\ActivityStatus;
+use Modules\Crm\Models\Activity;
 use Modules\Crm\Models\Conversation;
 use Modules\Crm\Models\Event;
 use Modules\Crm\Models\Lead;
+use Modules\Crm\Policies\ActivityPolicy;
+use Modules\Crm\Services\Agenda\ActivityService;
+use Modules\Crm\Services\Agenda\AgendaDirectory;
 
 /**
  * Dashboard / inicio del panel. Pantalla de entrada, adaptada por PERSONA (ver
@@ -69,6 +74,78 @@ class Dashboard extends Component
             'referredPending' => Lead::query()->where('assigned_to_user_id', $user->getKey())
                 ->whereNotIn('status', ['enrolled', 'discarded'])->count(),
         ];
+    }
+
+    /**
+     * Indicadores operativos (admin / admisiones), todos enlazados a listados filtrados.
+     * Administración: totales de la institución. Asesor: SOLO lo suyo (leads asignados
+     * y sus actividades), nunca totales globales.
+     *
+     * @return array<string, array{n:int, url:string}>
+     */
+    private function operativeKpis(User $user, bool $own): array
+    {
+        $tz = app(AgendaDirectory::class)->timezoneFor((int) $user->getKey());
+        $leads = fn () => Lead::query()->when($own, fn ($q) => $q->where('assigned_to_user_id', $user->getKey()));
+        $leadUrl = fn (array $p) => route('crm.leads.index', $own ? $p + ['mine' => 1] : $p);
+        $acts = fn () => ActivityPolicy::visibleQuery(Activity::query(), $user)
+            ->when($own, fn ($q) => $q->where('assigned_to_user_id', $user->getKey()));
+        $dayStart = Carbon::now($tz)->startOfDay();
+        $startOfMonth = Carbon::now()->startOfMonth();
+
+        return [
+            'new' => ['n' => $leads()->where('status', 'new')->count(), 'url' => $leadUrl(['status' => 'new'])],
+            'overdue' => [
+                'n' => $acts()->where('status', ActivityStatus::Scheduled->value)->where('ends_at', '<', now())->count(),
+                'url' => route('crm.agenda.index', ['overdue' => 1]),
+            ],
+            'today' => [
+                'n' => $acts()->where('status', '!=', ActivityStatus::Cancelled->value)
+                    ->where('starts_at', '>=', $dayStart->copy()->utc())
+                    ->where('starts_at', '<', $dayStart->copy()->addDay()->utc())->count(),
+                'url' => route('crm.agenda.index', ['view' => 'day', 'date' => $dayStart->toDateString()]),
+            ],
+            'next7' => [
+                'n' => $acts()->where('status', ActivityStatus::Scheduled->value)
+                    ->where('starts_at', '>=', now())->where('starts_at', '<', now()->addDays(7))->count(),
+                'url' => route('crm.agenda.index', ['view' => 'list', 'range' => 7]),
+            ],
+            'followup' => ['n' => $leads()->where('status', 'qualified')->count(), 'url' => $leadUrl(['status' => 'qualified'])],
+            'enrolledMonth' => [
+                'n' => $leads()->where('status', 'enrolled')->where('updated_at', '>=', $startOfMonth)->count(),
+                'url' => $leadUrl(['status' => 'enrolled', 'period' => 'month']),
+            ],
+        ];
+    }
+
+    /**
+     * «Mi agenda de hoy»: actividades asignadas al usuario que empiezan hoy en su zona
+     * horaria, sin las canceladas.
+     *
+     * @return Collection<int, Activity>
+     */
+    private function myAgendaToday(User $user): Collection
+    {
+        $tz = app(AgendaDirectory::class)->timezoneFor((int) $user->getKey());
+        $dayStart = Carbon::now($tz)->startOfDay();
+
+        return Activity::query()
+            ->with(['lead.contact', 'contact'])
+            ->where('assigned_to_user_id', $user->getKey())
+            ->where('status', '!=', ActivityStatus::Cancelled->value)
+            ->where('starts_at', '>=', $dayStart->copy()->utc())
+            ->where('starts_at', '<', $dayStart->copy()->addDay()->utc())
+            ->orderBy('starts_at')
+            ->limit(20)
+            ->get();
+    }
+
+    /** Completar desde «Mi agenda de hoy» (re-autoriza en el servidor). */
+    public function completeActivity(int $id, ActivityService $service): void
+    {
+        $activity = Activity::query()->findOrFail($id);
+        $this->authorize('update', $activity);
+        $service->complete($activity, auth()->user());
     }
 
     /**
@@ -225,6 +302,8 @@ class Dashboard extends Component
             'readOnly' => $user->crmReadOnly(),
             'canCreate' => $user->can('create', Lead::class),
             'counts' => $counts,
+            'agendaToday' => $user->can('create', Activity::class) ? $this->myAgendaToday($user) : null,
+            'agendaTz' => app(AgendaDirectory::class)->timezoneFor((int) $user->getKey()),
         ];
 
         // Datos especificos por persona (solo se consulta lo que la vista usara).
@@ -247,6 +326,7 @@ class Dashboard extends Component
         } else { // admin / admisiones (operativo, actua): igual que el v4 de referencia
             $newLeads = $this->leadList(fn ($q) => $q->where('status', 'new'), 'created_at', 'desc', 6);
             $data['newLeads'] = $newLeads;
+            $data['kpis'] = $this->operativeKpis($user, $persona !== 'admin');
             $data['corporate'] = $this->corporateMap($newLeads);
             $data['activity'] = $this->recentActivity();
             $data['leadsByArea'] = $this->leadsByArea();

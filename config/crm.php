@@ -455,4 +455,17 @@ return [
 
         'levels_order' => ['inicial', 'intermedio', 'avanzado'],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Agenda interna (Fase 1)
+    |--------------------------------------------------------------------------
+    | Zona horaria por defecto de un perfil de reuniones aún no configurado (cada
+    | asesor la ajusta en «Perfil de reuniones»). Las fechas se guardan en UTC.
+    */
+    'agenda' => [
+        'default_timezone' => (string) env('CRM_AGENDA_TIMEZONE', 'UTC'),
+        // Recordatorios marcados por defecto al crear (minutos antes).
+        'default_reminders' => [60],
+    ],
 ];

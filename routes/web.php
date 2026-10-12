@@ -13,6 +13,11 @@ use Modules\Ai\Livewire\Knowledge\Library as KnowledgeLibrary;
 use Modules\Catalog\Livewire\Categories\Manage as CategoriesManage;
 use Modules\Catalog\Livewire\Programs\Form as ProgramsForm;
 use Modules\Catalog\Livewire\Programs\Index as ProgramsIndex;
+use Modules\Crm\Livewire\Agenda\Availability as AgendaAvailability;
+use Modules\Crm\Livewire\Agenda\Form as AgendaForm;
+use Modules\Crm\Livewire\Agenda\Index as AgendaIndex;
+use Modules\Crm\Livewire\Agenda\MeetingProfileForm as AgendaProfile;
+use Modules\Crm\Livewire\Agenda\Show as AgendaShow;
 use Modules\Crm\Livewire\Contacts\Index as ContactsIndex;
 use Modules\Crm\Livewire\Contacts\Show as ContactsShow;
 use Modules\Crm\Livewire\Conversations\Show as ConversationsShow;
@@ -115,6 +120,12 @@ $panel->group(function () {
     Route::get('/crm/contacts', ContactsIndex::class)->name('crm.contacts.index');
     Route::get('/crm/contacts/{contact}', ContactsShow::class)->name('crm.contacts.show');
     Route::get('/crm/conversations/{conversation}', ConversationsShow::class)->name('crm.conversations.show');
+    Route::get('/crm/agenda', AgendaIndex::class)->name('crm.agenda.index');
+    Route::get('/crm/agenda/create', AgendaForm::class)->name('crm.agenda.create');
+    Route::get('/crm/agenda/availability', AgendaAvailability::class)->name('crm.agenda.availability');
+    Route::get('/crm/agenda/profile', AgendaProfile::class)->name('crm.agenda.profile');
+    Route::get('/crm/agenda/{activity}', AgendaShow::class)->whereNumber('activity')->name('crm.agenda.show');
+    Route::get('/crm/agenda/{activity}/edit', AgendaForm::class)->whereNumber('activity')->name('crm.agenda.edit');
 
     // Bandeja social unificada (Livewire full-page; acceso canWorkCrm, gated en mount).
     Route::get('/social/bandeja', \Modules\Social\Livewire\Inbox::class)->name('social.inbox');

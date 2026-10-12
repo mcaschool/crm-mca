@@ -30,16 +30,6 @@
 
     <div class="mca-brand-gap"></div>
 
-    {{-- Selector de línea de producto: preparado para varias; hoy una sola --}}
-    <div class="mca-switcher" title="Línea de producto activa">
-        <div class="sic"><x-ui.icon name="layers" /></div>
-        <div class="tx">
-            <div class="t1">Microcredenciales</div>
-            <div class="t2">Línea activa</div>
-        </div>
-        <x-ui.icon name="chevron-down" class="chev" style="width:16px;height:16px" />
-    </div>
-
     <nav class="mca-nav">
         <div class="mca-nav-group">
             <div class="mca-nav-label">CAPTACIÓN</div>
@@ -62,6 +52,11 @@
                     <x-ui.icon name="contact" /> {{ __('Contactos') }}
                     <span x-show="n > 0" x-text="n"
                           style="margin-left:auto;min-width:18px;height:18px;padding:0 6px;border-radius:10px;background:#C9A84C;color:#241a05;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">{{ $crmBadges['contacts'] ?: '' }}</span>
+                </a>
+            @endcan
+            @can('viewAny', \Modules\Crm\Models\Activity::class)
+                <a href="{{ route('crm.agenda.index') }}" class="mca-nav-item {{ request()->routeIs('crm.agenda.*') ? 'on' : '' }}">
+                    <x-ui.icon name="calendar" /> {{ __('Agenda') }}
                 </a>
             @endcan
             @if (auth()->user()?->canSendEmail())
