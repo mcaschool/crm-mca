@@ -1,11 +1,12 @@
 <div>
     <x-ui.styles />
-    <div class="mca-panel" style="padding:22px 26px 34px">
-        <div class="mca-toolbar">
-            <div class="sp"></div>
-            <a href="{{ route('integrations.video') }}" class="btn btn-ghost btn-sm">{{ __('Videoconferencias') }}</a>
-            <a href="{{ route('integrations.ai-processes') }}" class="btn btn-ghost btn-sm">{{ __('Procesos de IA') }}</a>
-        </div>
+    <div class="mca-panel mca-page">
+        <x-ui.page-header :title="__('Integraciones')">
+            <x-slot:actions>
+                <a href="{{ route('integrations.video') }}" class="btn btn-ghost btn-sm">{{ __('Videoconferencias') }}</a>
+                <a href="{{ route('integrations.ai-processes') }}" class="btn btn-ghost btn-sm">{{ __('Procesos de IA') }}</a>
+            </x-slot:actions>
+        </x-ui.page-header>
 
         @if (session('status'))
             <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>

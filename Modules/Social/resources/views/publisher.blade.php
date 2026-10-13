@@ -1,7 +1,7 @@
-<div class="sp-wrap" wire:key="social-publisher">
+<div class="sp-wrap mca-page" wire:key="social-publisher">
     <style>
         .sp-wrap{--sp-blue:#1E5AA8;--sp-ink:#1F2A37;--sp-muted:#6B7686;--sp-line:#E6EAF0;--sp-bg:#F4F6F9;
-            font-family:'DM Sans',system-ui,sans-serif;color:var(--sp-ink);padding:22px 24px}
+            font-family:'DM Sans',system-ui,sans-serif;color:var(--sp-ink)}
         .sp-wrap *{box-sizing:border-box}
         .sp-head h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em}
         .sp-head p{margin:4px 0 18px;font-size:13.5px;color:var(--sp-muted)}

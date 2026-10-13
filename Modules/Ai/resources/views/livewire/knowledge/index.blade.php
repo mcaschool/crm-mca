@@ -1,6 +1,6 @@
 <div>
     <x-ui.styles />
-    <div class="mca-panel" style="padding:22px 26px 34px">
+    <div class="mca-panel mca-page">
         {{-- Aviso: esta vista es solo de consulta; la gestión completa está en el Centro. --}}
         <div style="display:flex;gap:10px;align-items:flex-start;background:#eef4fb;border:1px solid #c8daf0;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13.5px">
             <x-ui.icon name="book-open" class="ic" style="width:18px;height:18px;color:var(--mca,#1E5AA8);flex:none;margin-top:1px" />

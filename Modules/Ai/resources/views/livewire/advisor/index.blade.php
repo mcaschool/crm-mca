@@ -1,13 +1,15 @@
 <div>
     <x-ui.styles />
-    <div class="mca-panel" style="padding:22px 26px 34px">
-        <div class="mca-head" style="justify-content:flex-end">
+    <div class="mca-panel mca-page">
+        <x-ui.page-header :title="__('Asesores Inteligentes')">
             @if ($canManage)
-                <a href="{{ route('advisors.create') }}" class="btn btn-primary">
-                    <x-ui.icon name="plus" /> Crear asesor
-                </a>
+                <x-slot:actions>
+                    <a href="{{ route('advisors.create') }}" class="btn btn-primary">
+                        <x-ui.icon name="plus" /> Crear asesor
+                    </a>
+                </x-slot:actions>
             @endif
-        </div>
+        </x-ui.page-header>
 
         @if (session('status'))
             <div class="mca-toast ok fade"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>

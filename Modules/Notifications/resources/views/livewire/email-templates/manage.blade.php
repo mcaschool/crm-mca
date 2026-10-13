@@ -4,8 +4,8 @@
          reservado (vacío) para que TODO el contenido (cabecera, pestañas, formulario y
          lista) crezca junto DENTRO de sus márgenes y siga alineado. Solo cuando el
          carril es visible (>1180px). --}}
-    <style>@media(min-width:1181px){.mca-rail{flex-basis:210px}}.mail-tb-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed img{max-width:100%}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
-    <div class="mca-panel" style="padding:22px 26px 34px;max-width:900px">
+    <style>.mail-tb-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed img{max-width:100%}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
+    <div class="mca-panel mca-page" style="max-width:900px">
 
         @if ($scope === 'shared')
             <x-ui.settings-tabs />

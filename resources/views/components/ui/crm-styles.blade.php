@@ -106,6 +106,7 @@
 .crm-page .d-body{display:grid;grid-template-columns:1fr 340px;gap:0}
 .crm-page .d-body.no-conv{grid-template-columns:1fr}
 @media(max-width:820px){.crm-page .d-body{grid-template-columns:1fr}}
+@media(max-width:640px){.crm-page .toolbar .search{min-width:0;width:100%;margin-left:0}}
 .crm-page .conv{padding:18px 20px;border-right:1px solid var(--line)}
 .crm-page .conv h3,.crm-page .side h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 12px;display:flex;align-items:center;gap:7px}
 .crm-page .side .block+.block{margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}

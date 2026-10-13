@@ -1,6 +1,7 @@
 <div>
     <x-ui.styles />
-    <div class="mca-panel" style="padding:22px 26px 34px">
+    <div class="mca-panel mca-page">
+        <x-ui.page-header :title="__('Contactos')" :count="$contacts->count()" />
         <div class="mca-toolbar">
             <div class="mca-search">
                 <x-ui.icon name="search" class="ic" style="width:16px;height:16px" />

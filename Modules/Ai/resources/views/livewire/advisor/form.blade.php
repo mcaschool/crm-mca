@@ -10,7 +10,7 @@
         .adv-bg{align-items:center;gap:8px;white-space:nowrap}
         .adv-form .mca-seg button,.adv-form .mca-filebtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
     </style>
-    <div class="mca-panel adv-form" style="padding:22px 26px 34px">
+    <div class="mca-panel adv-form mca-page">
         <div class="mca-head">
             <div style="display:flex;align-items:center;gap:12px">
                 <a href="{{ route('advisors.index') }}" class="btn btn-ghost btn-sm" title="{{ __('Volver') }}" aria-label="{{ __('Volver') }}"><x-ui.icon name="chevron-left" class="ic" style="width:16px;height:16px" /></a>

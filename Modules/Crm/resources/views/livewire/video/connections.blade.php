@@ -56,7 +56,7 @@
         };
     @endphp
 
-    <div class="mca-panel" style="padding:22px 26px 34px">
+    <div class="mca-panel mca-page">
         <div class="mca-head">
             <div style="display:flex;align-items:center;gap:12px">
                 <a href="{{ route('integrations.index') }}" class="btn btn-ghost btn-sm" title="{{ __('Volver') }}"><x-ui.icon name="chevron-left" class="ic" style="width:16px;height:16px" /></a>

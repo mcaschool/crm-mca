@@ -1,6 +1,6 @@
 <div>
     <x-ui.styles />
-    <div class="mca-panel" style="padding:22px 26px 34px">
+    <div class="mca-panel mca-page">
         <x-ui.settings-tabs />
 
         @if (session('status'))

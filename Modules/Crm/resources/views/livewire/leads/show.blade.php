@@ -1,4 +1,4 @@
-<div class="crm-page" style="padding:22px 26px 34px">
+<div class="crm-page mca-page">
     <x-ui.crm-styles />
     @php
         $c = $lead->contact;

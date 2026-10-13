@@ -19,21 +19,8 @@
     </head>
     <body class="antialiased" style="margin:0">
         @php
-            // El título y su icono derivan de la SECCIÓN activa (misma pareja que el
-            // sidebar), no se hardcodean por pantalla: al añadir páginas se mantiene solo.
-            [$section, $sectionIcon] = match (true) {
-                request()->routeIs('dashboard') => [__('Inicio'), 'home'],
-                request()->routeIs('crm.leads.*') => [__('Leads'), 'users'],
-                request()->routeIs('crm.contacts.*'), request()->routeIs('crm.conversations.*') => [__('Contactos'), 'contact'],
-                request()->routeIs('advisors.*'), request()->routeIs('ai.*') => [__('Asesores Inteligentes'), 'bot'],
-                request()->routeIs('catalog.*') => [__('Catálogo'), 'book-open'],
-                request()->routeIs('users.*') => [__('Usuarios'), 'user-cog'],
-                request()->routeIs('integrations.*') => [__('Integraciones'), 'plug'],
-                request()->routeIs('audit.*') => [__('Auditoría'), 'shield'],
-                request()->routeIs('settings.*') => [__('Ajustes'), 'user-cog'],
-                request()->routeIs('profile.*') => [__('Mi perfil'), 'user'],
-                default => [config('app.name', 'Panel'), 'home'],
-            };
+            // Migas de pan: sección del menú + página actual, desde un único mapa de rutas.
+            $crumbs = \App\View\Breadcrumbs::for(request());
         @endphp
 
         <div class="mca-shell" x-data="{ sidebarOpen: false }">
@@ -46,7 +33,20 @@
                     <button type="button" class="mca-hamburger" @click="sidebarOpen = true" aria-label="{{ __('Abrir menú') }}">
                         <x-ui.icon name="menu" style="width:22px;height:22px" />
                     </button>
-                    <h1 class="mca-topbar-title"><x-ui.icon name="{{ $sectionIcon }}" class="tico" /> {{ $section }}</h1>
+                    <nav class="mca-crumbs" aria-label="{{ __('Ruta de navegación') }}">
+                        <x-ui.icon name="{{ $crumbs['icon'] }}" class="tico" />
+                        <ol>
+                            @foreach ($crumbs['items'] as $crumb)
+                                <li>
+                                    @if ($crumb['url'])
+                                        <a href="{{ $crumb['url'] }}">{{ $crumb['label'] }}</a>
+                                    @else
+                                        <span aria-current="page">{{ $crumb['label'] }}</span>
+                                    @endif
+                                </li>
+                            @endforeach
+                        </ol>
+                    </nav>
                     <div class="sp"></div>
 
                     @if (config('crm.multi_institution') && auth()->user()->isSuperAdmin())
@@ -104,19 +104,16 @@
                 </header>
 
                 <main class="mca-content">
-                    {{-- Marco común: cuerpo de la página + carril derecho reservado (vacío,
-                         para métricas futuras). Todas las pantallas lo heredan de aquí. --}}
+                    {{-- Marco común: el cuerpo de la página ocupa todo el ancho disponible
+                         (hasta un máximo legible); cada página aporta su margen con .mca-page. --}}
                     <div class="mca-canvas">
                         <div class="mca-canvas-body">
                             @isset($header)
-                                <div style="padding:22px 24px 0">{{ $header }}</div>
+                                <div class="mca-page" style="padding-bottom:0">{{ $header }}</div>
                             @endisset
 
                             {{ $slot }}
                         </div>
-                        <aside class="mca-rail" aria-hidden="true">
-                            <div class="rail-ph"></div>
-                        </aside>
                     </div>
                 </main>
             </div>

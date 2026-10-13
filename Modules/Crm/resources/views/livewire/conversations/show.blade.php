@@ -1,11 +1,9 @@
 <div>
     <x-ui.styles />
-    <div class="mca-panel" style="padding:22px 26px 34px">
-        @if ($conversation->contact)
-            <a href="{{ route('crm.contacts.show', $conversation->contact) }}" class="btn btn-ghost btn-sm" style="margin-bottom:14px">
-                <x-ui.icon name="chevron-left" class="ic" style="width:15px;height:15px" /> {{ __('Ficha del contacto') }}
-            </a>
-        @endif
+    <div class="mca-panel mca-page">
+        <x-ui.page-header :title="__('Conversación').' #'.$conversation->id"
+            :back="$conversation->contact ? route('crm.contacts.show', $conversation->contact) : null"
+            :back-label="__('Ficha del contacto')" />
 
         <div style="display:flex;flex-direction:column;gap:16px;max-width:820px">
             <div class="mca-muted" style="font-size:12.5px">

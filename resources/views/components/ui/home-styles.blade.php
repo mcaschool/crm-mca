@@ -5,7 +5,7 @@
 --}}
 <style>
 /* Inicio: única pantalla con carril derecho reservado (para métricas futuras). */
-.mca-home{font-family:var(--mca-font);color:var(--mca-ink);padding:22px 26px 34px;display:grid;grid-template-columns:1fr;gap:18px;align-items:start}
+.mca-home{font-family:var(--mca-font);color:var(--mca-ink);padding:24px var(--mca-gutter,28px) 40px;display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}
 .mca-home *{box-sizing:border-box}
 .mca-home .ic{flex:0 0 auto}
 .mca-home .home-main{display:flex;flex-direction:column;gap:16px;min-width:0}
@@ -15,7 +15,7 @@
 .mca-home .rail-ic .ic{width:20px;height:20px}
 .mca-home .rail-t{font-size:13.5px;font-weight:600;color:var(--mca-ink-2)}
 .mca-home .rail-s{font-size:12px;color:var(--mca-ink-3);margin-top:5px;line-height:1.5}
-@media(max-width:1180px){.mca-home{grid-template-columns:1fr}}
+@media(max-width:1180px){.mca-home{grid-template-columns:minmax(0,1fr)}}
 
 /* saludo compacto (una línea) */
 .mca-home .hello{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
@@ -34,7 +34,7 @@
 /* grid */
 .mca-home .grid{display:grid;gap:16px}
 .mca-home .kpis{grid-template-columns:repeat(5,1fr)}
-.mca-home .cols{grid-template-columns:7fr 5fr}
+.mca-home .cols{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
 .mca-home .card{background:var(--mca-card);border:1px solid var(--mca-card-border);border-radius:var(--mca-radius);box-shadow:var(--mca-shadow)}
 
 /* KPI */
@@ -111,7 +111,7 @@
 
 @media(max-width:1100px){
   .mca-home .kpis{grid-template-columns:repeat(2,1fr)}
-  .mca-home .cols{grid-template-columns:1fr}
+  .mca-home .cols{grid-template-columns:minmax(0,1fr)}
 }
 @media(max-width:760px){
   .mca-home .kpis{grid-template-columns:1fr}

@@ -1,11 +1,8 @@
 @push('styles')
     <style>
-        /* La bandeja es una pantalla tipo app: ocupa el ANCHO COMPLETO del bloque central.
-           El layout reserva un carril derecho vacío de 300px en todas las páginas; aquí lo
-           recogemos SOLO para la bandeja (vía :has) y damos gutters propios al cuerpo. */
-        .mca-canvas:has(.social-inbox){padding-right:0}
-        .mca-canvas:has(.social-inbox) .mca-rail{display:none}
-        .mca-canvas:has(.social-inbox) .mca-canvas-body{padding:18px 22px}
+        /* La bandeja es una pantalla tipo app que llena el alto de la ventana: márgenes
+           verticales más cortos que .mca-page y los mismos laterales que el resto del panel. */
+        .mca-canvas-body:has(.social-inbox){padding:18px var(--mca-gutter)}
         .social-inbox{--sb-blue:#1E5AA8;--sb-gold:#C9A84C;--sb-ink:#1F2A37;--sb-muted:#6B7686;--sb-line:#E6EAF0;--sb-bg:#F4F6F9;
             display:flex;gap:16px;height:calc(100vh - 96px);min-height:460px;width:100%;font-family:'DM Sans',system-ui,sans-serif;color:var(--sb-ink)}
         .social-inbox *{box-sizing:border-box}

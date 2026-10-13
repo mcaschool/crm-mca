@@ -1,6 +1,6 @@
 <div>
     <x-ui.styles />
-    <div class="mca-panel" style="padding:22px 26px 34px">
+    <div class="mca-panel mca-page">
         <p class="mca-sub" style="margin:0 0 18px">Tus datos son gestionados por un administrador. Aquí solo puedes cambiar tu contraseña y tu foto.</p>
 
         @if (session('status'))

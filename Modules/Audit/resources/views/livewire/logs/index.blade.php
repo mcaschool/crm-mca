@@ -1,5 +1,5 @@
 @use('Modules\Audit\Support\AuditPresenter')
-<div class="crm-page" style="padding:22px 26px 34px">
+<div class="crm-page mca-page">
     <x-ui.crm-styles />
     @once
         <style>
@@ -17,13 +17,10 @@
     @endonce
 
     <div style="width:100%">
+        <x-ui.page-header title="Auditoría de seguridad" :count="$logs->total()" />
+
         <div class="panel">
             <div class="toolbar">
-                <h2>
-                    <x-ui.icon name="shield" class="i18" /> Auditoría de seguridad
-                    <span class="count">{{ $logs->total() }}</span>
-                </h2>
-
                 <select class="fbtn" wire:model.live="action" aria-label="Filtrar por tipo de acción">
                     <option value="">Acción · todas</option>
                     @foreach ($actionOptions as $opt)
@@ -48,17 +45,19 @@
                 @endif
             </div>
 
-            <table>
+            <div class="mca-table-scroll">
+            <table class="mca-rtable">
                 <thead>
                     <tr>
-                        <th>Fecha / hora</th><th>Actor</th><th>Acción</th><th>Entidad</th><th>IP</th>
+                        <th class="rt-sticky">Fecha / hora</th><th>Actor</th><th>Acción</th><th>Entidad</th><th>IP</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($logs as $log)
                         <tr wire:key="log-{{ $log->id }}">
-                            <td class="date">{{ $log->created_at?->translatedFormat('d M Y · H:i') ?? '—' }}</td>
-                            <td class="actor">
+                            <td class="date rt-primary rt-sticky">{{ $log->created_at?->translatedFormat('d M Y · H:i') ?? '—' }}</td>
+                            <td class="actor" data-label="Actor">
+                                <div>
                                 @if ($log->user)
                                     <div class="nm">{{ $log->user->name }}</div>
                                     <div class="sub">{{ $log->user->email }}</div>
@@ -68,20 +67,22 @@
                                 @else
                                     <div class="nm">Sistema</div>
                                 @endif
+                                </div>
                             </td>
-                            <td>
+                            <td data-label="Acción">
                                 <span class="chip ev-{{ AuditPresenter::actionGroup($log->action) }}">{{ AuditPresenter::actionLabel($log->action) }}</span>
                             </td>
-                            <td class="ent">{{ AuditPresenter::entityLabel($log->auditable_type, $log->auditable_id) }}</td>
-                            <td class="ip">{{ $log->ip ?? '—' }}</td>
+                            <td class="ent rt-wrap" data-label="Entidad">{{ AuditPresenter::entityLabel($log->auditable_type, $log->auditable_id) }}</td>
+                            <td class="ip" data-label="IP">{{ $log->ip ?? '—' }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="empty">No hay eventos de auditoría con esos filtros.</td>
+                            <td colspan="5" class="empty rt-empty">No hay eventos de auditoría con esos filtros.</td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
+            </div>
 
             @if ($logs->hasPages())
                 <div class="pager">

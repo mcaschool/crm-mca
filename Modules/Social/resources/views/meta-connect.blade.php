@@ -1,7 +1,7 @@
 <div>
     <x-ui.styles />
 
-    <div class="mca-panel" style="padding:22px 26px 34px">
+    <div class="mca-panel mca-page">
         <div class="mca-head">
             <div>
                 <h1 class="mca-h1">Meta</h1>

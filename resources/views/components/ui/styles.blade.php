@@ -12,9 +12,9 @@
   font-family:"DM Sans",system-ui,-apple-system,Arial,sans-serif;color:var(--ink)}
 .mca-panel *{box-sizing:border-box}
 .mca-panel .ic{width:20px;height:20px;flex-shrink:0;vertical-align:middle}
-.mca-h1{font-size:22px;font-weight:700;letter-spacing:-.2px;color:var(--ink);margin:0}
+.mca-h1{font-size:20px;line-height:1.25;font-weight:700;letter-spacing:-.01em;color:var(--ink);margin:0}
 .mca-sub{font-size:14px;color:var(--muted);margin:4px 0 0}
-.mca-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.mca-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px 16px;margin-bottom:20px;flex-wrap:wrap}
 
 /* Card */
 .mca-panel .card{background:var(--white);border:1px solid var(--line);border-radius:var(--mca-radius);box-shadow:var(--mca-shadow)}
@@ -136,6 +136,11 @@
 .mca-modal h2{font-size:18px;font-weight:700;color:var(--ink);margin:0 0 6px}
 .mca-modal p{font-size:14px;color:var(--muted);line-height:1.55;margin:0 0 14px}
 .mca-modal .warn{background:#FCECEC;color:#b3261e;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:500;margin-bottom:14px}
+
+/* Pantallas estrechas: la cabecera y sus acciones nunca superan el ancho; un botón con
+   texto largo pasa a dos líneas en lugar de desbordar la página. */
+.mca-head > *{min-width:0;max-width:100%}
+@media(max-width:640px){.mca-panel .btn{white-space:normal;text-align:center;line-height:1.25;max-width:100%}}
 
 @media (prefers-reduced-motion: reduce){.mca-panel .fade{animation:none}.mca-spin{animation:none}.mca-panel .btn:active{transform:none}.mca-modal-bg,.mca-modal{animation:none}}
 </style>

@@ -1,15 +1,11 @@
-<div class="crm-page" style="padding:22px 26px 34px">
+<div class="crm-page mca-page">
     <x-ui.crm-styles />
     <div style="width:100%">
+        <x-ui.page-header :title="__('Leads')" :count="$leads->total()" />
 
         <div class="panel">
             <div class="toolbar">
-                <h2>
-                    <x-ui.icon name="users" class="i18" /> Prospectos
-                    <span class="count">{{ $leads->total() }}</span>
-                </h2>
-
-                <div class="search">
+                <div class="search" style="margin-left:0;flex:1 1 260px;max-width:420px">
                     <x-ui.icon name="search" class="i16" />
                     <input type="search" wire:model.live.debounce.400ms="search" placeholder="Buscar por nombre o correo…" aria-label="Buscar por nombre o correo">
                 </div>
@@ -55,10 +51,11 @@
                 </div>
             @endif
 
-            <table>
+            <div class="mca-table-scroll">
+            <table class="mca-rtable">
                 <thead>
                     <tr>
-                        <th>Nombre</th><th>Correo</th><th>Asesor</th><th>Estado</th><th>Emparejador</th><th>Empresa</th><th>Fecha</th>
+                        <th class="rt-sticky">Nombre</th><th>Correo</th><th>Asesor</th><th>Estado</th><th>Emparejador</th><th>Empresa</th><th>Fecha</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -71,10 +68,10 @@
                         @endphp
                         <tr class="row" wire:key="lead-{{ $lead->id }}"
                             onclick="window.location='{{ route('crm.leads.show', $lead) }}'">
-                            <td>
+                            <td class="rt-primary rt-sticky">
                                 <div class="who">
                                     <span class="ava">{{ $initials ?: '—' }}</span>
-                                    <span class="nm">{{ $fullName }}</span>
+                                    <a class="nm" href="{{ route('crm.leads.show', $lead) }}" style="color:inherit;text-decoration:none">{{ $fullName }}</a>
                                     @if ($lead->contact?->hasUnseenRecontact())
                                         <span class="recontact" title="{{ __('Este contacto volvió a escribir; abre la ficha para verlo.') }}">
                                             <span class="dot"></span> {{ __('Volvió a contactar') }}
@@ -82,8 +79,8 @@
                                     @endif
                                 </div>
                             </td>
-                            <td class="mail">{{ $lead->contact->email ?? '—' }}</td>
-                            <td>
+                            <td class="mail rt-w-md" data-label="Correo">{!! str_replace('@', '@<wbr>', e($lead->contact->email ?? '—')) !!}</td>
+                            <td class="rt-w-sm" data-label="Asesor">
                                 @php $incompanyLead = $lead->source === 'incompany_web' || $lead->product_type === 'incompany'; @endphp
                                 @if ($incompanyLead)
                                     <span class="src"><x-ui.icon name="briefcase" class="i14" /> {{ $lead->capturedByLabel() }}</span>
@@ -93,10 +90,10 @@
                                     <span class="dash">—</span>
                                 @endif
                             </td>
-                            <td>
+                            <td data-label="Estado">
                                 <span class="chip {{ $lead->status->badgeClass() }}">{{ $lead->status->label() }}</span>
                             </td>
-                            <td class="match">
+                            <td class="match rt-w-sm" data-label="Emparejador">
                                 @if ($lead->goal)
                                     {{ $lead->goal }}@if ($lead->area) <small>· {{ $lead->area }}</small>@endif
                                 @elseif ($lead->area)
@@ -105,22 +102,23 @@
                                     <span class="dash">—</span>
                                 @endif
                             </td>
-                            <td>
+                            <td data-label="Empresa">
                                 @if (isset($corporate[(int) $lead->contact_id]) || $lead->isCorporate())
                                     <span class="emp"><x-ui.icon name="building-2" class="i12" /> Empresa</span>
                                 @else
                                     <span class="dash">—</span>
                                 @endif
                             </td>
-                            <td class="date">{{ $lead->created_at?->translatedFormat('d M Y') ?? '—' }}</td>
+                            <td class="date" data-label="Fecha">{{ $lead->created_at?->translatedFormat('d M Y') ?? '—' }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="empty">No hay leads con esos filtros.</td>
+                            <td colspan="7" class="empty rt-empty">No hay leads con esos filtros.</td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
+            </div>
 
             @if ($leads->hasPages())
                 <div class="pager">

@@ -9,7 +9,7 @@
 
     /* Cabecera */
     .kc-header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
-    .kc-title{font-size:26px;font-weight:700;letter-spacing:-.3px;margin:0;color:var(--mca-ink)}
+    .kc-title{font-size:20px;line-height:1.25;font-weight:700;letter-spacing:-.01em;margin:0;color:var(--mca-ink)}
     .kc-sub{font-size:14px;color:var(--mca-ink-2);margin:5px 0 0}
 
     /* Pestañas segmentadas */

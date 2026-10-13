@@ -1,6 +1,6 @@
 <div>
     <x-ui.styles />
-    <div class="mca-panel" style="padding:22px 26px 34px">
+    <div class="mca-panel mca-page">
         <a href="{{ route('crm.contacts.index') }}" class="btn btn-ghost btn-sm" style="margin-bottom:14px">
             <x-ui.icon name="chevron-left" class="ic" style="width:15px;height:15px" /> {{ __('Volver a contactos') }}
         </a>

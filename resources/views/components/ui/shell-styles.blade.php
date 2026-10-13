@@ -62,28 +62,93 @@
 /* ===== MAIN ===== */
 .mca-main{flex:1;min-width:0;display:flex;flex-direction:column}
 .mca-topbar{height:60px;background:rgba(255,255,255,.85);backdrop-filter:blur(6px);border-bottom:1px solid var(--mca-card-border);
-  display:flex;align-items:center;gap:14px;padding:0 26px;position:sticky;top:0;z-index:30}
-.mca-topbar-title{font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--mca-ink);margin:0;display:flex;align-items:center;gap:8px}
-.mca-topbar-title .tico{width:17px;height:17px;color:var(--mca-ink-3)}
+  display:flex;align-items:center;gap:14px;padding:0 var(--mca-gutter);position:sticky;top:0;z-index:30}
 .mca-topbar .sp{flex:1}
+
+/* migas de pan (sección › página). En móvil solo la página actual, en una línea. */
+.mca-crumbs{display:flex;align-items:center;gap:8px;min-width:0;font-size:14px}
+.mca-crumbs .tico{width:17px;height:17px;color:var(--mca-ink-3);flex:0 0 auto}
+.mca-crumbs ol{display:flex;align-items:center;min-width:0;margin:0;padding:0;list-style:none}
+.mca-crumbs li{display:flex;align-items:center;min-width:0;white-space:nowrap}
+.mca-crumbs li + li::before{content:"";width:6px;height:6px;margin:0 10px 0 9px;border-right:1.5px solid var(--mca-ink-3);border-top:1.5px solid var(--mca-ink-3);transform:rotate(45deg);flex:0 0 auto}
+.mca-crumbs a{color:var(--mca-ink-2);text-decoration:none;font-weight:500;border-radius:6px}
+.mca-crumbs a:hover{color:var(--mca-blue)}
+.mca-crumbs [aria-current]{color:var(--mca-ink);font-weight:600;overflow:hidden;text-overflow:ellipsis}
 .mca-topbar .icon-btn{width:38px;height:38px;border-radius:10px;border:1px solid var(--mca-card-border);background:#fff;display:grid;place-items:center;color:var(--mca-ink-2);cursor:pointer;position:relative}
 .mca-topbar .icon-btn .dot{position:absolute;top:9px;right:10px;width:6px;height:6px;border-radius:50%;background:#E5484D}
 .mca-topbar .lang{height:38px;padding:0 13px;border-radius:10px;border:1px solid var(--mca-card-border);background:#fff;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--mca-ink-2)}
 .mca-inst{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 13px;border-radius:10px;border:1px solid var(--mca-card-border);background:#fff;font-size:13px;font-weight:600;color:var(--mca-ink-2);cursor:pointer;font-family:inherit}
 
-/* área de contenido: MARCO COMÚN de TODAS las páginas internas. Un "canvas" divide
-   el área en el CUERPO (contenido de la página) + un CARRIL derecho reservado y
-   vacío, simétrico a la columna del menú lateral, para métricas futuras. Todas las
-   pantallas lo heredan del layout: el contenido ocupa el ancho MENOS el carril y
-   nunca queda pegado al borde derecho ni estirado a todo lo ancho. */
+/* área de contenido: MARCO COMÚN de todas las páginas internas. El cuerpo ocupa todo
+   el ancho disponible junto al menú (sin carriles reservados), con un máximo legible en
+   pantallas muy anchas. El margen interior lo da .mca-page, igual en todas las páginas
+   y alineado con la barra superior (--mca-gutter). */
+.mca-shell{--mca-gutter:28px}
 .mca-content{flex:1;min-width:0}
-.mca-canvas{display:flex;align-items:flex-start;min-width:0}
-.mca-canvas-body{flex:1 1 auto;min-width:0}
-.mca-rail{flex:0 0 300px;align-self:stretch;padding:22px 22px 34px 4px}
-.mca-rail .rail-ph{position:sticky;top:76px;min-height:220px;border:1px dashed var(--mca-card-border);border-radius:var(--mca-radius);background:rgba(255,255,255,.45)}
-/* Pantallas medianas: el carril se recoge para no ahogar el contenido. */
-@media(max-width:1180px){.mca-rail{display:none}}
-@media(max-width:640px){.mca-canvas{padding-right:0}}
+.mca-canvas{min-width:0}
+.mca-canvas-body{min-width:0;max-width:1680px}
+.mca-page{padding:24px var(--mca-gutter) 40px;min-width:0}
+@media(max-width:1023px){.mca-shell{--mca-gutter:20px}.mca-page{padding-top:20px;padding-bottom:32px}}
+@media(max-width:640px){
+  .mca-shell{--mca-gutter:16px}
+  .mca-page{padding-top:16px;padding-bottom:28px}
+  /* barra superior compacta: más espacio para el nombre de la página */
+  .mca-topbar{gap:6px}
+  .mca-topbar .icon-btn{width:34px;height:34px}
+  .mca-topbar .lang{height:34px;padding:0 8px}
+  .mca-crumbs .tico,.mca-crumbs li:not(:last-child){display:none}
+  .mca-crumbs{font-size:15px}
+}
+
+/* cabecera de página: título (y contador) + descripción + acciones a la derecha */
+.mca-pagehead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px 16px;flex-wrap:wrap;margin:0 0 20px}
+.mca-pagehead .ph-text{min-width:0;flex:1 1 280px}
+.mca-pagehead .ph-back{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:500;color:var(--mca-ink-2);text-decoration:none;margin-bottom:6px;border-radius:6px}
+.mca-pagehead .ph-back:hover{color:var(--mca-blue)}
+.mca-pagehead .ph-back .ic{width:16px;height:16px}
+.mca-pagehead h1{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0;font-size:20px;line-height:1.25;font-weight:700;letter-spacing:-.01em;color:var(--mca-ink)}
+.mca-pagehead .ph-count{font-size:12.5px;font-weight:600;color:var(--mca-ink-2);background:var(--mca-card);border:1px solid var(--mca-card-border);border-radius:999px;padding:1px 9px;font-variant-numeric:tabular-nums}
+.mca-pagehead .ph-sub{margin:4px 0 0;font-size:14px;color:var(--mca-ink-2);max-width:72ch}
+.mca-pagehead .ph-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:100%}
+
+/* tablas anchas: desplazamiento horizontal propio (nunca recorte), primera columna fija y
+   sombras laterales que avisan de que hay más contenido a izquierda o derecha */
+.mca-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;
+  background:linear-gradient(90deg,var(--mca-card) 30%,rgba(255,255,255,0)) left center/40px 100% no-repeat local,
+             linear-gradient(270deg,var(--mca-card) 30%,rgba(255,255,255,0)) right center/40px 100% no-repeat local,
+             radial-gradient(farthest-side at 0 50%,rgba(19,37,61,.14),rgba(19,37,61,0)) left center/12px 100% no-repeat scroll,
+             radial-gradient(farthest-side at 100% 50%,rgba(19,37,61,.14),rgba(19,37,61,0)) right center/12px 100% no-repeat scroll}
+.mca-table-scroll > table{min-width:100%;width:max-content}
+.mca-table-scroll > table th,.mca-table-scroll > table td{white-space:nowrap}
+.mca-table-scroll > table .rt-wrap{white-space:normal}
+.mca-table-scroll > table .rt-w-sm,.mca-table-scroll > table .rt-w-md{white-space:normal;overflow-wrap:anywhere}
+.mca-table-scroll > table .rt-w-sm{max-width:180px}
+.mca-table-scroll > table .rt-w-md{max-width:240px}
+.mca-table-scroll .rt-sticky{position:sticky;left:0;z-index:1}
+.mca-table-scroll td.rt-sticky{background:var(--mca-card)}
+.mca-table-scroll tbody tr:hover > td.rt-sticky{background:#F7FAFE}
+.mca-table-scroll th.rt-sticky{background:#FBFCFE}
+
+/* listados en móvil: cada fila pasa a ser una tarjeta con etiqueta + valor; nada se oculta.
+   La primera celda (.rt-primary) encabeza la tarjeta y las acciones (.rt-actions) quedan al pie. */
+@media(max-width:767px){
+  table.mca-rtable{width:100%;min-width:0}
+  table.mca-rtable thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  table.mca-rtable,table.mca-rtable tbody{display:block}
+  table.mca-rtable tr{display:block;padding:14px 16px;border-top:1px solid var(--mca-card-border)}
+  table.mca-rtable tbody tr:first-child{border-top:0}
+  table.mca-rtable td{display:flex;align-items:baseline;gap:12px;padding:3px 0 !important;border:0 !important;white-space:normal;min-width:0;text-align:left !important;background:none}
+  table.mca-rtable td[data-label]::before{content:attr(data-label);flex:0 0 96px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--mca-ink-3);padding-top:2px}
+  /* «anywhere» solo parte una palabra si no cabe en la línea (correos largos) */
+  table.mca-rtable td,table.mca-rtable td > *{min-width:0;overflow-wrap:anywhere}
+  .mca-table-scroll > table.mca-rtable .rt-w-sm,.mca-table-scroll > table.mca-rtable .rt-w-md{max-width:none}
+  table.mca-rtable td.rt-primary{padding-bottom:8px !important}
+  table.mca-rtable td.rt-actions{justify-content:flex-start;flex-wrap:wrap;padding-top:10px !important}
+  table.mca-rtable td.rt-empty{display:block;text-align:center !important;padding:28px 8px !important}
+  .mca-table-scroll:has(> table.mca-rtable){overflow-x:visible;background:none}
+  .mca-table-scroll > table.mca-rtable{width:100%}
+  .mca-table-scroll .rt-sticky{position:static}
+}
 
 /* hamburguesa + backdrop (solo móvil) */
 .mca-hamburger{display:none;background:none;border:none;color:var(--mca-ink);cursor:pointer;padding:6px;margin-left:-6px}
@@ -96,5 +161,7 @@
   .mca-hamburger{display:inline-flex}
   .mca-backdrop.show{display:block;position:fixed;inset:0;background:rgba(19,30,45,.42);z-index:35}
 }
+/* foco de teclado visible en la navegación y la barra superior */
+.mca-nav-item:focus-visible,.mca-crumbs a:focus-visible,.mca-topbar button:focus-visible,.mca-user:focus-visible,.mca-pagehead a:focus-visible{outline:2px solid var(--mca-blue);outline-offset:2px}
 @media (prefers-reduced-motion: reduce){ .mca-shell *{transition:none !important} }
 </style>

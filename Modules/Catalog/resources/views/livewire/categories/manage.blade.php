@@ -1,9 +1,7 @@
 <div>
     <x-ui.styles />
-    <div class="mca-panel" style="padding:22px 26px 34px">
-        <a href="{{ route('catalog.programs.index') }}" class="btn btn-ghost btn-sm" style="margin-bottom:14px">
-            <x-ui.icon name="chevron-left" class="ic" style="width:15px;height:15px" /> {{ __('Volver al catálogo') }}
-        </a>
+    <div class="mca-panel mca-page">
+        <x-ui.page-header :title="__('Categorías')" :back="route('catalog.programs.index')" :back-label="__('Volver al catálogo')" />
 
         @if (session('status'))
             <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>

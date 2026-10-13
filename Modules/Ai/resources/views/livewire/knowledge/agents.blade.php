@@ -17,7 +17,7 @@
     <x-ui.styles />
     @include('ai::livewire.knowledge._styles')
 
-    <div class="mca-panel kc">
+    <div class="mca-panel kc mca-page">
         <div class="kc-header">
             <div>
                 <h1 class="kc-title">{{ __('Centro de Conocimiento') }}</h1>

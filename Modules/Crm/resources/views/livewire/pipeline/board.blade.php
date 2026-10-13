@@ -1,4 +1,4 @@
-<div class="crm-page" style="padding:22px 26px 34px">
+<div class="crm-page mca-page">
     <x-ui.crm-styles />
     @include('crm::livewire.agenda.partials.styles')
     <style>
@@ -12,7 +12,7 @@
         .crm-page .pl-clear{border:0;background:none;color:var(--blue);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
         .crm-page .pl-board{margin-top:16px}
         .crm-page .pl-tabs{display:none}
-        .crm-page .pl-cols{display:grid;grid-template-columns:repeat(5,minmax(250px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px;align-items:start}
+        .crm-page .pl-cols{display:grid;grid-template-columns:repeat(5,minmax(212px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px;align-items:start}
         .crm-page .pl-col{background:#F4F7FB;border:1px solid var(--line);border-radius:16px;padding:10px;min-width:0;transition:box-shadow .15s,border-color .15s}
         .crm-page .pl-col.pl-over{border-color:var(--blue-3);box-shadow:0 0 0 3px rgba(59,130,214,.18)}
         .crm-page .pl-col-h{display:flex;align-items:center;gap:8px;padding:2px 4px 10px}
@@ -59,9 +59,10 @@
         $openStages = ['new', 'contacted', 'qualified'];
     @endphp
 
+    <x-ui.page-header :title="__('Pipeline Comercial')" :count="$total" />
+
     <div class="panel">
         <div class="toolbar">
-            <h2 style="text-transform:none"><x-ui.icon name="funnel" class="i18" /> {{ __('Pipeline Comercial') }} <span class="count">{{ $total }}</span></h2>
             <div class="pl-seg" role="group" aria-label="{{ __('Alcance') }}">
                 <button type="button" wire:click="$set('scope', 'mine')" aria-pressed="{{ $scope === 'mine' ? 'true' : 'false' }}">{{ __('Mis leads') }}</button>
                 <button type="button" wire:click="$set('scope', 'team')" aria-pressed="{{ $scope === 'team' ? 'true' : 'false' }}">{{ __('Equipo') }}</button>

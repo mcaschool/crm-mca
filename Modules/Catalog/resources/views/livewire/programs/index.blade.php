@@ -1,13 +1,14 @@
 <div>
     <x-ui.styles />
-    <div class="mca-panel" style="padding:22px 26px 34px">
-        <div class="mca-toolbar">
-            <div class="sp"></div>
-            <a href="{{ route('catalog.categories') }}" class="btn btn-ghost btn-sm">{{ __('Categorías') }}</a>
-            <a href="{{ route('catalog.programs.create') }}" class="btn btn-primary btn-sm">
-                <x-ui.icon name="plus" class="ic" style="width:15px;height:15px" /> {{ __('Nuevo programa') }}
-            </a>
-        </div>
+    <div class="mca-panel mca-page">
+        <x-ui.page-header :title="__('Catálogo')" :count="$programs->count()">
+            <x-slot:actions>
+                <a href="{{ route('catalog.categories') }}" class="btn btn-ghost btn-sm">{{ __('Categorías') }}</a>
+                <a href="{{ route('catalog.programs.create') }}" class="btn btn-primary btn-sm">
+                    <x-ui.icon name="plus" class="ic" style="width:15px;height:15px" /> {{ __('Nuevo programa') }}
+                </a>
+            </x-slot:actions>
+        </x-ui.page-header>
 
         @if (session('status'))
             <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>

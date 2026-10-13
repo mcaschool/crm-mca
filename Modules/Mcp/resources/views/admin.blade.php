@@ -41,7 +41,7 @@
         $label = ['chatgpt' => 'ChatGPT', 'claude' => 'Claude', 'claude_code' => 'Claude Code'];
     @endphp
 
-    <div class="mca-panel" style="padding:22px 26px 34px">
+    <div class="mca-panel mca-page">
         <div class="mca-head">
             <div>
                 <h1 class="mca-h1">{{ __('Conexiones IA') }}</h1>

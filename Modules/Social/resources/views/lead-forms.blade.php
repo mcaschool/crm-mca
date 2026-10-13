@@ -38,7 +38,7 @@
         @media (max-width:900px){.wz-steps{grid-template-columns:1fr 1fr}.lf-form{grid-template-columns:1fr}}
     </style>
 
-    <div class="mca-panel" style="padding:22px 26px 34px">
+    <div class="mca-panel mca-page">
         <div class="mca-head">
             <div style="display:flex;align-items:center;gap:12px">
                 <a href="{{ route('social.channels') }}" class="btn btn-ghost btn-sm" aria-label="{{ __('Volver') }}"><x-ui.icon name="chevron-left" class="ic" style="width:16px;height:16px" /></a>

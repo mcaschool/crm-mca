@@ -33,7 +33,7 @@
     <x-ui.styles />
     @include('ai::livewire.knowledge._styles')
 
-    <div class="mca-panel kc">
+    <div class="mca-panel kc mca-page">
         {{-- Cabecera --}}
         <div class="kc-header">
             <div>
