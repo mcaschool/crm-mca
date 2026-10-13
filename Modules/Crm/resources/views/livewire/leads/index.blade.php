@@ -10,28 +10,30 @@
 
     <div class="ui-card ui-card--list">
         <div class="ui-toolbar">
-            <x-ui.search wire:model.live.debounce.400ms="search" placeholder="Buscar por nombre o correo…" aria-label="Buscar por nombre o correo" />
+            <x-ui.search wire:model.live.debounce.400ms="search" :placeholder="__('Nombre o correo').'…'" :aria-label="__('Buscar por nombre o correo')" />
 
-            <x-ui.select filter :active="$status !== ''" wire:model.live="status" aria-label="Filtrar por estado">
-                <option value="">Estado · todos</option>
-                @foreach ($statuses as $s)
-                    <option value="{{ $s->value }}">{{ $s->label() }}</option>
-                @endforeach
-            </x-ui.select>
+            <x-ui.filters :active="collect([$status, $advisor, $area])->filter(fn ($v) => $v !== '')->count()">
+                <x-ui.select filter :active="$status !== ''" wire:model.live="status" aria-label="Filtrar por estado">
+                    <option value="">Estado · todos</option>
+                    @foreach ($statuses as $s)
+                        <option value="{{ $s->value }}">{{ $s->label() }}</option>
+                    @endforeach
+                </x-ui.select>
 
-            <x-ui.select filter :active="$advisor !== ''" wire:model.live="advisor" aria-label="Filtrar por asesor de origen">
-                <option value="">Asesor · todos</option>
-                @foreach ($advisors as $a)
-                    <option value="{{ $a->id }}">{{ $a->assistant_name }}</option>
-                @endforeach
-            </x-ui.select>
+                <x-ui.select filter :active="$advisor !== ''" wire:model.live="advisor" aria-label="Filtrar por asesor de origen">
+                    <option value="">Asesor · todos</option>
+                    @foreach ($advisors as $a)
+                        <option value="{{ $a->id }}">{{ $a->assistant_name }}</option>
+                    @endforeach
+                </x-ui.select>
 
-            <x-ui.select filter :active="$area !== ''" wire:model.live="area" aria-label="Filtrar por área">
-                <option value="">Área · todas</option>
-                @foreach ($areas as $areaOption)
-                    <option value="{{ $areaOption }}">{{ $areaOption }}</option>
-                @endforeach
-            </x-ui.select>
+                <x-ui.select filter :active="$area !== ''" wire:model.live="area" aria-label="Filtrar por área">
+                    <option value="">Área · todas</option>
+                    @foreach ($areas as $areaOption)
+                        <option value="{{ $areaOption }}">{{ $areaOption }}</option>
+                    @endforeach
+                </x-ui.select>
+            </x-ui.filters>
         </div>
 
         @if ($corp === '1')

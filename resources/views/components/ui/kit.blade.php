@@ -6,10 +6,14 @@
   heredadas (.mca-panel de x-ui.styles y .crm-page de x-ui.crm-styles) pantalla a
   pantalla. Prefijo único `ui-`; las pantallas no definen estilos propios para botones,
   campos, insignias, tablas ni tarjetas. Componentes Blade que la usan: x-ui.button,
-  x-ui.badge, x-ui.avatar, x-ui.search, x-ui.select, x-ui.kpi, x-ui.pager,
+  x-ui.badge, x-ui.avatar, x-ui.search, x-ui.select, x-ui.filters, x-ui.kpi, x-ui.pager,
   x-ui.lead-status.
 
   Tonos: cada componente con color lee --tone/--tone-soft de una clase .ui-tone--*.
+  Tabla en móvil (tarjetas): .rt-primary encabeza, .rt-aside (estado) arriba a la derecha,
+  .rt-foot (controles secundarios) y .rt-actions al pie; variantes de tabla
+  .ui-table--meta3 (tres datos cortos por fila) y .ui-table--stack-aside (insignias largas).
+  Fichas en rejilla: .ui-grid > .ui-card.ui-entity (cabecera, .ui-meta y pie .ui-card-f).
 --}}
 <style>
 /* solo para lectores de pantalla */
@@ -60,7 +64,7 @@
 .ui-select{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:32px;font-weight:500;
   background:var(--mca-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235A6B83' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center}
 /* filtro aplicado (x-ui.select :active): se distingue de un filtro en «todos» sin leer su texto */
-.ui-select--filter.is-active{border-color:#9DB8DD;background-color:var(--mca-blue-soft);color:var(--mca-blue-deep)}
+.ui-select--filter.is-active,.ui-input--filter.is-active{border-color:#9DB8DD;background-color:var(--mca-blue-soft);color:var(--mca-blue-deep)}
 .ui-search{position:relative;display:flex;align-items:center;min-width:0}
 .ui-search .ic{position:absolute;left:11px;width:16px;height:16px;color:var(--mca-text-3);pointer-events:none}
 .ui-search .ui-input{width:100%;padding-left:35px}
@@ -92,6 +96,9 @@ a.ui-person-name:hover{color:var(--mca-blue)}
 a.ui-person-name:focus-visible{outline:2px solid var(--mca-blue);outline-offset:2px;border-radius:3px}
 .ui-person-mail{font-size:13px;color:var(--mca-text-3);line-height:1.3}
 .ui-person-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+/* celda con título y dato secundario (programas, entidades…) */
+.ui-cell-title{font-size:14px;font-weight:600;color:var(--mca-text);line-height:1.3}
+.ui-cell-sub{font-size:12.5px;color:var(--mca-text-3);line-height:1.3}
 
 /* ---------- tarjeta / panel ---------- */
 .ui-card{background:var(--mca-surface);border:1px solid var(--mca-line);border-radius:var(--mca-r-card);box-shadow:var(--mca-shadow-card);min-width:0}
@@ -115,7 +122,7 @@ a.ui-person-name:focus-visible{outline:2px solid var(--mca-blue);outline-offset:
 
 /* ---------- tabla de datos ---------- */
 .ui-table{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px;color:var(--mca-text);font-variant-numeric:tabular-nums}
-.ui-table thead th{height:40px;padding:0 16px;text-align:left;font-size:12px;font-weight:600;color:var(--mca-text-3);background:var(--mca-surface-2);border-bottom:1px solid var(--mca-line);letter-spacing:.01em}
+.ui-table thead th{position:relative;height:40px;padding:0 16px;text-align:left;font-size:12px;font-weight:600;color:var(--mca-text-3);background:var(--mca-surface-2);border-bottom:1px solid var(--mca-line);letter-spacing:.01em}
 .ui-table td{padding:12px 16px;border-bottom:1px solid var(--mca-line);vertical-align:middle;height:60px}
 .ui-table th:first-child,.ui-table td:first-child{padding-left:20px}
 .ui-table th:last-child,.ui-table td:last-child{padding-right:20px}
@@ -128,11 +135,17 @@ a.ui-person-name:focus-visible{outline:2px solid var(--mca-blue);outline-offset:
 .ui-table .t-end{text-align:right}
 .ui-table .t-nil{color:var(--mca-text-3)}
 .ui-table .t-sub{display:block;font-size:12.5px;color:var(--mca-text-3);margin-top:2px}
+.ui-table .t-mono,.ui-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;letter-spacing:0}
 .ui-table .t-src{display:inline-flex;align-items:center;gap:7px;color:var(--mca-text)}
 .ui-table .t-src .ic{width:15px;height:15px;color:var(--mca-text-3)}
 .ui-table .t-actions{display:flex;gap:6px;justify-content:flex-end}
 .ui-table .t-gap{width:var(--mca-h-sm);flex:0 0 auto}
+/* orden manual: posición + subir/bajar */
+.ui-table .t-order{display:flex;align-items:center;gap:2px}
+.ui-table .t-order-n{min-width:22px;font-weight:600;color:var(--mca-text)}
 .ui-table .rt-empty{height:auto}
+/* columna de texto largo (títulos de programa…): se parte en líneas a partir de 320 px */
+.mca-table-scroll > table.ui-table .rt-w-lg{white-space:normal;max-width:320px}
 /* columna fija (scroll horizontal): mismo fondo que su fila y su cabecera */
 .mca-table-scroll > table.ui-table td.rt-sticky{background:var(--mca-surface)}
 .mca-table-scroll > table.ui-table th.rt-sticky{background:var(--mca-surface-2)}
@@ -146,6 +159,8 @@ a.ui-person-name:focus-visible{outline:2px solid var(--mca-blue);outline-offset:
   .ui-table th:last-child,.ui-table td:last-child{padding-right:16px}
   .mca-table-scroll > table.ui-table .rt-shrink{white-space:normal;max-width:170px}
   .mca-table-scroll > table.ui-table td.rt-primary{white-space:normal;max-width:280px}
+  .mca-table-scroll > table.ui-table td.rt-w-lg{max-width:240px}
+  .mca-table-scroll > table.ui-table .rt-w-sm{max-width:150px}
 }
 
 /* estado vacío */
@@ -159,6 +174,31 @@ a.ui-person-name:focus-visible{outline:2px solid var(--mca-blue);outline-offset:
 .ui-pager b{color:var(--mca-text);font-weight:600}
 .ui-pager .ui-pager-nav{display:flex;align-items:center;gap:6px}
 .ui-pager .ui-pager-pos{min-width:56px;text-align:center;font-variant-numeric:tabular-nums}
+
+/* grupo de filtros (x-ui.filters): en línea en escritorio; en móvil, plegado tras «Filtros» */
+.ui-filters,.ui-filters-body{display:contents}
+.ui-filters-toggle{display:none}
+
+/* rejilla de fichas (asesores, integraciones…): tarjeta con cabecera, datos y acciones al pie */
+.ui-grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));align-items:stretch}
+.ui-entity{display:flex;flex-direction:column}
+.ui-entity-h{display:flex;align-items:flex-start;gap:12px;padding:16px 18px 0}
+.ui-entity-h .ui-person-text{flex:1;gap:6px}
+.ui-entity-title{margin:0;font-size:15px;font-weight:600;color:var(--mca-text);line-height:1.3;letter-spacing:-.005em}
+.ui-entity-b{flex:1;padding:12px 18px 16px;font-size:13px;color:var(--mca-text-2)}
+.ui-card-f{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 18px;border-top:1px solid var(--mca-line);background:var(--mca-surface-2);border-radius:0 0 var(--mca-r-card) var(--mca-r-card)}
+.ui-card-f .sp{flex:1}
+/* lista de datos etiqueta → valor */
+.ui-meta{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:baseline;gap:6px 16px;margin:0;font-size:13px}
+.ui-meta dt{color:var(--mca-text-3);font-weight:500}
+.ui-meta dd{margin:0;color:var(--mca-text);min-width:0;overflow-wrap:anywhere}
+.ui-meta .t-nil,.ui-entity-b .t-nil{color:var(--mca-text-3)}
+.ui-note{margin:8px 0 0;font-size:12.5px;color:var(--mca-text-3);line-height:1.45}
+@media(max-width:767px){
+  .ui-entity-h{padding:14px 14px 0}
+  .ui-entity-b{padding:12px 14px 14px}
+  .ui-card-f{padding:10px 14px}
+}
 
 /* aviso */
 .ui-alert{display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:var(--mca-r-ctl);font-size:13.5px;font-weight:500;
@@ -200,15 +240,24 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
 }
 
 /* ---------- móvil: la tabla pasa a tarjetas (nada se oculta) ----------
-   Contrato de marcado (el mismo de .mca-rtable): data-label en cada celda de dato,
+   Contrato de marcado: data-label en cada celda de dato,
    .rt-primary encabeza la tarjeta, .rt-aside (estado) queda arriba a la derecha y
    .rt-actions al pie a todo el ancho. Los datos van en una rejilla de dos columnas. */
 @media(max-width:767px){
   .ui-card--list{background:none;border:0;box-shadow:none;border-radius:0}
   .ui-card--list > .ui-toolbar{padding:0 0 12px;border:0;gap:8px}
-  .ui-card--list > .ui-toolbar .ui-search{flex:1 1 100%;max-width:none}
+  .ui-card--list > .ui-toolbar .ui-search{flex:1 1 0;max-width:none}
   .ui-card--list > .ui-toolbar .ui-select{flex:1 1 auto;min-width:calc(50% - 4px)}
-  .ui-card--list > .ui-toolbar .ui-btn{flex:1 1 calc(50% - 4px)}
+  .ui-card--list > .ui-toolbar .ui-btn:not(.ui-filters-toggle){flex:1 1 calc(50% - 4px)}
+  /* filtros plegados: «Filtros (n)» junto al buscador; al abrir, rejilla de dos columnas */
+  .ui-filters-toggle{display:inline-flex;flex:0 0 auto}
+  .ui-toolbar > .ui-filters:first-child .ui-filters-toggle{flex:1 1 100%;justify-content:flex-start}
+  .ui-toolbar > .ui-filters:first-child .ui-filters-chev{margin-left:auto}
+  .ui-filters.is-open .ui-filters-chev{transform:rotate(180deg)}
+  .ui-filters-body{display:none}
+  .ui-filters.is-open .ui-filters-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex:1 1 100%}
+  .ui-filters-body > *{width:100%;min-width:0}
+  .ui-filters-body > .ui-btn--ghost{grid-column:1/-1;justify-self:start;width:auto}
   .ui-card--list > .ui-toolbar .sp{display:none}
   .ui-card--list > .ui-filter-note{border:1px solid var(--mca-line);border-radius:var(--mca-r-ctl);margin:0 0 12px}
   .ui-card--list > .ui-pager{border:0;padding:12px 0 0}
@@ -224,12 +273,23 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
   table.ui-table td{display:flex;flex-direction:column;align-items:flex-start;gap:1px;line-height:1.4;height:auto;padding:0 !important;border:0;white-space:normal !important;
     min-width:0;max-width:none !important;background:none !important;position:static !important;font-size:14px;overflow-wrap:anywhere}
   table.ui-table td[data-label]{flex:1 1 calc(50% - 6px)}
-  table.ui-table td[data-label]::before{content:attr(data-label);font-size:12px;font-weight:500;color:var(--mca-text-3);line-height:1.25}
+  /* tres datos cortos (p. ej. país y contadores): una sola fila de tres columnas */
+  table.ui-table.ui-table--meta3 td[data-label]{flex-basis:calc(33.333% - 8px)}
+  table.ui-table td[data-label]::before{content:attr(data-label);font-family:var(--mca-font);letter-spacing:0;font-size:12px;font-weight:500;color:var(--mca-text-3);line-height:1.25}
   table.ui-table td.rt-primary{flex:1 1 55%;order:-2}
   table.ui-table td.rt-aside{flex:0 0 auto;order:-1;align-items:flex-end}
+  table.ui-table tr:not(:has(> td.rt-aside)) > td.rt-primary{flex-basis:100%}
+  /* insignias largas (p. ej. acciones de auditoría): bajo el encabezado, a la izquierda */
+  table.ui-table.ui-table--stack-aside td.rt-primary{flex-basis:100%}
+  table.ui-table.ui-table--stack-aside td.rt-aside{flex-basis:100%;align-items:flex-start}
   table.ui-table td.rt-aside::before{display:none}
   table.ui-table td.rt-actions{flex:1 1 100%;flex-direction:row;padding-top:12px !important;border-top:1px solid var(--mca-line)}
   table.ui-table td.rt-actions .t-actions{width:100%;justify-content:stretch}
+  /* controles secundarios de la fila (p. ej. orden manual): al pie, junto a las acciones */
+  table.ui-table td.rt-foot{order:9;flex:0 0 auto;flex-direction:row;align-items:center;gap:4px;padding:12px 12px 0 0 !important;margin-right:-12px;border-top:1px solid var(--mca-line)}
+  table.ui-table td.rt-foot::before{margin-right:4px}
+  table.ui-table td.rt-actions{order:10}
+  table.ui-table tr:has(> td.rt-foot) > td.rt-actions{flex:1 1 0}
   table.ui-table .t-gap{display:none}
   table.ui-table td.rt-actions .ui-btn:not(.ui-btn--icon){flex:1}
   table.ui-table td.rt-empty{display:block;flex:1 1 100%}

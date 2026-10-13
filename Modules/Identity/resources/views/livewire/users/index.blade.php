@@ -13,20 +13,22 @@
 
     <div class="ui-card ui-card--list">
         <div class="ui-toolbar">
-            <x-ui.search wire:model.live.debounce.300ms="search" placeholder="Buscar por nombre o correo…" aria-label="Buscar por nombre o correo" />
+            <x-ui.search wire:model.live.debounce.300ms="search" :placeholder="__('Nombre o correo').'…'" :aria-label="__('Buscar por nombre o correo')" />
 
-            <x-ui.select filter :active="$department !== ''" wire:model.live="department" aria-label="Filtrar por departamento">
-                <option value="">Departamento · todos</option>
-                @foreach ($departments as $dep)
-                    <option value="{{ $dep }}">{{ $dep }}</option>
-                @endforeach
-            </x-ui.select>
+            <x-ui.filters :active="collect([$department, $status])->filter(fn ($v) => $v !== '')->count()">
+                <x-ui.select filter :active="$department !== ''" wire:model.live="department" aria-label="Filtrar por departamento">
+                    <option value="">Departamento · todos</option>
+                    @foreach ($departments as $dep)
+                        <option value="{{ $dep }}">{{ $dep }}</option>
+                    @endforeach
+                </x-ui.select>
 
-            <x-ui.select filter :active="$status !== ''" wire:model.live="status" aria-label="Filtrar por estado">
-                <option value="">Estado · todos</option>
-                <option value="active">Activo</option>
-                <option value="inactive">Inactivo</option>
-            </x-ui.select>
+                <x-ui.select filter :active="$status !== ''" wire:model.live="status" aria-label="Filtrar por estado">
+                    <option value="">Estado · todos</option>
+                    <option value="active">Activo</option>
+                    <option value="inactive">Inactivo</option>
+                </x-ui.select>
+            </x-ui.filters>
         </div>
 
         <div class="mca-table-scroll">
