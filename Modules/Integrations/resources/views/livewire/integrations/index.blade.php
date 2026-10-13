@@ -1,70 +1,66 @@
-<div>
-    <x-ui.styles />
-    <div class="mca-panel mca-page">
-        <x-ui.page-header :title="__('Integraciones')">
-            <x-slot:actions>
-                <a href="{{ route('integrations.video') }}" class="btn btn-ghost btn-sm">{{ __('Videoconferencias') }}</a>
-                <a href="{{ route('integrations.ai-processes') }}" class="btn btn-ghost btn-sm">{{ __('Procesos de IA') }}</a>
-            </x-slot:actions>
-        </x-ui.page-header>
+<div class="mca-page">
+    <x-ui.page-header :title="__('Integraciones')" :subtitle="__('Servicios externos conectados al CRM. Las credenciales se guardan cifradas.')">
+        <x-slot:actions>
+            <x-ui.button icon="video" :href="route('integrations.video')">{{ __('Videoconferencias') }}</x-ui.button>
+            <x-ui.button icon="cpu" :href="route('integrations.ai-processes')">{{ __('Procesos de IA') }}</x-ui.button>
+        </x-slot:actions>
+    </x-ui.page-header>
 
-        @if (session('status'))
-            <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
-        @endif
+    @if (session('status'))
+        <div class="ui-alert ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('status') }}</div>
+    @endif
 
-        <div class="mca-grid">
-            @foreach ($cards as $card)
-                @php($integration = $card['integration'])
-                @php($state = $integration === null ? 'desconectado' : ($integration->status === 'active' ? 'conectado' : 'inactivo'))
-                <div class="card card-p fade" style="display:flex;flex-direction:column" wire:key="int-{{ $card['type'] }}">
-                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-                        <h3 style="font-size:15px;font-weight:700;color:var(--ink);margin:0">{{ $card['label'] }}</h3>
-                        @if ($state === 'conectado')
-                            <span class="badge badge-on">{{ __('conectado') }}</span>
-                        @elseif ($state === 'inactivo')
-                            <span class="badge" style="background:var(--mca-warn-soft);color:var(--mca-warn)">{{ __('inactivo') }}</span>
-                        @else
-                            <span class="badge badge-off">{{ __('desconectado') }}</span>
-                        @endif
+    <div class="ui-grid">
+        @foreach ($cards as $card)
+            @php
+                $integration = $card['integration'];
+                $state = $integration === null ? 'desconectado' : ($integration->status === 'active' ? 'conectado' : 'inactivo');
+            @endphp
+            <article class="ui-card ui-entity" wire:key="int-{{ $card['type'] }}">
+                <div class="ui-entity-h">
+                    <div class="ui-person-text">
+                        <h2 class="ui-entity-title">{{ $card['label'] }}</h2>
                     </div>
+                    <x-ui.badge :tone="['conectado' => 'success', 'inactivo' => 'warning', 'desconectado' => 'neutral'][$state]" dot>{{ Str::ucfirst(__($state)) }}</x-ui.badge>
+                </div>
 
-                    <div style="margin-top:8px;font-size:13px;color:var(--muted);flex:1">
-                        @if ($integration === null)
-                            {{ __('Sin configurar.') }}
-                        @else
+                <div class="ui-entity-b">
+                    @if ($integration === null)
+                        <span class="t-nil">{{ __('Sin configurar.') }}</span>
+                    @else
+                        <dl class="ui-meta">
                             @if ($integration->provider)
-                                <div>{{ __('Proveedor') }}: {{ $integration->provider }}</div>
+                                <dt>{{ __('Proveedor') }}</dt><dd>{{ $integration->provider }}</dd>
                             @endif
-                            <div>
-                                {{ __('Última prueba') }}:
+                            <dt>{{ __('Última prueba') }}</dt>
+                            <dd>
                                 @if ($integration->last_tested_at)
                                     {{ $integration->last_tested_at->diffForHumans() }}
                                     @if ($integration->last_test_ok === true)
-                                        <span style="color:var(--mca-ok)">✓</span>
+                                        <x-ui.badge tone="success" icon="check">{{ __('Correcta') }}</x-ui.badge>
                                     @elseif ($integration->last_test_ok === false)
-                                        <span style="color:#b3261e">✕</span>
+                                        <x-ui.badge tone="danger" icon="x">{{ __('Fallida') }}</x-ui.badge>
                                     @endif
                                 @else
-                                    {{ __('nunca') }}
+                                    <span class="t-nil">{{ __('nunca') }}</span>
                                 @endif
-                            </div>
-                            @if ($integration->last_test_message)
-                                <div style="font-size:12px;margin-top:4px;color:var(--ink-3, #8A99B2)">{{ $integration->last_test_message }}</div>
-                            @endif
+                            </dd>
+                        </dl>
+                        @if ($integration->last_test_message)
+                            <p class="ui-note">{{ $integration->last_test_message }}</p>
                         @endif
-                    </div>
-
-                    <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px">
-                        <a href="{{ route('integrations.configure', $card['type']) }}" class="btn btn-primary btn-sm">{{ __('Configurar') }}</a>
-                        @if ($integration !== null)
-                            <button type="button" wire:click="test({{ $integration->id }})" wire:loading.attr="disabled" class="btn btn-ghost btn-sm">{{ __('Probar conexión') }}</button>
-                            <button type="button" wire:click="toggle({{ $integration->id }})" class="btn btn-soft btn-sm">
-                                {{ $integration->status === 'active' ? __('Desactivar') : __('Activar') }}
-                            </button>
-                        @endif
-                    </div>
+                    @endif
                 </div>
-            @endforeach
-        </div>
+
+                <div class="ui-card-f">
+                    <x-ui.button size="sm" icon="pencil" :href="route('integrations.configure', $card['type'])">{{ __('Configurar') }}</x-ui.button>
+                    @if ($integration !== null)
+                        <x-ui.button size="sm" icon="refresh" wire:click="test({{ $integration->id }})" wire:loading.attr="disabled">{{ __('Probar conexión') }}</x-ui.button>
+                        @php($toggleLabel = $integration->status === 'active' ? __('Desactivar') : __('Activar'))
+                        <x-ui.button size="sm" icon="power" wire:click="toggle({{ $integration->id }})" :title="$toggleLabel" :aria-label="$toggleLabel.' '.$card['label']" />
+                    @endif
+                </div>
+            </article>
+        @endforeach
     </div>
 </div>
