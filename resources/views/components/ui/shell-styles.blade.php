@@ -133,24 +133,9 @@
 .mca-table-scroll tbody tr:hover > td.rt-sticky{background:#F7FAFE}
 .mca-table-scroll th.rt-sticky{background:#FBFCFE}
 
-/* listados en móvil: cada fila pasa a ser una tarjeta con etiqueta + valor; nada se oculta.
-   La primera celda (.rt-primary) encabeza la tarjeta y las acciones (.rt-actions) quedan al pie. */
+/* listados en móvil: el patrón de tarjetas vive en x-ui.kit (.ui-table). Aquí solo se libera
+   la columna fija, que en tarjetas no tiene sentido. */
 @media(max-width:767px){
-  table.mca-rtable{width:100%;min-width:0}
-  table.mca-rtable thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  table.mca-rtable,table.mca-rtable tbody{display:block}
-  table.mca-rtable tr{display:block;padding:14px 16px;border-top:1px solid var(--mca-card-border)}
-  table.mca-rtable tbody tr:first-child{border-top:0}
-  table.mca-rtable td{display:flex;align-items:baseline;gap:12px;padding:3px 0 !important;border:0 !important;white-space:normal;min-width:0;text-align:left !important;background:none}
-  table.mca-rtable td[data-label]::before{content:attr(data-label);flex:0 0 96px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--mca-ink-3);padding-top:2px}
-  /* «anywhere» solo parte una palabra si no cabe en la línea (correos largos) */
-  table.mca-rtable td,table.mca-rtable td > *{min-width:0;overflow-wrap:anywhere}
-  .mca-table-scroll > table.mca-rtable .rt-w-sm,.mca-table-scroll > table.mca-rtable .rt-w-md{max-width:none}
-  table.mca-rtable td.rt-primary{padding-bottom:8px !important}
-  table.mca-rtable td.rt-actions{justify-content:flex-start;flex-wrap:wrap;padding-top:10px !important}
-  table.mca-rtable td.rt-empty{display:block;text-align:center !important;padding:28px 8px !important}
-  .mca-table-scroll:has(> table.mca-rtable){overflow-x:visible;background:none}
-  .mca-table-scroll > table.mca-rtable{width:100%}
   .mca-table-scroll .rt-sticky{position:static}
 }
 

@@ -101,6 +101,6 @@ it('Leads, Usuarios y Auditoría usan el patrón responsive sin quitar columnas 
     $this->actingAs($admin);
     app(\Modules\Audit\Services\AuditService::class)->log('user.updated', $admin);
     $audit = $this->get('/audit')->getContent();
-    expect($audit)->toContain('class="mca-rtable"')
-        ->toContain('data-label="Actor"')->toContain('data-label="Acción"')->toContain('data-label="Entidad"')->toContain('data-label="IP"');
+    expect($audit)->toContain('class="ui-table ui-table--stack-aside"')->toContain('class="rt-primary"')
+        ->toContain('data-label="Fecha / hora"')->toContain('data-label="Acción"')->toContain('data-label="Entidad"')->toContain('data-label="IP"');
 });
