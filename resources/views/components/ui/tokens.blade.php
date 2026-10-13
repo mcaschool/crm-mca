@@ -32,5 +32,36 @@
   --mca-radius:16px; --mca-radius-sm:11px;
   --mca-shadow:0 1px 2px rgba(19,37,61,.04), 0 6px 20px rgba(19,37,61,.06);
   --mca-shadow-sm:0 1px 2px rgba(19,37,61,.05);
+
+  /* ===== Escala del sistema de componentes (etapa 2) =====
+     La consumen el kit de componentes (x-ui.kit) y el shell. Los tokens de arriba siguen vigentes para las
+     pantallas aún no migradas; se reasignarán a esta escala al extender el sistema.
+     Todos los pares texto/fondo cumplen WCAG AA (≥4.5:1). */
+
+  /* Texto: principal 15.4:1 · secundario 7.5:1 · terciario 5.4:1 (4.8:1 sobre el menú) */
+  --mca-text:#13253D; --mca-text-2:#46566E; --mca-text-3:#5A6B83; --mca-text-dis:#8593A8;
+
+  /* Superficies y bordes */
+  --mca-surface:#FFFFFF; --mca-surface-2:#F8FAFC; --mca-surface-hover:#F5F8FC;
+  --mca-line:#E3E8EF; --mca-line-strong:#D2DAE5;
+  --mca-focus:0 0 0 3px rgba(30,90,168,.22);
+
+  /* Tonos semánticos: texto (≥5:1 sobre su fondo suave) + fondo suave */
+  --mca-success:#1E6B45; --mca-success-soft:#E7F4EC;
+  --mca-warning:#8A5A0C; --mca-warning-soft:#FBF1DC;
+  --mca-danger:#B42318;  --mca-danger-soft:#FDECEC;
+  --mca-teal:#0E6570;    --mca-teal-soft:#E0F3F4;
+  --mca-neutral:#55657C; --mca-neutral-soft:#EEF1F5;
+  --mca-gold-ink:#7A5B12; --mca-gold-line:#EBDDB2;
+
+  /* Tipografía: 12 · 13 · 14 · 16 · 22 · 28 */
+  --mca-fs-xs:12px; --mca-fs-sm:13px; --mca-fs-md:14px; --mca-fs-lg:16px; --mca-fs-xl:22px; --mca-fs-2xl:28px;
+
+  /* Controles: 32 compacto · 36 estándar (barras y tablas) · 40 formularios */
+  --mca-h-sm:32px; --mca-h-md:36px; --mca-h-lg:40px;
+  --mca-r-ctl:8px; --mca-r-card:12px;
+  --mca-shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --mca-shadow-card:0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.04);
+  --mca-shadow-pop:0 12px 32px -8px rgba(19,37,61,.20), 0 2px 6px rgba(19,37,61,.06);
 }
 </style>

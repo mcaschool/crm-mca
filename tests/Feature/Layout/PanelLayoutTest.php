@@ -40,7 +40,7 @@ it('no reserva el carril derecho y todas las páginas usan el margen común', fu
     $html = $this->actingAs(layoutAdmin())->get('/crm/leads')->assertOk()->getContent();
 
     expect($html)->not->toContain('mca-rail')->not->toContain('rail-ph')
-        ->and($html)->toContain('class="crm-page mca-page"')
+        ->and($html)->toMatch('~<div [^>]*class="mca-page"~')
         ->and($html)->not->toContain('padding:22px 26px 34px');
 });
 
@@ -86,15 +86,16 @@ it('Leads, Usuarios y Auditoría usan el patrón responsive sin quitar columnas 
     Lead::factory()->create();
 
     $leads = $this->actingAs($admin)->get('/crm/leads')->getContent();
-    expect($leads)->toContain('<div class="mca-table-scroll">')->toContain('<table class="mca-rtable">');
-    foreach (['Correo', 'Asesor', 'Estado', 'Emparejador', 'Empresa', 'Fecha'] as $label) {
+    expect($leads)->toContain('<div class="mca-table-scroll">')->toContain('<table class="ui-table">')
+        ->toContain('class="ui-person-mail"');
+    foreach (['Asesor', 'Estado', 'Emparejador', 'Empresa', 'Fecha'] as $label) {
         expect($leads)->toContain('data-label="'.$label.'"');
     }
 
     User::factory()->create(['institution_id' => $admin->institution_id, 'role' => 'admissions', 'status' => 'active']);
     $users = $this->actingAs($admin)->get('/users')->getContent();
-    expect($users)->toContain('class="mca-rtable"')->toContain('class="rt-actions"')
-        ->toContain('data-label="Correo"')->toContain('data-label="Rol"')->toContain('data-label="Estado"')
+    expect($users)->toContain('class="ui-table"')->toContain('class="rt-actions"')
+        ->toContain('class="ui-person-mail"')->toContain('data-label="Rol"')->toContain('data-label="Estado"')
         ->toMatch('~aria-label="(Desactivar|Activar) ~');
 
     $this->actingAs($admin);

@@ -1,23 +1,23 @@
-{{-- Actividad reciente (dashboard v4). Espera: $activity (Collection<Event>). --}}
+{{-- Actividad reciente del inicio (x-ui.kit). Espera: $activity (Collection<Event>). --}}
 @forelse ($activity as $ev)
     @php
         $evTone = match ($ev->event_type) {
-            'corporate_interest', 'corporate_contact', 'corporate_form', 'recontacted' => 'b-gold',
-            'used_matcher', 'started_celia', 'contact_created' => 'b-blue',
-            'viewed_program', 'viewed_certification', 'clicked_enrollment', 'program_interest' => 'b-ok',
-            'unresolved_question' => 'b-warn',
-            default => 'b-info',
+            'corporate_interest', 'corporate_contact', 'corporate_form', 'recontacted' => 'gold',
+            'used_matcher', 'started_celia', 'contact_created' => 'blue',
+            'viewed_program', 'viewed_certification', 'clicked_enrollment', 'program_interest' => 'success',
+            'unresolved_question' => 'warning',
+            default => 'teal',
         };
         $who = trim(($ev->contact->first_name ?? '').' '.($ev->contact->last_name ?? ''));
         $evDetail = $ev->detail();
     @endphp
-    <div class="act" wire:key="ha-{{ $ev->id }}">
-        <span class="d {{ $evTone }}"><x-ui.icon name="{{ $ev->icon() }}" /></span>
-        <div class="tx">
-            <div class="t">@if ($who !== '')<b>{{ $who }}:</b> @endif{{ $ev->label() }}@if ($evDetail) <span class="mca-muted">— {{ $evDetail }}</span>@endif</div>
-            <div class="ago">{{ $ev->created_at?->diffForHumans() }}</div>
+    <div class="home-act" wire:key="ha-{{ $ev->id }}">
+        <span class="home-act-ic ui-tone--{{ $evTone }}"><x-ui.icon name="{{ $ev->icon() }}" /></span>
+        <div class="ui-row-main">
+            <div class="home-act-t">@if ($who !== '')<b class="ui-person-name">{{ $who }}</b> @endif{{ $ev->label() }}@if ($evDetail) <span class="home-act-d">— {{ $evDetail }}</span>@endif</div>
+            <div class="ui-row-meta">{{ $ev->created_at?->diffForHumans() }}</div>
         </div>
     </div>
 @empty
-    <div class="empty">Sin actividad reciente.</div>
+    <div class="home-empty"><x-ui.icon name="activity" /> Sin actividad reciente.</div>
 @endforelse

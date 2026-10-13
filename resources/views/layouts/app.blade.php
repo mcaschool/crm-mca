@@ -11,8 +11,9 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @livewireStyles
 
-        {{-- Sistema de diseño MCA: tokens de marca + estilos del shell (patrón x-ui) --}}
+        {{-- Sistema de diseño MCA: tokens de marca + componentes compartidos + shell (patrón x-ui) --}}
         <x-ui.tokens />
+        <x-ui.kit />
         <x-ui.shell-styles />
         <style>[x-cloak]{display:none !important}</style>
         @stack('styles')

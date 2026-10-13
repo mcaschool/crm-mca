@@ -1,7 +1,7 @@
 {{--
   Cabecera de página estándar: enlace «volver» opcional, título (con contador opcional),
   descripción y acciones a la derecha (la principal, la última). Estilos en x-ui.shell-styles
-  (.mca-pagehead), válidos en cualquier familia de página.
+  (.mca-pagehead), válidos en cualquier familia de página. Slot opcional `badge` junto al título.
 --}}
 @props(['title', 'subtitle' => null, 'count' => null, 'back' => null, 'backLabel' => null])
 <div {{ $attributes->merge(['class' => 'mca-pagehead']) }}>
@@ -9,7 +9,7 @@
         @if ($back)
             <a href="{{ $back }}" class="ph-back"><x-ui.icon name="chevron-left" class="ic" /> {{ $backLabel ?? __('Volver') }}</a>
         @endif
-        <h1>{{ $title }}@if ($count !== null)<span class="ph-count">{{ $count }}</span>@endif</h1>
+        <h1>{{ $title }}@if ($count !== null)<span class="ph-count">{{ $count }}</span>@endif @isset($badge){{ $badge }}@endisset</h1>
         @if ($subtitle)
             <p class="ph-sub">{{ $subtitle }}</p>
         @endif

@@ -1,15 +1,14 @@
-{{-- Fila de lead (dashboard v4). Espera: $lead, $metaText, $badge (closure),
-     $corporate (map), $leadInitials/$leadName (closures). --}}
-<a class="lead" href="{{ route('crm.leads.show', $lead) }}" wire:key="hl-{{ $lead->id }}">
-    <span class="av">{{ $leadInitials($lead) }}</span>
-    <div class="tx">
-        <div class="n">{{ $leadName($lead) }}</div>
-        <div class="m">{{ $metaText }}</div>
+{{-- Fila de lead del inicio (x-ui.kit). Espera: $lead, $metaText, $corporate (map), $leadName (closure). --}}
+<a class="ui-row" href="{{ route('crm.leads.show', $lead) }}" wire:key="hl-{{ $lead->id }}">
+    <x-ui.avatar :name="$leadName($lead)" :seed="$lead->contact_id" />
+    <div class="ui-row-main">
+        <div class="ui-row-title ui-person-name">{{ $leadName($lead) }}</div>
+        <div class="ui-row-meta">{{ $metaText }}</div>
     </div>
-    <div class="rt">
+    <div class="ui-row-aside">
         @if (isset($corporate[(int) $lead->contact_id]))
-            <span class="tag emp"><x-ui.icon name="building-2" /> Empresa</span>
+            <x-ui.badge tone="gold" icon="building-2">Empresa</x-ui.badge>
         @endif
-        <span class="tag {{ $badge($lead->status->value) }}">{{ $lead->status->label() }}</span>
+        <x-ui.lead-status :status="$lead->status" />
     </div>
 </a>

@@ -1,102 +1,96 @@
-<div>
-    <x-ui.styles />
-    <div class="mca-panel mca-page">
-        <x-ui.page-header :title="__('Usuarios')" :count="$users->count()">
-            @if ($canManage)
-                <x-slot:actions>
-                    <a href="{{ route('users.create') }}" class="btn btn-primary"><x-ui.icon name="plus" /> Crear usuario</a>
-                </x-slot:actions>
-            @endif
-        </x-ui.page-header>
-
-        @if (session('status'))
-            <div class="mca-toast ok fade"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
+<div class="mca-page">
+    <x-ui.page-header :title="__('Usuarios')" :count="$users->count()" :subtitle="__('Personas con acceso al panel, su rol y su estado.')">
+        @if ($canManage)
+            <x-slot:actions>
+                <x-ui.button variant="primary" icon="plus" :href="route('users.create')">Crear usuario</x-ui.button>
+            </x-slot:actions>
         @endif
+    </x-ui.page-header>
 
-        {{-- Buscar + filtros --}}
-        <div class="card card-p fade" style="margin-bottom:16px">
-            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-                <div class="field" style="flex:2;min-width:200px;margin-bottom:0">
-                    <label>Buscar</label>
-                    <input type="text" wire:model.live.debounce.300ms="search" placeholder="Nombre o correo">
-                </div>
-                <div class="field" style="flex:1;min-width:150px;margin-bottom:0">
-                    <label>Departamento</label>
-                    <select wire:model.live="department">
-                        <option value="">Todos</option>
-                        @foreach ($departments as $dep)
-                            <option value="{{ $dep }}">{{ $dep }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="field" style="flex:1;min-width:130px;margin-bottom:0">
-                    <label>Estado</label>
-                    <select wire:model.live="status">
-                        <option value="">Todos</option>
-                        <option value="active">Activo</option>
-                        <option value="inactive">Inactivo</option>
-                    </select>
-                </div>
-            </div>
+    @if (session('status'))
+        <div class="ui-alert ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('status') }}</div>
+    @endif
+
+    <div class="ui-card ui-card--list">
+        <div class="ui-toolbar">
+            <x-ui.search wire:model.live.debounce.300ms="search" placeholder="Buscar por nombre o correo…" aria-label="Buscar por nombre o correo" />
+
+            <x-ui.select filter :active="$department !== ''" wire:model.live="department" aria-label="Filtrar por departamento">
+                <option value="">Departamento · todos</option>
+                @foreach ($departments as $dep)
+                    <option value="{{ $dep }}">{{ $dep }}</option>
+                @endforeach
+            </x-ui.select>
+
+            <x-ui.select filter :active="$status !== ''" wire:model.live="status" aria-label="Filtrar por estado">
+                <option value="">Estado · todos</option>
+                <option value="active">Activo</option>
+                <option value="inactive">Inactivo</option>
+            </x-ui.select>
         </div>
 
-        <div class="card fade" style="overflow:hidden">
-            <div class="mca-table-scroll">
-            <table class="mca-rtable" style="width:100%;border-collapse:collapse;font-size:14px">
-                <thead>
-                    <tr style="background:var(--paper);text-align:left;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.4px">
-                        <th class="rt-sticky" style="padding:12px 16px;font-weight:600">Nombre</th>
-                        <th style="padding:12px 16px;font-weight:600">Correo</th>
-                        <th style="padding:12px 16px;font-weight:600">Departamento</th>
-                        <th style="padding:12px 16px;font-weight:600">Rol</th>
-                        <th style="padding:12px 16px;font-weight:600">Estado</th>
-                        <th style="padding:12px 16px"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($users as $u)
-                        <tr wire:key="u-{{ $u->id }}" style="border-top:1px solid var(--line)">
-                            <td class="rt-primary rt-sticky" style="padding:11px 16px">
-                                <div style="display:flex;align-items:center;gap:11px">
-                                    <span class="mca-av" style="width:38px;height:38px">
-                                        @if ($u->avatarUrl())
-                                            <img src="{{ $u->avatarUrl() }}" alt="{{ $u->name }}">
-                                        @else
-                                            <x-ui.icon name="user" class="ic" style="width:18px;height:18px" />
-                                        @endif
-                                    </span>
-                                    <span style="font-weight:600;color:var(--ink)">{{ $u->name }}</span>
+        <div class="mca-table-scroll">
+        <table class="ui-table">
+            <thead>
+                <tr>
+                    <th class="rt-sticky">Usuario</th><th>Estado</th><th>Rol</th><th>Departamento</th>
+                    <th><span class="ui-sr">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse ($users as $u)
+                    @php $active = $u->status === 'active'; @endphp
+                    <tr wire:key="u-{{ $u->id }}">
+                        <td class="rt-primary rt-sticky">
+                            <div class="ui-person">
+                                <x-ui.avatar :name="$u->name" :src="$u->avatarUrl()" :seed="$u->id" />
+                                <div class="ui-person-text">
+                                    <div class="ui-person-line">
+                                        <span class="ui-person-name">{{ $u->name }}</span>
+                                        @if ($u->id === auth()->id())<x-ui.badge tone="blue">Tú</x-ui.badge>@endif
+                                    </div>
+                                    <span class="ui-person-mail">{!! str_replace('@', '@<wbr>', e($u->email)) !!}</span>
                                 </div>
-                            </td>
-                            <td class="rt-w-md" data-label="Correo" style="padding:13px 16px;color:var(--muted)">{!! str_replace('@', '@<wbr>', e($u->email)) !!}</td>
-                            <td data-label="Departamento" style="padding:13px 16px">
-                                @if ($u->department)
-                                    <span class="badge badge-soft">{{ $u->department }}</span>
-                                @else
-                                    <span class="mca-muted">—</span>
-                                @endif
-                            </td>
-                            <td data-label="Rol" style="padding:13px 16px;color:var(--muted)">{{ $u->role->label() }}</td>
-                            <td data-label="Estado" style="padding:13px 16px">
-                                <span class="badge {{ $u->status === 'active' ? 'badge-on' : 'badge-off' }}">{{ $u->status === 'active' ? 'Activo' : 'Inactivo' }}</span>
-                            </td>
-                            <td class="rt-actions" style="padding:10px 16px;text-align:right;white-space:nowrap">
-                                @if ($canManage)
-                                    <a href="{{ route('users.edit', $u->id) }}" class="btn btn-ghost btn-sm"><x-ui.icon name="pencil" class="ic" style="width:15px;height:15px" /> Editar</a>
+                            </div>
+                        </td>
+                        <td class="rt-aside" data-label="Estado">
+                            <x-ui.badge :tone="$active ? 'success' : 'neutral'" dot>{{ $active ? 'Activo' : 'Inactivo' }}</x-ui.badge>
+                        </td>
+                        <td data-label="Rol">{{ $u->role->label() }}</td>
+                        <td data-label="Departamento">
+                            @if ($u->department)
+                                <span class="t-2">{{ $u->department }}</span>
+                            @else
+                                <span class="t-nil">—</span>
+                            @endif
+                        </td>
+                        <td @class(['rt-actions' => $canManage])>
+                            @if ($canManage)
+                                <div class="t-actions">
+                                    <x-ui.button size="sm" icon="pencil" :href="route('users.edit', $u->id)">Editar</x-ui.button>
                                     @if ($u->id !== auth()->id())
-                                        <button type="button" wire:click="toggleActive({{ $u->id }})" class="btn btn-ghost btn-sm" title="{{ $u->status === 'active' ? 'Desactivar' : 'Activar' }}" aria-label="{{ ($u->status === 'active' ? 'Desactivar' : 'Activar').' '.$u->name }}">
-                                            <x-ui.icon name="power" class="ic" style="width:15px;height:15px" />
-                                        </button>
+                                        <x-ui.button size="sm" icon="power" wire:click="toggleActive({{ $u->id }})"
+                                            title="{{ $active ? 'Desactivar' : 'Activar' }}" aria-label="{{ ($active ? 'Desactivar' : 'Activar').' '.$u->name }}" />
+                                    @else
+                                        <span class="t-gap" aria-hidden="true"></span>
                                     @endif
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="6" class="rt-empty" style="padding:40px;text-align:center;color:var(--muted)">Sin usuarios que coincidan.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-            </div>
+                                </div>
+                            @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="5" class="rt-empty">
+                            <div class="ui-empty">
+                                <div class="ui-empty-ic"><x-ui.icon name="users" /></div>
+                                <b>Sin usuarios que coincidan.</b>
+                                Prueba con otra búsqueda o quita algún filtro.
+                            </div>
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
         </div>
     </div>
 </div>
