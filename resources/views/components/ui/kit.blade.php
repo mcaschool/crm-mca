@@ -14,6 +14,9 @@
   .rt-foot (controles secundarios) y .rt-actions al pie; variantes de tabla
   .ui-table--meta3 (tres datos cortos por fila) y .ui-table--stack-aside (insignias largas).
   Fichas en rejilla: .ui-grid > .ui-card.ui-entity (cabecera, .ui-meta y pie .ui-card-f).
+  Ficha de un registro: .ui-record (cabecera .ui-record-h + rejilla .ui-record-grid con
+  .ui-record-main / .ui-record-side), .ui-subnav por anclas, .ui-list, .ui-timeline,
+  .ui-chat, .ui-callout, .ui-menu, .ui-modal. Formularios: x-ui.field + .ui-form-grid.
 --}}
 <style>
 /* solo para lectores de pantalla */
@@ -102,7 +105,7 @@ a.ui-person-name:focus-visible{outline:2px solid var(--mca-blue);outline-offset:
 
 /* ---------- tarjeta / panel ---------- */
 .ui-card{background:var(--mca-surface);border:1px solid var(--mca-line);border-radius:var(--mca-r-card);box-shadow:var(--mca-shadow-card);min-width:0}
-.ui-card-h{display:flex;align-items:center;gap:10px;min-height:52px;padding:10px 18px;border-bottom:1px solid var(--mca-line)}
+.ui-card-h{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;min-height:52px;padding:10px 18px;border-bottom:1px solid var(--mca-line)}
 .ui-card-h h2,.ui-card-h h3{min-width:0;margin:0;font-size:14px;font-weight:600;color:var(--mca-text);letter-spacing:-.005em}
 .ui-card-h .ui-card-ic{width:16px;height:16px;color:var(--mca-text-3)}
 .ui-card-h .sp{flex:1}
@@ -198,6 +201,212 @@ a.ui-person-name:focus-visible{outline:2px solid var(--mca-blue);outline-offset:
   .ui-entity-h{padding:14px 14px 0}
   .ui-entity-b{padding:12px 14px 14px}
   .ui-card-f{padding:10px 14px}
+}
+
+/* ---------- ficha de un registro (lead, contacto…) ----------
+   Cabecera (identidad + acciones comerciales) y rejilla de dos columnas: a la izquierda el
+   historial de interacciones; a la derecha los datos y el seguimiento. En <1180 px, una
+   sola columna con los datos primero. */
+.ui-record{display:flex;flex-direction:column;gap:16px;min-width:0}
+.ui-back{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;font-size:13px;font-weight:500;color:var(--mca-text-2);text-decoration:none;border-radius:6px}
+.ui-back:hover{color:var(--mca-blue)}
+.ui-back:focus-visible{outline:2px solid var(--mca-blue);outline-offset:2px}
+.ui-back .ic{width:16px;height:16px}
+.ui-record-h{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;padding:20px 22px}
+.ui-avatar--xl{--s:56px;font-size:19px}
+.ui-record-id{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:8px}
+.ui-record-title{margin:0;font-size:var(--mca-fs-xl);font-weight:700;letter-spacing:-.02em;line-height:1.2;color:var(--mca-text);overflow-wrap:anywhere}
+.ui-record-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:13px;color:var(--mca-text-2)}
+.ui-record-meta > span{display:inline;min-width:0;overflow-wrap:anywhere}
+.ui-record-meta .ic{display:inline-block;width:15px;height:15px;margin-right:6px;vertical-align:-3px;color:var(--mca-text-3)}
+.ui-record-meta b{color:var(--mca-text);font-weight:600}
+.ui-record-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ui-record-grid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr) 360px;align-items:start}
+.ui-record-main,.ui-record-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.ui-record [id]{scroll-margin-top:120px}
+@media(max-width:1179px){
+  .ui-record-grid{grid-template-columns:minmax(0,1fr)}
+  .ui-record-side{order:-1}
+}
+@media(max-width:640px){
+  .ui-record-h{padding:16px;gap:12px}
+  .ui-avatar--xl{--s:44px;font-size:16px}
+  .ui-record-actions{width:100%}
+  .ui-record-actions > .ui-btn,.ui-record-actions > .ui-dropdown{flex:1 1 calc(50% - 4px)}
+  .ui-record-actions > .ui-dropdown > .ui-btn{width:100%}
+  .ui-record-actions > .ui-dropdown > .ui-btn{justify-content:space-between}
+  .ui-record-actions > .ui-btn--primary{order:-1;flex-basis:100%}
+  .ui-record-id{flex:1 1 0}
+  /* el «…» de la cabecera es decorativo (sin acción): en móvil no ocupa una fila */
+  .ui-record-actions > span.ui-btn--icon{display:none}
+}
+
+/* navegación por secciones de la ficha (anclas: nada queda oculto) */
+.ui-subnav{position:sticky;top:64px;z-index:5;display:flex;gap:4px;padding:4px;overflow-x:auto;background:var(--mca-surface);
+  border:1px solid var(--mca-line);border-radius:var(--mca-r-card);box-shadow:var(--mca-shadow-card);scrollbar-width:none}
+.ui-subnav::-webkit-scrollbar{display:none}
+.ui-subnav a{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;height:32px;padding:0 12px;border-radius:var(--mca-r-ctl);font-size:13px;font-weight:600;color:var(--mca-text-2);text-decoration:none;white-space:nowrap}
+.ui-subnav a:hover{background:var(--mca-surface-hover);color:var(--mca-text)}
+.ui-subnav a:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+.ui-subnav .ic{width:15px;height:15px;color:var(--mca-text-3)}
+.ui-subnav .ui-badge--count{height:18px;padding:0 6px;font-size:11.5px}
+
+/* cuerpo de tarjeta con relleno estándar y lista de filas */
+.ui-card-p{padding:16px 18px}
+.ui-card-h .ui-card-sub{font-size:12.5px;color:var(--mca-text-3);font-weight:500}
+.ui-list{list-style:none;margin:0;padding:0}
+.ui-list-item{display:flex;align-items:flex-start;gap:12px;width:100%;padding:12px 18px;border:0;border-top:1px solid var(--mca-line);background:none;
+  font:inherit;font-size:13.5px;color:var(--mca-text);text-align:left;text-decoration:none;min-width:0}
+.ui-list > li:first-child > .ui-list-item,.ui-list > .ui-list-item:first-child{border-top:0}
+a.ui-list-item,button.ui-list-item{cursor:pointer}
+a.ui-list-item:hover,button.ui-list-item:hover{background:var(--mca-surface-hover)}
+a.ui-list-item:focus-visible,button.ui-list-item:focus-visible{outline:none;box-shadow:inset var(--mca-focus)}
+.ui-list-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;overflow-wrap:anywhere}
+.ui-list-title{font-weight:600;color:var(--mca-text);line-height:1.35}
+.ui-list-title .ui-link{display:inline;white-space:normal;overflow-wrap:anywhere}
+.ui-list-title .ui-link .ic{display:inline-block;vertical-align:-2px;margin-left:2px}
+.ui-list-meta{font-size:12.5px;color:var(--mca-text-3);line-height:1.4}
+.ui-list-meta b{color:var(--mca-text-2);font-weight:600}
+.ui-list-aside{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.ui-list-empty{padding:18px;font-size:13.5px;color:var(--mca-text-3)}
+
+/* línea de tiempo (eventos) */
+.ui-timeline{list-style:none;margin:0;padding:4px 18px 10px}
+.ui-timeline > li{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--mca-line)}
+.ui-timeline > li:first-child{border-top:0}
+.ui-tl-ic{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;color:var(--tone,var(--mca-text-2));background:var(--tone-soft,var(--mca-neutral-soft))}
+.ui-tl-ic .ic{width:14px;height:14px}
+.ui-tl-body{min-width:0;font-size:13.5px;line-height:1.45;color:var(--mca-text);overflow-wrap:anywhere}
+.ui-tl-detail{color:var(--mca-text-2)}
+.ui-tl-time{font-size:12px;color:var(--mca-text-3);margin-top:2px}
+
+/* conversación: el prospecto a la derecha (como siempre en el CRM), el asesor a la izquierda */
+.ui-chat{display:flex;flex-direction:column;gap:12px;padding:16px 18px;max-height:70vh;overflow-y:auto;overscroll-behavior:contain}
+.ui-msg{display:flex;flex-direction:column;gap:4px;max-width:min(82%,640px);align-items:flex-start}
+.ui-msg-from{font-size:12px;font-weight:600;color:var(--mca-text-3);padding:0 4px}
+.ui-msg-bubble{padding:10px 14px;border-radius:14px;border-bottom-left-radius:4px;font-size:14px;line-height:1.5;color:var(--mca-text);
+  background:var(--mca-surface-2);box-shadow:inset 0 0 0 1px var(--mca-line);overflow-wrap:anywhere}
+.ui-msg-bubble a{color:var(--mca-blue);font-weight:600;overflow-wrap:anywhere}
+.ui-msg--in{align-self:flex-end;align-items:flex-end}
+.ui-msg--in .ui-msg-bubble{background:var(--mca-gold-soft);box-shadow:inset 0 0 0 1px var(--mca-gold-line);border-bottom-left-radius:14px;border-bottom-right-radius:4px}
+
+/* aviso dentro de una tarjeta o de la página */
+.ui-callout{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-radius:var(--mca-r-ctl);font-size:13px;line-height:1.45;color:var(--mca-text-2);
+  background:var(--tone-soft,var(--mca-surface-2));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tone,var(--mca-text-3)) 18%,transparent)}
+.ui-callout .ic{width:16px;height:16px;flex:0 0 auto;margin-top:1px;color:var(--tone,var(--mca-text-3))}
+.ui-callout b{color:var(--mca-text);font-weight:600}
+
+/* menú desplegable (p. ej. cambio de estado) */
+.ui-dropdown{position:relative;display:inline-flex}
+.ui-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:40;min-width:220px;padding:6px;background:var(--mca-surface);
+  border:1px solid var(--mca-line);border-radius:var(--mca-r-card);box-shadow:var(--mca-shadow-pop)}
+.ui-menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:0;background:none;border-radius:var(--mca-r-ctl);
+  font:inherit;font-size:13.5px;color:var(--mca-text);text-align:left;cursor:pointer}
+.ui-menu-item:hover:not(:disabled){background:var(--mca-surface-hover)}
+.ui-menu-item:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+.ui-menu-item:disabled{opacity:.55;cursor:default}
+
+/* ventana modal */
+.ui-modal-bg{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(19,37,61,.45)}
+.ui-modal{--w:720px;width:100%;max-width:var(--w);max-height:92vh;display:flex;flex-direction:column;overflow:hidden;background:var(--mca-surface);
+  border-radius:16px;box-shadow:0 24px 70px -20px rgba(0,0,0,.5)}
+.ui-modal--lg{--w:990px}
+.ui-modal-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 22px;border-bottom:1px solid var(--mca-line)}
+.ui-modal-title{margin:0;display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700;color:var(--mca-text);overflow-wrap:anywhere}
+.ui-modal-title .ic{width:18px;height:18px;color:var(--mca-text-3)}
+.ui-modal-sub{margin:4px 0 0;font-size:12.5px;color:var(--mca-text-3);overflow-wrap:anywhere}
+.ui-modal-sub b{color:var(--mca-text);font-weight:600}
+.ui-modal-b{flex:1;min-height:0;overflow:auto;padding:18px 22px;display:flex;flex-direction:column;gap:16px}
+.ui-modal-b > *{flex-shrink:0}
+.ui-modal-f{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:14px 22px;border-top:1px solid var(--mca-line);background:var(--mca-surface-2)}
+@media(max-width:640px){
+  .ui-modal-bg{padding:0;align-items:stretch}
+  .ui-modal{max-height:none;height:100%;border-radius:0}
+  .ui-modal-h,.ui-modal-b,.ui-modal-f{padding-left:16px;padding-right:16px}
+}
+
+/* piezas de ficha: datos espaciados, nota de tarjeta, paso numerado, notas internas */
+.ui-meta--spaced{gap:10px 16px;margin-top:2px}
+.ui-card-p > .ui-person-line + .ui-meta{margin-top:14px}
+.ui-meta--muted dd{color:var(--mca-text-3)}
+.ui-meta + .ui-callout{margin-top:14px}
+.ui-callout--sm{padding:9px 12px;font-size:12.5px}
+.ui-strong{font-weight:600;color:var(--mca-text)}
+.ui-text-danger{color:var(--mca-danger) !important;font-weight:600}
+.ui-card-kicker{margin:0;padding:12px 18px 4px;font-size:12px;font-weight:600;color:var(--mca-text-3)}
+.ui-card-kicker + .ui-list > li:first-child > .ui-list-item{border-top:0}
+.ui-card-note{margin:0;padding:10px 18px 14px;border-top:1px solid var(--mca-line);font-size:12.5px;color:var(--mca-text-3);font-style:italic}
+.ui-step-n{width:26px;height:26px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:12.5px;font-weight:700;color:var(--mca-blue);background:var(--mca-blue-soft)}
+.ui-note-body{white-space:pre-line;line-height:1.5;color:var(--mca-text)}
+.ui-inline-form{display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--mca-line);background:var(--mca-surface-2);border-radius:0 0 var(--mca-r-card) var(--mca-r-card)}
+.ui-inline-form .ui-input{flex:1;min-width:0}
+.ui-list--boxed{border:1px solid var(--mca-line);border-radius:var(--mca-r-ctl);overflow:hidden}
+.ui-list--boxed .ui-list-item{padding:9px 12px}
+.ui-menu--scroll{min-width:240px;max-height:260px;overflow:auto}
+.ui-menu-item--stack{flex-direction:column;align-items:flex-start;gap:1px}
+.ui-modal--md{--w:800px}
+.ui-mail-to{font-size:13.5px;color:var(--mca-text-2)}
+.ui-mail-to b{color:var(--mca-text);font-weight:600}
+
+/* calendario del lead (componente compartido de la agenda) */
+.ui-lead-agenda{display:flex;flex-direction:column;gap:10px;min-width:0}
+.ui-next-activity{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:var(--mca-r-ctl);text-decoration:none;color:inherit;
+  background:var(--mca-blue-soft);box-shadow:inset 3px 0 0 var(--mca-blue)}
+.ui-next-activity:hover{background:#E1ECF8}
+.ui-next-activity:focus-visible{outline:none;box-shadow:inset 3px 0 0 var(--mca-blue),var(--mca-focus)}
+.ui-next-kicker{margin:0;font-size:12px;font-weight:600;color:var(--mca-blue)}
+.ui-next-kicker--muted{color:var(--mca-text-3)}
+.ui-list--compact .ui-list-item{padding:8px 0}
+.ui-lead-agenda-actions{display:flex;gap:6px;flex-wrap:wrap}
+.ui-callout--stack{flex-direction:column;gap:6px}
+.ui-break{overflow-wrap:anywhere;min-width:0}
+.ui-link--btn{border:0;background:none;padding:0;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+
+/* editor de correo: barra de formato, cuerpo editable y vista de código */
+.ui-editor{border:1px solid var(--mca-line-strong);border-radius:var(--mca-r-ctl);overflow:hidden;background:var(--mca-surface)}
+.ui-editor:focus-within{border-color:var(--mca-blue);box-shadow:var(--mca-focus)}
+.ui-editor-tb{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--mca-line);background:var(--mca-surface-2)}
+.ui-tb-btn{height:30px;min-width:32px;padding:0 9px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border:1px solid var(--mca-line-strong);
+  border-radius:6px;background:var(--mca-surface);font:inherit;font-size:13px;color:var(--mca-text);cursor:pointer}
+.ui-tb-btn:hover{background:var(--mca-surface-hover)}
+.ui-tb-btn:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+.ui-tb-select{height:30px;padding:0 8px;border:1px solid var(--mca-line-strong);border-radius:6px;background:var(--mca-surface);font:inherit;font-size:12.5px;color:var(--mca-text);cursor:pointer;flex:0 0 auto}
+.ui-tb-sep{width:1px;height:20px;background:var(--mca-line-strong)}
+.ui-editor-body{min-height:240px;max-height:50vh;overflow:auto;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;color:var(--mca-text)}
+.ui-editor-codewrap{display:flex;flex-direction:column}
+.ui-editor-code{width:100%;height:34vh;min-height:200px;box-sizing:border-box;border:0;border-bottom:1px solid var(--mca-line);padding:12px 14px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;outline:none;resize:vertical;color:var(--mca-text);background:var(--mca-surface-2)}
+.ui-editor-preview{display:flex;flex-direction:column;height:34vh}
+.ui-editor-pvh{padding:6px 12px;border-bottom:1px solid var(--mca-line);background:var(--mca-surface-2);font-size:11.5px;color:var(--mca-text-3)}
+.ui-editor-preview iframe{flex:1;width:100%;border:0;background:#fff}
+
+/* ---------- formularios: 40 px, etiqueta encima, ayuda y error debajo ---------- */
+.ui-form-grid{display:grid;gap:16px 20px;grid-template-columns:repeat(var(--cols,2),minmax(0,1fr))}
+.ui-form-grid--3{--cols:3}
+.ui-span-full{grid-column:1/-1}
+.ui-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ui-label{font-size:13px;font-weight:600;color:var(--mca-text);line-height:1.3}
+.ui-label .opt{font-weight:400;color:var(--mca-text-3)}
+.ui-label .req{color:var(--mca-danger);margin-left:2px}
+.ui-field .ui-input,.ui-field .ui-select{width:100%;height:var(--mca-h-lg);font-size:14px}
+.ui-textarea{height:auto !important;min-height:96px;padding:10px 12px;line-height:1.5;resize:vertical}
+.ui-help{margin:0;font-size:12.5px;line-height:1.4;color:var(--mca-text-3)}
+.ui-error{margin:0;display:flex;align-items:flex-start;gap:6px;font-size:12.5px;font-weight:500;line-height:1.4;color:var(--mca-danger)}
+.ui-error .ic{width:14px;height:14px;flex:0 0 auto;margin-top:1px}
+.ui-input.is-invalid,.ui-select.is-invalid{border-color:var(--mca-danger)}
+.ui-input.is-invalid:focus,.ui-select.is-invalid:focus{box-shadow:0 0 0 3px rgba(180,35,24,.16)}
+.ui-form-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ui-form-grid + .ui-form-grid{margin-top:16px}
+.ui-req{color:var(--mca-danger)}
+.ui-narrow{max-width:880px}
+.ui-card-h--sep{border-top:1px solid var(--mca-line)}
+.ui-card-f--end{justify-content:flex-end}
+.ui-btn-label{display:inline-flex;align-items:center;gap:7px}
+.ui-spin{display:inline-block;width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:uiSpin .7s linear infinite;vertical-align:middle}
+@keyframes uiSpin{to{transform:rotate(360deg)}}
+@media(max-width:767px){
+  .ui-form-grid,.ui-form-grid--3{grid-template-columns:minmax(0,1fr)}
+  .ui-form-actions > .ui-btn{flex:1 1 auto}
 }
 
 /* aviso */
@@ -299,7 +508,7 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
 }
 
 @media (prefers-reduced-motion: reduce){
-  .ui-badge--pulse .dot{animation:none}
+  .ui-badge--pulse .dot,.ui-spin{animation:none}
   .ui-btn,.ui-kpi,.ui-kpi-go,.ui-input,.ui-select,.ui-table tbody tr{transition:none}
 }
 </style>

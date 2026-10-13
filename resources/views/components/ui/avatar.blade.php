@@ -10,7 +10,7 @@
     $parts = preg_split('/\s+/u', trim((string) $name)) ?: [];
     $initials = mb_strtoupper(mb_substr($parts[0] ?? '', 0, 1).mb_substr(count($parts) > 1 ? end($parts) : '', 0, 1));
 @endphp
-<span {{ $attributes->merge(['class' => 'ui-avatar ui-tone--'.$tone.($size === 'lg' ? ' ui-avatar--lg' : '').($square ? ' ui-avatar--sq' : '')]) }} aria-hidden="true">
+<span {{ $attributes->merge(['class' => 'ui-avatar ui-tone--'.$tone.($size === 'lg' ? ' ui-avatar--lg' : '').($size === 'xl' ? ' ui-avatar--xl' : '').($square ? ' ui-avatar--sq' : '')]) }} aria-hidden="true">
     @if ($src)
         <img src="{{ $src }}" alt="">
     @elseif ($initials !== '')
