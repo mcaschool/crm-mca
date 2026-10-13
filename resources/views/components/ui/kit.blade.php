@@ -218,13 +218,13 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
   table.ui-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   table.ui-table,table.ui-table tbody{display:block}
   table.ui-table tbody{display:flex;flex-direction:column;gap:10px}
-  table.ui-table tr{display:flex;flex-wrap:wrap;gap:12px;padding:14px 16px;background:var(--mca-surface);border:1px solid var(--mca-line);
+  table.ui-table tr{display:flex;flex-wrap:wrap;gap:10px 12px;padding:12px 14px;background:var(--mca-surface);border:1px solid var(--mca-line);
     border-radius:var(--mca-r-card);box-shadow:var(--mca-shadow-card)}
   table.ui-table tbody tr:hover > td{background:none}
-  table.ui-table td{display:flex;flex-direction:column;align-items:flex-start;gap:3px;height:auto;padding:0 !important;border:0;white-space:normal !important;
+  table.ui-table td{display:flex;flex-direction:column;align-items:flex-start;gap:1px;line-height:1.4;height:auto;padding:0 !important;border:0;white-space:normal !important;
     min-width:0;max-width:none !important;background:none !important;position:static !important;font-size:14px;overflow-wrap:anywhere}
   table.ui-table td[data-label]{flex:1 1 calc(50% - 6px)}
-  table.ui-table td[data-label]::before{content:attr(data-label);font-size:12px;font-weight:500;color:var(--mca-text-3);line-height:1.3}
+  table.ui-table td[data-label]::before{content:attr(data-label);font-size:12px;font-weight:500;color:var(--mca-text-3);line-height:1.25}
   table.ui-table td.rt-primary{flex:1 1 55%;order:-2}
   table.ui-table td.rt-aside{flex:0 0 auto;order:-1;align-items:flex-end}
   table.ui-table td.rt-aside::before{display:none}
