@@ -24,11 +24,11 @@ function dsAdmin(): User
     return $user;
 }
 
-it('el layout carga la capa de componentes una sola vez y las pantallas prototipo no usan las familias heredadas', function () {
+it('el layout carga la capa de componentes una sola vez y las pantallas migradas no usan las familias heredadas', function () {
     $admin = dsAdmin();
     Lead::factory()->create();
 
-    foreach (['/crm/leads', '/users', '/dashboard'] as $url) {
+    foreach (['/crm/leads', '/users', '/dashboard', '/crm/contacts', '/audit', '/catalog', '/advisors', '/integrations'] as $url) {
         $html = $this->actingAs($admin)->get($url)->assertOk()->getContent();
         expect(substr_count($html, '.ui-btn{--h:'))->toBe(1, $url)
             ->and(substr_count($html, '--mca-text-3:'))->toBe(1, $url)
