@@ -237,8 +237,6 @@ a.ui-person-name:focus-visible{outline:2px solid var(--mca-blue);outline-offset:
   .ui-record-actions > .ui-dropdown > .ui-btn{justify-content:space-between}
   .ui-record-actions > .ui-btn--primary{order:-1;flex-basis:100%}
   .ui-record-id{flex:1 1 0}
-  /* el «…» de la cabecera es decorativo (sin acción): en móvil no ocupa una fila */
-  .ui-record-actions > span.ui-btn--icon{display:none}
 }
 
 /* navegación por secciones de la ficha (anclas: nada queda oculto) */
@@ -363,20 +361,34 @@ a.ui-list-item:focus-visible,button.ui-list-item:focus-visible{outline:none;box-
 .ui-link--btn{border:0;background:none;padding:0;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
 
 /* editor de correo: barra de formato, cuerpo editable y vista de código */
-.ui-editor{border:1px solid var(--mca-line-strong);border-radius:var(--mca-r-ctl);overflow:hidden;background:var(--mca-surface)}
+/* sin overflow:hidden en el contenedor: el menú «Etiqueta» debe poder salir del editor sin recortarse */
+.ui-editor{border:1px solid var(--mca-line-strong);border-radius:var(--mca-r-ctl);background:var(--mca-surface)}
 .ui-editor:focus-within{border-color:var(--mca-blue);box-shadow:var(--mca-focus)}
-.ui-editor-tb{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--mca-line);background:var(--mca-surface-2)}
+.ui-editor-tb{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--mca-line);background:var(--mca-surface-2);
+  border-radius:calc(var(--mca-r-ctl) - 1px) calc(var(--mca-r-ctl) - 1px) 0 0}
 .ui-tb-btn{height:30px;min-width:32px;padding:0 9px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border:1px solid var(--mca-line-strong);
   border-radius:6px;background:var(--mca-surface);font:inherit;font-size:13px;color:var(--mca-text);cursor:pointer}
 .ui-tb-btn:hover{background:var(--mca-surface-hover)}
 .ui-tb-btn:focus-visible{outline:none;box-shadow:var(--mca-focus)}
 .ui-tb-select{height:30px;padding:0 8px;border:1px solid var(--mca-line-strong);border-radius:6px;background:var(--mca-surface);font:inherit;font-size:12.5px;color:var(--mca-text);cursor:pointer;flex:0 0 auto}
 .ui-tb-sep{width:1px;height:20px;background:var(--mca-line-strong)}
+.ui-tb-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
 .ui-editor-body{min-height:240px;max-height:50vh;overflow:auto;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;color:var(--mca-text)}
+/* móvil: la barra pasa de 3 filas a 2 (mismas herramientas; los textos se ocultan y quedan en title/aria-label)
+   y el cuerpo crece con el contenido para que solo desplace el modal (un único scroll con el teclado abierto) */
+@media(max-width:640px){
+  .ui-editor-tb,.ui-tb-group{gap:4px}
+  .ui-editor-tb{padding:6px}
+  .ui-editor-tb .ui-tb-sep,.ui-tb-label{display:none}
+  .ui-tb-btn{height:32px;min-width:34px;padding:0 6px}
+  .ui-tb-select{height:32px;max-width:92px;padding:0 4px}
+  .ui-editor-body{min-height:180px;max-height:none}
+  .ui-editor-tb .ui-menu{left:auto;right:0;max-width:calc(100vw - 32px)}
+}
 .ui-editor-codewrap{display:flex;flex-direction:column}
 .ui-editor-code{width:100%;height:34vh;min-height:200px;box-sizing:border-box;border:0;border-bottom:1px solid var(--mca-line);padding:12px 14px;
   font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;outline:none;resize:vertical;color:var(--mca-text);background:var(--mca-surface-2)}
-.ui-editor-preview{display:flex;flex-direction:column;height:34vh}
+.ui-editor-preview{display:flex;flex-direction:column;height:34vh;overflow:hidden;border-radius:0 0 calc(var(--mca-r-ctl) - 1px) calc(var(--mca-r-ctl) - 1px)}
 .ui-editor-pvh{padding:6px 12px;border-bottom:1px solid var(--mca-line);background:var(--mca-surface-2);font-size:11.5px;color:var(--mca-text-3)}
 .ui-editor-preview iframe{flex:1;width:100%;border:0;background:#fff}
 

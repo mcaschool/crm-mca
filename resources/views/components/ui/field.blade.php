@@ -12,6 +12,6 @@
         <p class="ui-error" @if ($for) id="{{ $for }}-error" @endif role="alert"><x-ui.icon name="alert-triangle" /> {{ $error }}</p>
     @endif
     @if ($help)
-        <p class="ui-help">{{ $help }}</p>
+        <p class="ui-help" @if ($for) id="{{ $for }}-help" @endif>{{ $help }}</p>
     @endif
 </div>

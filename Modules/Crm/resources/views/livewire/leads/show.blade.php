@@ -83,9 +83,6 @@
                     <x-ui.badge tone="neutral" icon="eye">solo lectura</x-ui.badge>
                 @endif
                 <x-ui.button icon="download" wire:click="exportOne">Exportar</x-ui.button>
-                @unless ($incompany)
-                    <span class="ui-btn ui-btn--ghost ui-btn--icon" aria-hidden="true"><x-ui.icon name="more-horizontal" /></span>
-                @endunless
                 @if ($canEmail)
                     <x-ui.button variant="primary" icon="mail" wire:click="openCompose">Enviar correo</x-ui.button>
                 @endif
@@ -380,16 +377,16 @@
         <div x-data="{ destroy(){ document.body.style.overflow='' } }" x-init="document.body.style.overflow='hidden'" class="ui-modal-bg" wire:key="mail-overlay">
             <div class="ui-modal ui-modal--lg" role="dialog" aria-modal="true" aria-labelledby="mail-title">
                 <div class="ui-modal-h">
-                    <h2 class="ui-modal-title" id="mail-title"><x-ui.icon name="mail" /> Nuevo correo</h2>
-                    <x-ui.button variant="ghost" icon="x" wire:click="$set('composeOpen', false)" aria-label="Cerrar" />
+                    <h2 class="ui-modal-title" id="mail-title"><x-ui.icon name="mail" /> {{ __('Nuevo correo') }}</h2>
+                    <x-ui.button variant="ghost" icon="x" wire:click="$set('composeOpen', false)" :aria-label="__('Cerrar')" />
                 </div>
 
                 <div class="ui-modal-b mail-scrollbody">
                     <div class="ui-form-grid">
-                        <x-ui.field :class="$templates->isEmpty() ? 'ui-span-full' : null" label="Enviar como" for="mail-sender" :error="$errors->first('emailSenderId')"
-                            :help="$senders->isEmpty() ? 'No hay remitentes. Un administrador debe registrar uno en Ajustes → Remitentes de correo.' : null">
-                            <select id="mail-sender" wire:model="emailSenderId" aria-label="Enviar como" @class(['ui-select', 'is-invalid' => $errors->has('emailSenderId')])>
-                                <option value="">— Elige un remitente —</option>
+                        <x-ui.field :class="$templates->isEmpty() ? 'ui-span-full' : null" :label="__('Enviar como')" for="mail-sender" :error="$errors->first('emailSenderId')"
+                            :help="$senders->isEmpty() ? __('No hay remitentes. Un administrador debe registrar uno en Ajustes → Remitentes de correo.') : null">
+                            <select id="mail-sender" wire:model="emailSenderId" aria-label="{{ __('Enviar como') }}" @class(['ui-select', 'is-invalid' => $errors->has('emailSenderId')])>
+                                <option value="">— {{ __('Elige un remitente') }} —</option>
                                 @foreach ($senders as $s)
                                     <option value="{{ $s->id }}">{{ $s->name }} · {{ $s->from_address }}</option>
                                 @endforeach
@@ -397,19 +394,19 @@
                         </x-ui.field>
 
                         @if (! $templates->isEmpty())
-                            <x-ui.field label="Plantilla" for="mail-template" help="Carga asunto y cuerpo; puedes ajustarlo antes de enviar. Las etiquetas se rellenan al enviar.">
-                                <select id="mail-template" class="ui-select" aria-label="Plantilla" x-on:change="$wire.loadTemplate($event.target.value)">
-                                    <option value="">— Redactar desde cero —</option>
+                            <x-ui.field :label="__('Plantilla')" for="mail-template" :help="__('Carga asunto y cuerpo; puedes ajustarlo antes de enviar. Las etiquetas se rellenan al enviar.')">
+                                <select id="mail-template" class="ui-select" aria-label="{{ __('Plantilla') }}" x-on:change="$wire.loadTemplate($event.target.value)">
+                                    <option value="">— {{ __('Redactar desde cero') }} —</option>
                                     @php $shared = $templates->whereNull('user_id'); $mine = $templates->whereNotNull('user_id'); @endphp
                                     @if ($shared->isNotEmpty())
-                                        <optgroup label="Compartidas">
+                                        <optgroup label="{{ __('Compartidas') }}">
                                             @foreach ($shared as $tpl)
                                                 <option value="{{ $tpl->id }}">{{ $tpl->name }}</option>
                                             @endforeach
                                         </optgroup>
                                     @endif
                                     @if ($mine->isNotEmpty())
-                                        <optgroup label="Mías">
+                                        <optgroup label="{{ __('Mías') }}">
                                             @foreach ($mine as $tpl)
                                                 <option value="{{ $tpl->id }}">{{ $tpl->name }}</option>
                                             @endforeach
@@ -420,10 +417,10 @@
                         @endif
                     </div>
 
-                    <div class="ui-mail-to">Para: <b>{{ $c->email ?? '—' }}</b></div>
+                    <div class="ui-mail-to">{{ __('Para:') }} <b>{{ $c->email ?? '—' }}</b></div>
 
-                    <x-ui.field label="Asunto" for="mail-subject" :error="$errors->first('emailSubject')">
-                        <input id="mail-subject" type="text" wire:model="emailSubject" maxlength="200" placeholder="Asunto" @class(['ui-input', 'is-invalid' => $errors->has('emailSubject')])>
+                    <x-ui.field :label="__('Asunto')" for="mail-subject" :error="$errors->first('emailSubject')">
+                        <input id="mail-subject" type="text" wire:model="emailSubject" maxlength="200" placeholder="{{ __('Asunto') }}" @class(['ui-input', 'is-invalid' => $errors->has('emailSubject')])>
                     </x-ui.field>
 
                     {{-- Editor: toolbar + contenteditable. wire:ignore para que Livewire no lo re-pinte. --}}
@@ -433,43 +430,43 @@
                         x-on:load-template.window="$refs.ed.innerHTML = $event.detail.html || ''; $refs.ed.dispatchEvent(new Event('input')); mode='visual'"
                         class="ui-editor">
                         <div class="ui-editor-tb">
-                            <div x-show="mode==='visual'" class="mail-tb-group">
-                                <button type="button" class="ui-tb-btn" title="Negrita" aria-label="Negrita" onmousedown="event.preventDefault()" x-on:click="document.execCommand('bold'); $refs.ed.dispatchEvent(new Event('input'))"><b>B</b></button>
-                                <button type="button" class="ui-tb-btn" title="Cursiva" aria-label="Cursiva" onmousedown="event.preventDefault()" x-on:click="document.execCommand('italic'); $refs.ed.dispatchEvent(new Event('input'))"><i>I</i></button>
-                                <button type="button" class="ui-tb-btn" title="Subrayado" aria-label="Subrayado" onmousedown="event.preventDefault()" x-on:click="document.execCommand('underline'); $refs.ed.dispatchEvent(new Event('input'))"><u>U</u></button>
+                            <div x-show="mode==='visual'" class="ui-tb-group">
+                                <button type="button" class="ui-tb-btn" title="{{ __('Negrita') }}" aria-label="{{ __('Negrita') }}" onmousedown="event.preventDefault()" x-on:click="document.execCommand('bold'); $refs.ed.dispatchEvent(new Event('input'))"><b>B</b></button>
+                                <button type="button" class="ui-tb-btn" title="{{ __('Cursiva') }}" aria-label="{{ __('Cursiva') }}" onmousedown="event.preventDefault()" x-on:click="document.execCommand('italic'); $refs.ed.dispatchEvent(new Event('input'))"><i>I</i></button>
+                                <button type="button" class="ui-tb-btn" title="{{ __('Subrayado') }}" aria-label="{{ __('Subrayado') }}" onmousedown="event.preventDefault()" x-on:click="document.execCommand('underline'); $refs.ed.dispatchEvent(new Event('input'))"><u>U</u></button>
                                 <span class="ui-tb-sep"></span>
-                                <select title="Tipografía" aria-label="Tipografía" class="ui-tb-select"
+                                <select title="{{ __('Tipografía') }}" aria-label="{{ __('Tipografía') }}" class="ui-tb-select"
                                     x-on:mousedown="saveSel()"
                                     x-on:change="applyFont($event.target.value); $event.target.selectedIndex=0">
-                                    <option value="">Fuente</option>
+                                    <option value="">{{ __('Fuente') }}</option>
                                     <option value="Arial" style="font-family:Arial">Arial</option>
                                     <option value="Georgia" style="font-family:Georgia">Georgia</option>
                                     <option value="Verdana" style="font-family:Verdana">Verdana</option>
                                     <option value="Times New Roman" style="font-family:'Times New Roman'">Times New Roman</option>
                                 </select>
-                                <select title="Tamaño de texto" aria-label="Tamaño de texto" class="ui-tb-select"
+                                <select title="{{ __('Tamaño de texto') }}" aria-label="{{ __('Tamaño de texto') }}" class="ui-tb-select"
                                     x-on:mousedown="saveSel()"
                                     x-on:change="applySize($event.target.value); $event.target.selectedIndex=0">
-                                    <option value="">Tamaño</option>
-                                    <option value="2">Pequeño</option>
-                                    <option value="3">Normal</option>
-                                    <option value="4">Grande</option>
-                                    <option value="6">Título</option>
-                                    <option value="7">Título grande</option>
+                                    <option value="">{{ __('Tamaño') }}</option>
+                                    <option value="2">{{ __('Pequeño') }}</option>
+                                    <option value="3">{{ __('Normal') }}</option>
+                                    <option value="4">{{ __('Grande') }}</option>
+                                    <option value="6">{{ __('Título') }}</option>
+                                    <option value="7">{{ __('Título grande') }}</option>
                                 </select>
                                 <span class="ui-tb-sep"></span>
-                                <button type="button" class="ui-tb-btn" title="Lista con viñetas" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertUnorderedList'); $refs.ed.dispatchEvent(new Event('input'))">• —</button>
-                                <button type="button" class="ui-tb-btn" title="Lista numerada" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertOrderedList'); $refs.ed.dispatchEvent(new Event('input'))">1.</button>
-                                <button type="button" class="ui-tb-btn" title="Insertar enlace" onmousedown="event.preventDefault()" x-on:click="let u=prompt('URL (https://…)'); if(u){document.execCommand('createLink',false,u)}; $refs.ed.dispatchEvent(new Event('input'))">🔗</button>
-                                <button type="button" class="ui-tb-btn" title="Quitar formato" onmousedown="event.preventDefault()" x-on:click="document.execCommand('removeFormat'); document.execCommand('unlink'); $refs.ed.dispatchEvent(new Event('input'))">✕ fmt</button>
+                                <button type="button" class="ui-tb-btn" title="{{ __('Lista con viñetas') }}" aria-label="{{ __('Lista con viñetas') }}" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertUnorderedList'); $refs.ed.dispatchEvent(new Event('input'))">• —</button>
+                                <button type="button" class="ui-tb-btn" title="{{ __('Lista numerada') }}" aria-label="{{ __('Lista numerada') }}" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertOrderedList'); $refs.ed.dispatchEvent(new Event('input'))">1.</button>
+                                <button type="button" class="ui-tb-btn" title="{{ __('Insertar enlace') }}" aria-label="{{ __('Insertar enlace') }}" onmousedown="event.preventDefault()" x-on:click="let u=prompt('URL (https://…)'); if(u){document.execCommand('createLink',false,u)}; $refs.ed.dispatchEvent(new Event('input'))">🔗</button>
+                                <button type="button" class="ui-tb-btn" title="{{ __('Quitar formato') }}" aria-label="{{ __('Quitar formato') }}" onmousedown="event.preventDefault()" x-on:click="document.execCommand('removeFormat'); document.execCommand('unlink'); $refs.ed.dispatchEvent(new Event('input'))">✕<span class="ui-tb-label"> fmt</span></button>
                                 <span class="ui-tb-sep"></span>
-                                <button type="button" class="ui-tb-btn" title="Insertar imagen (se ve dentro del correo)" onmousedown="event.preventDefault()" onclick="document.getElementById('inlineImageInput').click()">🖼️ Imagen</button>
+                                <button type="button" class="ui-tb-btn" title="{{ __('Insertar imagen (se ve dentro del correo)') }}" aria-label="{{ __('Insertar imagen') }}" onmousedown="event.preventDefault()" onclick="document.getElementById('inlineImageInput').click()">🖼️<span class="ui-tb-label"> {{ __('Imagen') }}</span></button>
 
                                 {{-- Etiquetas dinámicas: se rellenan con datos reales al enviar --}}
                                 @if (! empty($emailTags))
                                     <span class="ui-tb-sep"></span>
                                     <div class="ui-dropdown" x-on:click.outside="tagsOpen=false">
-                                        <button type="button" class="ui-tb-btn" title="Insertar etiqueta" onmousedown="event.preventDefault()" x-on:click="tagsOpen=!tagsOpen">🏷️ Etiqueta ▾</button>
+                                        <button type="button" class="ui-tb-btn" title="{{ __('Insertar etiqueta') }}" aria-label="{{ __('Insertar etiqueta') }}" onmousedown="event.preventDefault()" x-on:click="tagsOpen=!tagsOpen">🏷️<span class="ui-tb-label"> {{ __('Etiqueta') }}</span> ▾</button>
                                         <div x-show="tagsOpen" x-cloak class="ui-menu ui-menu--scroll">
                                             @foreach ($emailTags as $t)
                                                 <button type="button" class="ui-menu-item ui-menu-item--stack" onmousedown="event.preventDefault()" x-on:click="insertTag(@js($t['tag']))">
@@ -481,26 +478,26 @@
                                     </div>
                                 @endif
                                 @if ($canCodeMode)
-                                    <button type="button" class="ui-tb-btn ui-mono" title="Editar el código HTML/CSS" x-on:click="toCode()">&lt;/&gt; Código</button>
+                                    <button type="button" class="ui-tb-btn ui-mono" title="{{ __('Editar el código HTML/CSS') }}" aria-label="{{ __('Editar el código HTML/CSS') }}" x-on:click="toCode()">&lt;/&gt;<span class="ui-tb-label"> {{ __('Código') }}</span></button>
                                 @endif
                             </div>
                             @if ($canCodeMode)
-                                <button type="button" class="ui-tb-btn" title="Volver al editor visual" x-show="mode==='code'" x-cloak x-on:click="toVisual()">◱ Editor visual</button>
+                                <button type="button" class="ui-tb-btn" title="{{ __('Volver al editor visual') }}" x-show="mode==='code'" x-cloak x-on:click="toVisual()">◱ {{ __('Editor visual') }}</button>
                             @endif
                         </div>
                         {{-- Vista VISUAL --}}
-                        <div contenteditable="true" id="mailEditorBody" x-ref="ed" x-show="mode==='visual'" class="mailbody-ed ui-editor-body" data-ph="Escribe el mensaje…"
+                        <div contenteditable="true" id="mailEditorBody" x-ref="ed" x-show="mode==='visual'" class="mailbody-ed ui-editor-body" data-ph="{{ __('Escribe el mensaje…') }}"
                             x-on:input="$wire.set('emailBody', enc($refs.ed.innerHTML), false)"
                             x-on:mouseup="saveSel()" x-on:keyup="saveSel()"
                             x-on:blur="$wire.set('emailBody', enc($refs.ed.innerHTML), false)"></div>
                         {{-- Vista CÓDIGO: HTML editable (ancho completo) + vista previa debajo (iframe sandbox, sin scripts) --}}
                         @if ($canCodeMode)
                             <div x-show="mode==='code'" x-cloak class="ui-editor-codewrap">
-                                <textarea x-ref="code" spellcheck="false" class="ui-editor-code" placeholder="Pega o escribe HTML/CSS de diseño (tablas, estilos inline)…"
+                                <textarea x-ref="code" spellcheck="false" class="ui-editor-code" placeholder="{{ __('Pega o escribe HTML/CSS de diseño (tablas, estilos inline)…') }}"
                                     x-on:input="$wire.set('emailBody', enc($refs.code.value), false); preview()"></textarea>
                                 <div class="ui-editor-preview">
-                                    <div class="ui-editor-pvh">Vista previa</div>
-                                    <iframe x-ref="pv" sandbox="" title="Vista previa"></iframe>
+                                    <div class="ui-editor-pvh">{{ __('Vista previa') }}</div>
+                                    <iframe x-ref="pv" sandbox="" title="{{ __('Vista previa') }}"></iframe>
                                 </div>
                             </div>
                         @endif
@@ -509,18 +506,18 @@
 
                     {{-- Imagen inline: input FUERA de wire:ignore para que Livewire procese la subida --}}
                     <input type="file" id="inlineImageInput" wire:model="inlineUpload" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
-                    <div wire:loading wire:target="inlineUpload" class="ui-help"><span class="ui-spin"></span> Subiendo imagen…</div>
+                    <div wire:loading wire:target="inlineUpload" class="ui-help"><span class="ui-spin"></span> {{ __('Subiendo imagen…') }}</div>
                     @error('inlineUpload') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
 
                     {{-- Adjuntos --}}
                     <div class="ui-field">
-                        <span class="ui-label">Adjuntos <span class="opt">· máx {{ round($att['max_file_bytes'] / 1048576) }} MB por archivo, {{ round($att['max_total_bytes'] / 1048576) }} MB en total</span></span>
+                        <span class="ui-label">{{ __('Adjuntos') }} <span class="opt">· {{ __('máx :file MB por archivo, :total MB en total', ['file' => round($att['max_file_bytes'] / 1048576), 'total' => round($att['max_total_bytes'] / 1048576)]) }}</span></span>
                         <div>
-                            <label class="ui-btn ui-btn--secondary ui-btn--sm"><x-ui.icon name="upload" /> Adjuntar archivos
+                            <label class="ui-btn ui-btn--secondary ui-btn--sm"><x-ui.icon name="upload" /> {{ __('Adjuntar archivos') }}
                                 <input type="file" wire:model="emailAttachments" multiple accept=".{{ implode(',.', $att['allowed_extensions']) }}" hidden>
                             </label>
                         </div>
-                        <div wire:loading wire:target="emailAttachments" class="ui-help"><span class="ui-spin"></span> Subiendo…</div>
+                        <div wire:loading wire:target="emailAttachments" class="ui-help"><span class="ui-spin"></span> {{ __('Subiendo…') }}</div>
                         @error('emailAttachments') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
                         @error('emailAttachments.*') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
 
@@ -531,7 +528,7 @@
                                         <div class="ui-list-item">
                                             <x-ui.icon name="file-text" class="ui-card-ic" />
                                             <span class="ui-list-main"><span class="ui-list-title">{{ $file->getClientOriginalName() }}</span><span class="ui-list-meta">{{ number_format($file->getSize() / 1024) }} KB</span></span>
-                                            <x-ui.button size="sm" variant="ghost" wire:click="removeAttachment({{ $i }})">Quitar</x-ui.button>
+                                            <x-ui.button size="sm" variant="ghost" wire:click="removeAttachment({{ $i }})">{{ __('Quitar') }}</x-ui.button>
                                         </div>
                                     </li>
                                 @endforeach
@@ -541,15 +538,15 @@
                 </div>
 
                 <div class="ui-modal-f">
-                    <x-ui.button wire:click="$set('composeOpen', false)">Cancelar</x-ui.button>
+                    <x-ui.button wire:click="$set('composeOpen', false)">{{ __('Cancelar') }}</x-ui.button>
                     <button type="button" class="ui-btn ui-btn--primary" wire:click="sendEmail" wire:loading.attr="disabled" wire:target="sendEmail,emailAttachments">
-                        <x-ui.icon name="mail" /> Enviar
+                        <x-ui.icon name="mail" /> {{ __('Enviar') }}
                         <span wire:loading wire:target="sendEmail">…</span>
                     </button>
                 </div>
             </div>
         </div>
-        <style>.mail-tb-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}.mailbody-ed:empty:before{content:attr(data-ph);color:var(--mca-text-3);pointer-events:none}.mailbody-ed img{max-width:100%}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
+        <style>.mailbody-ed:empty:before{content:attr(data-ph);color:var(--mca-text-3);pointer-events:none}.mailbody-ed img{max-width:100%}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
     @endif
 
     {{-- Ver un correo ENVIADO tal como se envió --}}

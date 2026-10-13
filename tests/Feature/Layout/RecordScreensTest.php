@@ -56,6 +56,16 @@ it('la ficha del lead usa la estructura de registro y conserva todos sus bloques
         ->toContain(route('crm.agenda.create', ['lead' => $lead->id]));
 });
 
+it('la cabecera del lead ya no muestra el «…» decorativo sin acción', function () {
+    $admin = recordAdmin();
+    $lead = Lead::factory()->create();
+
+    $html = $this->actingAs($admin)->get('/crm/leads/'.$lead->id)->assertOk()->getContent();
+
+    expect($html)->not->toContain('<circle cx="19" cy="12" r="1"/>')
+        ->toContain('wire:click="exportOne"')->toContain('wire:click="openCompose"');
+});
+
 it('el menú de estado lista todos los estados y desactiva el actual', function () {
     $admin = recordAdmin();
     $lead = Lead::factory()->create(['status' => 'new']);
