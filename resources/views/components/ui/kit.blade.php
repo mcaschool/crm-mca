@@ -227,6 +227,7 @@ a.ui-person-name:focus-visible{outline:2px solid var(--mca-blue);outline-offset:
 @media(max-width:1179px){
   .ui-record-grid{grid-template-columns:minmax(0,1fr)}
   .ui-record-side{order:-1}
+  .ui-record--main-first .ui-record-side{order:0}
 }
 @media(max-width:640px){
   .ui-record-h{padding:16px;gap:12px}
@@ -251,7 +252,7 @@ a.ui-person-name:focus-visible{outline:2px solid var(--mca-blue);outline-offset:
 
 /* cuerpo de tarjeta con relleno estándar y lista de filas */
 .ui-card-p{padding:16px 18px}
-.ui-card-h .ui-card-sub{font-size:12.5px;color:var(--mca-text-3);font-weight:500}
+.ui-card-h .ui-card-sub{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mca-text-3);font-weight:500}
 .ui-list{list-style:none;margin:0;padding:0}
 .ui-list-item{display:flex;align-items:flex-start;gap:12px;width:100%;padding:12px 18px;border:0;border-top:1px solid var(--mca-line);background:none;
   font:inherit;font-size:13.5px;color:var(--mca-text);text-align:left;text-decoration:none;min-width:0}
@@ -519,7 +520,327 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
   .ui-table .ui-person-mail{font-size:13px}
 }
 
+/* cabecera de página con varias acciones: en móvil la principal ocupa la fila y las demás se reparten */
+@media(max-width:640px){
+  .mca-pagehead.ui-ph-stack .ph-actions{width:100%}
+  .mca-pagehead.ui-ph-stack .ph-actions > *{flex:1 1 calc(50% - 4px)}
+  .mca-pagehead.ui-ph-stack .ph-actions > .ui-btn--primary{order:-1;flex-basis:100%}
+}
+
+/* ---------- control segmentado (p. ej. vistas del Calendario) ---------- */
+.ui-seg{display:inline-flex;gap:2px;padding:3px;background:var(--mca-surface-2);border:1px solid var(--mca-line);border-radius:var(--mca-r-ctl)}
+.ui-seg button{height:28px;padding:0 12px;border:0;border-radius:6px;background:none;font:inherit;font-size:13px;font-weight:600;color:var(--mca-text-2);cursor:pointer;white-space:nowrap}
+.ui-seg button:hover{color:var(--mca-text);background:rgba(19,37,61,.05)}
+.ui-seg button[aria-pressed=true]{background:var(--mca-surface);color:var(--mca-blue-deep);box-shadow:var(--mca-shadow-xs),inset 0 0 0 1px var(--mca-line-strong)}
+.ui-seg button:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+
+/* casillas, chips de opción y franjas horarias de formularios */
+.ui-checks{display:flex;flex-wrap:wrap;gap:10px 20px}
+.ui-check{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--mca-text);cursor:pointer;line-height:1.35}
+.ui-check input{width:16px;height:16px;flex:0 0 auto;margin:0;accent-color:var(--mca-blue);cursor:pointer}
+.ui-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ui-chip{height:30px;padding:0 11px;border:1px solid #C9D9EE;border-radius:999px;background:var(--mca-surface);font:inherit;font-size:13px;font-weight:600;
+  color:var(--mca-blue);font-variant-numeric:tabular-nums;cursor:pointer}
+.ui-chip:hover{background:var(--mca-blue-soft)}
+.ui-chip:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+/* piezas de ficha y formularios del Calendario */
+.ui-record-title.is-struck{text-decoration:line-through;text-decoration-thickness:2px;color:var(--mca-text-2)}
+.ui-card--danger{border-color:#F0C9C5}
+.ui-card--danger > .ui-card-h .ui-card-ic{color:var(--mca-danger)}
+.ui-actions-row{display:flex;flex-wrap:wrap;gap:8px}
+.ui-actions-row--top{margin-top:12px}
+.ui-card-p--sep{border-top:1px solid var(--mca-line);display:flex;flex-direction:column;gap:12px}
+.ui-btn--block{width:100%}
+.ui-guest-form{display:flex;flex-direction:column;gap:12px;margin-top:4px;padding-top:12px;border-top:1px dashed var(--mca-line-strong)}
+.ui-card-kicker--flush{padding:0}
+.ui-list-go{width:16px;height:16px;flex:0 0 auto;margin-top:2px;color:var(--mca-blue)}
+.ui-stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.ui-alert--flush{margin:0}
+.ui-callout-list{list-style:disc}
+.ui-text-warning{color:var(--mca-warning) !important}
+.ui-text-warning .ic{display:inline-block;width:13px;height:13px;vertical-align:-2px}
+.ui-checks--field{min-height:var(--mca-h-lg);align-items:center}
+.ui-form-actions--end{justify-content:flex-end}
+.ui-owner-pick{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--mca-text-2)}
+.ui-owner-pick .ui-select{min-width:200px}
+.ui-weekrows{border-top:1px solid var(--mca-line)}
+.ui-subform{border-bottom:1px solid var(--mca-line);background:var(--mca-surface-2)}
+.ui-subform > .ui-card-f{border-radius:0}
+.ui-list-item--wrap{flex-wrap:wrap}
+/* texto copiable (enlaces públicos) */
+.ui-copy{display:flex;align-items:center;gap:6px;min-height:var(--mca-h-lg);padding:3px 3px 3px 12px;border:1px solid var(--mca-line-strong);border-radius:var(--mca-r-ctl);background:var(--mca-surface-2)}
+.ui-copy-text{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:var(--mca-text);overflow-wrap:anywhere}
+.ui-copy--inline{min-height:0;padding:0;border:0;background:none}
+.ui-copy--inline .ui-copy-text{flex:0 1 auto;color:var(--mca-text-3)}
+/* salas institucionales (Meet / Zoom) */
+.ui-vr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+.ui-vr{display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px 18px}
+.ui-vr + .ui-vr{border-left:1px solid var(--mca-line)}
+.ui-vr-title{margin:0;font-size:14px;font-weight:600;color:var(--mca-text)}
+.ui-vr .ui-meta dd{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+@media(max-width:767px){.ui-vr + .ui-vr{border-left:0;border-top:1px solid var(--mca-line)}}
+/* plantillas de correo del Calendario: editor y vista previa */
+.ui-tpl-key{min-width:260px}
+.ui-tpl-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px}
+.ui-tpl-edit{display:flex;flex-direction:column;gap:16px;min-width:0;padding:18px;border-right:1px solid var(--mca-line)}
+.ui-tpl-body{min-height:340px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+.ui-tpl-side{display:flex;flex-direction:column;gap:10px;min-width:0;padding:18px;background:var(--mca-surface-2);border-radius:0 0 var(--mca-r-card) 0}
+.ui-tpl-vars{display:flex;flex-wrap:wrap;gap:6px}
+.ui-tpl-vars code{padding:2px 7px;border-radius:6px;background:var(--mca-blue-soft);color:var(--mca-blue-deep);font-size:12px}
+.ui-tpl-preview{padding:14px;border:1px solid var(--mca-line);border-radius:var(--mca-r-ctl);background:#fff;font-size:13.5px;line-height:1.5;overflow-wrap:anywhere}
+.ui-tpl-preview-subject{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--mca-line);font-weight:700;color:var(--mca-text)}
+.ui-tpl-preview a{color:var(--mca-blue)}
+@media(max-width:1023px){
+  .ui-tpl-grid{grid-template-columns:minmax(0,1fr)}
+  .ui-tpl-edit{border-right:0;border-bottom:1px solid var(--mca-line)}
+  .ui-tpl-side{border-radius:0 0 var(--mca-r-card) var(--mca-r-card)}
+}
+@media(max-width:640px){.ui-tpl-key{min-width:0;flex:1 1 100%}.ui-tpl-edit,.ui-tpl-side{padding:16px}}
+/* campana de avisos del Calendario (barra superior) */
+.ui-bell{position:relative;cursor:pointer}
+.ui-bell .ic{width:18px;height:18px}
+.ui-bell-n{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;background:var(--mca-blue);color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:700}
+.ui-bell-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 8px 8px 14px;border-bottom:1px solid var(--mca-line);font-size:13px}
+.ui-bell-list{max-height:360px;overflow:auto}
+.ui-bell-list .ui-list-item{padding:10px 14px}
+.ui-bell-list .ui-list-item.is-unread{background:var(--mca-blue-soft)}
+.ui-bell-kind{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--mca-blue)}
+.ui-chip[aria-pressed=true]{color:#fff;background:var(--mca-blue);border-color:var(--mca-blue)}
+.ui-span-2{grid-column:span 2}
+@media(max-width:767px){.ui-span-2{grid-column:auto}}
+/* elemento elegido en un buscador (p. ej. contacto de una actividad) y resultados */
+.ui-picked{display:flex;align-items:center;gap:10px;min-height:var(--mca-h-lg);padding:4px 4px 4px 12px;border:1px solid #C9D9EE;border-radius:var(--mca-r-ctl);background:var(--mca-blue-soft);font-size:13.5px}
+.ui-picked > .ic{width:16px;height:16px;flex:0 0 auto;color:var(--mca-blue)}
+.ui-picked-text{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.3;overflow-wrap:anywhere}
+.ui-picked-text b{font-weight:600;color:var(--mca-text)}
+.ui-picked-text span{font-size:12.5px;color:var(--mca-text-2)}
+.ui-results{margin-top:6px;max-height:280px;overflow:auto}
+.ui-callout-list{margin:0;padding-left:20px}
+.ui-callout--stack > b{display:flex;align-items:center;gap:6px}
+.ui-callout--stack .ui-input{width:100%;max-width:480px}
+.ui-interval{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ui-interval .ui-input{width:124px;height:var(--mca-h-md)}
+.ui-interval .sep{color:var(--mca-text-3)}
+.ui-weekrow{display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px 16px;align-items:start;padding:12px 18px;border-top:1px solid var(--mca-line)}
+.ui-weekrow:first-child{border-top:0}
+.ui-weekrow-day{padding-top:8px;font-size:13.5px;font-weight:600;color:var(--mca-text)}
+.ui-weekrow-body{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0}
+.ui-weekrow-off{padding-top:8px;font-size:13px;color:var(--mca-text-3)}
+@media(max-width:640px){
+  .ui-weekrow{grid-template-columns:minmax(0,1fr);padding:12px 16px}
+  .ui-weekrow-day{padding-top:0}
+  .ui-interval{flex-wrap:nowrap;width:100%}
+  .ui-interval .ui-input{width:auto;flex:1 1 0;min-width:0;padding:0 8px}
+}
+
+/* ---------- Calendario ----------
+   Una sola marca para todas las vistas: cada día es una sección (.ui-cal-day) con cabecera y
+   actividades (.ui-cal-ev). Por defecto se pinta como AGENDA (filas legibles con hora, datos,
+   estado y acceso): así se ven la vista Lista, las vencidas y la semana/día en tableta y móvil.
+   Con ancho suficiente (contenedor ≥900 px), semana y día pasan a REJILLA HORARIA: escala de
+   horas, posición y altura proporcionales a la hora y la duración, y las actividades simultáneas
+   repartidas en carriles (CalendarGrid). El mes es una cuadrícula que en móvil se reduce a un
+   mini-mes con puntos más la agenda del mes. El color es el estado; el icono, el tipo. */
+.ui-cal{container:cal / inline-size;min-width:0}
+.ui-cal-bar{display:flex;align-items:center;gap:10px 12px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--mca-line)}
+.ui-cal-nav{display:inline-flex;align-items:center;gap:4px}
+.ui-cal-title{margin:0;display:flex;align-items:center;gap:8px;min-width:0;font-size:17px;font-weight:700;letter-spacing:-.01em;color:var(--mca-text)}
+.ui-cal-bar .sp{flex:1}
+.ui-cal-body{transition:opacity .15s}
+.ui-cal.is-loading .ui-cal-body{opacity:.5}
+.ui-cal-foot{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:10px 16px;border-top:1px solid var(--mca-line);background:var(--mca-surface-2);
+  border-radius:0 0 var(--mca-r-card) var(--mca-r-card);font-size:12.5px;color:var(--mca-text-3)}
+.ui-cal-foot .sp{flex:1}
+.ui-cal-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:0;list-style:none}
+.ui-cal-legend li{display:inline-flex;align-items:center;gap:6px}
+.ui-cal-legend i{width:12px;height:12px;border-radius:3px;background:var(--tone-soft);border-left:3px solid var(--tone)}
+
+/* sección de un día (cabecera + actividades) */
+.ui-cal-day{min-width:0}
+.ui-cal-day-h{display:flex;align-items:center;gap:10px;margin:0;padding:8px 16px;background:var(--mca-surface-2);border-bottom:1px solid var(--mca-line);font-size:13px;font-weight:500;color:var(--mca-text-3)}
+.ui-cal-day + .ui-cal-day > .ui-cal-day-h{border-top:1px solid var(--mca-line)}
+.ui-cal-daybtn{display:inline-flex;align-items:baseline;gap:6px;min-height:32px;padding:5px 6px;margin-left:-6px;border:0;border-radius:6px;background:none;font:inherit;color:var(--mca-text-2);cursor:pointer}
+.ui-cal-daybtn:hover{background:rgba(19,37,61,.05);color:var(--mca-text)}
+.ui-cal-daybtn:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+.ui-cal-daybtn .num{font-size:16px;font-weight:700;color:var(--mca-text);font-variant-numeric:tabular-nums}
+.ui-cal-day.is-today .ui-cal-daybtn .num{min-width:28px;padding:1px 7px;border-radius:999px;text-align:center;color:#fff;background:var(--mca-blue)}
+.ui-cal-daybtn .dow{text-transform:capitalize}
+.ui-cal-daybtn .dow .s{display:none}
+.ui-cal-daybtn .mon{color:var(--mca-text-2)}
+.ui-cal-day-n{margin-left:auto;font-size:12.5px}
+.ui-cal-foot .ic{display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:4px}
+.ui-cal-ev-meta .is-high{color:var(--mca-danger);font-weight:600}
+.ui-cal-day-b{position:relative;min-width:0}
+.ui-cal-free{margin:0;padding:10px 16px;font-size:13px;color:var(--mca-text-3)}
+.ui-cal-now{display:none}
+.ui-cal-gutter{display:none}
+.ui-cal-cluster{display:none}
+
+/* actividad: fila de agenda (por defecto) */
+.ui-cal-ev{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) auto;align-items:start;gap:4px 14px;padding:12px 16px;
+  border-top:1px solid var(--mca-line);font-size:13.5px;line-height:1.4;color:var(--mca-text);box-shadow:inset 3px 0 0 var(--tone)}
+.ui-cal-day-b > .ui-cal-ev:first-child{border-top:0}
+.ui-cal-ev:hover{background:var(--mca-surface-hover)}
+.ui-cal-ev-time{font-weight:700;font-variant-numeric:tabular-nums;color:var(--mca-text);white-space:nowrap;padding-top:1px}
+.ui-cal-ev-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.ui-cal-ev-head{display:flex;align-items:flex-start;gap:8px;min-width:0}
+.ui-cal-ev-ic{width:22px;height:22px;flex:0 0 auto;display:grid;place-items:center;border-radius:6px;color:var(--tone);background:var(--tone-soft)}
+.ui-cal-ev-ic .ic{width:13px;height:13px}
+.ui-cal-ev-title{display:block;min-width:0;font-weight:600;color:var(--mca-text);text-decoration:none;overflow-wrap:anywhere;padding-top:1px}
+.ui-cal-ev-meta{display:flex;flex-wrap:wrap;gap:3px 14px;padding-left:30px;font-size:12.5px;color:var(--mca-text-3)}
+.ui-cal-ev-meta > span{display:inline-flex;align-items:center;gap:5px;min-width:0;overflow-wrap:anywhere}
+.ui-cal-ev-meta .ic{width:13px;height:13px;flex:0 0 auto}
+.ui-cal-ev-side{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.ui-cal-ev.is-cancelled .ui-cal-ev-title{text-decoration:line-through;color:var(--mca-text-3)}
+.ui-cal-ev.is-cancelled .ui-cal-ev-time{color:var(--mca-text-3)}
+/* toda la tarjeta abre el detalle (enlace «estirado»); el acceso a la reunión queda por encima */
+.ui-cal-open::after{content:"";position:absolute;inset:0;border-radius:inherit}
+.ui-cal-open:focus-visible{outline:none}
+.ui-cal-open:focus-visible::after{box-shadow:var(--mca-focus)}
+.ui-cal .ag-join{position:relative;z-index:1;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:var(--mca-r-ctl);background:var(--mca-blue);
+  color:#fff;font-size:12.5px;font-weight:600;text-decoration:none;white-space:nowrap}
+.ui-cal .ag-join:hover{background:var(--mca-blue-hover)}
+.ui-cal .ag-join:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+.ui-cal .ag-join .ic{width:14px;height:14px}
+.ui-cal .ag-join.only-ic{width:24px;height:24px;padding:0;justify-content:center;border-radius:6px}
+.ui-cal .ag-join.only-ic .ic{width:13px;height:13px}
+
+/* agenda estrecha (móvil): hora encima, estado y acceso debajo */
+@container cal (max-width:560px){
+  .ui-cal-bar{padding:12px}
+  .ui-cal-bar .sp{display:none}
+  .ui-cal-title{font-size:16px;flex:1 1 auto}
+  .ui-cal-bar .ui-seg{width:100%}
+  .ui-cal-bar .ui-seg button{flex:1;height:32px}
+  .ui-cal-bar .ui-btn--sm{--h:36px}
+  .ui-cal-ev{grid-template-columns:minmax(0,1fr);gap:6px;padding:12px 14px}
+  .ui-cal-ev-time{font-size:13px;color:var(--tone)}
+  .ui-cal-ev-meta{padding-left:0}
+  .ui-cal-ev-side{justify-content:flex-start}
+  .ui-cal-ev-side .ag-join{height:32px}
+  .ui-cal-day-h{padding:8px 14px}
+}
+
+/* rejilla horaria (semana y día con espacio) */
+@container cal (min-width:900px){
+  .ui-cal-grid{--ph:72px;display:grid;grid-template-columns:56px var(--tpl,repeat(var(--cols),minmax(0,1fr)))}
+  .ui-cal-gutter{display:block;border-right:1px solid var(--mca-line)}
+  .ui-cal-gutter-h{height:58px;border-bottom:1px solid var(--mca-line);background:var(--mca-surface-2)}
+  .ui-cal-hours{position:relative;height:calc(var(--hours) * var(--ph));margin:0;padding:0;list-style:none}
+  .ui-cal-hours li{position:absolute;right:8px;top:calc(var(--i) * var(--ph) - 7px);font-size:11.5px;font-weight:500;color:var(--mca-text-3);font-variant-numeric:tabular-nums}
+  .ui-cal-hours li:first-child{top:4px}
+  .ui-cal-grid > .ui-cal-day + .ui-cal-day{border-left:1px solid var(--mca-line)}
+  .ui-cal-grid .ui-cal-day-h{position:sticky;top:64px;z-index:3;height:58px;justify-content:center;flex-direction:column;gap:0;padding:6px 4px;border-top:0 !important}
+  .ui-cal-grid .ui-cal-daybtn{flex-direction:column;align-items:center;gap:1px;margin:0;padding:2px 10px}
+  .ui-cal-grid .ui-cal-daybtn .dow{font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+  .ui-cal-grid .ui-cal-daybtn .dow .s{display:inline}
+  .ui-cal-grid .ui-cal-daybtn .dow .l,.ui-cal-grid .ui-cal-daybtn .mon{display:none}
+  .ui-cal-grid .ui-cal-daybtn .num{font-size:18px;line-height:1.35}
+  .ui-cal-grid .ui-cal-day-n{display:none}
+  .ui-cal-grid .ui-cal-day-b{height:calc(var(--hours) * var(--ph));
+    background:repeating-linear-gradient(to bottom,var(--mca-line) 0 1px,transparent 1px calc(var(--ph) / 2),#EEF2F7 calc(var(--ph) / 2) calc(var(--ph) / 2 + 1px),transparent calc(var(--ph) / 2 + 1px) var(--ph))}
+  .ui-cal-grid .ui-cal-day.is-today .ui-cal-day-b{background-color:#F7FAFE}
+  .ui-cal-grid .ui-cal-free{display:none}
+  .ui-cal-grid .ui-cal-now{display:block;position:absolute;left:0;right:0;top:calc(var(--t) * var(--ph) / 60);z-index:2;height:2px;background:var(--mca-danger);pointer-events:none}
+  .ui-cal-grid .ui-cal-now::before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--mca-danger)}
+
+  .ui-cal-grid .ui-cal-ev{position:absolute;z-index:3;top:calc(var(--t) * var(--ph) / 60 + 1px);height:max(22px,calc(var(--d) * var(--ph) / 60 - 3px));
+    left:calc(var(--l) / var(--n) * (100% - 6px) + 3px);width:calc((100% - 6px) / var(--n) - 2px);
+    display:flex;flex-direction:column;gap:1px;padding:3px 7px 3px 9px;border:0;border-radius:6px;overflow:hidden;font-size:12px;line-height:1.3;
+    background:var(--tone-soft);box-shadow:inset 3px 0 0 var(--tone),0 0 0 1px var(--mca-surface)}
+  .ui-cal-grid .ui-cal-ev > *,.ui-cal-grid .ui-cal-ev-main > *{flex-shrink:0}
+  /* 3 o más a la vez en la semana: sus tarjetas se sustituyen por una tarjeta de grupo (.ui-cal-cluster) */
+  .ui-cal-grid:not(.ui-cal-grid--day) .ui-cal-ev.is-stacked{display:none}
+  .ui-cal-grid:not(.ui-cal-grid--day) .ui-cal-cluster{display:flex;flex-direction:column;gap:2px;position:absolute;z-index:4;left:3px;right:3px;top:calc(var(--t) * var(--ph) / 60 + 1px);
+    min-height:calc(var(--d) * var(--ph) / 60 - 3px);padding:4px 6px 5px;border-radius:6px;background:var(--mca-surface);
+    box-shadow:inset 0 0 0 1px var(--mca-line-strong),var(--mca-shadow-xs)}
+  .ui-cal-cluster-h{display:flex;align-items:center;gap:5px;padding:0 2px;font-size:11px;font-weight:700;color:var(--mca-text-2)}
+  .ui-cal-cluster-h .ic{width:12px;height:12px}
+  .ui-cal-cluster ul{margin:0;padding:0;list-style:none}
+  .ui-cal-cluster .ui-cal-chip{padding:1px 2px;font-size:11.5px;gap:5px}
+  /* tarjetas estrechas: solo hora de inicio y sin botón de acceso (sigue en la ficha, la vista día y la lista) */
+  .ui-cal-grid .ui-cal-ev{container:ev / inline-size}
+  .ui-cal-grid .ui-cal-ev:hover,.ui-cal-grid .ui-cal-ev:focus-within{z-index:20;box-shadow:inset 3px 0 0 var(--tone),0 0 0 1px var(--mca-surface),var(--mca-shadow-pop)}
+  .ui-cal-grid .ui-cal-ev-time{padding:0;font-size:11.5px;font-weight:600;color:var(--tone);overflow:hidden;text-overflow:ellipsis}
+  .ui-cal-grid .ui-cal-ev-ic{display:none}
+  .ui-cal-grid .ui-cal-ev-title{padding:0;font-size:12.5px;line-height:1.3;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--lines,1);overflow:hidden}
+  .ui-cal-grid .ui-cal-ev-meta{display:none;padding:0;font-size:11.5px;gap:0 8px}
+  .ui-cal-grid .ui-cal-ev-side .ui-badge{display:none}
+  .ui-cal-grid .ui-cal-ev-side{position:absolute;top:3px;right:3px}
+  .ui-cal-grid .ui-cal-ev:has(.ag-join) .ui-cal-ev-main,.ui-cal-grid .ui-cal-ev:has(.ag-join) .ui-cal-ev-time{padding-right:24px}
+  .ui-cal-grid .ag-join{width:22px;height:22px;padding:0;justify-content:center;border-radius:6px}
+  .ui-cal-grid .ag-join span{display:none}
+  .ui-cal-grid .ui-cal-ev.is-cancelled{background:#F4F6F9}
+  /* cuánto texto cabe según la duración (≤20 min: una línea; 30 min: hora y título; 1 h+: título en dos líneas y datos) */
+  .ui-cal-grid .ui-cal-ev--xs{flex-direction:row;align-items:center;gap:6px;padding-top:0;padding-bottom:0}
+  .ui-cal-grid .ui-cal-ev--xs .ui-cal-ev-main{flex:1;min-width:0}
+  .ui-cal-grid .ui-cal-ev--md,.ui-cal-grid .ui-cal-ev--lg{--lines:2}
+  .ui-cal-grid .ui-cal-ev--lg .ui-cal-ev-meta{display:flex;flex-direction:column}
+  .ui-cal-grid .ui-cal-ev--lg .ui-cal-ev-meta > span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+  .ui-cal-grid .ui-cal-ev--lg .ui-cal-ev-meta .ic{display:none}
+  /* vista día: columna ancha; hora a la izquierda y los datos en línea */
+  .ui-cal-grid--day .ui-cal-ev{flex-direction:row;align-items:flex-start;gap:14px;padding:5px 12px 5px 14px;font-size:12.5px}
+  .ui-cal-grid--day .ui-cal-ev-time{flex:0 0 auto;min-width:84px;font-size:12px;padding-top:1px}
+  .ui-cal-grid--day .ui-cal-ev-main{flex:1;min-width:0;gap:2px}
+  .ui-cal-grid--day .ui-cal-ev-title{font-size:13px;--lines:1}
+  .ui-cal-grid--day .ui-cal-ev--lg .ui-cal-ev-title{--lines:2}
+  .ui-cal-grid--day .ui-cal-ev-meta,.ui-cal-grid--day .ui-cal-ev--lg .ui-cal-ev-meta{display:flex;flex-direction:row;flex-wrap:wrap;gap:0 14px;font-size:12px}
+  .ui-cal-grid--day .ui-cal-ev-meta > span,.ui-cal-grid--day .ui-cal-ev--lg .ui-cal-ev-meta > span{display:inline-flex;flex:0 0 auto;white-space:nowrap}
+  .ui-cal-grid--day .ui-cal-ev:not(.ui-cal-ev--lg) .ui-cal-ev-meta{flex-wrap:nowrap;overflow:hidden}
+  .ui-cal-grid--day .ui-cal-ev-meta .ic,.ui-cal-grid--day .ui-cal-ev--lg .ui-cal-ev-meta .ic{display:inline-block}
+  .ui-cal-grid--day .ui-cal-ev--xs,.ui-cal-grid--day .ui-cal-ev--sm{align-items:center;padding-top:0;padding-bottom:0}
+  .ui-cal-grid--day .ui-cal-ev--xs .ui-cal-ev-main,.ui-cal-grid--day .ui-cal-ev--sm .ui-cal-ev-main{flex-direction:row;align-items:center;gap:14px}
+  .ui-cal-grid--day .ui-cal-ev--xs .ui-cal-ev-head,.ui-cal-grid--day .ui-cal-ev--sm .ui-cal-ev-head{flex:0 1 auto;min-width:0}
+  .ui-cal-grid--day .ui-cal-ev--xs .ui-cal-ev-meta,.ui-cal-grid--day .ui-cal-ev--sm .ui-cal-ev-meta{flex:1 1 0;min-width:0;flex-wrap:nowrap;overflow:hidden}
+  .ui-cal-grid--day .ui-cal-ev-side{top:50%;transform:translateY(-50%);right:6px}
+  .ui-cal-grid--day .ui-cal-ev--md .ui-cal-ev-side,.ui-cal-grid--day .ui-cal-ev--lg .ui-cal-ev-side{top:5px;transform:none}
+  .ui-cal-grid--day .ag-join{width:auto;padding:0 9px}
+  .ui-cal-grid--day .ag-join span{display:inline}
+  .ui-cal-grid--day .ui-cal-ev:has(.ag-join) .ui-cal-ev-main{padding-right:88px}
+  .ui-cal-grid--day .ui-cal-ev:has(.ag-join) .ui-cal-ev-time{padding-right:0}
+}
+
+@container ev (max-width:129px){
+  .ui-cal-ev-end,.ui-cal-ev-side{display:none}
+  .ui-cal-ev-main,.ui-cal-ev-time{padding-right:0 !important}
+}
+/* mes */
+.ui-cal-month{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.ui-cal-mh{padding:8px 10px;font-size:12px;font-weight:600;color:var(--mca-text-3);background:var(--mca-surface-2);border-bottom:1px solid var(--mca-line)}
+.ui-cal-cell{container:cell / inline-size;position:relative;display:flex;flex-direction:column;gap:2px;min-width:0;min-height:120px;padding:6px;border-bottom:1px solid var(--mca-line)}
+.ui-cal-cell:not(:nth-child(7n)){border-right:1px solid var(--mca-line)}
+.ui-cal-cell.is-out{background:var(--mca-surface-2)}
+.ui-cal-cell.is-out .ui-cal-cell-n{color:var(--mca-text-dis)}
+.ui-cal-cell-n{align-self:flex-start;min-width:26px;height:26px;padding:0 6px;border:0;border-radius:999px;background:none;font:inherit;font-size:13px;font-weight:600;
+  color:var(--mca-text);font-variant-numeric:tabular-nums;cursor:pointer}
+.ui-cal-cell-n:hover{background:rgba(19,37,61,.06)}
+.ui-cal-cell-n:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+.ui-cal-cell.is-today .ui-cal-cell-n{color:#fff;background:var(--mca-blue)}
+.ui-cal-chip{position:relative;display:flex;align-items:center;gap:6px;min-width:0;padding:2px 6px;border-radius:5px;font-size:12px;line-height:1.4;color:var(--mca-text)}
+.ui-cal-chip:hover{background:var(--mca-surface-hover)}
+.ui-cal-chip i{width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:var(--tone)}
+.ui-cal-chip time{flex:0 0 auto;color:var(--mca-text-3);font-variant-numeric:tabular-nums}
+.ui-cal-chip a{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit;text-decoration:none;font-weight:500}
+.ui-cal-chip.is-cancelled a{text-decoration:line-through;color:var(--mca-text-3)}
+.ui-cal-chip .ag-join{flex:0 0 auto;margin-left:auto}
+.ui-cal-more{align-self:flex-start;padding:2px 6px;border:0;border-radius:5px;background:none;font:inherit;font-size:12px;font-weight:600;color:var(--mca-blue);cursor:pointer}
+.ui-cal-more:hover{background:var(--mca-blue-soft)}
+.ui-cal-more:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+.ui-cal-dots{display:none}
+.ui-cal-month-agenda{display:none}
+@container cell (max-width:149px){.ui-cal-chip .ag-join{display:none}}
+@container cal (max-width:799px){
+  .ui-cal-mh{padding:8px 0;text-align:center;font-size:11.5px}
+  .ui-cal-cell{min-height:52px;align-items:center;gap:3px;padding:4px 2px;border-right:0 !important}
+  .ui-cal-cell-n{align-self:center;min-width:32px;height:32px}
+  .ui-cal-cell .ui-cal-chip,.ui-cal-cell .ui-cal-more{display:none}
+  .ui-cal-dots{display:flex;gap:3px;height:6px}
+  .ui-cal-dots i{width:6px;height:6px;border-radius:50%;background:var(--tone)}
+  .ui-cal-month-agenda{display:block;border-top:1px solid var(--mca-line)}
+}
+
 @media (prefers-reduced-motion: reduce){
+  .ui-cal-body{transition:none}
   .ui-badge--pulse .dot,.ui-spin{animation:none}
   .ui-btn,.ui-kpi,.ui-kpi-go,.ui-input,.ui-select,.ui-table tbody tr{transition:none}
 }
