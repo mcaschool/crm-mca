@@ -320,21 +320,17 @@ class Show extends Component
                 function (string $attr, mixed $value, callable $fail): void {
                     $ok = EmailSender::query()->where('id', $value)->where('status', 'active')->exists();
                     if (! $ok) {
-                        $fail('Elige un remitente válido.');
+                        $fail(__('Elige un remitente válido.'));
                     }
                 },
             ],
             'emailSubject' => ['required', 'string', 'max:200'],
             'emailBody' => ['required', 'string', 'max:100000'],
-        ], [], [
-            'emailSenderId' => 'remitente',
-            'emailSubject' => 'asunto',
-            'emailBody' => 'cuerpo',
-        ]);
+        ]); // nombres de campo: lang/{es,en}/validation.php (attributes), según el idioma activo
 
         // El cuerpo debe tener contenido real (no solo etiquetas vacías del editor).
         if (trim(strip_tags($this->emailBody)) === '') {
-            $this->addError('emailBody', 'Escribe el mensaje.');
+            $this->addError('emailBody', __('Escribe el mensaje.'));
 
             return;
         }
@@ -350,7 +346,7 @@ class Show extends Component
 
         $contact = $lead->contact;
         if ($contact === null || (string) $contact->email === '') {
-            $this->addError('emailSubject', 'Este contacto no tiene correo.');
+            $this->addError('emailSubject', __('Este contacto no tiene correo.'));
 
             return;
         }
@@ -393,7 +389,7 @@ class Show extends Component
             session()->flash('status', 'Correo enviado a '.$contact->email.' como '.$sender->from_address.'.');
         } else {
             // El intento fallido queda en el historial; se avisa sin romper la ficha.
-            $this->addError('emailBody', 'No se pudo enviar (revisa el SMTP del remitente). El intento quedó registrado en el historial.');
+            $this->addError('emailBody', __('No se pudo enviar (revisa el SMTP del remitente). El intento quedó registrado en el historial.'));
         }
     }
 
