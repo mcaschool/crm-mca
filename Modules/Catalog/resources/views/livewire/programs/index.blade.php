@@ -1,69 +1,83 @@
-<div>
-    <x-ui.styles />
-    <div class="mca-panel mca-page">
-        <x-ui.page-header :title="__('Catálogo')" :count="$programs->count()">
-            <x-slot:actions>
-                <a href="{{ route('catalog.categories') }}" class="btn btn-ghost btn-sm">{{ __('Categorías') }}</a>
-                <a href="{{ route('catalog.programs.create') }}" class="btn btn-primary btn-sm">
-                    <x-ui.icon name="plus" class="ic" style="width:15px;height:15px" /> {{ __('Nuevo programa') }}
-                </a>
-            </x-slot:actions>
-        </x-ui.page-header>
+<div class="mca-page">
+    <x-ui.page-header :title="__('Catálogo')" :count="$programs->count()" :subtitle="__('Programas que el emparejador y los asesores pueden recomendar.')">
+        <x-slot:actions>
+            <x-ui.button icon="layers" :href="route('catalog.categories')">{{ __('Categorías') }}</x-ui.button>
+            <x-ui.button variant="primary" icon="plus" :href="route('catalog.programs.create')">{{ __('Nuevo programa') }}</x-ui.button>
+        </x-slot:actions>
+    </x-ui.page-header>
 
-        @if (session('status'))
-            <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
-        @endif
+    @if (session('status'))
+        <div class="ui-alert ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('status') }}</div>
+    @endif
 
-        <div class="card" style="overflow:hidden">
-            <div style="overflow-x:auto">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>{{ __('Orden') }}</th>
-                            <th>{{ __('Código') }}</th>
-                            <th>{{ __('Nombre') }}</th>
-                            <th>{{ __('Área') }}</th>
-                            <th>{{ __('Nivel / Meta') }}</th>
-                            <th>{{ __('Estado') }}</th>
-                            <th>{{ __('Acciones') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse ($programs as $program)
-                            <tr wire:key="prog-{{ $program->id }}">
-                                <td>
-                                    <div style="display:flex;align-items:center;gap:4px">
-                                        <span class="t-strong">{{ $program->display_order }}</span>
-                                        <button type="button" wire:click="moveUp({{ $program->id }})" class="mca-muted" style="border:none;background:none;cursor:pointer;font-size:14px" title="{{ __('Subir') }}">↑</button>
-                                        <button type="button" wire:click="moveDown({{ $program->id }})" class="mca-muted" style="border:none;background:none;cursor:pointer;font-size:14px" title="{{ __('Bajar') }}">↓</button>
-                                    </div>
-                                </td>
-                                <td style="font-family:ui-monospace,monospace;font-size:12px">{{ $program->code }}</td>
-                                <td class="t-strong">{{ $program->name_es }}</td>
-                                {{-- Las áreas solo existen en Microcredenciales. --}}
-                                <td class="t-mut">{{ \Modules\Catalog\Models\Program::lineHasAreas($program->line) ? optional($program->category)->name_es : '—' }}</td>
-                                <td class="t-mut" style="font-size:12.5px">
-                                    {{ $program->level ?: '—' }} / {{ $program->goal ?: '—' }}
-                                    @if (! $program->level && ! $program->goal && ! $program->profile)
-                                        <span style="color:var(--mca-warn)" title="{{ __('Sin etiquetas: no aparece en el emparejador') }}">⚠</span>
-                                    @endif
-                                </td>
-                                <td>
-                                    <span class="badge {{ $program->status === 'active' ? 'badge-on' : 'badge-off' }}">{{ $program->status === 'active' ? __('activo') : __('inactivo') }}</span>
-                                </td>
-                                <td style="white-space:nowrap">
-                                    <a href="{{ route('catalog.programs.edit', $program) }}" style="color:var(--mca);font-weight:600">{{ __('Editar') }}</a>
-                                    <button type="button" wire:click="toggleActive({{ $program->id }})" class="mca-muted" style="border:none;background:none;cursor:pointer;margin-left:12px;font-weight:600">
-                                        {{ $program->status === 'active' ? __('Desactivar') : __('Activar') }}
-                                    </button>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="7" class="t-empty">{{ __('Sin programas. Importa el Excel con catalog:import o crea uno.') }}</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+    <div class="ui-card ui-card--list">
+        <div class="mca-table-scroll">
+        <table class="ui-table">
+            <thead>
+                <tr>
+                    <th class="rt-sticky">{{ __('Programa') }}</th>
+                    <th>{{ __('Estado') }}</th>
+                    <th>{{ __('Área') }}</th>
+                    <th>{{ __('Nivel / Meta') }}</th>
+                    <th>{{ __('Orden') }}</th>
+                    <th><span class="ui-sr">{{ __('Acciones') }}</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse ($programs as $program)
+                    @php $active = $program->status === 'active'; @endphp
+                    <tr wire:key="prog-{{ $program->id }}">
+                        <td class="rt-primary rt-sticky rt-w-lg">
+                            <div class="ui-person-text">
+                                <span class="ui-cell-title">{{ $program->name_es }}</span>
+                                <span class="ui-cell-sub ui-mono">{{ $program->code }}</span>
+                            </div>
+                        </td>
+                        <td class="rt-aside" data-label="{{ __('Estado') }}">
+                            <x-ui.badge :tone="$active ? 'success' : 'neutral'" dot>{{ Str::ucfirst($active ? __('activo') : __('inactivo')) }}</x-ui.badge>
+                        </td>
+                        {{-- Las áreas solo existen en Microcredenciales. --}}
+                        <td class="rt-w-sm t-2" data-label="{{ __('Área') }}">
+                            @if (\Modules\Catalog\Models\Program::lineHasAreas($program->line) && $program->category)
+                                {{ $program->category->name_es }}
+                            @else
+                                <span class="t-nil">—</span>
+                            @endif
+                        </td>
+                        <td class="rt-w-sm t-2" data-label="{{ __('Nivel / Meta') }}">
+                            <div>
+                                {{ $program->level ?: '—' }} / {{ $program->goal ?: '—' }}
+                                @if (! $program->level && ! $program->goal && ! $program->profile)
+                                    <span class="t-sub"><x-ui.badge tone="warning" icon="alert-triangle" title="{{ __('Sin etiquetas: no aparece en el emparejador') }}">{{ __('Sin etiquetas') }}</x-ui.badge></span>
+                                @endif
+                            </div>
+                        </td>
+                        <td class="rt-foot" data-label="{{ __('Orden') }}">
+                            <div class="t-order">
+                                <span class="t-order-n">{{ $program->display_order }}</span>
+                                <x-ui.button variant="ghost" size="sm" icon="chevron-up" wire:click="moveUp({{ $program->id }})" :aria-label="__('Subir').' '.$program->name_es" :title="__('Subir')" />
+                                <x-ui.button variant="ghost" size="sm" icon="chevron-down" wire:click="moveDown({{ $program->id }})" :aria-label="__('Bajar').' '.$program->name_es" :title="__('Bajar')" />
+                            </div>
+                        </td>
+                        <td class="rt-actions">
+                            <div class="t-actions">
+                                <x-ui.button size="sm" icon="pencil" :href="route('catalog.programs.edit', $program)">{{ __('Editar') }}</x-ui.button>
+                                <x-ui.button size="sm" icon="power" wire:click="toggleActive({{ $program->id }})" :title="$active ? __('Desactivar') : __('Activar')" :aria-label="($active ? __('Desactivar') : __('Activar')).' '.$program->name_es" />
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="6" class="rt-empty">
+                            <div class="ui-empty">
+                                <div class="ui-empty-ic"><x-ui.icon name="book-open" /></div>
+                                <b>{{ __('Sin programas. Importa el Excel con catalog:import o crea uno.') }}</b>
+                            </div>
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
         </div>
     </div>
 </div>
