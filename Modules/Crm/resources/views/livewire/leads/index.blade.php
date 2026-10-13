@@ -79,7 +79,7 @@
                             </div>
                         </td>
                         <td class="rt-aside" data-label="Estado"><x-ui.lead-status :status="$lead->status" /></td>
-                        <td data-label="Asesor">
+                        <td class="rt-shrink" data-label="Asesor">
                             @if ($incompanyLead)
                                 <span class="t-src"><x-ui.icon name="briefcase" /> {{ $lead->capturedByLabel() }}</span>
                             @elseif ($lead->bot)

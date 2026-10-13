@@ -138,6 +138,16 @@ a.ui-person-name:focus-visible{outline:2px solid var(--mca-blue);outline-offset:
 .mca-table-scroll > table.ui-table th.rt-sticky{background:var(--mca-surface-2)}
 .mca-table-scroll > table.ui-table tbody tr:hover > td.rt-sticky{background:var(--mca-surface-hover)}
 
+/* portátiles (<1440): celdas algo más juntas y las columnas de texto pueden partirse en
+   dos líneas (.rt-shrink y la persona) antes de recurrir al desplazamiento horizontal */
+@media(min-width:768px) and (max-width:1439px){
+  .ui-table thead th,.ui-table td{padding-left:12px;padding-right:12px}
+  .ui-table th:first-child,.ui-table td:first-child{padding-left:16px}
+  .ui-table th:last-child,.ui-table td:last-child{padding-right:16px}
+  .mca-table-scroll > table.ui-table .rt-shrink{white-space:normal;max-width:170px}
+  .mca-table-scroll > table.ui-table td.rt-primary{white-space:normal;max-width:280px}
+}
+
 /* estado vacío */
 .ui-empty{padding:40px 20px;text-align:center;color:var(--mca-text-2);font-size:14px}
 .ui-empty .ui-empty-ic{width:40px;height:40px;border-radius:50%;margin:0 auto 10px;display:grid;place-items:center;background:var(--mca-neutral-soft);color:var(--mca-text-3)}
