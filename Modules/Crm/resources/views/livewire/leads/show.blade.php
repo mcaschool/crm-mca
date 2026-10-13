@@ -1,820 +1,606 @@
-<div class="crm-page mca-page">
-    <x-ui.crm-styles />
+<div class="mca-page">
     @php
         $c = $lead->contact;
         $first = $c->first_name ?? '';
         $last = $c->last_name ?? '';
-        $initials = mb_strtoupper(mb_substr($first, 0, 1).mb_substr($last, 0, 1)) ?: '—';
         $fullName = trim($first.' '.$last) ?: '—';
+        $notesList = $lead->leadNotes;
+        if ($incompany) {
+            $modalidadLabel = match ($incompany->modalidad) {
+                'grupo' => 'Grupo',
+                'persona' => 'Individual',
+                default => $incompany->modalidad ?: '—',
+            };
+            $ruta = $incompany->programRoute();
+            $incHot = $incompany->hasRequestedContact();
+        }
+        // Tono de cada evento en la línea de tiempo (el mismo criterio que el Inicio).
+        $evTone = fn ($ev) => match ($ev->event_type) {
+            'corporate_interest', 'corporate_contact', 'corporate_form', 'recontacted' => 'gold',
+            'used_matcher', 'started_celia', 'contact_created' => 'blue',
+            'viewed_program', 'viewed_certification', 'clicked_enrollment', 'program_interest' => 'success',
+            'unresolved_question' => 'warning',
+            default => 'neutral',
+        };
     @endphp
 
-    <div style="width:100%">
-        <a href="{{ route('crm.leads.index') }}" style="display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-weight:600;font-size:13px;text-decoration:none;margin-bottom:14px">
-            <x-ui.icon name="chevron-left" style="width:15px;height:15px" /> Volver a leads
-        </a>
+    <div class="ui-record">
+        <a href="{{ route('crm.leads.index') }}" class="ui-back"><x-ui.icon name="chevron-left" /> Volver a leads</a>
 
         @if (session('status'))
-            <div class="toast ok"><x-ui.icon name="check" class="i16" /> {{ session('status') }}</div>
+            <div class="ui-alert ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('status') }}</div>
         @endif
-        @error('status') <div class="toast err"><x-ui.icon name="x" class="i16" /> {{ $message }}</div> @enderror
-        @error('transferTarget') <div class="toast err"><x-ui.icon name="x" class="i16" /> {{ $message }}</div> @enderror
+        @error('status') <div class="ui-alert ui-tone--danger" role="alert"><x-ui.icon name="x" /> {{ $message }}</div> @enderror
+        @error('transferTarget') <div class="ui-alert ui-tone--danger" role="alert"><x-ui.icon name="x" /> {{ $message }}</div> @enderror
 
-        @if ($incompany)
-            @php
-                $modalidadLabel = match ($incompany->modalidad) {
-                    'grupo' => 'Grupo',
-                    'persona' => 'Individual',
-                    default => $incompany->modalidad ?: '—',
-                };
-                $ruta = $incompany->programRoute();
-                $incHot = $incompany->hasRequestedContact();
-            @endphp
-            <div class="ic-stack">
-                {{-- CABECERA --}}
-                <div class="ic-head">
-                    <span class="av">{{ $initials }}</span>
-                    <div>
-                        <div class="nm">{{ $fullName }}</div>
-                        <div class="meta">
-                            <span><x-ui.icon name="briefcase" class="i13" /> Captado por <b>{{ $lead->capturedByLabel() }}</b></span>
-                            <span>·</span>
-                            <span><x-ui.icon name="mail" class="i13 gray" /> {{ $c->email ?? '—' }}</span>
-                            @if ($lead->sourceLabel())
-                                <span>·</span>
-                                <span>Motivo: <b>{{ $lead->sourceLabel() }}</b></span>
-                            @endif
-                        </div>
-                    </div>
-                    <div class="sp"></div>
-                    <div class="d-actions">
-                        @if ($isTerminal || ! $canAct)
-                            <span class="statuspick {{ $lead->status->badgeClass() }}" style="cursor:default">
-                                <x-ui.icon name="{{ $isTerminal ? 'check' : 'clock' }}" class="i14" /> {{ $lead->status->label() }}
-                            </span>
-                        @else
-                            <div class="statusmenu">
-                                <button type="button" class="statuspick {{ $lead->status->badgeClass() }}" wire:click="$toggle('statusMenuOpen')">
-                                    <x-ui.icon name="clock" class="i14" /> {{ $lead->status->label() }}
-                                    <x-ui.icon name="chevron-down" class="i14" />
-                                </button>
-                                @if ($statusMenuOpen)
-                                    <div class="menu" wire:click.outside="$set('statusMenuOpen', false)">
-                                        @foreach ($statuses as $s)
-                                            <button type="button" wire:click="changeStatus('{{ $s->value }}')"
-                                                @if ($s->value === $lead->status->value) disabled @endif>
-                                                <span class="chip {{ $s->badgeClass() }}">{{ $s->label() }}</span>
-                                            </button>
-                                        @endforeach
-                                    </div>
-                                @endif
-                            </div>
-                        @endif
-                        @can('create', \Modules\Crm\Models\Activity::class)
-                            <a href="{{ route('crm.agenda.create', ['lead' => $lead->id]) }}" class="ghost"><x-ui.icon name="calendar" class="i14" /> {{ __('Programar actividad') }}</a>
-                        @endcan
-                        @if ($canEmail)
-                            <button type="button" class="ghost" wire:click="openCompose"><x-ui.icon name="mail" class="i14" /> Enviar correo</button>
-                        @endif
-                        @if ($canAct)
-                            <a href="#transfer" class="ghost"><x-ui.icon name="arrow-right-left" class="i14" /> Transferir</a>
-                        @else
-                            <span class="ro-tag"><x-ui.icon name="eye" class="i12" /> solo lectura</span>
-                        @endif
-                        <button type="button" class="ghost" wire:click="exportOne"><x-ui.icon name="download" class="i14" /> Exportar</button>
-                    </div>
-                </div>
-
-                {{-- BANNER de contexto --}}
-                <div class="ic-banner">
-                    <x-ui.icon name="briefcase" class="i15" />
-                    <span><b>Lead de formulario · Recomendador InCompany.</b> No tuvo conversación de chat; su diagnóstico está en el Perfil InCompany.</span>
-                </div>
-
-                {{-- BLOQUE 1 · Datos personales --}}
-                <div class="ic-card">
-                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="user" class="i15" /></span><h2>Datos personales</h2></div>
-                    <div class="ic-rows">
-                        <div class="ic-row"><span class="lbl"><x-ui.icon name="user" class="i15" /> Nombre</span><span class="val">{{ $fullName }}</span></div>
-                        <div class="ic-row"><span class="lbl"><x-ui.icon name="mail" class="i15" /> Correo</span><span class="val">{{ $c->email ?? '—' }}</span></div>
-                        <div class="ic-row"><span class="lbl"><x-ui.icon name="phone" class="i15" /> WhatsApp</span><span class="val {{ $phoneDisplay ? '' : 'dim' }}">{{ $phoneDisplay ?? '—' }}</span></div>
-                        <div class="ic-row"><span class="lbl"><x-ui.icon name="globe" class="i15" /> País</span><span class="val {{ $c->country ? '' : 'dim' }}">{{ $c->country ?: '—' }}</span></div>
-                    </div>
-                    <div class="ic-audit"><x-ui.icon name="lock" class="i13" /> Acceso a datos personales registrado en auditoría.</div>
-                </div>
-
-                {{-- BLOQUE 2 · Perfil InCompany --}}
-                <div class="ic-card">
-                    <div class="ic-card-h">
-                        <span class="cic"><x-ui.icon name="briefcase" class="i15" /></span>
-                        <h2>Perfil InCompany</h2>
-                        <div class="sp"></div>
-                        <span class="ic-tag-emp">EMPRESA</span>
-                    </div>
-                    <div class="ic-diag">
-                        @if ($incHot)
-                            <span class="dchip hot"><x-ui.icon name="alert-triangle" class="i12" /> Solicitó contacto</span>
-                        @else
-                            <span class="dchip"><x-ui.icon name="sparkles" class="i12" /> Diagnóstico</span>
-                        @endif
-                    </div>
-                    @if ($incompany->diagnostico_at)
-                        <div class="ic-when">Vio su diagnóstico: {{ $incompany->diagnostico_at->translatedFormat('d M Y · H:i') }}</div>
+        {{-- CABECERA · identidad del lead y acciones comerciales --}}
+        <header class="ui-card ui-record-h">
+            <x-ui.avatar :name="$fullName" :seed="$lead->contact_id" size="xl" />
+            <div class="ui-record-id">
+                <div class="ui-person-line">
+                    <h1 class="ui-record-title">{{ $fullName }}</h1>
+                    @if ($incompany)
+                        <x-ui.badge tone="gold" icon="building-2">Empresa</x-ui.badge>
                     @endif
-                    @if ($incompany->solicita_contacto_at)
-                        <div class="ic-when hot">Pidió contacto: {{ $incompany->solicita_contacto_at->translatedFormat('d M Y · H:i') }}</div>
+                </div>
+                <div class="ui-record-meta">
+                    <span><x-ui.icon name="{{ $incompany ? 'briefcase' : 'bot' }}" /> Captado por <b>{{ $lead->capturedByLabel() }}</b></span>
+                    <span><x-ui.icon name="mail" /> {!! str_replace('@', '@<wbr>', e($c->email ?? '—')) !!}</span>
+                    @if ($lead->sourceLabel())
+                        <span><x-ui.icon name="activity" /> Motivo: <b>{{ $lead->sourceLabel() }}</b></span>
                     @endif
-                    <div class="ic-rows" style="padding-top:10px">
-                        <div class="ic-row"><span class="lbl">Empresa</span><span class="val">{{ $incompany->nombre_empresa }}</span></div>
-                        <div class="ic-row"><span class="lbl">Contacto</span><span class="val">{{ $incompany->nombre_contacto }}</span></div>
-                        <div class="ic-row"><span class="lbl">Sector</span><span class="val {{ $incompany->sector ? '' : 'dim' }}">{{ $incompany->sector ?: '—' }}</span></div>
-                        <div class="ic-row"><span class="lbl">Tamaño</span><span class="val {{ $incompany->tamano_empresa ? '' : 'dim' }}">{{ $incompany->tamano_empresa ?: '—' }}</span></div>
-                        <div class="ic-row"><span class="lbl">Modalidad</span><span class="val">{{ $modalidadLabel }} · {{ $incompany->cantidad_personas }} {{ $incompany->cantidad_personas === 1 ? 'persona' : 'personas' }}</span></div>
-                        <div class="ic-row"><span class="lbl">Área a desarrollar</span><span class="val {{ $incompany->area_desarrollo ? '' : 'dim' }}">{{ $incompany->area_desarrollo ?: '—' }}</span></div>
-                    </div>
-                </div>
-
-                {{-- BLOQUE 3 · Ruta formativa propuesta (nombre enlazado al catálogo, sin precio) --}}
-                <div class="ic-card">
-                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="book-open" class="i15" /></span><h2>Ruta formativa propuesta</h2></div>
-                    <div class="ic-ruta">
-                        @forelse ($ruta as $r)
-                            <div class="ic-prog" wire:key="ic-prog-{{ $r['position'] }}">
-                                <span class="n">{{ $r['position'] }}</span>
-                                <div class="info">
-                                    @if ($r['linked'])
-                                        <div class="name">
-                                            @if ($r['program']->url)
-                                                <a href="{{ $r['program']->url }}" target="_blank" rel="noopener">{{ $r['program']->name }} <x-ui.icon name="external-link" class="i12 gray" /></a>
-                                            @else
-                                                {{ $r['program']->name }}
-                                            @endif
-                                        </div>
-                                        <div class="code">{{ $r['program']->course_idnumber ?: $r['code'] }}</div>
-                                    @else
-                                        <div class="name">{{ $r['code'] }}</div>
-                                        <div class="code">Código recibido</div>
-                                    @endif
-                                </div>
-                                @if ($r['linked'])
-                                    <span class="ok"><x-ui.icon name="check" class="i12" /> En catálogo</span>
-                                @else
-                                    <span class="no"><x-ui.icon name="alert-triangle" class="i12" /> Sin enlazar</span>
-                                @endif
-                            </div>
-                        @empty
-                            <div class="conv-empty" style="font-size:12.5px">Sin programas indicados.</div>
-                        @endforelse
-                    </div>
-                    <div class="ic-note">Los nombres se enlazan al catálogo por su código. Sin precio: para InCompany se negocia por propuesta.</div>
-                </div>
-
-                {{-- Herramientas del comercial (conservadas, en tarjeta v4) --}}
-                {{-- Correo --}}
-                <div class="ic-card" id="email">
-                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="mail" class="i15" /></span><h2>Correo</h2></div>
-                    <div class="ic-body">
-                        @if ($canEmail)
-                            <button type="button" wire:click="openCompose" class="ghost" style="margin-bottom:10px"><x-ui.icon name="mail" class="i14" /> Enviar correo a {{ $first ?: 'este contacto' }}</button>
-                        @endif
-                        <div style="font-size:12px;color:var(--muted);font-weight:600;margin:4px 0 6px">Correos enviados</div>
-                        @forelse ($emails as $em)
-                            <button type="button" wire:click="openSentEmail({{ $em->id }})" wire:key="email-{{ $em->id }}"
-                                style="display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:9px 2px;cursor:pointer">
-                                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-                                    <div style="font-size:13px;color:var(--ink);font-weight:600">{{ $em->subject }}
-                                        @if ($em->status !== 'sent')<span style="color:#B23B3B;font-weight:600;font-size:11.5px"> · falló</span>@endif
-                                    </div>
-                                    <span style="font-size:11.5px;color:var(--blue);font-weight:600;white-space:nowrap">Abrir ›</span>
-                                </div>
-                                <div style="font-size:12px;color:var(--muted);margin-top:2px">
-                                    Como <b>{{ $em->from_name ?: $em->from_address }}</b>
-                                    · {{ ($em->sent_at ?? $em->created_at)?->translatedFormat('d M Y · H:i') }}
-                                    · por {{ $em->sentByUser?->name ?? 'Equipo' }}
-                                    @if ($em->files_count) · <x-ui.icon name="download" class="i12" /> {{ $em->files_count }} adjunto(s)@endif
-                                </div>
-                            </button>
-                        @empty
-                            <div class="conv-empty" style="font-size:12.5px">Aún no se han enviado correos.</div>
-                        @endforelse
-                    </div>
-                </div>
-
-                {{-- Agenda --}}
-                <div class="ic-card">
-                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="calendar" class="i15" /></span><h2>{{ __('Calendario') }}</h2></div>
-                    <div class="ic-body" style="padding:12px 18px 16px"><livewire:crm.agenda.lead-activities :lead-id="$lead->id" :key="'lead-agenda-ic-'.$lead->id" /></div>
-                </div>
-
-                {{-- Eventos --}}
-                <div class="ic-card">
-                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="clock" class="i15" /></span><h2>Eventos</h2></div>
-                    <div class="ic-body">
-                        @forelse ($events as $ev)
-                            @php $evDetail = $ev->detail(); @endphp
-                            <div class="ev">
-                                <x-ui.icon name="{{ $ev->icon() }}" class="i15" />
-                                <div>
-                                    {{ $ev->label() }}@if ($evDetail)<span style="color:var(--muted);word-break:break-word">: {{ $evDetail }}</span>@endif
-                                    <div class="t">{{ $ev->created_at?->translatedFormat('d M Y · H:i') }}</div>
-                                </div>
-                            </div>
-                        @empty
-                            <div class="conv-empty" style="font-size:12.5px">Sin eventos registrados.</div>
-                        @endforelse
-                    </div>
-                </div>
-
-                {{-- Transferir seguimiento --}}
-                <div class="ic-card" id="transfer">
-                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="arrow-right-left" class="i15" /></span><h2>Transferir seguimiento</h2></div>
-                    <div class="ic-body">
-                        <div class="transfer">
-                            <x-ui.icon name="arrow-right-left" class="i14" /> Transferir a
-                            @if ($canAct)
-                                <select wire:model="transferTarget" wire:change="transfer" aria-label="Transferir seguimiento a">
-                                    @foreach ($transferOptions as $value => $optLabel)
-                                        <option value="{{ $value }}">{{ $optLabel }}</option>
-                                    @endforeach
-                                </select>
-                            @else
-                                <span style="margin-left:auto;font-weight:600">{{ $transferOptions[$transferTarget] ?? '—' }}</span>
-                            @endif
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Notas internas --}}
-                <div class="ic-card">
-                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="sticky-note" class="i15" /></span><h2>Notas internas</h2></div>
-                    <div class="ic-body">
-                        @forelse ($lead->leadNotes as $note)
-                            <div class="note" wire:key="note-{{ $note->id }}">
-                                {{ $note->body }}
-                                <div class="meta">— {{ $note->author_name ?: 'Equipo' }} · {{ $note->created_at?->translatedFormat('d M') }}</div>
-                            </div>
-                        @empty
-                            <div class="conv-empty" style="font-size:12.5px">Aún no hay notas.</div>
-                        @endforelse
-                        @if ($canAct)
-                            <div class="addnote">
-                                <input type="text" wire:model="newNote" wire:keydown.enter="addNote" placeholder="Añadir una nota…" aria-label="Añadir una nota">
-                                <button type="button" wire:click="addNote" aria-label="Guardar nota"><x-ui.icon name="plus" class="i16" /></button>
-                            </div>
-                        @endif
-                    </div>
-                </div>
-
-                {{-- Matrícula · Moodle (dormido) --}}
-                <div class="ic-card">
-                    <div class="ic-card-h"><span class="cic"><x-ui.icon name="graduation-cap" class="i15" /></span><h2>Matrícula · Moodle</h2></div>
-                    <div class="ic-body">
-                        <div class="moodle">
-                            <span class="tag">Se activa con integración Moodle</span>
-                            <div class="mrow"><span class="k">Course ID</span><span class="v">—</span></div>
-                            <div class="mrow"><span class="k">Moodle User</span><span class="v">—</span></div>
-                            <div class="mrow"><span class="k">Culminación</span><span class="v">—</span></div>
-                        </div>
-                    </div>
                 </div>
             </div>
-        @else
-        <div class="panel">
-            {{-- Cabecera --}}
-            <div class="d-head">
-                <span class="ava">{{ $initials }}</span>
-                <div>
-                    <div class="nm">{{ $fullName }}</div>
-                    <div class="sub">
-                        <x-ui.icon name="{{ $incompany ? 'briefcase' : 'bot' }}" class="i13" /> Captado por {{ $lead->capturedByLabel() }}
-                        · <x-ui.icon name="mail" class="i13 gray" /> {{ $c->email ?? '—' }}
-                        @if ($lead->sourceLabel())
-                            · <x-ui.icon name="activity" class="i13 gray" /> Motivo: {{ $lead->sourceLabel() }}
-                        @endif
-                    </div>
-                </div>
-
-                <div class="d-actions">
-                    @if ($isTerminal || ! $canAct)
-                        <span class="statuspick {{ $lead->status->badgeClass() }}" style="cursor:default">
-                            <x-ui.icon name="{{ $isTerminal ? 'check' : 'clock' }}" class="i14" /> {{ $lead->status->label() }}
-                        </span>
-                    @else
-                        <div class="statusmenu">
-                            <button type="button" class="statuspick {{ $lead->status->badgeClass() }}" wire:click="$toggle('statusMenuOpen')">
-                                <x-ui.icon name="clock" class="i14" /> {{ $lead->status->label() }}
-                                <x-ui.icon name="chevron-down" class="i14" />
-                            </button>
-                            @if ($statusMenuOpen)
-                                <div class="menu" wire:click.outside="$set('statusMenuOpen', false)">
-                                    @foreach ($statuses as $s)
-                                        <button type="button" wire:click="changeStatus('{{ $s->value }}')"
-                                            @if ($s->value === $lead->status->value) disabled @endif>
-                                            <span class="chip {{ $s->badgeClass() }}">{{ $s->label() }}</span>
-                                        </button>
-                                    @endforeach
-                                </div>
-                            @endif
-                        </div>
-                    @endif
-
-                    @can('create', \Modules\Crm\Models\Activity::class)
-                        <a href="{{ route('crm.agenda.create', ['lead' => $lead->id]) }}" class="ghost"><x-ui.icon name="calendar" class="i14" /> {{ __('Programar actividad') }}</a>
-                    @endcan
-                    @if ($canEmail)
-                        <button type="button" class="ghost" wire:click="openCompose"><x-ui.icon name="mail" class="i14" /> Enviar correo</button>
-                    @endif
-                    @if ($canAct)
-                        <a href="#transfer" class="ghost"><x-ui.icon name="arrow-right-left" class="i14" /> Transferir</a>
-                    @else
-                        <span class="ro-tag"><x-ui.icon name="eye" class="i12" /> solo lectura</span>
-                    @endif
-                    <button type="button" class="ghost" wire:click="exportOne"><x-ui.icon name="download" class="i14" /> Exportar</button>
-                    <span class="ghost" style="padding:8px 10px"><x-ui.icon name="more-horizontal" class="i14" /></span>
-                </div>
-            </div>
-
-            {{-- Sin conversación (leads de formulario, p. ej. InCompany) → una sola columna:
-                 no se muestra el panel grande vacío de chat; la ficha se centra en los datos. --}}
-            <div class="d-body {{ $messages->isEmpty() ? 'no-conv' : '' }}">
-                {{-- Conversación (solo si de verdad hubo mensajes) --}}
-                @if ($messages->isNotEmpty())
-                    <div class="conv">
-                        <h3><x-ui.icon name="message-circle" class="i14" /> Conversación</h3>
-                        @foreach ($messages as $msg)
-                            @php
-                                $isUser = $msg->sender_type === 'user';
-                                $label = $isUser ? ($first ?: 'Prospecto') : ($msg->sender_type === 'celia' ? ($lead->bot->assistant_name ?? 'Celia') : 'MCA School');
-                                $html = e($msg->content);
-                                $html = preg_replace('~(https?://[^\s<]+)~u', '<a href="$1" target="_blank" rel="noopener">$1</a>', $html);
-                            @endphp
-                            <div class="m {{ $isUser ? 'me' : 'bot' }}">
-                                <div class="lbl">{{ $label }}</div>
-                                <div class="bub">{!! nl2br($html) !!}</div>
+            <div class="ui-record-actions">
+                @if ($isTerminal || ! $canAct)
+                    <x-ui.badge :tone="['new' => 'blue', 'contacted' => 'teal', 'qualified' => 'warning', 'enrolled' => 'success'][$lead->status->value] ?? 'neutral'" :icon="$isTerminal ? 'check' : 'clock'">{{ $lead->status->label() }}</x-ui.badge>
+                @else
+                    <div class="ui-dropdown">
+                        <button type="button" class="ui-btn ui-btn--secondary" wire:click="$toggle('statusMenuOpen')" aria-haspopup="menu" aria-expanded="{{ $statusMenuOpen ? 'true' : 'false' }}" title="Cambiar estado">
+                            <x-ui.lead-status :status="$lead->status" />
+                            <x-ui.icon name="chevron-down" />
+                        </button>
+                        @if ($statusMenuOpen)
+                            <div class="ui-menu" role="menu" wire:click.outside="$set('statusMenuOpen', false)">
+                                @foreach ($statuses as $s)
+                                    <button type="button" role="menuitem" class="ui-menu-item" wire:click="changeStatus('{{ $s->value }}')"
+                                        @if ($s->value === $lead->status->value) disabled aria-current="true" @endif>
+                                        <x-ui.lead-status :status="$s" />
+                                        @if ($s->value === $lead->status->value)<x-ui.icon name="check" />@endif
+                                    </button>
+                                @endforeach
                             </div>
-                        @endforeach
+                        @endif
                     </div>
                 @endif
 
-                {{-- Barra lateral --}}
-                <div class="side">
-                    @if ($messages->isEmpty())
-                        {{-- Nota compacta en vez del panel de chat vacío. --}}
-                        <div class="block">
-                            <div style="display:flex;align-items:flex-start;gap:9px;color:var(--muted);font-size:12.5px">
-                                <x-ui.icon name="{{ $incompany ? 'briefcase' : 'message-circle' }}" class="i15" style="flex:0 0 auto;margin-top:1px" />
-                                <span>
-                                    @if ($incompany)
-                                        Lead de formulario · <b>Recomendador InCompany</b>. No tuvo conversación de chat; su diagnóstico está en el Perfil InCompany.
-                                    @else
-                                        Este lead no tiene conversación registrada.
-                                    @endif
-                                </span>
-                            </div>
-                        </div>
-                    @endif
-                    {{-- 1 · Datos personales --}}
-                    <div class="block">
-                        <h3><x-ui.icon name="user" class="i14" /> Datos personales</h3>
-                        <div class="field"><x-ui.icon name="user" class="i15" /><span class="k">Nombre</span><span class="v">{{ $fullName }}</span></div>
-                        <div class="field"><x-ui.icon name="mail" class="i15" /><span class="k">Correo</span><span class="v">{{ $c->email ?? '—' }}</span></div>
-                        <div class="field">
-                            <x-ui.icon name="phone" class="i15" /><span class="k">WhatsApp</span>
-                            <span class="v">{{ $phoneDisplay ?? '—' }}</span>
-                        </div>
-                        <div class="field"><x-ui.icon name="globe" class="i15" /><span class="k">País</span><span class="v">{{ $c->country ?: '—' }}</span></div>
-                        <div class="locknote"><x-ui.icon name="lock" class="i13" /> Acceso a datos personales registrado en auditoría.</div>
-                    </div>
+                @can('create', \Modules\Crm\Models\Activity::class)
+                    <x-ui.button icon="calendar" :href="route('crm.agenda.create', ['lead' => $lead->id])">{{ __('Programar actividad') }}</x-ui.button>
+                @endcan
+                @if ($canAct)
+                    <x-ui.button icon="arrow-right-left" href="#transfer">Transferir</x-ui.button>
+                @else
+                    <x-ui.badge tone="neutral" icon="eye">solo lectura</x-ui.badge>
+                @endif
+                <x-ui.button icon="download" wire:click="exportOne">Exportar</x-ui.button>
+                @unless ($incompany)
+                    <span class="ui-btn ui-btn--ghost ui-btn--icon" aria-hidden="true"><x-ui.icon name="more-horizontal" /></span>
+                @endunless
+                @if ($canEmail)
+                    <x-ui.button variant="primary" icon="mail" wire:click="openCompose">Enviar correo</x-ui.button>
+                @endif
+            </div>
+        </header>
 
-                    {{-- Perfil InCompany (formación corporativa recibida desde n8n). Mini-informe
-                         ordenado: empresa, calificación, área a desarrollar y la ruta de hasta 3
-                         programas ENLAZADOS al catálogo (se muestra el NOMBRE, nunca el precio). --}}
-                    @if ($incompany)
-                        @php
-                            $modalidadLabel = match ($incompany->modalidad) {
-                                'grupo' => 'Grupo',
-                                'persona' => 'Individual',
-                                default => $incompany->modalidad ?: '—',
-                            };
-                            $ruta = $incompany->programRoute();
-                        @endphp
-                        <div class="block">
-                            <h3>
-                                <x-ui.icon name="briefcase" class="i14" /> Perfil InCompany
-                                <span style="margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:normal;color:var(--muted);background:#EEF1F6;border:1px solid var(--line);padding:2px 8px;border-radius:999px">Empresa</span>
-                            </h3>
+        @if ($incompany)
+            <div class="ui-callout ui-tone--gold">
+                <x-ui.icon name="briefcase" />
+                <span><b>Lead de formulario · Recomendador InCompany.</b> No tuvo conversación de chat; su diagnóstico está en el Perfil InCompany.</span>
+            </div>
+        @endif
 
-                            {{-- Estado del embudo InCompany: diagnóstico → solicitó contacto (el más caliente). --}}
-                            @php $incHot = $incompany->hasRequestedContact(); @endphp
-                            <div style="margin:2px 0 10px">
+        <div class="ui-record-grid">
+            {{-- PRINCIPAL · perfil (InCompany) e historial de interacciones --}}
+            <div class="ui-record-main">
+                @if ($incompany)
+                    <section class="ui-card" aria-labelledby="h-incompany">
+                        <div class="ui-card-h">
+                            <x-ui.icon name="briefcase" class="ui-card-ic" /><h2 id="h-incompany">Perfil InCompany</h2><span class="sp"></span>
+                            <x-ui.badge tone="gold">EMPRESA</x-ui.badge>
+                        </div>
+                        <div class="ui-card-p">
+                            <div class="ui-person-line">
                                 @if ($incHot)
-                                    <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;color:#B23B3B;background:#FBEAEA;border:1px solid #E9C4C4;padding:4px 10px;border-radius:999px">
-                                        <x-ui.icon name="alert-triangle" class="i12" /> Solicitó contacto
-                                    </span>
+                                    <x-ui.badge tone="danger" icon="alert-triangle">Solicitó contacto</x-ui.badge>
                                 @else
-                                    <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--muted);background:#EEF1F6;border:1px solid var(--line);padding:4px 10px;border-radius:999px">
-                                        <x-ui.icon name="sparkles" class="i12" /> Diagnóstico
-                                    </span>
+                                    <x-ui.badge tone="blue" icon="sparkles">Diagnóstico</x-ui.badge>
                                 @endif
                                 @if ($incompany->diagnostico_at)
-                                    <div style="font-size:11.5px;color:var(--muted);margin-top:6px">Vio su diagnóstico: {{ $incompany->diagnostico_at->translatedFormat('d M Y · H:i') }}</div>
+                                    <span class="ui-list-meta">Vio su diagnóstico: {{ $incompany->diagnostico_at->translatedFormat('d M Y · H:i') }}</span>
                                 @endif
                                 @if ($incompany->solicita_contacto_at)
-                                    <div style="font-size:11.5px;color:#B23B3B;font-weight:600;margin-top:2px">Pidió contacto: {{ $incompany->solicita_contacto_at->translatedFormat('d M Y · H:i') }}</div>
+                                    <span class="ui-list-meta ui-text-danger">Pidió contacto: {{ $incompany->solicita_contacto_at->translatedFormat('d M Y · H:i') }}</span>
                                 @endif
                             </div>
+                            <dl class="ui-meta ui-meta--spaced">
+                                <dt>Empresa</dt><dd class="ui-strong">{{ $incompany->nombre_empresa }}</dd>
+                                <dt>Contacto</dt><dd>{{ $incompany->nombre_contacto }}</dd>
+                                <dt>Sector</dt><dd>@if ($incompany->sector){{ $incompany->sector }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>Tamaño</dt><dd>@if ($incompany->tamano_empresa){{ $incompany->tamano_empresa }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>Modalidad</dt><dd>{{ $modalidadLabel }} · {{ $incompany->cantidad_personas }} {{ $incompany->cantidad_personas === 1 ? 'persona' : 'personas' }}</dd>
+                                <dt>Área a desarrollar</dt><dd>@if ($incompany->area_desarrollo){{ $incompany->area_desarrollo }}@else<span class="t-nil">—</span>@endif</dd>
+                            </dl>
+                        </div>
+                    </section>
 
-                            <div class="field"><x-ui.icon name="building" class="i15" /><span class="k">Empresa</span><span class="v" style="font-weight:700">{{ $incompany->nombre_empresa }}</span></div>
-                            <div class="field"><x-ui.icon name="user" class="i15" /><span class="k">Contacto</span><span class="v">{{ $incompany->nombre_contacto }}</span></div>
-
-                            {{-- Calificación --}}
-                            <div class="mrow"><span class="k">Sector</span><span class="v">{{ $incompany->sector ?: '—' }}</span></div>
-                            <div class="mrow"><span class="k">Tamaño</span><span class="v">{{ $incompany->tamano_empresa ?: '—' }}</span></div>
-                            <div class="mrow"><span class="k">Modalidad</span><span class="v">{{ $modalidadLabel }} · {{ $incompany->cantidad_personas }} {{ $incompany->cantidad_personas === 1 ? 'persona' : 'personas' }}</span></div>
-
-                            @if ($incompany->area_desarrollo)
-                                <div class="mrow" style="align-items:flex-start"><span class="k">A desarrollar</span><span class="v">{{ $incompany->area_desarrollo }}</span></div>
-                            @endif
-
-                            {{-- Ruta de programas EN ORDEN, enlazada al catálogo (nombre, sin precio) --}}
-                            <div style="font-size:12px;color:var(--muted);font-weight:600;margin:10px 0 4px">Ruta formativa propuesta</div>
+                    {{-- Ruta formativa propuesta (nombre enlazado al catálogo, sin precio) --}}
+                    <section class="ui-card" aria-labelledby="h-ruta">
+                        <div class="ui-card-h"><x-ui.icon name="book-open" class="ui-card-ic" /><h2 id="h-ruta">Ruta formativa propuesta</h2></div>
+                        <ol class="ui-list">
                             @forelse ($ruta as $r)
-                                <div wire:key="incompany-prog-{{ $r['position'] }}" style="display:flex;gap:8px;align-items:flex-start;border-top:1px solid var(--line);padding:8px 2px">
-                                    <span style="flex:0 0 auto;width:20px;height:20px;border-radius:999px;background:var(--blue);color:#fff;font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ $r['position'] }}</span>
-                                    <div style="min-width:0">
-                                        @if ($r['linked'])
-                                            @if ($r['program']->url)
-                                                <a href="{{ $r['program']->url }}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600;color:var(--ink);text-decoration:none">{{ $r['program']->name }} <x-ui.icon name="external-link" class="i12 gray" /></a>
+                                <li wire:key="ic-prog-{{ $r['position'] }}">
+                                    <div class="ui-list-item">
+                                        <span class="ui-step-n">{{ $r['position'] }}</span>
+                                        <div class="ui-list-main">
+                                            @if ($r['linked'])
+                                                <span class="ui-list-title">
+                                                    @if ($r['program']->url)
+                                                        <a class="ui-link" href="{{ $r['program']->url }}" target="_blank" rel="noopener">{{ $r['program']->name }} <x-ui.icon name="external-link" /></a>
+                                                    @else
+                                                        {{ $r['program']->name }}
+                                                    @endif
+                                                </span>
+                                                <span class="ui-list-meta ui-mono">{{ $r['program']->course_idnumber ?: $r['code'] }}</span>
                                             @else
-                                                <span style="font-size:13px;font-weight:600;color:var(--ink)">{{ $r['program']->name }}</span>
+                                                <span class="ui-list-title ui-mono">{{ $r['code'] }}</span>
+                                                <span class="ui-list-meta">Código recibido</span>
                                             @endif
-                                            <div style="font-size:11.5px;color:var(--muted)">{{ $r['program']->course_idnumber ?: $r['code'] }}</div>
-                                        @else
-                                            <span style="font-size:13px;font-weight:600;color:var(--ink)">{{ $r['code'] }}</span>
-                                            <div style="font-size:11.5px;color:#B23B3B;font-weight:600"><x-ui.icon name="alert-triangle" class="i12" /> Sin enlazar al catálogo</div>
-                                        @endif
+                                        </div>
+                                        <div class="ui-list-aside">
+                                            @if ($r['linked'])
+                                                <x-ui.badge tone="success" icon="check">En catálogo</x-ui.badge>
+                                            @else
+                                                <x-ui.badge tone="danger" icon="alert-triangle">Sin enlazar</x-ui.badge>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </li>
+                            @empty
+                                <li class="ui-list-empty">Sin programas indicados.</li>
+                            @endforelse
+                        </ol>
+                        <p class="ui-card-note">Los nombres se enlazan al catálogo por su código. Sin precio: para InCompany se negocia por propuesta.</p>
+                    </section>
+                @endif
+
+                {{-- Navegación por secciones del historial (anclas: nada queda oculto) --}}
+                <nav class="ui-subnav" aria-label="Secciones de la ficha">
+                    @unless ($incompany)
+                        <a href="#conversation"><x-ui.icon name="message-circle" /> Conversación <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $messages->count() }}</span></a>
+                    @endunless
+                    <a href="#email"><x-ui.icon name="mail" /> Correo <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $emails->count() }}</span></a>
+                    <a href="#notes"><x-ui.icon name="sticky-note" /> Notas <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $notesList->count() }}</span></a>
+                    <a href="#events"><x-ui.icon name="clock" /> Eventos <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $events->count() }}</span></a>
+                    <a href="#enrollment"><x-ui.icon name="graduation-cap" /> Matrícula</a>
+                </nav>
+
+                @unless ($incompany)
+                    {{-- Conversación (solo si de verdad hubo mensajes; si no, una nota compacta) --}}
+                    <section class="ui-card" id="conversation" aria-labelledby="h-conv">
+                        <div class="ui-card-h"><x-ui.icon name="message-circle" class="ui-card-ic" /><h2 id="h-conv">Conversación</h2>
+                            @if ($messages->isNotEmpty())<span class="ui-badge ui-badge--count ui-tone--neutral">{{ $messages->count() }}</span>@endif
+                        </div>
+                        @if ($messages->isNotEmpty())
+                            <div class="ui-chat">
+                                @foreach ($messages as $msg)
+                                    @php
+                                        $isUser = $msg->sender_type === 'user';
+                                        $label = $isUser ? ($first ?: 'Prospecto') : ($msg->sender_type === 'celia' ? ($lead->bot->assistant_name ?? 'Celia') : 'MCA School');
+                                        $html = e($msg->content);
+                                        $html = preg_replace('~(https?://[^\s<]+)~u', '<a href="$1" target="_blank" rel="noopener">$1</a>', $html);
+                                    @endphp
+                                    <div class="ui-msg {{ $isUser ? 'ui-msg--in' : '' }}">
+                                        <div class="ui-msg-from">{{ $label }}</div>
+                                        <div class="ui-msg-bubble">{!! nl2br($html) !!}</div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="ui-card-p">
+                                <div class="ui-callout"><x-ui.icon name="message-circle" /><span>Este lead no tiene conversación registrada.</span></div>
+                            </div>
+                        @endif
+                    </section>
+                @endunless
+
+                {{-- Correo: enviar + historial --}}
+                <section class="ui-card" id="email" aria-labelledby="h-email">
+                    <div class="ui-card-h">
+                        <x-ui.icon name="mail" class="ui-card-ic" /><h2 id="h-email">Correo</h2><span class="sp"></span>
+                        @if ($canEmail)
+                            <x-ui.button size="sm" icon="mail" wire:click="openCompose">Enviar correo a {{ $first ?: 'este contacto' }}</x-ui.button>
+                        @endif
+                    </div>
+                    <p class="ui-card-kicker">Correos enviados</p>
+                    <ul class="ui-list">
+                        @forelse ($emails as $em)
+                            <li wire:key="email-{{ $em->id }}">
+                                <button type="button" class="ui-list-item" wire:click="openSentEmail({{ $em->id }})">
+                                    <span class="ui-tl-ic ui-tone--blue"><x-ui.icon name="mail" /></span>
+                                    <span class="ui-list-main">
+                                        <span class="ui-list-title">{{ $em->subject }}
+                                            @if ($em->status !== 'sent') <x-ui.badge tone="danger">falló</x-ui.badge>@endif
+                                        </span>
+                                        <span class="ui-list-meta">
+                                            Como <b>{{ $em->from_name ?: $em->from_address }}</b>
+                                            · {{ ($em->sent_at ?? $em->created_at)?->translatedFormat('d M Y · H:i') }}
+                                            · por {{ $em->sentByUser?->name ?? 'Equipo' }}
+                                            @if ($em->files_count) · {{ $em->files_count }} adjunto(s)@endif
+                                        </span>
+                                    </span>
+                                    <span class="ui-list-aside ui-link">Abrir ›</span>
+                                </button>
+                            </li>
+                        @empty
+                            <li class="ui-list-empty">Aún no se han enviado correos.</li>
+                        @endforelse
+                    </ul>
+                </section>
+
+                {{-- Notas internas --}}
+                <section class="ui-card" id="notes" aria-labelledby="h-notes">
+                    <div class="ui-card-h"><x-ui.icon name="sticky-note" class="ui-card-ic" /><h2 id="h-notes">Notas internas</h2>
+                        @if ($notesList->isNotEmpty())<span class="ui-badge ui-badge--count ui-tone--neutral">{{ $notesList->count() }}</span>@endif
+                    </div>
+                    <ul class="ui-list">
+                        @forelse ($notesList as $note)
+                            <li wire:key="note-{{ $note->id }}">
+                                <div class="ui-list-item">
+                                    <x-ui.avatar :name="$note->author_name ?: 'Equipo'" :seed="$note->author_name ?: 'Equipo'" />
+                                    <div class="ui-list-main">
+                                        <span class="ui-note-body">{{ $note->body }}</span>
+                                        <span class="ui-list-meta">— {{ $note->author_name ?: 'Equipo' }} · {{ $note->created_at?->translatedFormat('d M') }}</span>
                                     </div>
                                 </div>
-                            @empty
-                                <div class="conv-empty" style="font-size:12.5px">Sin programas indicados.</div>
-                            @endforelse
+                            </li>
+                        @empty
+                            <li class="ui-list-empty">Aún no hay notas.</li>
+                        @endforelse
+                    </ul>
+                    @if ($canAct)
+                        <div class="ui-inline-form">
+                            <input type="text" class="ui-input" wire:model="newNote" wire:keydown.enter="addNote" placeholder="Añadir una nota…" aria-label="Añadir una nota">
+                            <x-ui.button variant="primary" icon="plus" wire:click="addNote" aria-label="Guardar nota" />
                         </div>
                     @endif
+                </section>
 
-                    {{-- Correo: enviar + historial --}}
-                    <div class="block" id="email">
-                        <h3><x-ui.icon name="mail" class="i14" /> Correo</h3>
-
-                        @if ($canEmail)
-                            <button type="button" wire:click="openCompose" class="ghost" style="margin-bottom:10px"><x-ui.icon name="mail" class="i14" /> Enviar correo a {{ $first ?: 'este contacto' }}</button>
-                        @endif
-
-                        <div style="font-size:12px;color:var(--muted);font-weight:600;margin:4px 0 6px">Correos enviados</div>
-                        @forelse ($emails as $em)
-                            <button type="button" wire:click="openSentEmail({{ $em->id }})" wire:key="email-{{ $em->id }}"
-                                style="display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:9px 2px;cursor:pointer">
-                                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-                                    <div style="font-size:13px;color:var(--ink);font-weight:600">{{ $em->subject }}
-                                        @if ($em->status !== 'sent')<span style="color:#B23B3B;font-weight:600;font-size:11.5px"> · falló</span>@endif
+                {{-- Eventos --}}
+                <section class="ui-card" id="events" aria-labelledby="h-events">
+                    <div class="ui-card-h"><x-ui.icon name="clock" class="ui-card-ic" /><h2 id="h-events">Eventos</h2>
+                        @if ($events->isNotEmpty())<span class="ui-badge ui-badge--count ui-tone--neutral">{{ $events->count() }}</span>@endif
+                    </div>
+                    @if ($events->isNotEmpty())
+                        <ol class="ui-timeline">
+                            @foreach ($events as $ev)
+                                @php $evDetail = $ev->detail(); @endphp
+                                <li>
+                                    <span class="ui-tl-ic ui-tone--{{ $evTone($ev) }}"><x-ui.icon name="{{ $ev->icon() }}" /></span>
+                                    <div class="ui-tl-body">
+                                        {{ $ev->label() }}@if ($evDetail)<span class="ui-tl-detail">: {{ $evDetail }}</span>@endif
+                                        <div class="ui-tl-time">{{ $ev->created_at?->translatedFormat('d M Y · H:i') }}</div>
                                     </div>
-                                    <span style="font-size:11.5px;color:var(--blue);font-weight:600;white-space:nowrap">Abrir ›</span>
-                                </div>
-                                <div style="font-size:12px;color:var(--muted);margin-top:2px">
-                                    Como <b>{{ $em->from_name ?: $em->from_address }}</b>
-                                    · {{ ($em->sent_at ?? $em->created_at)?->translatedFormat('d M Y · H:i') }}
-                                    · por {{ $em->sentByUser?->name ?? 'Equipo' }}
-                                    @if ($em->files_count) · <x-ui.icon name="download" class="i12" /> {{ $em->files_count }} adjunto(s)@endif
-                                </div>
-                            </button>
-                        @empty
-                            <div class="conv-empty" style="font-size:12.5px">Aún no se han enviado correos.</div>
-                        @endforelse
-                    </div>
+                                </li>
+                            @endforeach
+                        </ol>
+                    @else
+                        <p class="ui-list-empty">Sin eventos registrados.</p>
+                    @endif
+                </section>
 
-                    {{-- 2 · Resultado del emparejador --}}
-                    <div class="block">
-                        <h3><x-ui.icon name="sparkles" class="i14" /> Resultado del emparejador</h3>
-                        <div class="mrow"><span class="k">Motivación</span><span class="v">{{ $motivacion ?: '—' }}</span></div>
-                        <div class="mrow"><span class="k">Meta</span><span class="v">{{ $lead->goal ?: '—' }}</span></div>
-                        <div class="mrow"><span class="k">Área</span><span class="v">{{ $lead->area ?: '—' }}</span></div>
-                        <div class="mrow"><span class="k">Momento</span><span class="v">{{ $lead->level ?: '—' }}</span></div>
-                        @if ($lead->program)
-                            <div class="rec">Recomendado: <b>{{ $lead->program->name_es }}</b></div>
-                        @endif
+                {{-- Matrícula · Moodle (dormido) --}}
+                <section class="ui-card" id="enrollment" aria-labelledby="h-moodle">
+                    <div class="ui-card-h"><x-ui.icon name="graduation-cap" class="ui-card-ic" /><h2 id="h-moodle">Matrícula · Moodle</h2><span class="sp"></span>
+                        <x-ui.badge tone="neutral">Se activa con integración Moodle</x-ui.badge>
                     </div>
-
-                    {{-- Agenda --}}
-                    <div class="block">
-                        <h3><x-ui.icon name="calendar" class="i14" /> {{ __('Calendario') }}</h3>
-                        <livewire:crm.agenda.lead-activities :lead-id="$lead->id" :key="'lead-agenda-'.$lead->id" />
+                    <div class="ui-card-p">
+                        <dl class="ui-meta ui-meta--muted">
+                            <dt>Course ID</dt><dd>—</dd>
+                            <dt>Moodle User</dt><dd>—</dd>
+                            <dt>Culminación</dt><dd>—</dd>
+                        </dl>
                     </div>
+                </section>
+            </div>
 
-                    {{-- 3 · Eventos --}}
-                    <div class="block">
-                        <h3><x-ui.icon name="clock" class="i14" /> Eventos</h3>
-                        @forelse ($events as $ev)
-                            @php $evDetail = $ev->detail(); @endphp
-                            <div class="ev">
-                                <x-ui.icon name="{{ $ev->icon() }}" class="i15" />
-                                <div>
-                                    {{ $ev->label() }}@if ($evDetail)<span style="color:var(--muted);word-break:break-word">: {{ $evDetail }}</span>@endif
-                                    <div class="t">{{ $ev->created_at?->translatedFormat('d M Y · H:i') }}</div>
-                                </div>
-                            </div>
-                        @empty
-                            <div class="conv-empty" style="font-size:12.5px">Sin eventos registrados.</div>
-                        @endforelse
+            {{-- LATERAL · datos del contacto, resultado del emparejador y seguimiento --}}
+            <aside class="ui-record-side">
+                <section class="ui-card" aria-labelledby="h-personal">
+                    <div class="ui-card-h"><x-ui.icon name="user" class="ui-card-ic" /><h2 id="h-personal">Datos personales</h2></div>
+                    <div class="ui-card-p">
+                        <dl class="ui-meta ui-meta--spaced">
+                            <dt>Nombre</dt><dd class="ui-strong">{{ $fullName }}</dd>
+                            <dt>Correo</dt><dd>{!! str_replace('@', '@<wbr>', e($c->email ?? '—')) !!}</dd>
+                            <dt>WhatsApp</dt><dd>@if ($phoneDisplay){{ $phoneDisplay }}@else<span class="t-nil">—</span>@endif</dd>
+                            <dt>País</dt><dd>@if ($c->country){{ $c->country }}@else<span class="t-nil">—</span>@endif</dd>
+                        </dl>
+                        <div class="ui-callout ui-callout--sm"><x-ui.icon name="lock" /><span>Acceso a datos personales registrado en auditoría.</span></div>
                     </div>
+                </section>
 
-                    {{-- 4 · Transferir seguimiento --}}
-                    <div class="block" id="transfer">
-                        <h3><x-ui.icon name="arrow-right-left" class="i14" /> Transferir seguimiento</h3>
-                        <div class="transfer">
-                            <x-ui.icon name="arrow-right-left" class="i14" /> Transferir a
-                            @if ($canAct)
-                                <select wire:model="transferTarget" wire:change="transfer" aria-label="Transferir seguimiento a">
+                @unless ($incompany)
+                    <section class="ui-card" aria-labelledby="h-matcher">
+                        <div class="ui-card-h"><x-ui.icon name="sparkles" class="ui-card-ic" /><h2 id="h-matcher">Resultado del emparejador</h2></div>
+                        <div class="ui-card-p">
+                            <dl class="ui-meta ui-meta--spaced">
+                                <dt>Motivación</dt><dd>@if ($motivacion){{ $motivacion }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>Meta</dt><dd>@if ($lead->goal){{ $lead->goal }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>Área</dt><dd>@if ($lead->area){{ $lead->area }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>Momento</dt><dd>@if ($lead->level){{ $lead->level }}@else<span class="t-nil">—</span>@endif</dd>
+                            </dl>
+                            @if ($lead->program)
+                                <div class="ui-callout ui-callout--sm ui-tone--success"><x-ui.icon name="graduation-cap" /><span>Recomendado: <b>{{ $lead->program->name_es }}</b></span></div>
+                            @endif
+                        </div>
+                    </section>
+                @endunless
+
+                {{-- Transferir seguimiento --}}
+                <section class="ui-card" id="transfer" aria-labelledby="h-transfer">
+                    <div class="ui-card-h"><x-ui.icon name="arrow-right-left" class="ui-card-ic" /><h2 id="h-transfer">Transferir seguimiento</h2></div>
+                    <div class="ui-card-p">
+                        @if ($canAct)
+                            <x-ui.field label="Transferir a" for="lead-transfer">
+                                <select id="lead-transfer" class="ui-select" wire:model="transferTarget" wire:change="transfer" aria-label="Transferir seguimiento a">
                                     @foreach ($transferOptions as $value => $optLabel)
                                         <option value="{{ $value }}">{{ $optLabel }}</option>
                                     @endforeach
                                 </select>
-                            @else
-                                <span style="margin-left:auto;font-weight:600">{{ $transferOptions[$transferTarget] ?? '—' }}</span>
-                            @endif
-                        </div>
-                    </div>
-
-                    {{-- 5 · Notas internas --}}
-                    <div class="block">
-                        <h3><x-ui.icon name="sticky-note" class="i14" /> Notas internas</h3>
-                        @forelse ($lead->leadNotes as $note)
-                            <div class="note" wire:key="note-{{ $note->id }}">
-                                {{ $note->body }}
-                                <div class="meta">— {{ $note->author_name ?: 'Equipo' }} · {{ $note->created_at?->translatedFormat('d M') }}</div>
-                            </div>
-                        @empty
-                            <div class="conv-empty" style="font-size:12.5px">Aún no hay notas.</div>
-                        @endforelse
-                        @if ($canAct)
-                            <div class="addnote">
-                                <input type="text" wire:model="newNote" wire:keydown.enter="addNote" placeholder="Añadir una nota…" aria-label="Añadir una nota">
-                                <button type="button" wire:click="addNote" aria-label="Guardar nota"><x-ui.icon name="plus" class="i16" /></button>
-                            </div>
+                            </x-ui.field>
+                        @else
+                            <dl class="ui-meta"><dt>Transferir a</dt><dd class="ui-strong">{{ $transferOptions[$transferTarget] ?? '—' }}</dd></dl>
                         @endif
                     </div>
+                </section>
 
-                    {{-- 6 · Matrícula · Moodle (dormido) --}}
-                    <div class="block">
-                        <h3><x-ui.icon name="graduation-cap" class="i14" /> Matrícula · Moodle</h3>
-                        <div class="moodle">
-                            <span class="tag">Se activa con integración Moodle</span>
-                            <div class="mrow"><span class="k">Course ID</span><span class="v">—</span></div>
-                            <div class="mrow"><span class="k">Moodle User</span><span class="v">—</span></div>
-                            <div class="mrow"><span class="k">Culminación</span><span class="v">—</span></div>
-                        </div>
+                {{-- Calendario (componente compartido de la agenda) --}}
+                <section class="ui-card" aria-labelledby="h-agenda">
+                    <div class="ui-card-h"><x-ui.icon name="calendar" class="ui-card-ic" /><h2 id="h-agenda">{{ __('Calendario') }}</h2></div>
+                    <div class="ui-card-p">
+                        <livewire:crm.agenda.lead-activities :lead-id="$lead->id" :key="($incompany ? 'lead-agenda-ic-' : 'lead-agenda-').$lead->id" />
                     </div>
-                </div>
-            </div>
+                </section>
+            </aside>
         </div>
-        @endif
     </div>
 
     {{-- Editor de correo A PANTALLA COMPLETA --}}
     @if ($composeOpen)
         @php $att = config('crm.mail.attachments'); @endphp
-        <div x-data="{ destroy(){ document.body.style.overflow='' } }" x-init="document.body.style.overflow='hidden'"
-            style="position:fixed;inset:0;z-index:1000;background:rgba(19,37,61,.45);display:flex;align-items:center;justify-content:center;padding:24px" wire:key="mail-overlay">
-            <div style="background:#fff;width:100%;max-width:990px;max-height:92vh;height:auto;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;box-shadow:0 24px 70px -20px rgba(0,0,0,.5)">
-                {{-- Cabecera --}}
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 22px;border-bottom:1px solid var(--line)">
-                    <div style="font-weight:700;font-size:16px;color:var(--ink)"><x-ui.icon name="mail" class="i16" /> Nuevo correo</div>
-                    <button type="button" wire:click="$set('composeOpen', false)" class="ghost" aria-label="Cerrar"><x-ui.icon name="x" class="i16" /></button>
+        <div x-data="{ destroy(){ document.body.style.overflow='' } }" x-init="document.body.style.overflow='hidden'" class="ui-modal-bg" wire:key="mail-overlay">
+            <div class="ui-modal ui-modal--lg" role="dialog" aria-modal="true" aria-labelledby="mail-title">
+                <div class="ui-modal-h">
+                    <h2 class="ui-modal-title" id="mail-title"><x-ui.icon name="mail" /> Nuevo correo</h2>
+                    <x-ui.button variant="ghost" icon="x" wire:click="$set('composeOpen', false)" aria-label="Cerrar" />
                 </div>
 
-                {{-- Cuerpo (scroll) --}}
-                <div class="mail-scrollbody" style="flex:1;min-height:0;overflow:auto;padding:18px 22px;display:flex;flex-direction:column;gap:12px">
-                    <div>
-                        <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">Enviar como</label>
-                        <select wire:model="emailSenderId" aria-label="Enviar como" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px">
-                            <option value="">— Elige un remitente —</option>
-                            @foreach ($senders as $s)
-                                <option value="{{ $s->id }}">{{ $s->name }} · {{ $s->from_address }}</option>
-                            @endforeach
-                        </select>
-                        @error('emailSenderId') <div class="toast err" style="font-size:12.5px;margin-top:4px">{{ $message }}</div> @enderror
-                        @if ($senders->isEmpty())
-                            <div style="font-size:12.5px;color:var(--muted);margin-top:4px">No hay remitentes. Un administrador debe registrar uno en Ajustes → Remitentes de correo.</div>
+                <div class="ui-modal-b mail-scrollbody">
+                    <div class="ui-form-grid">
+                        <x-ui.field :class="$templates->isEmpty() ? 'ui-span-full' : null" label="Enviar como" for="mail-sender" :error="$errors->first('emailSenderId')"
+                            :help="$senders->isEmpty() ? 'No hay remitentes. Un administrador debe registrar uno en Ajustes → Remitentes de correo.' : null">
+                            <select id="mail-sender" wire:model="emailSenderId" aria-label="Enviar como" @class(['ui-select', 'is-invalid' => $errors->has('emailSenderId')])>
+                                <option value="">— Elige un remitente —</option>
+                                @foreach ($senders as $s)
+                                    <option value="{{ $s->id }}">{{ $s->name }} · {{ $s->from_address }}</option>
+                                @endforeach
+                            </select>
+                        </x-ui.field>
+
+                        @if (! $templates->isEmpty())
+                            <x-ui.field label="Plantilla" for="mail-template" help="Carga asunto y cuerpo; puedes ajustarlo antes de enviar. Las etiquetas se rellenan al enviar.">
+                                <select id="mail-template" class="ui-select" aria-label="Plantilla" x-on:change="$wire.loadTemplate($event.target.value)">
+                                    <option value="">— Redactar desde cero —</option>
+                                    @php $shared = $templates->whereNull('user_id'); $mine = $templates->whereNotNull('user_id'); @endphp
+                                    @if ($shared->isNotEmpty())
+                                        <optgroup label="Compartidas">
+                                            @foreach ($shared as $tpl)
+                                                <option value="{{ $tpl->id }}">{{ $tpl->name }}</option>
+                                            @endforeach
+                                        </optgroup>
+                                    @endif
+                                    @if ($mine->isNotEmpty())
+                                        <optgroup label="Mías">
+                                            @foreach ($mine as $tpl)
+                                                <option value="{{ $tpl->id }}">{{ $tpl->name }}</option>
+                                            @endforeach
+                                        </optgroup>
+                                    @endif
+                                </select>
+                            </x-ui.field>
                         @endif
                     </div>
 
-                    @if (! $templates->isEmpty())
-                        <div>
-                            <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">Plantilla</label>
-                            <select aria-label="Plantilla" x-on:change="$wire.loadTemplate($event.target.value)"
-                                style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px">
-                                <option value="">— Redactar desde cero —</option>
-                                @php $shared = $templates->whereNull('user_id'); $mine = $templates->whereNotNull('user_id'); @endphp
-                                @if ($shared->isNotEmpty())
-                                    <optgroup label="Compartidas">
-                                        @foreach ($shared as $tpl)
-                                            <option value="{{ $tpl->id }}">{{ $tpl->name }}</option>
-                                        @endforeach
-                                    </optgroup>
-                                @endif
-                                @if ($mine->isNotEmpty())
-                                    <optgroup label="Mías">
-                                        @foreach ($mine as $tpl)
-                                            <option value="{{ $tpl->id }}">{{ $tpl->name }}</option>
-                                        @endforeach
-                                    </optgroup>
-                                @endif
-                            </select>
-                            <div style="font-size:12px;color:var(--muted);margin-top:4px">Carga asunto y cuerpo; puedes ajustarlo antes de enviar. Las etiquetas se rellenan al enviar.</div>
-                        </div>
-                    @endif
+                    <div class="ui-mail-to">Para: <b>{{ $c->email ?? '—' }}</b></div>
 
-                    <div style="font-size:13px;color:var(--muted)">Para: <b style="color:var(--ink)">{{ $c->email ?? '—' }}</b></div>
-
-                    <input type="text" wire:model="emailSubject" maxlength="200" placeholder="Asunto" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px">
-                    @error('emailSubject') <div class="toast err" style="font-size:12.5px">{{ $message }}</div> @enderror
+                    <x-ui.field label="Asunto" for="mail-subject" :error="$errors->first('emailSubject')">
+                        <input id="mail-subject" type="text" wire:model="emailSubject" maxlength="200" placeholder="Asunto" @class(['ui-input', 'is-invalid' => $errors->has('emailSubject')])>
+                    </x-ui.field>
 
                     {{-- Editor: toolbar + contenteditable. wire:ignore para que Livewire no lo re-pinte. --}}
                     <div wire:ignore
                         x-data="{ tagsOpen: false, savedRange: null, caret(ed){ ed.focus(); const s=window.getSelection(); if(!s.rangeCount || !ed.contains(s.anchorNode)){ const r=document.createRange(); r.selectNodeContents(ed); r.collapse(false); s.removeAllRanges(); s.addRange(r);} }, saveSel(){ const s=window.getSelection(); if(s.rangeCount && this.$refs.ed.contains(s.anchorNode)) this.savedRange = s.getRangeAt(0).cloneRange(); }, applyFont(f){ if(!f) return; const ed=this.$refs.ed; ed.focus(); if(this.savedRange){ const s=window.getSelection(); s.removeAllRanges(); s.addRange(this.savedRange); } document.execCommand('fontName',false,f); ed.dispatchEvent(new Event('input')); }, applySize(v){ if(!v) return; const ed=this.$refs.ed; ed.focus(); if(this.savedRange){ const s=window.getSelection(); s.removeAllRanges(); s.addRange(this.savedRange); } document.execCommand('fontSize',false,v); ed.dispatchEvent(new Event('input')); }, insertTag(t){ const ed=this.$refs.ed; this.caret(ed); document.execCommand('insertText',false,'['+t+']'); ed.dispatchEvent(new Event('input')); this.tagsOpen=false; }, insertImage(d){ if(!d||!d.url||!d.cid) return; const ed=this.$refs.ed; this.caret(ed); document.execCommand('insertHTML',false,'<img src=\''+d.url+'\' data-cid=\''+d.cid+'\' style=\'max-width:100%;height:auto\'><br>'); ed.dispatchEvent(new Event('input')); }, mode:'visual', toCode(){ this.$refs.code.value=this.$refs.ed.innerHTML; this.mode='code'; this.$nextTick(()=>this.preview()); }, toVisual(){ this.$refs.ed.innerHTML=this.$refs.code.value; this.$refs.ed.dispatchEvent(new Event('input')); this.mode='visual'; }, preview(){ if(this.$refs.pv) this.$refs.pv.srcdoc=this.$refs.code.value; }, enc(s){ return '__B64__'+btoa(unescape(encodeURIComponent(s))); } }"
                         x-on:insert-inline-image.window="insertImage($event.detail)"
                         x-on:load-template.window="$refs.ed.innerHTML = $event.detail.html || ''; $refs.ed.dispatchEvent(new Event('input')); mode='visual'"
-                        style="border:1px solid var(--line);border-radius:10px;overflow:hidden">
-                        <div style="display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--soft,#F1F6FC);flex-wrap:wrap;align-items:center">
-                            @php
-                                $tbtn = 'height:30px;min-width:32px;padding:0 9px;border:1px solid var(--line);background:#fff;border-radius:7px;font-size:13px;cursor:pointer;color:var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:4px';
-                            @endphp
+                        class="ui-editor">
+                        <div class="ui-editor-tb">
                             <div x-show="mode==='visual'" class="mail-tb-group">
-                            <button type="button" title="Negrita" onmousedown="event.preventDefault()" x-on:click="document.execCommand('bold'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }};font-weight:700">B</button>
-                            <button type="button" title="Cursiva" onmousedown="event.preventDefault()" x-on:click="document.execCommand('italic'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }};font-style:italic">I</button>
-                            <button type="button" title="Subrayado" onmousedown="event.preventDefault()" x-on:click="document.execCommand('underline'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }};text-decoration:underline">U</button>
-                            <span style="width:1px;height:20px;background:var(--line);align-self:center"></span>
-                            <select title="Tipografía" aria-label="Tipografía"
-                                x-on:mousedown="saveSel()"
-                                x-on:change="applyFont($event.target.value); $event.target.selectedIndex=0"
-                                style="height:30px;border:1px solid var(--line);background:#fff;border-radius:7px;font-size:12.5px;color:var(--ink);padding:0 8px;cursor:pointer;width:auto;flex:0 0 auto">
-                                <option value="">Fuente</option>
-                                <option value="Arial" style="font-family:Arial">Arial</option>
-                                <option value="Georgia" style="font-family:Georgia">Georgia</option>
-                                <option value="Verdana" style="font-family:Verdana">Verdana</option>
-                                <option value="Times New Roman" style="font-family:'Times New Roman'">Times New Roman</option>
-                            </select>
-                            <select title="Tamaño de texto" aria-label="Tamaño de texto"
-                                x-on:mousedown="saveSel()"
-                                x-on:change="applySize($event.target.value); $event.target.selectedIndex=0"
-                                style="height:30px;border:1px solid var(--line);background:#fff;border-radius:7px;font-size:12.5px;color:var(--ink);padding:0 8px;cursor:pointer;width:auto;flex:0 0 auto">
-                                <option value="">Tamaño</option>
-                                <option value="2">Pequeño</option>
-                                <option value="3">Normal</option>
-                                <option value="4">Grande</option>
-                                <option value="6">Título</option>
-                                <option value="7">Título grande</option>
-                            </select>
-                            <span style="width:1px;height:20px;background:var(--line);align-self:center"></span>
-                            <button type="button" title="Lista con viñetas" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertUnorderedList'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }}">• —</button>
-                            <button type="button" title="Lista numerada" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertOrderedList'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }}">1.</button>
-                            <button type="button" title="Insertar enlace" onmousedown="event.preventDefault()" x-on:click="let u=prompt('URL (https://…)'); if(u){document.execCommand('createLink',false,u)}; $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }}">🔗</button>
-                            <button type="button" title="Quitar formato" onmousedown="event.preventDefault()" x-on:click="document.execCommand('removeFormat'); document.execCommand('unlink'); $refs.ed.dispatchEvent(new Event('input'))" style="{{ $tbtn }}">✕ fmt</button>
-                            <span style="width:1px;height:20px;background:var(--line);align-self:center"></span>
-                            <button type="button" title="Insertar imagen (se ve dentro del correo)" onmousedown="event.preventDefault()" onclick="document.getElementById('inlineImageInput').click()" style="{{ $tbtn }}">🖼️ Imagen</button>
+                                <button type="button" class="ui-tb-btn" title="Negrita" aria-label="Negrita" onmousedown="event.preventDefault()" x-on:click="document.execCommand('bold'); $refs.ed.dispatchEvent(new Event('input'))"><b>B</b></button>
+                                <button type="button" class="ui-tb-btn" title="Cursiva" aria-label="Cursiva" onmousedown="event.preventDefault()" x-on:click="document.execCommand('italic'); $refs.ed.dispatchEvent(new Event('input'))"><i>I</i></button>
+                                <button type="button" class="ui-tb-btn" title="Subrayado" aria-label="Subrayado" onmousedown="event.preventDefault()" x-on:click="document.execCommand('underline'); $refs.ed.dispatchEvent(new Event('input'))"><u>U</u></button>
+                                <span class="ui-tb-sep"></span>
+                                <select title="Tipografía" aria-label="Tipografía" class="ui-tb-select"
+                                    x-on:mousedown="saveSel()"
+                                    x-on:change="applyFont($event.target.value); $event.target.selectedIndex=0">
+                                    <option value="">Fuente</option>
+                                    <option value="Arial" style="font-family:Arial">Arial</option>
+                                    <option value="Georgia" style="font-family:Georgia">Georgia</option>
+                                    <option value="Verdana" style="font-family:Verdana">Verdana</option>
+                                    <option value="Times New Roman" style="font-family:'Times New Roman'">Times New Roman</option>
+                                </select>
+                                <select title="Tamaño de texto" aria-label="Tamaño de texto" class="ui-tb-select"
+                                    x-on:mousedown="saveSel()"
+                                    x-on:change="applySize($event.target.value); $event.target.selectedIndex=0">
+                                    <option value="">Tamaño</option>
+                                    <option value="2">Pequeño</option>
+                                    <option value="3">Normal</option>
+                                    <option value="4">Grande</option>
+                                    <option value="6">Título</option>
+                                    <option value="7">Título grande</option>
+                                </select>
+                                <span class="ui-tb-sep"></span>
+                                <button type="button" class="ui-tb-btn" title="Lista con viñetas" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertUnorderedList'); $refs.ed.dispatchEvent(new Event('input'))">• —</button>
+                                <button type="button" class="ui-tb-btn" title="Lista numerada" onmousedown="event.preventDefault()" x-on:click="document.execCommand('insertOrderedList'); $refs.ed.dispatchEvent(new Event('input'))">1.</button>
+                                <button type="button" class="ui-tb-btn" title="Insertar enlace" onmousedown="event.preventDefault()" x-on:click="let u=prompt('URL (https://…)'); if(u){document.execCommand('createLink',false,u)}; $refs.ed.dispatchEvent(new Event('input'))">🔗</button>
+                                <button type="button" class="ui-tb-btn" title="Quitar formato" onmousedown="event.preventDefault()" x-on:click="document.execCommand('removeFormat'); document.execCommand('unlink'); $refs.ed.dispatchEvent(new Event('input'))">✕ fmt</button>
+                                <span class="ui-tb-sep"></span>
+                                <button type="button" class="ui-tb-btn" title="Insertar imagen (se ve dentro del correo)" onmousedown="event.preventDefault()" onclick="document.getElementById('inlineImageInput').click()">🖼️ Imagen</button>
 
-                            {{-- Etiquetas dinámicas: se rellenan con datos reales al enviar --}}
-                            @if (! empty($emailTags))
-                                <span style="width:1px;height:20px;background:var(--line);align-self:center"></span>
-                                <div style="position:relative" x-on:click.outside="tagsOpen=false">
-                                    <button type="button" title="Insertar etiqueta" onmousedown="event.preventDefault()" x-on:click="tagsOpen=!tagsOpen" style="{{ $tbtn }};display:inline-flex;align-items:center;gap:4px">🏷️ Etiqueta ▾</button>
-                                    <div x-show="tagsOpen" x-cloak style="position:absolute;top:32px;left:0;z-index:5;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 30px -12px rgba(19,37,61,.4);min-width:240px;padding:6px;max-height:240px;overflow:auto">
-                                        @foreach ($emailTags as $t)
-                                            <button type="button" onmousedown="event.preventDefault()" x-on:click="insertTag(@js($t['tag']))" style="display:flex;flex-direction:column;gap:1px;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:6px 8px;cursor:pointer">
-                                                <span style="font-size:13px;font-weight:600;color:var(--ink)">[{{ $t['tag'] }}]</span>
-                                                <span style="font-size:11.5px;color:var(--muted)">→ {{ str($t['preview'])->limit(40) }}</span>
-                                            </button>
-                                        @endforeach
+                                {{-- Etiquetas dinámicas: se rellenan con datos reales al enviar --}}
+                                @if (! empty($emailTags))
+                                    <span class="ui-tb-sep"></span>
+                                    <div class="ui-dropdown" x-on:click.outside="tagsOpen=false">
+                                        <button type="button" class="ui-tb-btn" title="Insertar etiqueta" onmousedown="event.preventDefault()" x-on:click="tagsOpen=!tagsOpen">🏷️ Etiqueta ▾</button>
+                                        <div x-show="tagsOpen" x-cloak class="ui-menu ui-menu--scroll">
+                                            @foreach ($emailTags as $t)
+                                                <button type="button" class="ui-menu-item ui-menu-item--stack" onmousedown="event.preventDefault()" x-on:click="insertTag(@js($t['tag']))">
+                                                    <span class="ui-strong">[{{ $t['tag'] }}]</span>
+                                                    <span class="ui-list-meta">→ {{ str($t['preview'])->limit(40) }}</span>
+                                                </button>
+                                            @endforeach
+                                        </div>
                                     </div>
-                                </div>
-                            @endif
+                                @endif
                                 @if ($canCodeMode)
-                                    <button type="button" title="Editar el código HTML/CSS" x-on:click="toCode()" style="{{ $tbtn }};font-family:ui-monospace,Menlo,Consolas,monospace">&lt;/&gt; Código</button>
+                                    <button type="button" class="ui-tb-btn ui-mono" title="Editar el código HTML/CSS" x-on:click="toCode()">&lt;/&gt; Código</button>
                                 @endif
                             </div>
                             @if ($canCodeMode)
-                                <button type="button" title="Volver al editor visual" x-show="mode==='code'" x-cloak x-on:click="toVisual()" style="{{ $tbtn }}">◱ Editor visual</button>
+                                <button type="button" class="ui-tb-btn" title="Volver al editor visual" x-show="mode==='code'" x-cloak x-on:click="toVisual()">◱ Editor visual</button>
                             @endif
                         </div>
                         {{-- Vista VISUAL --}}
-                        <div contenteditable="true" id="mailEditorBody" x-ref="ed" x-show="mode==='visual'" class="mailbody-ed" data-ph="Escribe el mensaje…"
+                        <div contenteditable="true" id="mailEditorBody" x-ref="ed" x-show="mode==='visual'" class="mailbody-ed ui-editor-body" data-ph="Escribe el mensaje…"
                             x-on:input="$wire.set('emailBody', enc($refs.ed.innerHTML), false)"
                             x-on:mouseup="saveSel()" x-on:keyup="saveSel()"
-                            x-on:blur="$wire.set('emailBody', enc($refs.ed.innerHTML), false)"
-                            style="min-height:240px;max-height:50vh;overflow:auto;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;color:var(--ink)"></div>
+                            x-on:blur="$wire.set('emailBody', enc($refs.ed.innerHTML), false)"></div>
                         {{-- Vista CÓDIGO: HTML editable (ancho completo) + vista previa debajo (iframe sandbox, sin scripts) --}}
                         @if ($canCodeMode)
-                            <div x-show="mode==='code'" x-cloak style="display:flex;flex-direction:column">
-                                <textarea x-ref="code" spellcheck="false" placeholder="Pega o escribe HTML/CSS de diseño (tablas, estilos inline)…"
-                                    x-on:input="$wire.set('emailBody', enc($refs.code.value), false); preview()"
-                                    style="width:100%;height:34vh;min-height:200px;box-sizing:border-box;border:0;border-bottom:1px solid var(--line);padding:12px 14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;outline:none;resize:vertical;color:var(--ink);background:#fbfdff"></textarea>
-                                <div style="display:flex;flex-direction:column;height:34vh">
-                                    <div style="font-size:11px;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--line);background:var(--soft,#F1F6FC)">Vista previa</div>
-                                    <iframe x-ref="pv" sandbox="" title="Vista previa" style="flex:1;width:100%;border:0;background:#fff"></iframe>
+                            <div x-show="mode==='code'" x-cloak class="ui-editor-codewrap">
+                                <textarea x-ref="code" spellcheck="false" class="ui-editor-code" placeholder="Pega o escribe HTML/CSS de diseño (tablas, estilos inline)…"
+                                    x-on:input="$wire.set('emailBody', enc($refs.code.value), false); preview()"></textarea>
+                                <div class="ui-editor-preview">
+                                    <div class="ui-editor-pvh">Vista previa</div>
+                                    <iframe x-ref="pv" sandbox="" title="Vista previa"></iframe>
                                 </div>
                             </div>
                         @endif
                     </div>
-                    @error('emailBody') <div class="toast err" style="font-size:12.5px">{{ $message }}</div> @enderror
+                    @error('emailBody') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
 
                     {{-- Imagen inline: input FUERA de wire:ignore para que Livewire procese la subida --}}
-                    <input type="file" id="inlineImageInput" wire:model="inlineUpload" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
-                    <div wire:loading wire:target="inlineUpload" style="font-size:12.5px;color:var(--muted)"><span class="mca-spin"></span> Subiendo imagen…</div>
-                    @error('inlineUpload') <div class="toast err" style="font-size:12.5px">{{ $message }}</div> @enderror
+                    <input type="file" id="inlineImageInput" wire:model="inlineUpload" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+                    <div wire:loading wire:target="inlineUpload" class="ui-help"><span class="ui-spin"></span> Subiendo imagen…</div>
+                    @error('inlineUpload') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
 
                     {{-- Adjuntos --}}
-                    <div>
-                        <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">
-                            Adjuntos <span style="font-weight:400">· máx {{ round($att['max_file_bytes'] / 1048576) }} MB por archivo, {{ round($att['max_total_bytes'] / 1048576) }} MB en total</span>
-                        </label>
-                        <label class="ghost" style="cursor:pointer"><x-ui.icon name="upload" class="i14" /> Adjuntar archivos
-                            <input type="file" wire:model="emailAttachments" multiple accept=".{{ implode(',.', $att['allowed_extensions']) }}" style="display:none">
-                        </label>
-                        <div wire:loading wire:target="emailAttachments" style="font-size:12.5px;color:var(--muted);margin-top:4px"><span class="mca-spin"></span> Subiendo…</div>
-                        @error('emailAttachments') <div class="toast err" style="font-size:12.5px;margin-top:4px">{{ $message }}</div> @enderror
-                        @error('emailAttachments.*') <div class="toast err" style="font-size:12.5px;margin-top:4px">{{ $message }}</div> @enderror
+                    <div class="ui-field">
+                        <span class="ui-label">Adjuntos <span class="opt">· máx {{ round($att['max_file_bytes'] / 1048576) }} MB por archivo, {{ round($att['max_total_bytes'] / 1048576) }} MB en total</span></span>
+                        <div>
+                            <label class="ui-btn ui-btn--secondary ui-btn--sm"><x-ui.icon name="upload" /> Adjuntar archivos
+                                <input type="file" wire:model="emailAttachments" multiple accept=".{{ implode(',.', $att['allowed_extensions']) }}" hidden>
+                            </label>
+                        </div>
+                        <div wire:loading wire:target="emailAttachments" class="ui-help"><span class="ui-spin"></span> Subiendo…</div>
+                        @error('emailAttachments') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                        @error('emailAttachments.*') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
 
                         @if (! empty($emailAttachments))
-                            <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+                            <ul class="ui-list ui-list--boxed">
                                 @foreach ($emailAttachments as $i => $file)
-                                    <div wire:key="att-{{ $i }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 10px">
-                                        <span><x-ui.icon name="file-text" class="i14" /> {{ $file->getClientOriginalName() }} <span style="color:var(--muted)">· {{ number_format($file->getSize() / 1024) }} KB</span></span>
-                                        <button type="button" wire:click="removeAttachment({{ $i }})" class="ghost" style="padding:3px 8px;font-size:12px">Quitar</button>
-                                    </div>
+                                    <li wire:key="att-{{ $i }}">
+                                        <div class="ui-list-item">
+                                            <x-ui.icon name="file-text" class="ui-card-ic" />
+                                            <span class="ui-list-main"><span class="ui-list-title">{{ $file->getClientOriginalName() }}</span><span class="ui-list-meta">{{ number_format($file->getSize() / 1024) }} KB</span></span>
+                                            <x-ui.button size="sm" variant="ghost" wire:click="removeAttachment({{ $i }})">Quitar</x-ui.button>
+                                        </div>
+                                    </li>
                                 @endforeach
-                            </div>
+                            </ul>
                         @endif
                     </div>
                 </div>
 
-                {{-- Pie --}}
-                <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;padding:14px 22px;border-top:1px solid var(--line)">
-                    <button type="button" wire:click="$set('composeOpen', false)" class="ghost">Cancelar</button>
-                    <button type="button" wire:click="sendEmail" wire:loading.attr="disabled" wire:target="sendEmail,emailAttachments" class="ghost solid">
-                        <x-ui.icon name="mail" class="i14" /> Enviar
+                <div class="ui-modal-f">
+                    <x-ui.button wire:click="$set('composeOpen', false)">Cancelar</x-ui.button>
+                    <button type="button" class="ui-btn ui-btn--primary" wire:click="sendEmail" wire:loading.attr="disabled" wire:target="sendEmail,emailAttachments">
+                        <x-ui.icon name="mail" /> Enviar
                         <span wire:loading wire:target="sendEmail">…</span>
                     </button>
                 </div>
             </div>
         </div>
-        <style>.mail-scrollbody>*{flex-shrink:0}.mail-tb-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}.mailbody-ed:empty:before{content:attr(data-ph);color:var(--muted);pointer-events:none}.mailbody-ed img{max-width:100%}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
+        <style>.mail-tb-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}.mailbody-ed:empty:before{content:attr(data-ph);color:var(--mca-text-3);pointer-events:none}.mailbody-ed img{max-width:100%}.mailbody-ed ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.mailbody-ed ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.mailbody-ed li{margin:.2em 0}[x-cloak]{display:none!important}</style>
     @endif
 
     {{-- Ver un correo ENVIADO tal como se envió --}}
     @if ($viewingEmail)
-        <div x-data="{ destroy(){ document.body.style.overflow='' } }" x-init="document.body.style.overflow='hidden'"
-            style="position:fixed;inset:0;z-index:1000;background:rgba(19,37,61,.45);display:flex;align-items:center;justify-content:center;padding:24px" wire:key="sent-overlay-{{ $viewingEmail->id }}">
-            <div style="background:#fff;width:100%;max-width:800px;max-height:92vh;height:auto;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;box-shadow:0 24px 70px -20px rgba(0,0,0,.5)">
-                {{-- Cabecera --}}
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:16px 22px;border-bottom:1px solid var(--line)">
+        <div x-data="{ destroy(){ document.body.style.overflow='' } }" x-init="document.body.style.overflow='hidden'" class="ui-modal-bg" wire:key="sent-overlay-{{ $viewingEmail->id }}">
+            <div class="ui-modal ui-modal--md" role="dialog" aria-modal="true" aria-labelledby="sent-title">
+                <div class="ui-modal-h">
                     <div>
-                        <div style="font-weight:700;font-size:16px;color:var(--ink)">{{ $viewingEmail->subject }}
-                            @if ($viewingEmail->status !== 'sent')<span style="color:#B23B3B;font-size:12px;font-weight:600"> · falló</span>@endif
-                        </div>
-                        <div style="font-size:12.5px;color:var(--muted);margin-top:4px">
-                            <b style="color:var(--ink)">{{ $viewingEmail->from_name ?: $viewingEmail->from_address }}</b> &lt;{{ $viewingEmail->from_address }}&gt;
+                        <h2 class="ui-modal-title" id="sent-title">{{ $viewingEmail->subject }}
+                            @if ($viewingEmail->status !== 'sent') <x-ui.badge tone="danger">falló</x-ui.badge>@endif
+                        </h2>
+                        <p class="ui-modal-sub">
+                            <b>{{ $viewingEmail->from_name ?: $viewingEmail->from_address }}</b> &lt;{{ $viewingEmail->from_address }}&gt;
                             → {{ $viewingEmail->to_address }}
-                        </div>
-                        <div style="font-size:12px;color:var(--muted);margin-top:2px">
+                        </p>
+                        <p class="ui-modal-sub">
                             {{ ($viewingEmail->sent_at ?? $viewingEmail->created_at)?->translatedFormat('d M Y · H:i') }}
                             · por {{ $viewingEmail->sentByUser?->name ?? 'Equipo' }}
-                            · <span style="text-transform:capitalize">{{ $viewingEmail->status === 'sent' ? 'enviado' : 'falló' }}</span>
-                        </div>
+                            · {{ $viewingEmail->status === 'sent' ? 'Enviado' : 'Falló' }}
+                        </p>
                     </div>
-                    <button type="button" wire:click="closeSentEmail" class="ghost" aria-label="Cerrar"><x-ui.icon name="x" class="i16" /></button>
+                    <x-ui.button variant="ghost" icon="x" wire:click="closeSentEmail" aria-label="Cerrar" />
                 </div>
 
                 {{-- Cuerpo tal como se envió (formato + imágenes inline resueltas) --}}
-                <div style="flex:1;overflow:auto;padding:22px 26px">
-                    <div class="sent-body" style="font-size:14px;line-height:1.55;color:var(--ink);word-break:break-word">{!! $viewingBody !!}</div>
+                <div class="ui-modal-b">
+                    <div class="sent-body">{!! $viewingBody !!}</div>
 
                     @if ($viewingEmail->files->isNotEmpty())
-                        <div style="margin-top:22px;border-top:1px solid var(--line);padding-top:14px">
-                            <div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px">Adjuntos</div>
-                            <div style="display:flex;flex-direction:column;gap:6px">
+                        <div class="ui-field">
+                            <span class="ui-label">Adjuntos</span>
+                            <ul class="ui-list ui-list--boxed">
                                 @foreach ($viewingEmail->files as $file)
-                                    <button type="button" wire:click="downloadAttachment({{ $file->id }})" style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 11px;background:#fff;cursor:pointer">
-                                        <span><x-ui.icon name="file-text" class="i14" /> {{ $file->filename }} <span style="color:var(--muted)">· {{ number_format($file->size / 1024) }} KB</span></span>
-                                        <span style="color:var(--blue);font-weight:600;white-space:nowrap"><x-ui.icon name="download" class="i13" /> Descargar</span>
-                                    </button>
+                                    <li>
+                                        <button type="button" class="ui-list-item" wire:click="downloadAttachment({{ $file->id }})">
+                                            <x-ui.icon name="file-text" class="ui-card-ic" />
+                                            <span class="ui-list-main"><span class="ui-list-title">{{ $file->filename }}</span><span class="ui-list-meta">{{ number_format($file->size / 1024) }} KB</span></span>
+                                            <span class="ui-list-aside ui-link"><x-ui.icon name="download" /> Descargar</span>
+                                        </button>
+                                    </li>
                                 @endforeach
-                            </div>
+                            </ul>
                         </div>
                     @endif
                 </div>
 
-                <div style="display:flex;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--line)">
-                    <button type="button" wire:click="closeSentEmail" class="ghost">Cerrar</button>
+                <div class="ui-modal-f">
+                    <x-ui.button wire:click="closeSentEmail">Cerrar</x-ui.button>
                 </div>
             </div>
         </div>
-        <style>.sent-body img{max-width:100%}.sent-body a{color:var(--blue)}.sent-body ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.sent-body ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.sent-body li{margin:.2em 0}</style>
+        <style>.sent-body{font-size:14px;line-height:1.55;color:var(--mca-text);word-break:break-word}.sent-body img{max-width:100%}.sent-body a{color:var(--mca-blue)}.sent-body ul{list-style:disc;padding-left:1.6em;margin:.5em 0}.sent-body ol{list-style:decimal;padding-left:1.6em;margin:.5em 0}.sent-body li{margin:.2em 0}</style>
     @endif
 </div>
