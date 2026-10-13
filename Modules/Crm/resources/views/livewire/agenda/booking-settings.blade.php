@@ -1,148 +1,140 @@
-<div style="display:flex;flex-direction:column;gap:16px;margin-top:16px">
+<div class="ui-stack">
     @if ($notice !== '')
-        <div class="toast ok" role="status" style="margin:0"><x-ui.icon name="check" class="i15" /> {{ $notice }}</div>
+        <div class="ui-alert ui-alert--flush ui-tone--success" role="status"><x-ui.icon name="check" /> {{ $notice }}</div>
     @endif
 
     {{-- Mi enlace de reservas --}}
-    <form class="panel" wire:submit="saveLink">
-        <div class="ag-bar">
-            <h2 style="text-transform:none"><x-ui.icon name="external-link" class="i18" /> {{ __('Mi enlace de reservas') }}</h2>
-            @if ($bookingsCount > 0)<span class="count">{{ __('Reservas próximas: :n', ['n' => $bookingsCount]) }}</span>@endif
+    <form class="ui-card" wire:submit="saveLink" novalidate>
+        <div class="ui-card-h"><x-ui.icon name="external-link" class="ui-card-ic" /><h2>{{ __('Mi enlace de reservas') }}</h2>
+            @if ($bookingsCount > 0)<x-ui.badge tone="blue">{{ __('Reservas próximas: :n', ['n' => $bookingsCount]) }}</x-ui.badge>@endif
         </div>
-        <div class="ag-form">
-            <div class="ag-f full ag-checks">
-                <label><input type="checkbox" wire:model="bookingEnabled"> {{ __('Recibir reservas públicas en mi Calendario') }}</label>
-                @error('bookingEnabled') <div class="err">{{ $message }}</div> @enderror
-            </div>
-            <div class="ag-f">
-                <label for="bk-slug">{{ __('Alias del enlace') }}</label>
-                <input id="bk-slug" type="text" wire:model="bookingSlug" maxlength="80" placeholder="ana-garcia">
-                <div class="hint">{{ __('Solo minúsculas, números y guiones. Cambiarlo invalida el enlace anterior.') }}</div>
-                @error('bookingSlug') <div class="err">{{ $message }}</div> @enderror
-            </div>
-            <div class="ag-f">
-                <label>{{ __('Enlace público') }}</label>
-                @if ($publicUrl)
-                    <div class="ag-picked" x-data="{ copied: false }">
-                        <span style="overflow-wrap:anywhere;font-size:12.5px">{{ $publicUrl }}</span>
-                        <button type="button" title="{{ __('Copiar') }}" aria-label="{{ __('Copiar') }}"
+        <div class="ui-card-p">
+            <div class="ui-form-grid">
+                <div class="ui-span-full">
+                    <label class="ui-check"><input type="checkbox" wire:model="bookingEnabled"> {{ __('Recibir reservas públicas en mi Calendario') }}</label>
+                    @error('bookingEnabled') <p class="ui-error"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                </div>
+                <x-ui.field :label="__('Alias del enlace')" for="bk-slug" :error="$errors->first('bookingSlug')" :help="__('Solo minúsculas, números y guiones. Cambiarlo invalida el enlace anterior.')">
+                    <input id="bk-slug" type="text" wire:model="bookingSlug" maxlength="80" placeholder="ana-garcia" autocapitalize="off" spellcheck="false" @class(['ui-input', 'is-invalid' => $errors->has('bookingSlug')])>
+                </x-ui.field>
+                <div class="ui-field">
+                    <span class="ui-label">{{ __('Enlace público') }}</span>
+                    @if ($publicUrl)
+                        <div class="ui-copy" x-data="{ copied: false }">
+                            <span class="ui-copy-text">{{ $publicUrl }}</span>
+                            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" :aria-label="copied ? @js(__('Copiado')) : @js(__('Copiar'))"
                                 x-on:click="navigator.clipboard.writeText(@js($publicUrl)); copied = true; setTimeout(() => copied = false, 1500)">
-                            <span x-show="!copied"><x-ui.icon name="file-text" class="i14" /></span><span x-show="copied" style="font-size:11px;color:#1E8E5A">✓</span>
-                        </button>
+                                <span x-show="!copied">{{ __('Copiar') }}</span><span x-show="copied" x-cloak>{{ __('Copiado') }}</span>
+                            </button>
+                        </div>
+                        <a href="{{ $publicUrl }}" target="_blank" rel="noopener" class="ui-link"><x-ui.icon name="external-link" /> {{ __('Vista previa') }}</a>
+                    @else
+                        <p class="ui-help">{{ __('Guarda un alias para obtener tu enlace.') }}</p>
+                    @endif
+                </div>
+                @if ($profileProblems !== [])
+                    <div class="ui-callout ui-tone--warning ui-callout--stack ui-span-full">
+                        <b><x-ui.icon name="alert-triangle" /> {{ __('Para recibir reservas:') }}</b>
+                        <ul class="ui-callout-list">@foreach ($profileProblems as $p)<li>{{ $p }}</li>@endforeach</ul>
                     </div>
-                    <div style="display:flex;gap:8px;margin-top:6px">
-                        <a href="{{ $publicUrl }}" target="_blank" rel="noopener" class="ag-linkbtn">{{ __('Vista previa') }} ↗</a>
-                    </div>
-                @else
-                    <div class="hint">{{ __('Guarda un alias para obtener tu enlace.') }}</div>
                 @endif
             </div>
-            @if ($profileProblems !== [])
-                <div class="full ag-warn" style="font-size:12.5px">
-                    <b>{{ __('Para recibir reservas:') }}</b>
-                    <ul>@foreach ($profileProblems as $p)<li>{{ $p }}</li>@endforeach</ul>
-                </div>
-            @endif
         </div>
-        <div class="ag-actions">
-            <button type="submit" class="ghost solid" wire:loading.attr="disabled"><x-ui.icon name="check" class="i15" /> {{ __('Guardar enlace') }}</button>
+        <div class="ui-card-f ui-card-f--end">
+            <x-ui.button type="submit" variant="primary" icon="check" wire:loading.attr="disabled">{{ __('Guardar enlace') }}</x-ui.button>
         </div>
     </form>
 
     {{-- Tipos de reunión --}}
-    <div class="panel">
-        <div class="ag-bar">
-            <h2 style="text-transform:none"><x-ui.icon name="calendar" class="i18" /> {{ __('Tipos de reunión') }}</h2>
-            <div style="flex:1"></div>
+    <section class="ui-card" aria-labelledby="mt-title">
+        <div class="ui-card-h"><x-ui.icon name="calendar" class="ui-card-ic" /><h2 id="mt-title">{{ __('Tipos de reunión') }}</h2>
+            <x-ui.badge tone="neutral" class="ui-badge--count">{{ $types->count() }}</x-ui.badge>
+            <span class="sp"></span>
             @unless ($showTypeForm)
-                <button type="button" class="ghost solid" wire:click="newType"><x-ui.icon name="plus" class="i15" /> {{ __('Nuevo tipo') }}</button>
+                <x-ui.button size="sm" icon="plus" wire:click="newType">{{ __('Nuevo tipo') }}</x-ui.button>
             @endunless
         </div>
 
         @if ($showTypeForm)
-            <form wire:submit="saveType" class="ag-form" style="border-bottom:1px solid var(--line)">
-                <div class="ag-f">
-                    <label for="mt-name">{{ __('Nombre') }}</label>
-                    <input id="mt-name" type="text" wire:model="name" maxlength="120" placeholder="{{ __('Consulta de admisiones') }}">
-                    @error('name') <div class="err">{{ $message }}</div> @enderror
+            <form wire:submit="saveType" novalidate class="ui-subform">
+                <div class="ui-card-p">
+                    <div class="ui-form-grid">
+                        <x-ui.field :label="__('Nombre')" for="mt-name" required :error="$errors->first('name')">
+                            <input id="mt-name" type="text" wire:model="name" maxlength="120" placeholder="{{ __('Consulta de admisiones') }}" @class(['ui-input', 'is-invalid' => $errors->has('name')])>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Alias del enlace')" for="mt-slug" optional :error="$errors->first('slug')">
+                            <input id="mt-slug" type="text" wire:model="slug" maxlength="80" placeholder="consulta-admisiones" autocapitalize="off" spellcheck="false" @class(['ui-input', 'is-invalid' => $errors->has('slug')])>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Duración (min)')" for="mt-dur" :error="$errors->first('duration')">
+                            <input id="mt-dur" type="number" min="10" max="240" step="5" inputmode="numeric" wire:model="duration" @class(['ui-input', 'is-invalid' => $errors->has('duration')])>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Medio')" for="mt-medium" :error="$errors->first('medium')">
+                            <select id="mt-medium" wire:model="medium" @class(['ui-select', 'is-invalid' => $errors->has('medium')])>
+                                @foreach ($media as $m)<option value="{{ $m->value }}">{{ $m->label() }}</option>@endforeach
+                            </select>
+                        </x-ui.field>
+                        <x-ui.field class="ui-span-full" :label="__('Descripción')" for="mt-desc" optional>
+                            <textarea id="mt-desc" wire:model="description" maxlength="2000" rows="3" class="ui-input ui-textarea"></textarea>
+                        </x-ui.field>
+                        <x-ui.field class="ui-span-full" :label="__('Instrucciones para el visitante')" for="mt-instr" optional>
+                            <input id="mt-instr" type="text" wire:model="instructions" maxlength="500" class="ui-input">
+                        </x-ui.field>
+                        <x-ui.field :label="__('Programa de interés')" for="mt-prog" optional :error="$errors->first('programId')">
+                            <select id="mt-prog" wire:model="programId" @class(['ui-select', 'is-invalid' => $errors->has('programId')])>
+                                <option value="">—</option>
+                                @foreach ($programs as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
+                            </select>
+                        </x-ui.field>
+                        <div class="ui-field">
+                            <span class="ui-label">{{ __('Visibilidad') }}</span>
+                            <div class="ui-checks ui-checks--field">
+                                <label class="ui-check"><input type="checkbox" wire:model="typeActive"> {{ __('Activo') }}</label>
+                                <label class="ui-check"><input type="checkbox" wire:model="typePublic"> {{ __('Público') }}</label>
+                            </div>
+                        </div>
+                        @error('typePublic') <div class="ui-callout ui-callout--sm ui-tone--warning ui-span-full"><x-ui.icon name="alert-triangle" /> <span>{{ $message }}</span></div> @enderror
+                    </div>
                 </div>
-                <div class="ag-f">
-                    <label for="mt-slug">{{ __('Alias del enlace (opcional)') }}</label>
-                    <input id="mt-slug" type="text" wire:model="slug" maxlength="80" placeholder="consulta-admisiones">
-                    @error('slug') <div class="err">{{ $message }}</div> @enderror
-                </div>
-                <div class="ag-f">
-                    <label for="mt-dur">{{ __('Duración (min)') }}</label>
-                    <input id="mt-dur" type="number" min="10" max="240" step="5" wire:model="duration">
-                    @error('duration') <div class="err">{{ $message }}</div> @enderror
-                </div>
-                <div class="ag-f">
-                    <label for="mt-medium">{{ __('Medio') }}</label>
-                    <select id="mt-medium" wire:model="medium">
-                        @foreach ($media as $m)<option value="{{ $m->value }}">{{ $m->label() }}</option>@endforeach
-                    </select>
-                    @error('medium') <div class="err">{{ $message }}</div> @enderror
-                </div>
-                <div class="ag-f full">
-                    <label for="mt-desc">{{ __('Descripción') }}</label>
-                    <textarea id="mt-desc" wire:model="description" maxlength="2000"></textarea>
-                </div>
-                <div class="ag-f full">
-                    <label for="mt-instr">{{ __('Instrucciones para el visitante') }}</label>
-                    <input id="mt-instr" type="text" wire:model="instructions" maxlength="500">
-                </div>
-                <div class="ag-f">
-                    <label for="mt-prog">{{ __('Programa de interés (opcional)') }}</label>
-                    <select id="mt-prog" wire:model="programId">
-                        <option value="">—</option>
-                        @foreach ($programs as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
-                    </select>
-                    @error('programId') <div class="err">{{ $message }}</div> @enderror
-                </div>
-                <div class="ag-f ag-checks" style="align-items:flex-end">
-                    <label><input type="checkbox" wire:model="typeActive"> {{ __('Activo') }}</label>
-                    <label><input type="checkbox" wire:model="typePublic"> {{ __('Público') }}</label>
-                </div>
-                @error('typePublic') <div class="full ag-warn" style="font-size:12.5px">{{ $message }}</div> @enderror
-                <div class="full" style="display:flex;gap:8px;justify-content:flex-end">
-                    <button type="button" class="ghost" wire:click="cancelType">{{ __('Cancelar') }}</button>
-                    <button type="submit" class="ghost solid" wire:loading.attr="disabled"><x-ui.icon name="check" class="i15" /> {{ __('Guardar tipo') }}</button>
+                <div class="ui-card-f ui-card-f--end">
+                    <x-ui.button wire:click="cancelType">{{ __('Cancelar') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary" icon="check" wire:loading.attr="disabled">{{ __('Guardar tipo') }}</x-ui.button>
                 </div>
             </form>
         @endif
 
-        <div class="ag-list">
+        <ul class="ui-list">
             @forelse ($types as $t)
                 @php $url = $typeUrl($t); $problems = $typeProblems[$t->id] ?? []; @endphp
-                <div class="ag-row" style="grid-template-columns:minmax(0,1fr) auto" wire:key="mt-{{ $t->id }}">
-                    <div class="what">
-                        <div class="t" style="font-weight:600;font-size:14px">{{ $t->name }}</div>
-                        <div class="s">
-                            <span>{{ $t->duration_minutes }} min</span>
-                            <span>{{ $t->medium->label() }}</span>
-                            <span class="ag-badge {{ $t->is_active ? '' : 'cancelled' }}">{{ $t->is_active ? __('Activo') : __('Inactivo') }}</span>
-                            <span class="ag-badge {{ $t->is_public ? 'completed' : 'cancelled' }}">{{ $t->is_public ? __('Público') : __('No público') }}</span>
-                        </div>
-                        @if ($problems !== [])
-                            <div style="font-size:12px;color:#B7791F;margin-top:4px">{{ implode(' ', $problems) }}</div>
-                        @elseif ($url && $t->is_public && $t->is_active)
-                            <div x-data="{ copied: false }" style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12px;min-width:0">
-                                <span style="color:var(--muted);overflow-wrap:anywhere">{{ $url }}</span>
-                                <button type="button" class="ag-linkbtn" x-on:click="navigator.clipboard.writeText(@js($url)); copied = true; setTimeout(() => copied = false, 1500)">
-                                    <span x-show="!copied">{{ __('Copiar') }}</span><span x-show="copied">{{ __('Copiado') }}</span>
-                                </button>
-                            </div>
-                        @endif
+                <li wire:key="mt-{{ $t->id }}">
+                    <div class="ui-list-item ui-list-item--wrap">
+                        <span class="ui-list-main">
+                            <span class="ui-list-title">{{ $t->name }}</span>
+                            <span class="ui-person-line">
+                                <span class="ui-list-meta">{{ $t->duration_minutes }} min · {{ $t->medium->label() }}</span>
+                                <x-ui.badge :tone="$t->is_active ? 'success' : 'neutral'" dot>{{ $t->is_active ? __('Activo') : __('Inactivo') }}</x-ui.badge>
+                                <x-ui.badge :tone="$t->is_public ? 'blue' : 'neutral'">{{ $t->is_public ? __('Público') : __('No público') }}</x-ui.badge>
+                            </span>
+                            @if ($problems !== [])
+                                <span class="ui-list-meta ui-text-warning"><x-ui.icon name="alert-triangle" /> {{ implode(' ', $problems) }}</span>
+                            @elseif ($url && $t->is_public && $t->is_active)
+                                <span class="ui-copy ui-copy--inline" x-data="{ copied: false }">
+                                    <span class="ui-copy-text">{{ $url }}</span>
+                                    <button type="button" class="ui-link ui-link--btn" x-on:click="navigator.clipboard.writeText(@js($url)); copied = true; setTimeout(() => copied = false, 1500)">
+                                        <span x-show="!copied">{{ __('Copiar') }}</span><span x-show="copied" x-cloak>{{ __('Copiado') }}</span>
+                                    </button>
+                                </span>
+                            @endif
+                        </span>
+                        <span class="ui-list-aside">
+                            <x-ui.button size="sm" wire:click="toggleType({{ $t->id }}, 'is_public')">{{ $t->is_public ? __('Ocultar') : __('Publicar') }}</x-ui.button>
+                            <x-ui.button size="sm" variant="ghost" icon="pencil" wire:click="editType({{ $t->id }})" :title="__('Editar')" :aria-label="__('Editar :name', ['name' => $t->name])" />
+                            <x-ui.button size="sm" variant="ghost" icon="trash" wire:click="deleteType({{ $t->id }})" wire:confirm="{{ __('¿Eliminar este tipo de reunión? Las reservas existentes se conservan.') }}" :title="__('Eliminar')" :aria-label="__('Eliminar :name', ['name' => $t->name])" />
+                        </span>
                     </div>
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-                        <button type="button" class="ghost" wire:click="toggleType({{ $t->id }}, 'is_public')">{{ $t->is_public ? __('Ocultar') : __('Publicar') }}</button>
-                        <button type="button" class="ghost" wire:click="editType({{ $t->id }})"><x-ui.icon name="pencil" class="i14" /></button>
-                        <button type="button" class="ghost" wire:click="deleteType({{ $t->id }})" wire:confirm="{{ __('¿Eliminar este tipo de reunión? Las reservas existentes se conservan.') }}"><x-ui.icon name="trash" class="i14" /></button>
-                    </div>
-                </div>
+                </li>
             @empty
-                <div class="empty">{{ __('Aún no hay tipos de reunión. Crea el primero para publicarlo en tu enlace.') }}</div>
+                <li class="ui-list-empty">{{ __('Aún no hay tipos de reunión. Crea el primero para publicarlo en tu enlace.') }}</li>
             @endforelse
-        </div>
-    </div>
+        </ul>
+    </section>
 </div>

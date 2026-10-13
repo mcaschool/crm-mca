@@ -2,33 +2,39 @@
     @if ($visible)
         <x-dropdown align="right" width="72">
             <x-slot name="trigger">
-                <button type="button" class="icon-btn" style="position:relative;cursor:pointer" title="{{ __('Avisos del calendario') }}">
-                    <x-ui.icon name="calendar" style="width:18px;height:18px" />
+                <button type="button" class="icon-btn ui-bell" title="{{ __('Avisos del calendario') }}"
+                    aria-label="{{ __('Avisos del calendario') }}{{ $unread > 0 ? ' · '.trans_choice(':n sin leer|:n sin leer', $unread, ['n' => $unread]) : '' }}">
+                    <x-ui.icon name="calendar" />
                     @if ($unread > 0)
-                        <span style="position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;background:#1E5AA8;color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:700">{{ $unread > 9 ? '9+' : $unread }}</span>
+                        <span class="ui-bell-n" aria-hidden="true">{{ $unread > 9 ? '9+' : $unread }}</span>
                     @endif
                 </button>
             </x-slot>
             <x-slot name="content">
-                <div style="padding:10px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px">
-                    <strong style="font-size:13px">{{ __('Avisos del calendario') }}</strong>
+                <div class="ui-bell-h">
+                    <strong>{{ __('Avisos del calendario') }}</strong>
                     @if ($unread > 0)
-                        <button type="button" wire:click="markAllRead" class="btn btn-soft btn-sm">{{ __('Marcar leídos') }}</button>
+                        <x-ui.button size="sm" variant="ghost" wire:click="markAllRead">{{ __('Marcar leídos') }}</x-ui.button>
                     @endif
                 </div>
-                @forelse ($items as $n)
-                    @php($d = $n->data)
-                    <a href="{{ isset($d['activity_id']) ? route('crm.agenda.show', $d['activity_id']) : route('crm.agenda.index') }}"
-                       style="display:block;text-decoration:none;color:inherit;padding:10px 14px;border-bottom:1px solid var(--line);{{ $n->read_at === null ? 'background:#F1F6FC' : '' }}">
-                        <div style="font-size:11px;font-weight:700;color:#1E5AA8;text-transform:uppercase;letter-spacing:.05em">{{ ['reminder' => __('Recordatorio'), 'booking' => __('Nueva reserva'), 'booking_rescheduled' => __('Reserva reprogramada'), 'booking_cancelled' => __('Reserva cancelada')][$d['kind'] ?? ''] ?? __('Actividad asignada') }}</div>
-                        <div style="font-size:12.5px;font-weight:600;margin-top:2px">{{ $d['title'] ?? '' }}</div>
-                        @if (! empty($d['starts_at']))
-                            <div style="font-size:11.5px;color:var(--muted);margin-top:2px">{{ \Illuminate\Support\Carbon::parse($d['starts_at'])->setTimezone($d['timezone'] ?? 'UTC')->format('d/m H:i') }} ({{ $d['timezone'] ?? 'UTC' }})</div>
-                        @endif
-                    </a>
-                @empty
-                    <div style="padding:14px;font-size:12.5px;color:var(--muted)">{{ __('Sin avisos del calendario.') }}</div>
-                @endforelse
+                <ul class="ui-list ui-bell-list">
+                    @forelse ($items as $n)
+                        @php($d = $n->data)
+                        <li>
+                            <a href="{{ isset($d['activity_id']) ? route('crm.agenda.show', $d['activity_id']) : route('crm.agenda.index') }}" @class(['ui-list-item', 'is-unread' => $n->read_at === null])>
+                                <span class="ui-list-main">
+                                    <span class="ui-bell-kind">{{ ['reminder' => __('Recordatorio'), 'booking' => __('Nueva reserva'), 'booking_rescheduled' => __('Reserva reprogramada'), 'booking_cancelled' => __('Reserva cancelada')][$d['kind'] ?? ''] ?? __('Actividad asignada') }}</span>
+                                    <span class="ui-list-title">{{ $d['title'] ?? '' }}</span>
+                                    @if (! empty($d['starts_at']))
+                                        <span class="ui-list-meta">{{ \Illuminate\Support\Carbon::parse($d['starts_at'])->setTimezone($d['timezone'] ?? 'UTC')->format('d/m H:i') }} ({{ $d['timezone'] ?? 'UTC' }})</span>
+                                    @endif
+                                </span>
+                            </a>
+                        </li>
+                    @empty
+                        <li class="ui-list-empty">{{ __('Sin avisos del calendario.') }}</li>
+                    @endforelse
+                </ul>
             </x-slot>
         </x-dropdown>
     @endif

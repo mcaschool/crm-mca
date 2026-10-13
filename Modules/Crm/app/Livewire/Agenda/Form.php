@@ -265,7 +265,7 @@ class Form extends Component
             'advisors' => $canAssign ? app(AgendaDirectory::class)->assignableUsers() : collect([$user]),
             'timezones' => DateTimeZone::listIdentifiers(),
             'check' => $check,
-            'slots' => $slots,
+            'freeSlots' => $slots, // no «slots»: Livewire 4 reserva $slots en la vista y lo sobrescribe
             'results' => $results,
             'pickedContact' => $this->contactId ? Contact::query()->find($this->contactId) : null,
             'pickedLead' => $this->leadId ? Lead::query()->with('program')->find($this->leadId) : null,

@@ -1,94 +1,83 @@
-<div class="panel" style="margin-top:16px">
-    <style>
-        .vr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:0}
-        .vr-box{padding:14px 18px;border-top:1px solid var(--line);min-width:0}
-        .vr-box h3{font-size:14px;font-weight:700;margin:0 0 8px;display:flex;align-items:center;gap:8px;color:var(--ink)}
-        .vr-line{font-size:13px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
-        .vr-line b{color:var(--ink);font-weight:600}
-        .vr-link{font-family:ui-monospace,monospace;font-size:12px;color:var(--ink);overflow-wrap:anywhere}
-        .vr-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-        .vr-warn{font-size:12px;margin-top:6px;padding:8px 10px;border-radius:9px;background:#FBF1DC;color:#8A5A12}
-        .vr-tag{display:inline-flex;align-items:center;font-size:11px;font-weight:600;border-radius:999px;padding:2px 8px;background:#EEF1F5;color:#6B7C93;white-space:nowrap}
-        .vr-tag.on{background:#E3F5EA;color:#1E8E5A}
-        .vr-tag.err{background:#FCECEC;color:#b3261e}
-    </style>
-    <div class="ag-bar">
-        <h2 style="text-transform:none"><x-ui.icon name="video" class="i18" /> {{ __('Salas institucionales') }}</h2>
-    </div>
+<section class="ui-card" aria-labelledby="vr-title">
+    <div class="ui-card-h"><x-ui.icon name="video" class="ui-card-ic" /><h2 id="vr-title">{{ __('Salas institucionales') }}</h2></div>
     @if ($videoNotice !== '')
-        <div class="toast {{ $videoNoticeError ? 'err' : 'ok' }}" role="status" style="margin:12px 18px 0">
-            <x-ui.icon name="{{ $videoNoticeError ? 'alert-triangle' : 'check' }}" class="i15" /> {{ $videoNotice }}
+        <div class="ui-card-p">
+            <div @class(['ui-alert', 'ui-alert--flush', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="status">
+                <x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> {{ $videoNotice }}
+            </div>
         </div>
     @endif
-    <div class="vr-grid">
+    <div class="ui-vr-grid">
         @foreach ($blocks as $provider => $b)
             @php($room = $b['room'])
             @php($isZoom = $provider === 'zoom')
-            <div class="vr-box" wire:key="vr-{{ $provider }}">
-                <h3>{{ $isZoom ? 'Zoom' : 'Google Meet' }}
+            <div class="ui-vr" wire:key="vr-{{ $provider }}">
+                <div class="ui-person-line">
+                    <h3 class="ui-vr-title">{{ $isZoom ? 'Zoom' : 'Google Meet' }}</h3>
                     @if ($room === null)
-                        <span class="vr-tag">{{ __('Sin sala') }}</span>
+                        <x-ui.badge tone="neutral">{{ __('Sin sala') }}</x-ui.badge>
                     @elseif ($room->status === 'active')
-                        <span class="vr-tag on">{{ $isZoom ? __('Reunión activa') : __('Sala activa') }}</span>
+                        <x-ui.badge tone="success" dot>{{ $isZoom ? __('Reunión activa') : __('Sala activa') }}</x-ui.badge>
                     @elseif ($room->status === 'missing')
-                        <span class="vr-tag err">{{ __('No existe en el proveedor') }}</span>
+                        <x-ui.badge tone="danger">{{ __('No existe en el proveedor') }}</x-ui.badge>
                     @else
-                        <span class="vr-tag err">{{ __('Con error') }}</span>
-                    @endif
-                </h3>
-
-                <div class="vr-line">{{ __('Enlace permanente') }}:
-                    @if ($b['link'])
-                        <span class="vr-link">{{ $b['link'] }}</span>
-                        <span class="vr-tag" style="margin-left:4px">{{ $b['inProfile'] ? __('sala institucional') : __('enlace manual') }}</span>
-                    @else
-                        <b>{{ __('sin enlace') }}</b>
+                        <x-ui.badge tone="danger">{{ __('Con error') }}</x-ui.badge>
                     @endif
                 </div>
 
-                @if ($room)
-                    <div class="vr-line">
-                        @if ($isZoom)
-                            {{ __('Permiso para dirigirla') }}:
-                            <b>{{ $room->host_status === 'advisor_host' ? __('Sí: el asesor es el anfitrión') : __('No: el asesor no es el anfitrión') }}</b>
+                <dl class="ui-meta">
+                    <dt>{{ __('Enlace permanente') }}</dt>
+                    <dd>
+                        @if ($b['link'])
+                            <span class="ui-mono ui-break">{{ $b['link'] }}</span>
+                            <x-ui.badge :tone="$b['inProfile'] ? 'blue' : 'neutral'">{{ $b['inProfile'] ? __('sala institucional') : __('enlace manual') }}</x-ui.badge>
                         @else
-                            {{ __('Asignación') }}:
-                            <b>{{ $room->host_status === 'assigned' ? __('Coanfitrión asignado') : __('Sin coanfitrión') }}</b>
+                            <span class="t-nil">{{ __('sin enlace') }}</span>
                         @endif
-                    </div>
-                    @if ($room->host_note && ! $room->advisorCanHost())
-                        <div class="vr-warn">{{ $room->host_note }}</div>
+                    </dd>
+                    @if ($room)
+                        @if ($isZoom)
+                            <dt>{{ __('Permiso para dirigirla') }}</dt>
+                            <dd>{{ $room->host_status === 'advisor_host' ? __('Sí: el asesor es el anfitrión') : __('No: el asesor no es el anfitrión') }}</dd>
+                        @else
+                            <dt>{{ __('Asignación') }}</dt>
+                            <dd>{{ $room->host_status === 'assigned' ? __('Coanfitrión asignado') : __('Sin coanfitrión') }}</dd>
+                        @endif
+                        @if ($room->last_checked_at)
+                            <dt>{{ __('Revisada') }}</dt><dd>{{ $room->last_checked_at->diffForHumans() }}</dd>
+                        @endif
                     @endif
-                    @if ($room->last_checked_at)
-                        <div class="vr-line" style="font-size:12px">{{ __('Revisada') }} {{ $room->last_checked_at->diffForHumans() }}</div>
-                    @endif
-                    @if ($b['manual'])
-                        <div class="vr-warn">{{ __('El perfil usa un enlace manual. Se conserva hasta que la administración lo reemplace por la sala institucional.') }}</div>
-                    @endif
+                </dl>
+
+                @if ($room && $room->host_note && ! $room->advisorCanHost())
+                    <div class="ui-callout ui-callout--sm ui-tone--warning"><x-ui.icon name="alert-triangle" /> <span>{{ $room->host_note }}</span></div>
+                @endif
+                @if ($room && $b['manual'])
+                    <div class="ui-callout ui-callout--sm ui-tone--warning"><x-ui.icon name="alert-triangle" /> <span>{{ __('El perfil usa un enlace manual. Se conserva hasta que la administración lo reemplace por la sala institucional.') }}</span></div>
                 @endif
 
-                <div class="vr-btns">
+                <div class="ui-actions-row">
                     @if ($b['link'])
-                        <a href="{{ $b['link'] }}" target="_blank" rel="noopener noreferrer" class="ghost solid"><x-ui.icon name="external-link" class="i15" /> {{ $isZoom ? __('Abrir Zoom') : __('Abrir Google Meet') }}</a>
+                        <a href="{{ $b['link'] }}" target="_blank" rel="noopener noreferrer" class="ui-btn ui-btn--secondary ui-btn--sm"><x-ui.icon name="external-link" /> {{ $isZoom ? __('Abrir Zoom') : __('Abrir Google Meet') }}</a>
                     @endif
                     @if ($isAdmin && $b['connected'])
                         @if ($room === null || $room->status !== 'active')
-                            <button type="button" class="ghost" wire:click="generateFor('{{ $provider }}')" wire:loading.attr="disabled">{{ $isZoom ? __('Generar reunión de Zoom') : __('Generar sala de Google Meet') }}</button>
+                            <x-ui.button size="sm" variant="primary" wire:click="generateFor('{{ $provider }}')" wire:loading.attr="disabled">{{ $isZoom ? __('Generar reunión de Zoom') : __('Generar sala de Google Meet') }}</x-ui.button>
                         @else
-                            <button type="button" class="ghost" wire:click="checkRoom({{ $room->id }})" wire:loading.attr="disabled">{{ __('Revisar') }}</button>
+                            <x-ui.button size="sm" icon="refresh" wire:click="checkRoom({{ $room->id }})" wire:loading.attr="disabled">{{ __('Revisar') }}</x-ui.button>
                             @if ($b['manual'])
-                                <button type="button" class="ghost" wire:click="assignRoom({{ $room->id }})" wire:confirm="{{ __('¿Reemplazar el enlace manual del perfil por la sala institucional? Las actividades ya creadas conservan su enlace.') }}">{{ __('Usar la sala en el perfil') }}</button>
+                                <x-ui.button size="sm" wire:click="assignRoom({{ $room->id }})" wire:confirm="{{ __('¿Reemplazar el enlace manual del perfil por la sala institucional? Las actividades ya creadas conservan su enlace.') }}">{{ __('Usar la sala en el perfil') }}</x-ui.button>
                             @endif
                             @if ($b['pending'] > 0)
-                                <button type="button" class="ghost" wire:click="applyRoom({{ $room->id }})" wire:confirm="{{ __('¿Poner esta sala en las actividades futuras que aún no tienen enlace? Se avisará a sus invitados.') }}">{{ __('Aplicar a actividades sin enlace (:n)', ['n' => $b['pending']]) }}</button>
+                                <x-ui.button size="sm" wire:click="applyRoom({{ $room->id }})" wire:confirm="{{ __('¿Poner esta sala en las actividades futuras que aún no tienen enlace? Se avisará a sus invitados.') }}">{{ __('Aplicar a actividades sin enlace (:n)', ['n' => $b['pending']]) }}</x-ui.button>
                             @endif
-                            <button type="button" class="ghost" wire:click="generateFor('{{ $provider }}', true)" wire:confirm="{{ __('¿Regenerar la sala? Las actividades ya creadas conservan el enlace anterior.') }}" wire:loading.attr="disabled">{{ __('Regenerar') }}</button>
+                            <x-ui.button size="sm" variant="ghost" wire:click="generateFor('{{ $provider }}', true)" wire:confirm="{{ __('¿Regenerar la sala? Las actividades ya creadas conservan el enlace anterior.') }}" wire:loading.attr="disabled">{{ __('Regenerar') }}</x-ui.button>
                         @endif
                     @elseif ($isAdmin)
-                        <a href="{{ route('integrations.video') }}" class="ghost">{{ __('Conectar la cuenta institucional') }}</a>
+                        <x-ui.button size="sm" variant="ghost" icon="plug" :href="route('integrations.video')">{{ __('Conectar la cuenta institucional') }}</x-ui.button>
                     @endif
                 </div>
             </div>
         @endforeach
     </div>
-</div>
+</section>
