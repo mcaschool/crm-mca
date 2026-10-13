@@ -63,14 +63,15 @@
 @media(max-width:640px){
   .mca-home{gap:12px}
   .mca-home .home-kpis{gap:10px}
-  /* indicador compacto, dos por fila: icono + etiqueta arriba, cifra debajo */
-  .mca-home .ui-kpi{padding:12px 12px 14px;gap:8px}
-  .mca-home .ui-kpi-top{align-items:flex-start;gap:8px}
-  .mca-home .ui-kpi-ic{width:26px;height:26px;border-radius:7px}
+  /* indicador compacto, dos por fila: cifra con su icono a la derecha y la etiqueta en
+     una línea debajo (toda la tarjeta es el enlace, así que la flecha sobra) */
+  .mca-home .ui-kpi{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"value icon" "label label";align-items:center;gap:6px 8px;padding:12px 14px}
+  .mca-home .ui-kpi-top{display:contents}
+  .mca-home .ui-kpi-ic{grid-area:icon;width:26px;height:26px;border-radius:7px}
   .mca-home .ui-kpi-ic .ic{width:15px;height:15px}
-  .mca-home .ui-kpi-label{font-size:12.5px;padding-top:4px}
-  .mca-home .ui-kpi-go{margin-top:5px}
-  .mca-home .ui-kpi-value{font-size:24px}
+  .mca-home .ui-kpi-label{grid-area:label;font-size:12.5px}
+  .mca-home .ui-kpi-go{display:none}
+  .mca-home .ui-kpi-value{grid-area:value;font-size:24px}
   .mca-home .ui-card-h{padding:10px 14px}
   .mca-home .ui-card-h .ui-btn--sm{padding:0 10px}
   .mca-home .ag-row{flex-wrap:wrap;gap:10px}
