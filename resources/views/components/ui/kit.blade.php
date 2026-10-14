@@ -984,7 +984,7 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
   .ui-inbox-auto{padding-left:0;gap:8px}
   .ui-inbox-agent{display:none}
   .ui-inbox-auto > .ui-badge{flex:0 0 auto;max-width:100%;white-space:normal;height:auto;min-height:24px;padding-top:3px;padding-bottom:3px;line-height:1.25}
-  .ui-inbox-auto > .ui-btn{--h:36px;flex:1 1 150px}
+  .ui-inbox-auto > .ui-btn{flex:1 1 150px;--h:36px}
   .ui-inbox-note{font-size:12px;gap:2px 10px}
   .ui-inbox-note-when{display:none}
   .ui-inbox-msgs{padding:12px 12px 14px}
