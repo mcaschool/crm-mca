@@ -344,22 +344,22 @@
                     <strong>{{ $selected->contact_name ?: __('Contacto sin nombre') }}</strong>
                     <span class="ui-inbox-via"><span wire:ignore wire:key="ico-info-{{ $selected->provider }}" class="ui-inbox-ico">@include('social::partials.provider-icon', ['provider' => $selected->provider, 'size' => 14])</span> {{ $selected->channel?->providerLabel() }}</span>
                 </div>
-                <dl class="ui-meta ui-meta--spaced ui-inbox-info-dl">
-                    <dt>{{ __('Cuenta') }}</dt><dd>{{ $selected->channel?->display_name ?? '—' }}</dd>
+                <dl class="ui-inbox-info-dl">
+                    <div><dt>{{ __('Cuenta') }}</dt><dd>{{ $selected->channel?->display_name ?? '—' }}</dd></div>
                     @if ($selected->contact_external_id)
-                        <dt>{{ $selected->provider === 'whatsapp' ? __('Número') : __('Identificador') }}</dt><dd class="ui-break">{{ $selected->contact_external_id }}</dd>
+                        <div><dt>{{ $selected->provider === 'whatsapp' ? __('Número') : __('Identificador') }}</dt><dd class="ui-break">{{ $selected->contact_external_id }}</dd></div>
                     @endif
                     @if ($hasAdvisor)
-                        <dt>{{ __('Asesor inteligente') }}</dt><dd>{{ $autoChannel->advisorBot?->assistant_name ?? __('Asesor inteligente') }}{{ $autoChannel->advisor_enabled ? '' : ' · '.__('desactivado en esta cuenta') }}</dd>
-                        <dt>{{ __('Atención') }}</dt><dd>{{ $selected->automationLabel() }}</dd>
+                        <div><dt>{{ __('Asesor inteligente') }}</dt><dd>{{ $autoChannel->advisorBot?->assistant_name ?? __('Asesor inteligente') }}{{ $autoChannel->advisor_enabled ? '' : ' · '.__('desactivado en esta cuenta') }}</dd></div>
+                        <div><dt>{{ __('Atención') }}</dt><dd>{{ $selected->automationLabel() }}</dd></div>
                     @endif
-                    <dt>{{ __('Asignada a') }}</dt><dd>{{ $selected->assignedUser?->name ?? __('Sin asignar') }}</dd>
-                    <dt>{{ __('Mensajes') }}</dt><dd>{{ $messages->count() }}@if ($selected->unread_count > 0) · {{ trans_choice(':n sin leer|:n sin leer', $selected->unread_count, ['n' => $selected->unread_count]) }}@endif</dd>
+                    <div><dt>{{ __('Asignada a') }}</dt><dd>{{ $selected->assignedUser?->name ?? __('Sin asignar') }}</dd></div>
+                    <div><dt>{{ __('Mensajes') }}</dt><dd>{{ $messages->count() }}@if ($selected->unread_count > 0) · {{ trans_choice(':n sin leer|:n sin leer', $selected->unread_count, ['n' => $selected->unread_count]) }}@endif</dd></div>
                     @if ($selected->provider === 'whatsapp' && $canReply)
-                        <dt>{{ __('Ventana de 24 h') }}</dt><dd><x-ui.badge :tone="$waWindowOpen ? 'success' : 'warning'" dot>{{ $waWindowOpen ? __('Abierta') : __('Cerrada') }}</x-ui.badge></dd>
+                        <div><dt>{{ __('Ventana de 24 h') }}</dt><dd><x-ui.badge :tone="$waWindowOpen ? 'success' : 'warning'" dot>{{ $waWindowOpen ? __('Abierta') : __('Cerrada') }}</x-ui.badge></dd></div>
                     @endif
-                    <dt>{{ __('Primer contacto') }}</dt><dd>{{ optional($selected->created_at)->format('d/m/Y H:i') }}</dd>
-                    <dt>{{ __('Último mensaje') }}</dt><dd>{{ optional($selected->last_message_at)->format('d/m/Y H:i') ?? '—' }}</dd>
+                    <div><dt>{{ __('Primer contacto') }}</dt><dd>{{ optional($selected->created_at)->format('d/m/Y H:i') }}</dd></div>
+                    <div><dt>{{ __('Último mensaje') }}</dt><dd>{{ optional($selected->last_message_at)->format('d/m/Y H:i') ?? '—' }}</dd></div>
                 </dl>
             </aside>
         @endif

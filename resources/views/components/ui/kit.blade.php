@@ -848,7 +848,7 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
    Sin franjas laterales: la conversación activa se marca con fondo; los colores solo comunican
    estados reales (no leídos, espera de una persona, error, envío fallido). */
 .mca-canvas-body:has(.ui-inbox){padding:18px var(--mca-gutter)}
-.ui-inbox{--list:340px;--info:300px;display:grid;grid-template-columns:var(--list) minmax(0,1fr);gap:16px;height:calc(100vh - 96px);height:calc(100dvh - 96px);min-height:480px}
+.ui-inbox{--list:340px;--info:320px;display:grid;grid-template-columns:var(--list) minmax(0,1fr);gap:16px;height:calc(100vh - 96px);height:calc(100dvh - 96px);min-height:480px}
 .ui-inbox > .ui-card{display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .ui-inbox-list-h{padding:16px 18px 12px;border-bottom:1px solid var(--mca-line)}
 .ui-inbox-list-h h1{margin:0;display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700;letter-spacing:-.01em;color:var(--mca-text)}
@@ -947,7 +947,11 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
 .ui-inbox-info-h h2{margin:0;font-size:14px;font-weight:600;color:var(--mca-text)}
 .ui-inbox-info-id{display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 18px 14px;text-align:center}
 .ui-inbox-info-id strong{font-size:15px;font-weight:700;color:var(--mca-text);overflow-wrap:anywhere}
-.ui-inbox-info-dl{padding:14px 18px 18px;border-top:1px solid var(--mca-line);overflow-y:auto}
+/* etiqueta sobre valor: los datos largos (nombres, identificadores, fechas) se leen completos */
+.ui-inbox-info-dl{display:flex;flex-direction:column;gap:12px;padding:16px 18px 18px;border-top:1px solid var(--mca-line);overflow-y:auto}
+.ui-inbox-info-dl > div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ui-inbox-info-dl dt{font-size:12px;font-weight:500;color:var(--mca-text-3)}
+.ui-inbox-info-dl dd{margin:0;font-size:13.5px;color:var(--mca-text);overflow-wrap:anywhere}
 /* plantillas de WhatsApp */
 .ui-modal--sm{--w:580px}
 .ui-tpl-pick{display:flex;flex-direction:column;align-items:stretch;gap:8px;width:100%;padding:12px 14px;border:0;border-radius:var(--mca-r-ctl);background:var(--mca-surface);
@@ -960,7 +964,7 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
   .ui-inbox.is-info:has(> .ui-inbox-info){grid-template-columns:var(--list) minmax(0,1fr) var(--info)}
   .ui-inbox.is-info > .ui-inbox-info{display:flex}
 }
-@media(min-width:1600px){.ui-inbox{--list:360px;--info:320px}}
+@media(min-width:1600px){.ui-inbox{--list:360px;--info:340px}}
 @media(max-width:1279px){
   .ui-inbox{--list:300px}
   .ui-inbox.is-info:has(> .ui-inbox-info) > .ui-inbox-scrim{display:block;position:fixed;inset:0;z-index:59;background:rgba(19,37,61,.32)}
@@ -976,9 +980,11 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
   .ui-inbox-who{flex:1 1 0}
   .ui-inbox-send{width:var(--h);padding:0}
   .ui-inbox-send .ui-hide-sm{display:none}
-  .ui-inbox-auto{padding-left:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  /* estado del asesor y acciones: en una línea si caben; si no, el estado arriba y las acciones a todo el ancho */
+  .ui-inbox-auto{padding-left:0;gap:8px}
   .ui-inbox-agent{display:none}
-  .ui-inbox-auto > *{flex:0 0 auto}
+  .ui-inbox-auto > .ui-badge{flex:0 0 auto;max-width:100%;white-space:normal;height:auto;min-height:24px;padding-top:3px;padding-bottom:3px;line-height:1.25}
+  .ui-inbox-auto > .ui-btn{--h:36px;flex:1 1 150px}
   .ui-inbox-note{font-size:12px;gap:2px 10px}
   .ui-inbox-note-when{display:none}
   .ui-inbox-msgs{padding:12px 12px 14px}
