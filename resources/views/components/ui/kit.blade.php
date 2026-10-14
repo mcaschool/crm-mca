@@ -1544,4 +1544,8 @@ details.ui-disclosure:not(.ui-card)[open] > summary{border-bottom:0}
   .ui-chip{height:34px}
 }
 
+/* desplegables anchos de la barra superior (campanas): en móvil, a lo ancho de la pantalla para no salirse por la izquierda */
+@media(max-width:640px){
+  [data-dd-wide]{position:fixed !important;top:60px !important;left:12px !important;right:12px !important;width:auto !important;max-width:none !important}
+}
 </style>
