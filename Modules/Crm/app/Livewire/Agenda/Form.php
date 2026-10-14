@@ -114,7 +114,8 @@ class Form extends Component
         $this->authorize('create', Activity::class);
         $this->assignedTo = $user->id;
         $profile = MeetingProfile::forUser($user->id);
-        $this->timezone = $profile->timezone;
+        // Zona por defecto = la que se usa para mostrarle el Calendario (perfil → institución…).
+        $this->timezone = app(AgendaDirectory::class)->timezoneFor((int) $user->id);
         $this->medium = $profile->default_medium->value;
         $this->duration = $profile->default_duration_minutes;
         $this->reminders = (array) config('crm.agenda.default_reminders', [60]);
@@ -315,7 +316,7 @@ class Form extends Component
             return;
         }
         $profile = MeetingProfile::forUser($this->assignedTo);
-        $this->timezone = $profile->timezone;
+        $this->timezone = app(AgendaDirectory::class)->timezoneFor((int) $this->assignedTo);
         $this->medium = $profile->default_medium->value;
         $this->duration = $profile->default_duration_minutes;
     }

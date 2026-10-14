@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Support\Collection;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Crm\Models\MeetingProfile;
+use Modules\Crm\Support\UserTimezone;
 
 /**
  * Usuarios de la institución activa que pueden tener agenda (operativos, no de solo
@@ -30,8 +31,19 @@ class AgendaDirectory
             ->values();
     }
 
+    /**
+     * Zona de presentación de un usuario: la MISMA regla que el resto del panel (UserTimezone:
+     * perfil de reuniones → institución → agenda → aplicación). Antes, sin perfil, el Calendario
+     * caía en la zona por defecto de la agenda (UTC) mientras la Bandeja y las fichas usaban la de
+     * la institución, y una misma persona veía dos horas distintas.
+     */
     public function timezoneFor(int $userId): string
     {
-        return MeetingProfile::forUser($userId)->timezone ?: 'UTC';
+        $profile = MeetingProfile::query()->where('user_id', $userId)->value('timezone');
+        if (UserTimezone::isValid($profile)) {
+            return $profile;
+        }
+
+        return UserTimezone::for(User::query()->find($userId));
     }
 }
