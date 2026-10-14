@@ -127,7 +127,7 @@ class Configure extends Component
             }
         }
 
-        session()->flash('status', __('Integracion guardada.'));
+        session()->flash('status', __('Integración guardada.'));
 
         return redirect()->route('integrations.index');
     }

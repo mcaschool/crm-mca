@@ -70,7 +70,7 @@ class Settings extends Component
         $institution->save();
 
         $this->logo = null;
-        session()->flash('status', 'Logo institucional actualizado.');
+        session()->flash('status', __('Logo institucional actualizado.'));
     }
 
     /** Guarda el tamaño (alto en px) del logo, acotado al rango sano. */
@@ -86,7 +86,7 @@ class Settings extends Component
         $institution->logo_size = $this->logoSize;
         $institution->save();
 
-        session()->flash('status', 'Tamaño del logo actualizado.');
+        session()->flash('status', __('Tamaño del logo actualizado.'));
     }
 
     public function removeLogo(): void
@@ -100,7 +100,7 @@ class Settings extends Component
             $institution->save();
         }
 
-        session()->flash('status', 'Logo eliminado; se usa la marca por defecto.');
+        session()->flash('status', __('Logo eliminado; se usa la marca por defecto.'));
     }
 
     private function institution(): Institution

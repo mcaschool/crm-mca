@@ -54,7 +54,7 @@ class Manage extends Component
             $category->save();
         }
 
-        session()->flash('status', __('Categorias actualizadas.'));
+        session()->flash('status', __('Categorías actualizadas.'));
     }
 
     public function addCategory(): void
@@ -72,7 +72,7 @@ class Manage extends Component
 
         $this->newNameEs = '';
         $this->loadRows();
-        session()->flash('status', __('Categoria creada.'));
+        session()->flash('status', __('Categoría creada.'));
     }
 
     public function render(): View

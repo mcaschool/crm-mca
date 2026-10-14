@@ -386,7 +386,7 @@ class Show extends Component
         if ($message->status === 'sent') {
             $this->composeOpen = false;
             $this->reset(['emailSubject', 'emailBody', 'emailAttachments', 'inlineImages', 'inlineCids', 'inlineUpload', 'templateInline']);
-            session()->flash('status', 'Correo enviado a '.$contact->email.' como '.$sender->from_address.'.');
+            session()->flash('status', __('Correo enviado a :to como :from.', ['to' => $contact->email, 'from' => $sender->from_address]));
         } else {
             // El intento fallido queda en el historial; se avisa sin romper la ficha.
             $this->addError('emailBody', __('No se pudo enviar (revisa el SMTP del remitente). El intento quedó registrado en el historial.'));

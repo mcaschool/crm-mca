@@ -119,7 +119,7 @@ class Form extends Component
 
         // No permitir desactivarse a uno mismo (evita quedarse sin acceso).
         if ($editing && $target->getKey() === auth()->id() && $this->status === 'inactive') {
-            $this->addError('status', 'No puedes desactivar tu propia cuenta.');
+            $this->addError('status', __('No puedes desactivar tu propia cuenta.'));
 
             return null;
         }
@@ -160,7 +160,7 @@ class Form extends Component
                 $audit->log('user.email_code_changed', $target, ['to' => $this->canEmailCode ? 'on' : 'off']);
             }
 
-            session()->flash('status', 'Usuario actualizado.');
+            session()->flash('status', __('Usuario actualizado.'));
 
             return null;
         }
@@ -171,7 +171,7 @@ class Form extends Component
         // Enlace de invitacion (token de restablecimiento): el usuario fija su clave.
         $link = $this->buildInvitationLink($target);
         $audit->log('user.invited', $target);
-        session()->flash('status', 'Usuario creado. Comparte el enlace de acceso con la persona.');
+        session()->flash('status', __('Usuario creado. Comparte el enlace de acceso con la persona.'));
         session()->flash('invitation_link', $link);
 
         return redirect()->route('users.edit', $target->getKey());
@@ -191,7 +191,7 @@ class Form extends Component
 
         $avatars->store($target, $this->avatar);
         $this->avatar = null;
-        session()->flash('status', 'Foto de perfil actualizada.');
+        session()->flash('status', __('Foto de perfil actualizada.'));
     }
 
     public function removeAvatar(UserAvatarService $avatars): void
@@ -201,7 +201,7 @@ class Form extends Component
         $this->authorize('update', $target);
 
         $avatars->remove($target);
-        session()->flash('status', 'Foto de perfil eliminada.');
+        session()->flash('status', __('Foto de perfil eliminada.'));
     }
 
     /** Regenera un enlace de acceso para un usuario existente (reenviar invitacion). */
@@ -213,7 +213,7 @@ class Form extends Component
 
         $this->invitationLink = $this->buildInvitationLink($target);
         $audit->log('user.invitation_resent', $target);
-        session()->flash('status', 'Nuevo enlace de acceso generado.');
+        session()->flash('status', __('Nuevo enlace de acceso generado.'));
     }
 
     private function buildInvitationLink(User $user): string

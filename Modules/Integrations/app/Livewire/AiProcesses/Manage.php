@@ -140,7 +140,7 @@ class Manage extends Component
             );
         }
 
-        session()->flash('status', __('Configuracion de IA guardada.'));
+        session()->flash('status', __('Configuración de IA guardada.'));
     }
 
     /** @return array<int, string> */

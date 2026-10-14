@@ -38,22 +38,24 @@ final class PostVideoService
     public function store(UploadedFile $file): array
     {
         if (! $file->isValid()) {
-            throw new RuntimeException('El archivo de video no se subió correctamente. Inténtalo de nuevo.');
+            throw new RuntimeException(__('El archivo de video no se subió correctamente. Inténtalo de nuevo.'));
         }
 
         $mime = (string) $file->getMimeType(); // finfo sobre el contenido real, no la extensión
         if (! in_array($mime, self::ACCEPTED_MIMES, true)) {
-            throw new RuntimeException('El video debe ser MP4. El archivo subido es '.($mime !== '' ? $mime : 'de tipo desconocido').'.');
+            throw new RuntimeException($mime !== ''
+                ? __('El video debe ser MP4. El archivo subido es :mime.', ['mime' => $mime])
+                : __('El video debe ser MP4. El archivo subido es de tipo desconocido.'));
         }
 
         if ((int) $file->getSize() > self::MAX_BYTES) {
-            throw new RuntimeException('El video supera el tamaño máximo permitido (250 MB).');
+            throw new RuntimeException(__('El video supera el tamaño máximo permitido (250 MB).'));
         }
 
         // putFileAs hace copia por streaming: el video nunca se carga entero en memoria.
         $path = Storage::disk('public')->putFileAs('social-posts', $file, Str::uuid()->toString().'.mp4');
         if ($path === false) {
-            throw new RuntimeException('No se pudo guardar el video en el servidor.');
+            throw new RuntimeException(__('No se pudo guardar el video en el servidor.'));
         }
 
         // Integridad: el archivo persistido debe existir y medir lo mismo que el subido.
@@ -63,7 +65,7 @@ final class PostVideoService
         if ($stored !== $expected) {
             Storage::disk('public')->delete($path);
 
-            throw new RuntimeException('El video no se guardó completo en el servidor. Inténtalo de nuevo.');
+            throw new RuntimeException(__('El video no se guardó completo en el servidor. Inténtalo de nuevo.'));
         }
 
         return [

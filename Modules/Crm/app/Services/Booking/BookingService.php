@@ -58,7 +58,7 @@ class BookingService
     {
         $advisor = User::query()->find($profile->user_id);
         if (! $this->publisher->advisorCanReceive($advisor, $profile) || ! $this->publisher->isBookable($type, $profile)) {
-            throw new SlotUnavailableException('Reservas no disponibles.');
+            throw new SlotUnavailableException(__('Reservas no disponibles.'));
         }
         $start = Carbon::parse($input['start'])->utc()->startOfMinute();
         $end = $start->copy()->addMinutes($type->duration_minutes);
@@ -75,7 +75,7 @@ class BookingService
             }
             $roomHash = $this->roomHashFor($type, $profile);
             if (! $this->slots->offers($profile->user_id, $start, $type->duration_minutes, $roomHash)) {
-                throw new SlotUnavailableException('Horario no disponible.');
+                throw new SlotUnavailableException(__('Horario no disponible.'));
             }
 
             try {
@@ -128,7 +128,7 @@ class BookingService
                     return ['booking' => $booking, 'token' => $token, 'created' => true];
                 });
             } catch (ScheduleConflictException) {
-                throw new SlotUnavailableException('Horario no disponible.');
+                throw new SlotUnavailableException(__('Horario no disponible.'));
             } catch (UniqueConstraintViolationException $e) {
                 $existing = $this->bookingByKey($key);
                 if ($existing === null) {
@@ -168,7 +168,7 @@ class BookingService
     public function rescheduleByVisitor(Booking $booking, string $startIso): void
     {
         if (! $booking->isManageable() || $booking->meetingType === null) {
-            throw new SlotUnavailableException('Reserva no gestionable.');
+            throw new SlotUnavailableException(__('Reserva no gestionable.'));
         }
         $activity = $booking->activity;
         $type = $booking->meetingType;
@@ -179,12 +179,12 @@ class BookingService
 
         Cache::lock('crm-booking:'.$activity->institution_id, 20)->block(10, function () use ($activity, $type, $profile, $advisor, $start, $end): void {
             if (! $this->slots->offers($activity->assigned_to_user_id, $start, $activity->durationMinutes(), $activity->meeting_room_hash ?? $this->roomHashFor($type, $profile), $activity->id)) {
-                throw new SlotUnavailableException('Horario no disponible.');
+                throw new SlotUnavailableException(__('Horario no disponible.'));
             }
             try {
                 $this->activities->reschedule($activity, $start, $end, $advisor ?? new User, false, null, __('Reprogramada por el visitante desde su enlace de reserva.'));
             } catch (ScheduleConflictException) {
-                throw new SlotUnavailableException('Horario no disponible.');
+                throw new SlotUnavailableException(__('Horario no disponible.'));
             }
         });
         $advisor?->notify(AgendaNotification::for('booking_rescheduled', $activity->fresh() ?? $activity));

@@ -53,20 +53,20 @@ class MiPerfil extends Component
 
         $avatars->store(auth()->user(), $this->avatar);
         $this->avatar = null;
-        session()->flash('status', 'Foto de perfil actualizada.');
+        session()->flash('status', __('Foto de perfil actualizada.'));
     }
 
     public function removeAvatar(UserAvatarService $avatars): void
     {
         $avatars->remove(auth()->user());
-        session()->flash('status', 'Foto de perfil eliminada.');
+        session()->flash('status', __('Foto de perfil eliminada.'));
     }
 
     public function updatePassword(AuditService $audit): void
     {
         $this->validate([
             'password' => ['required', 'confirmed', Password::defaults()],
-        ], [], ['password' => 'nueva contraseña']);
+        ], [], ['password' => __('nueva contraseña')]);
 
         $user = auth()->user();
         $user->password = Hash::make($this->password);
@@ -76,7 +76,7 @@ class MiPerfil extends Component
         $audit->log('account.password_changed', $user);
 
         $this->reset(['password', 'password_confirmation']);
-        session()->flash('status', 'Contraseña actualizada.');
+        session()->flash('status', __('Contraseña actualizada.'));
     }
 
     /** Paso 1: genera secreto + códigos de recuperación y muestra el QR (sin confirmar). */
@@ -118,7 +118,7 @@ class MiPerfil extends Component
 
         $this->recoveryCodesShown = $user->two_factor_recovery_codes ?? [];
         $this->confirmCode = '';
-        session()->flash('status', 'Verificación en dos pasos activada.');
+        session()->flash('status', __('Verificación en dos pasos activada.'));
     }
 
     /** Regenera los códigos de recuperación (los muestra una vez). */
@@ -133,7 +133,7 @@ class MiPerfil extends Component
         $user->save();
 
         $this->recoveryCodesShown = $user->two_factor_recovery_codes ?? [];
-        session()->flash('status', 'Nuevos códigos de recuperación generados.');
+        session()->flash('status', __('Nuevos códigos de recuperación generados.'));
     }
 
     /** Desactiva el 2FA (la política obligatoria forzará a reactivarlo en la próxima página). */
@@ -148,7 +148,7 @@ class MiPerfil extends Component
 
         $this->recoveryCodesShown = [];
         $this->confirmCode = '';
-        session()->flash('status', 'Verificación en dos pasos desactivada.');
+        session()->flash('status', __('Verificación en dos pasos desactivada.'));
     }
 
     public function dismissRecoveryCodes(): void

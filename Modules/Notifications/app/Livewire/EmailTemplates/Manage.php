@@ -171,7 +171,7 @@ class Manage extends Component
         // El cuerpo debe tener contenido real (texto o alguna imagen), no solo etiquetas vacías.
         $clean = $sanitizer->sanitize($this->body);
         if (trim(strip_tags($clean, '<img>')) === '' && ! str_contains($clean, '<img')) {
-            $this->addError('body', 'Escribe el contenido de la plantilla.');
+            $this->addError('body', __('Escribe el contenido de la plantilla.'));
 
             return;
         }
@@ -205,7 +205,7 @@ class Manage extends Component
 
         $this->showForm = false;
         $this->resetForm();
-        session()->flash('status', 'Plantilla guardada.');
+        session()->flash('status', __('Plantilla guardada.'));
     }
 
     public function delete(int $id): void
@@ -213,7 +213,7 @@ class Manage extends Component
         $template = EmailTemplate::query()->findOrFail($id);
         $this->authorize('delete', $template);
         $template->delete();  // las imágenes caen por FK cascade; el archivo queda inerte en disco privado
-        session()->flash('status', 'Plantilla eliminada.');
+        session()->flash('status', __('Plantilla eliminada.'));
     }
 
     private function resetForm(): void

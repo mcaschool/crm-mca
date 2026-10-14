@@ -1,8 +1,8 @@
 <div class="mca-page">
-    <x-ui.page-header :title="__('Configurar').': '.$meta['label']" :subtitle="__('Las credenciales se guardan cifradas. Una vez guardadas no se vuelven a mostrar: se enmascaran y solo pueden reemplazarse.')" :back="route('integrations.index')" :back-label="__('Volver a integraciones')" />
+    <x-ui.page-header :title="__('Configurar').': '.__($meta['label'])" :subtitle="__('Las credenciales se guardan cifradas. Una vez guardadas no se vuelven a mostrar: se enmascaran y solo pueden reemplazarse.')" :back="route('integrations.index')" :back-label="__('Volver a integraciones')" />
 
     <form class="ui-card ui-narrow" wire:submit="save" novalidate>
-        <div class="ui-card-h"><x-ui.icon name="plug" class="ui-card-ic" /><h2>{{ $meta['label'] }}</h2>
+        <div class="ui-card-h"><x-ui.icon name="plug" class="ui-card-ic" /><h2>{{ __($meta['label']) }}</h2>
             <span class="sp"></span>
             <span class="ui-card-sub"><x-ui.icon name="lock" class="ic" /> {{ __('Credenciales cifradas') }}</span>
         </div>

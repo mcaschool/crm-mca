@@ -31,12 +31,12 @@ final class PostImageService
     {
         $info = @getimagesizefromstring($binary);
         if ($info === false) {
-            throw new RuntimeException('El archivo no es una imagen válida.');
+            throw new RuntimeException(__('El archivo no es una imagen válida.'));
         }
 
         $ext = self::EXTENSIONS[$info['mime']] ?? null;
         if ($ext === null) {
-            throw new RuntimeException('Formato de imagen no soportado: usa JPG/JPEG o PNG.');
+            throw new RuntimeException(__('Formato de imagen no soportado: usa JPG/JPEG o PNG.'));
         }
 
         $path = 'social-posts/'.Str::uuid()->toString().'.'.$ext;

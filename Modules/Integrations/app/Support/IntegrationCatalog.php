@@ -46,7 +46,7 @@ final class IntegrationCatalog
                     ['key' => 'host', 'label' => 'Host', 'secret' => false, 'required' => true, 'type' => 'text'],
                     ['key' => 'port', 'label' => 'Puerto', 'secret' => false, 'required' => true, 'type' => 'number'],
                     ['key' => 'username', 'label' => 'Usuario', 'secret' => false, 'required' => true, 'type' => 'text'],
-                    ['key' => 'password', 'label' => 'Contrasena', 'secret' => true, 'required' => true, 'type' => 'password'],
+                    ['key' => 'password', 'label' => 'Contraseña', 'secret' => true, 'required' => true, 'type' => 'password'],
                     ['key' => 'encryption', 'label' => 'Cifrado', 'secret' => false, 'required' => false, 'type' => 'select', 'options' => ['tls', 'ssl', 'none']],
                 ],
             ],

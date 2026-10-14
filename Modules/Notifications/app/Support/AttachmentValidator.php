@@ -39,16 +39,16 @@ class AttachmentValidator
             $total += $size;
 
             if ($size > $cfg['max_file_bytes']) {
-                $errors[] = sprintf('"%s" supera el máximo de %s por archivo.', $name, $this->human($cfg['max_file_bytes']));
+                $errors[] = __('«:name» supera el máximo de :max por archivo.', ['name' => $name, 'max' => $this->human($cfg['max_file_bytes'])]);
             }
 
             if (! in_array($ext, $cfg['allowed_extensions'], true) || ! in_array($mime, $cfg['allowed_mimes'], true)) {
-                $errors[] = sprintf('"%s" no es un tipo de archivo permitido.', $name);
+                $errors[] = __('«:name» no es un tipo de archivo permitido.', ['name' => $name]);
             }
         }
 
         if ($total > $cfg['max_total_bytes']) {
-            $errors[] = sprintf('El total de adjuntos supera el máximo de %s.', $this->human($cfg['max_total_bytes']));
+            $errors[] = __('El total de adjuntos supera el máximo de :max.', ['max' => $this->human($cfg['max_total_bytes'])]);
         }
 
         return array_values(array_unique($errors));
@@ -66,11 +66,11 @@ class AttachmentValidator
 
         $mime = (string) $file->getMimeType();
         if (! in_array($mime, $imageMimes, true)) {
-            return 'Solo se permiten imágenes (JPG, PNG, GIF o WebP).';
+            return __('Solo se permiten imágenes (JPG, PNG, GIF o WebP).');
         }
 
         if ((int) $file->getSize() > $cfg['max_file_bytes']) {
-            return 'La imagen supera el máximo de '.$this->human($cfg['max_file_bytes']).'.';
+            return __('La imagen supera el máximo de :max.', ['max' => $this->human($cfg['max_file_bytes'])]);
         }
 
         return null;

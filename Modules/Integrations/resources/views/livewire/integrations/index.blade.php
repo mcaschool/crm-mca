@@ -19,7 +19,7 @@
             <article class="ui-card ui-entity" wire:key="int-{{ $card['type'] }}">
                 <div class="ui-entity-h">
                     <div class="ui-person-text">
-                        <h2 class="ui-entity-title">{{ $card['label'] }}</h2>
+                        <h2 class="ui-entity-title">{{ __($card['label']) }}</h2>
                     </div>
                     <x-ui.badge :tone="['conectado' => 'success', 'inactivo' => 'warning', 'desconectado' => 'neutral'][$state]" dot>{{ Str::ucfirst(__($state)) }}</x-ui.badge>
                 </div>
@@ -57,8 +57,8 @@
                     @if ($integration !== null)
                         <x-ui.button size="sm" icon="refresh" wire:click="test({{ $integration->id }})" wire:loading.attr="disabled">{{ __('Probar conexión') }}</x-ui.button>
                         @php($toggleLabel = $integration->status === 'active' ? __('Desactivar') : __('Activar'))
-                        <x-ui.button size="sm" icon="power" wire:click="toggle({{ $integration->id }})" :title="$toggleLabel" :aria-label="$toggleLabel.' '.$card['label']"
-                            wire:confirm="{{ $integration->status === 'active' ? __('¿Desactivar la integración «:name»? Los procesos que la usan (por ejemplo, las respuestas de IA de los asesores) dejarán de funcionar hasta que vuelva a activarse.', ['name' => $card['label']]) : __('¿Activar la integración «:name»? Los procesos configurados volverán a usarla.', ['name' => $card['label']]) }}" />
+                        <x-ui.button size="sm" icon="power" wire:click="toggle({{ $integration->id }})" :title="$toggleLabel" :aria-label="$toggleLabel.' '.__($card['label'])"
+                            wire:confirm="{{ $integration->status === 'active' ? __('¿Desactivar la integración «:name»? Los procesos que la usan (por ejemplo, las respuestas de IA de los asesores) dejarán de funcionar hasta que vuelva a activarse.', ['name' => __($card['label'])]) : __('¿Activar la integración «:name»? Los procesos configurados volverán a usarla.', ['name' => __($card['label'])]) }}" />
                     @endif
                 </div>
             </article>

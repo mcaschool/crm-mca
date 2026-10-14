@@ -94,7 +94,7 @@ final class AdvisorChannelAssignment
     private function write(SocialChannel $channel, Bot $bot, User $user, callable $guard): void
     {
         if ($bot->type === 'human') {
-            throw new InvalidArgumentException('Solo un asesor inteligente puede atender una cuenta automáticamente.');
+            throw new InvalidArgumentException(__('Solo un asesor inteligente puede atender una cuenta automáticamente.'));
         }
 
         DB::transaction(function () use ($channel, $bot, $user, $guard): void {
