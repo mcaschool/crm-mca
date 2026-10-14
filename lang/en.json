@@ -2283,5 +2283,7 @@
     "conectado": "connected",
     "desconectado": "disconnected",
     "Aún no hay leads para el embudo.": "No leads in the funnel yet.",
-    "Aún no hay datos para mostrar.": "No data to show yet."
+    "Aún no hay datos para mostrar.": "No data to show yet.",
+    "Guiado": "Guided",
+    "Abandonada": "Abandoned"
 }

@@ -13,9 +13,9 @@
 
         <div class="ui-stack">
             <div class="ui-record-meta">
-                <span>{{ __('Modo') }}: <b>{{ $conversation->mode }}</b></span>
-                <span>{{ __('Idioma') }}: <b>{{ $conversation->language }}</b></span>
-                <span>{{ __('Estado') }}: <b>{{ $conversation->status }}</b></span>
+                <span>{{ __('Modo') }}: <b>{{ ['guided' => __('Guiado'), 'celia' => 'Celia'][$conversation->mode] ?? $conversation->mode }}</b></span>
+                <span>{{ __('Idioma') }}: <b>{{ ['es' => __('Español'), 'en' => 'English'][$conversation->language] ?? $conversation->language }}</b></span>
+                <span>{{ __('Estado') }}: <b>{{ ['open' => __('Abierta'), 'closed' => __('Cerrada'), 'abandoned' => __('Abandonada')][$conversation->status] ?? $conversation->status }}</b></span>
             </div>
 
             <section class="ui-card" aria-labelledby="h-conv-msgs">
