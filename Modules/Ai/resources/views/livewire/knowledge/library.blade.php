@@ -1,5 +1,4 @@
 @php
-    use Illuminate\Support\Str;
     use Modules\Ai\Support\KnowledgeTaxonomy;
 
     // Líneas presentes para chips ('' = sin línea → clave sin_categoria). Las de la lista fija
@@ -17,225 +16,203 @@
     $kcLineOptions = collect($lines)->map(fn ($l) => __($l))
         ->union($kcCats->reject(fn ($c) => $c['key'] === 'sin_categoria' || isset($lines[$c['key']]))->pluck('label', 'key'))
         ->put('sin_categoria', __('Sin línea'));
-
-    // Color de avatar estable por agente (hash del nombre sobre una paleta fija de tokens v4).
-    $kcPalette = [
-        ['bg' => 'var(--mca-gold-soft)', 'fg' => 'var(--mca-gold)'],
-        ['bg' => 'var(--mca-blue-soft)', 'fg' => 'var(--mca-blue)'],
-        ['bg' => 'var(--mca-ok-soft)', 'fg' => 'var(--mca-ok)'],
-        ['bg' => 'var(--mca-warn-soft)', 'fg' => 'var(--mca-warn)'],
-        ['bg' => '#F1EEF9', 'fg' => '#6D5AB8'],
-    ];
-    $kcAvatar = fn (string $name): array => $kcPalette[abs(crc32($name)) % count($kcPalette)];
+    $kcNoFilters = $search === '' && $filterCategory === '' && $filterStatus === '' && $filterType === '';
+    $kcActiveFilters = collect([$filterCategory, $filterType, $filterStatus])->filter(fn ($v) => $v !== '')->count();
 @endphp
 
-<div>
-    <x-ui.styles />
-    @include('ai::livewire.knowledge._styles')
+<div class="mca-page">
+    <x-ui.page-header :title="__('Centro de Conocimiento')" :subtitle="__('Biblioteca central de fuentes, compartida entre todos los agentes.')">
+        <x-slot:actions>
+            <x-ui.button wire:click="syncLibrary" wire:loading.attr="disabled" wire:target="syncLibrary">
+                <span wire:loading.remove wire:target="syncLibrary" class="ui-btn-label"><x-ui.icon name="refresh" /> {{ __('Sincronizar biblioteca') }}</span>
+                <span wire:loading.inline-flex wire:target="syncLibrary"><span class="ui-spin"></span>&nbsp;{{ __('Sincronizando…') }}</span>
+            </x-ui.button>
+        </x-slot:actions>
+    </x-ui.page-header>
 
-    <div class="mca-panel kc mca-page">
-        {{-- Cabecera --}}
-        <div class="kc-header">
-            <div>
-                <h1 class="kc-title">{{ __('Centro de Conocimiento') }}</h1>
-                <p class="kc-sub">{{ __('Biblioteca central de fuentes, compartida entre todos los agentes.') }}</p>
-            </div>
-            <button type="button" wire:click="syncLibrary" wire:loading.attr="disabled" wire:target="syncLibrary" class="kc-btn kc-btn-ghost">
-                <span wire:loading.remove wire:target="syncLibrary" class="kc-inl"><x-ui.icon name="refresh" /> {{ __('Sincronizar biblioteca') }}</span>
-                <span wire:loading.inline-flex wire:target="syncLibrary" class="kc-gap"><span class="mca-spin"></span> {{ __('Sincronizando…') }}</span>
-            </button>
-        </div>
-
+    <div class="ui-stack">
         @include('ai::livewire.knowledge._tabs', ['active' => 'library'])
 
         @if (session('status'))
-            <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
+            <div class="ui-alert ui-alert--flush ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('status') }}</div>
         @endif
 
-        {{-- 1) Tarjetas de resumen (clic = filtrar) --}}
-        <div class="kc-stats">
-            <button type="button" wire:click="clearFilters" @class(['kc-stat', 'on' => $search === '' && $filterCategory === '' && $filterStatus === '' && $filterType === ''])>
-                <div class="kc-stat-top">
-                    <span class="kc-stat-label">{{ __('Total de fuentes') }}</span>
-                    <span class="kc-ic t-blue"><x-ui.icon name="book-open" /></span>
-                </div>
-                <div class="kc-stat-num">{{ $summary['total'] }}</div>
+        {{-- 1) Indicadores (clic = filtrar el listado) --}}
+        <div class="ui-kpi-grid">
+            <button type="button" wire:click="clearFilters" @class(['ui-kpi', 'is-on' => $kcNoFilters]) aria-pressed="{{ $kcNoFilters ? 'true' : 'false' }}">
+                <span class="ui-kpi-top">
+                    <span class="ui-kpi-ic ui-tone--blue"><x-ui.icon name="book-open" /></span>
+                    <span class="ui-kpi-label">{{ __('Total de fuentes') }}</span>
+                </span>
+                <span class="ui-kpi-value">{{ $summary['total'] }}</span>
             </button>
-            <button type="button" wire:click="$set('filterStatus', 'active')" @class(['kc-stat', 'on' => $filterStatus === 'active'])>
-                <div class="kc-stat-top">
-                    <span class="kc-stat-label">{{ __('Activas') }}</span>
-                    <span class="kc-ic t-green"><x-ui.icon name="check" /></span>
-                </div>
-                <div class="kc-stat-num c-green">{{ $summary['active'] }}</div>
+            <button type="button" wire:click="$set('filterStatus', 'active')" @class(['ui-kpi', 'is-on' => $filterStatus === 'active']) aria-pressed="{{ $filterStatus === 'active' ? 'true' : 'false' }}">
+                <span class="ui-kpi-top">
+                    <span class="ui-kpi-ic ui-tone--success"><x-ui.icon name="check" /></span>
+                    <span class="ui-kpi-label">{{ __('Activas') }}</span>
+                </span>
+                <span class="ui-kpi-value">{{ $summary['active'] }}</span>
             </button>
-            <button type="button" wire:click="$set('filterStatus', 'inactive')" @class(['kc-stat', 'on' => $filterStatus === 'inactive'])>
-                <div class="kc-stat-top">
-                    <span class="kc-stat-label">{{ __('Inactivas') }}</span>
-                    <span class="kc-ic t-gray">
-                        {{-- Lucide "ban" (círculo tachado) --}}
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
-                    </span>
-                </div>
-                <div class="kc-stat-num c-gray">{{ $summary['inactive'] }}</div>
+            <button type="button" wire:click="$set('filterStatus', 'inactive')" @class(['ui-kpi', 'is-on' => $filterStatus === 'inactive']) aria-pressed="{{ $filterStatus === 'inactive' ? 'true' : 'false' }}">
+                <span class="ui-kpi-top">
+                    <span class="ui-kpi-ic ui-tone--neutral"><x-ui.icon name="power" /></span>
+                    <span class="ui-kpi-label">{{ __('Inactivas') }}</span>
+                </span>
+                <span class="ui-kpi-value">{{ $summary['inactive'] }}</span>
             </button>
-            <button type="button" wire:click="filterByCategory('sin_categoria')" @class(['kc-stat', 'on' => $filterCategory === 'sin_categoria'])>
-                <div class="kc-stat-top">
-                    <span class="kc-stat-label">{{ __('Sin línea') }}</span>
-                    <span class="kc-ic t-amber"><x-ui.icon name="alert-triangle" /></span>
-                </div>
-                <div class="kc-stat-num c-amber">{{ $kcNoCat }}</div>
+            <button type="button" wire:click="filterByCategory('sin_categoria')" @class(['ui-kpi', 'is-on' => $filterCategory === 'sin_categoria']) aria-pressed="{{ $filterCategory === 'sin_categoria' ? 'true' : 'false' }}">
+                <span class="ui-kpi-top">
+                    <span class="ui-kpi-ic ui-tone--warning"><x-ui.icon name="alert-triangle" /></span>
+                    <span class="ui-kpi-label">{{ __('Sin línea') }}</span>
+                </span>
+                <span class="ui-kpi-value">{{ $kcNoCat }}</span>
             </button>
         </div>
 
         {{-- 2) Chips de línea --}}
-        <div class="kc-chips">
-            <span class="kc-chips-label">{{ __('Filtrar por línea:') }}</span>
-            <button type="button" wire:click="filterByCategory('')" @class(['kc-chip', 'on' => $filterCategory === ''])>{{ __('Todas') }} · {{ $summary['total'] }}</button>
+        <div class="ui-chips" role="group" aria-label="{{ __('Filtrar por línea') }}">
+            <span class="ui-label ui-chips-label">{{ __('Filtrar por línea:') }}</span>
+            <button type="button" wire:click="filterByCategory('')" class="ui-chip" aria-pressed="{{ $filterCategory === '' ? 'true' : 'false' }}">{{ __('Todas') }} · {{ $summary['total'] }}</button>
             @foreach ($kcCats as $c)
-                <button type="button" wire:key="chip-{{ $c['key'] }}" wire:click="filterByCategory('{{ $c['key'] }}')" @class(['kc-chip', 'on' => $filterCategory === $c['key']])>{{ $c['label'] }} · {{ $c['count'] }}</button>
+                <button type="button" wire:key="chip-{{ $c['key'] }}" wire:click="filterByCategory('{{ $c['key'] }}')" class="ui-chip" aria-pressed="{{ $filterCategory === $c['key'] ? 'true' : 'false' }}">{{ $c['label'] }} · {{ $c['count'] }}</button>
             @endforeach
         </div>
 
         {{-- 3) Espacios de subida: Programa Académico | Base de Conocimiento --}}
-        <div class="kc-spaces">
+        <div class="ui-grid ui-grid--2">
             {{-- Programa Académico: línea (sin la institucional) + programa del catálogo --}}
-            <div class="kc-card kc-space">
-                <div class="kc-space-head">
-                    <div class="kc-upload-ic"><x-ui.icon name="book-open" /></div>
-                    <div class="kc-upload-text">
-                        <h3>{{ __('Programa Académico') }}</h3>
-                        <p>{{ __('Contenido de un programa concreto del catálogo.') }}</p>
+            <section class="ui-card ui-entity" aria-labelledby="kc-space-program">
+                <div class="ui-entity-h">
+                    <span class="ui-icon-tile ui-tone--blue"><x-ui.icon name="book-open" /></span>
+                    <div class="ui-person-text">
+                        <h2 class="ui-entity-title" id="kc-space-program">{{ __('Programa Académico') }}</h2>
+                        <span class="ui-cell-sub">{{ __('Contenido de un programa concreto del catálogo.') }}</span>
                     </div>
                 </div>
 
-                <div class="kc-field">
-                    <span class="kc-field-label">{{ __('Línea') }}</span>
-                    {{-- En vivo: la línea filtra el desplegable de programas al momento --}}
-                    @include('ai::livewire.knowledge._dropdown', [
-                        'model' => 'programLine', 'live' => true, 'field' => true,
-                        'options' => collect($programLines)->map(fn ($l) => __($l))->all(),
-                        'placeholder' => __('Elige la línea…'), 'aria' => __('Línea del programa'),
-                    ])
-                    @error('programLine') <span class="kc-err">{{ $message }}</span> @enderror
-                </div>
+                <div class="ui-entity-b ui-stack">
+                    <x-ui.field :label="__('Línea')" for="kc-program-line" :error="$errors->first('programLine')">
+                        {{-- En vivo: la línea filtra el desplegable de programas al momento --}}
+                        @include('ai::livewire.knowledge._dropdown', [
+                            'model' => 'programLine', 'live' => true, 'field' => true, 'id' => 'kc-program-line',
+                            'options' => collect($programLines)->map(fn ($l) => __($l))->all(),
+                            'placeholder' => __('Elige la línea…'), 'aria' => __('Línea del programa'),
+                        ])
+                    </x-ui.field>
 
-                {{-- Carga masiva por línea: el programa sale de cada archivo --}}
-                <button type="button" wire:click="$toggle('programAuto')" class="kc-switch-btn kc-auto"
-                        role="switch" aria-checked="{{ $programAuto ? 'true' : 'false' }}">
-                    <span @class(['kc-switch', 'on' => $programAuto])></span>
-                    {{ __('Asignar programa automáticamente desde cada archivo') }}
-                </button>
+                    {{-- Carga masiva por línea: el programa sale de cada archivo --}}
+                    <button type="button" wire:click="$toggle('programAuto')" class="ui-switch ui-switch--flush"
+                            role="switch" aria-checked="{{ $programAuto ? 'true' : 'false' }}">
+                        <span class="ui-switch-track" aria-hidden="true"></span>
+                        {{ __('Asignar programa automáticamente desde cada archivo') }}
+                    </button>
 
-                {{-- Alta manual en el catálogo (solo quien puede gestionarlo; el servidor lo vuelve a comprobar) --}}
-                @php $kcProgramActions = auth()->user()?->can('create', \Modules\Catalog\Models\Program::class) ?? false; @endphp
-                @if ($programAuto)
-                    <p class="kc-auto-help">{!! __('Cada archivo indica su programa con <code>Programa: CÓDIGO</code> en el comentario de metadatos; si no lo trae, se busca por la URL de la ficha del programa. Los archivos que no se puedan asignar se rechazan con el motivo y el resto se sube.') !!}</p>
-                    @if ($kcProgramActions)
-                        <div class="kc-prog-actions">
-                            <button type="button" wire:click="openAddProgram" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="plus" /> {{ __('Añadir programa') }}</button>
-                            <button type="button" wire:click="openImportPrograms" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="upload" /> {{ __('Importar') }}</button>
-                        </div>
-                    @endif
-                @else
-                    <div class="kc-field">
-                        <span class="kc-field-label">{{ __('Programa del catálogo') }}</span>
-                        <div class="kc-field-search">
-                            <x-ui.icon name="search" />
-                            <input type="text" wire:model.live.debounce.300ms="programSearch" placeholder="{{ __('Buscar por nombre o código…') }}" aria-label="{{ __('Buscar programa') }}">
-                        </div>
-                        <div class="kc-prog-pick">
+                    {{-- Alta manual en el catálogo (solo quien puede gestionarlo; el servidor lo vuelve a comprobar) --}}
+                    @php $kcProgramActions = auth()->user()?->can('create', \Modules\Catalog\Models\Program::class) ?? false; @endphp
+                    @if ($programAuto)
+                        <p class="ui-help">{!! __('Cada archivo indica su programa con <code>Programa: CÓDIGO</code> en el comentario de metadatos; si no lo trae, se busca por la URL de la ficha del programa. Los archivos que no se puedan asignar se rechazan con el motivo y el resto se sube.') !!}</p>
+                        @if ($kcProgramActions)
+                            <div class="ui-actions-row">
+                                <x-ui.button size="sm" icon="plus" wire:click="openAddProgram">{{ __('Añadir programa') }}</x-ui.button>
+                                <x-ui.button size="sm" icon="upload" wire:click="openImportPrograms">{{ __('Importar') }}</x-ui.button>
+                            </div>
+                        @endif
+                    @else
+                        <x-ui.field :label="__('Programa del catálogo')" for="kc-program-search" :error="$errors->first('programId')">
+                            <x-ui.search id="kc-program-search" wire:model.live.debounce.300ms="programSearch" placeholder="{{ __('Buscar por nombre o código…') }}" aria-label="{{ __('Buscar programa') }}" />
                             @include('ai::livewire.knowledge._dropdown', [
                                 'model' => 'programId', 'live' => false, 'field' => true,
                                 'options' => $programs->mapWithKeys(fn ($p) => [$p->id => ($p->code ? $p->code.' · ' : '').$p->name_es])->all(),
                                 'placeholder' => $programLine === '' ? __('Elige primero la línea…') : __('Elige un programa…'), 'aria' => __('Programa del catálogo'),
                             ])
                             @if ($kcProgramActions)
-                                <div class="kc-prog-actions">
-                                    <button type="button" wire:click="openAddProgram" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="plus" /> {{ __('Añadir programa') }}</button>
-                                    <button type="button" wire:click="openImportPrograms" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="upload" /> {{ __('Importar') }}</button>
+                                <div class="ui-actions-row">
+                                    <x-ui.button size="sm" icon="plus" wire:click="openAddProgram">{{ __('Añadir programa') }}</x-ui.button>
+                                    <x-ui.button size="sm" icon="upload" wire:click="openImportPrograms">{{ __('Importar') }}</x-ui.button>
                                 </div>
                             @endif
-                        </div>
-                        @error('programId') <span class="kc-err">{{ $message }}</span> @enderror
-                    </div>
-                @endif
+                        </x-ui.field>
+                    @endif
 
-                <div class="kc-space-foot">
-                    <div wire:loading wire:target="programDocs" class="kc-meta"><span class="mca-spin"></span> {{ __('Cargando archivos…') }}</div>
-                    @error('programDocs') <div class="kc-err">{{ $message }}</div> @enderror
+                    <div wire:loading wire:target="programDocs" class="ui-help"><span class="ui-spin"></span> {{ __('Cargando archivos…') }}</div>
+                    @error('programDocs') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
                     @if (! empty($programDocs))
-                        <div class="kc-picked-files">
+                        <div class="ui-chips">
                             @foreach ($programDocs as $d)
-                                <span class="kc-file-tag"><x-ui.icon name="file-text" /> {{ method_exists($d, 'getClientOriginalName') ? $d->getClientOriginalName() : '' }}</span>
+                                <x-ui.badge tone="neutral" icon="file-text" class="ui-badge--wrap ui-mono">{{ method_exists($d, 'getClientOriginalName') ? $d->getClientOriginalName() : '' }}</x-ui.badge>
                             @endforeach
                         </div>
                     @endif
-                    <div class="kc-space-actions">
-                        <label class="kc-btn kc-btn-ghost">
-                            <x-ui.icon name="upload" /> {{ __('Elegir archivos') }}
-                            <input type="file" wire:model="programDocs" accept=".md" multiple class="kc-file">
-                        </label>
-                        <button type="button" wire:click="uploadProgramDocs" wire:loading.attr="disabled" wire:target="uploadProgramDocs,programDocs" class="kc-btn kc-btn-primary">
-                            <span wire:loading.remove wire:target="uploadProgramDocs" class="kc-inl"><x-ui.icon name="check" /> {{ __('Subir') }}</span>
-                            <span wire:loading.inline-flex wire:target="uploadProgramDocs" class="kc-gap"><span class="mca-spin"></span> {{ __('Procesando…') }}</span>
-                        </button>
-                    </div>
                 </div>
-            </div>
+
+                <div class="ui-card-f">
+                    <label class="ui-btn ui-btn--secondary">
+                        <x-ui.icon name="upload" /> {{ __('Elegir archivos') }}
+                        <input type="file" wire:model="programDocs" accept=".md" multiple class="ui-sr">
+                    </label>
+                    <span class="sp"></span>
+                    <x-ui.button variant="primary" wire:click="uploadProgramDocs" wire:loading.attr="disabled" wire:target="uploadProgramDocs,programDocs">
+                        <span wire:loading.remove wire:target="uploadProgramDocs" class="ui-btn-label"><x-ui.icon name="check" /> {{ __('Subir') }}</span>
+                        <span wire:loading.inline-flex wire:target="uploadProgramDocs"><span class="ui-spin"></span>&nbsp;{{ __('Procesando…') }}</span>
+                    </x-ui.button>
+                </div>
+            </section>
 
             {{-- Base de Conocimiento: solo línea (incluida la institucional), sin programa --}}
-            <div class="kc-card kc-space">
-                <div class="kc-space-head">
-                    <div class="kc-upload-ic t-gold"><x-ui.icon name="layers" /></div>
-                    <div class="kc-upload-text">
-                        <h3>{{ __('Base de Conocimiento') }}</h3>
-                        <p>{{ __('Admisiones, titulaciones y FAQs de toda una línea.') }}</p>
+            <section class="ui-card ui-entity" aria-labelledby="kc-space-kb">
+                <div class="ui-entity-h">
+                    <span class="ui-icon-tile ui-tone--gold"><x-ui.icon name="layers" /></span>
+                    <div class="ui-person-text">
+                        <h2 class="ui-entity-title" id="kc-space-kb">{{ __('Base de Conocimiento') }}</h2>
+                        <span class="ui-cell-sub">{{ __('Admisiones, titulaciones y FAQs de toda una línea.') }}</span>
                     </div>
                 </div>
 
-                <div class="kc-field">
-                    <span class="kc-field-label">{{ __('Línea') }}</span>
-                    @include('ai::livewire.knowledge._dropdown', [
-                        'model' => 'kbLine', 'live' => false, 'field' => true,
-                        'options' => collect($lines)->map(fn ($l) => __($l))->all(),
-                        'placeholder' => __('Elige la línea…'), 'aria' => __('Línea de la base de conocimiento'),
-                    ])
-                    @error('kbLine') <span class="kc-err">{{ $message }}</span> @enderror
-                </div>
+                <div class="ui-entity-b ui-stack">
+                    <x-ui.field :label="__('Línea')" for="kc-kb-line" :error="$errors->first('kbLine')">
+                        @include('ai::livewire.knowledge._dropdown', [
+                            'model' => 'kbLine', 'live' => false, 'field' => true, 'id' => 'kc-kb-line',
+                            'options' => collect($lines)->map(fn ($l) => __($l))->all(),
+                            'placeholder' => __('Elige la línea…'), 'aria' => __('Línea de la base de conocimiento'),
+                        ])
+                    </x-ui.field>
 
-                <div class="kc-space-foot">
-                    <div wire:loading wire:target="docs" class="kc-meta"><span class="mca-spin"></span> {{ __('Cargando archivos…') }}</div>
-                    @error('docs') <div class="kc-err">{{ $message }}</div> @enderror
+                    <div wire:loading wire:target="docs" class="ui-help"><span class="ui-spin"></span> {{ __('Cargando archivos…') }}</div>
+                    @error('docs') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
                     @if (! empty($docs))
-                        <div class="kc-picked-files">
+                        <div class="ui-chips">
                             @foreach ($docs as $d)
-                                <span class="kc-file-tag"><x-ui.icon name="file-text" /> {{ method_exists($d, 'getClientOriginalName') ? $d->getClientOriginalName() : '' }}</span>
+                                <x-ui.badge tone="neutral" icon="file-text" class="ui-badge--wrap ui-mono">{{ method_exists($d, 'getClientOriginalName') ? $d->getClientOriginalName() : '' }}</x-ui.badge>
                             @endforeach
                         </div>
                     @endif
-                    <div class="kc-space-actions">
-                        <label class="kc-btn kc-btn-ghost">
-                            <x-ui.icon name="upload" /> {{ __('Elegir archivos') }}
-                            <input type="file" wire:model="docs" accept=".md" multiple class="kc-file">
-                        </label>
-                        <button type="button" wire:click="uploadDocs" wire:loading.attr="disabled" wire:target="uploadDocs,docs" class="kc-btn kc-btn-primary">
-                            <span wire:loading.remove wire:target="uploadDocs" class="kc-inl"><x-ui.icon name="check" /> {{ __('Subir') }}</span>
-                            <span wire:loading.inline-flex wire:target="uploadDocs" class="kc-gap"><span class="mca-spin"></span> {{ __('Procesando…') }}</span>
-                        </button>
-                    </div>
                 </div>
-            </div>
+
+                <div class="ui-card-f">
+                    <label class="ui-btn ui-btn--secondary">
+                        <x-ui.icon name="upload" /> {{ __('Elegir archivos') }}
+                        <input type="file" wire:model="docs" accept=".md" multiple class="ui-sr">
+                    </label>
+                    <span class="sp"></span>
+                    <x-ui.button variant="primary" wire:click="uploadDocs" wire:loading.attr="disabled" wire:target="uploadDocs,docs">
+                        <span wire:loading.remove wire:target="uploadDocs" class="ui-btn-label"><x-ui.icon name="check" /> {{ __('Subir') }}</span>
+                        <span wire:loading.inline-flex wire:target="uploadDocs"><span class="ui-spin"></span>&nbsp;{{ __('Procesando…') }}</span>
+                    </x-ui.button>
+                </div>
+            </section>
         </div>
-        <p class="kc-upload-note">{{ __('Archivos .md: comentario con «Codigo», título «# » y al menos una sección «## ». Máx. 512 KB por archivo. Si el archivo declara «Categoria», debe coincidir con la línea elegida.') }}</p>
+        <p class="ui-help">{{ __('Archivos .md: comentario con «Codigo», título «# » y al menos una sección «## ». Máx. 512 KB por archivo. Si el archivo declara «Categoria», debe coincidir con la línea elegida.') }}</p>
 
         @if ($uploadResults !== [])
-            <div class="kc-card kc-upload">
-                <div class="kc-results" style="margin-top:0;padding-top:0;border-top:0">
-                    @php $kcCount = collect($uploadResults)->countBy('result'); @endphp
-                    <h4>{{ __('Resultado de la subida') }}
-                        <span class="kc-report-sum">{{ __(':new nuevos · :upd actualizados · :rej rechazados', ['new' => $kcCount['Nuevo'] ?? 0, 'upd' => $kcCount['Actualizado'] ?? 0, 'rej' => $kcCount['Rechazado'] ?? 0]) }}</span>
-                    </h4>
-                    <table class="kc-report">
+            @php $kcCount = collect($uploadResults)->countBy('result'); @endphp
+            <section class="ui-card ui-card--list" aria-labelledby="kc-upload-title">
+                <div class="ui-card-h">
+                    <x-ui.icon name="upload" class="ui-card-ic" />
+                    <h2 id="kc-upload-title">{{ __('Resultado de la subida') }}</h2>
+                    <span class="ui-card-sub">{{ __(':new nuevos · :upd actualizados · :rej rechazados', ['new' => $kcCount['Nuevo'] ?? 0, 'upd' => $kcCount['Actualizado'] ?? 0, 'rej' => $kcCount['Rechazado'] ?? 0]) }}</span>
+                </div>
+                <div class="mca-table-scroll">
+                    <table class="ui-table ui-table--dense">
                         <thead>
                             <tr>
                                 <th>{{ __('Archivo') }}</th>
@@ -246,77 +223,76 @@
                         </thead>
                         <tbody>
                             @foreach ($uploadResults as $r)
-                                @php $tone = match ($r['result']) { 'Nuevo' => 't-green', 'Actualizado' => 't-blue', default => 't-red' }; @endphp
+                                @php $tone = match ($r['result']) { 'Nuevo' => 'success', 'Actualizado' => 'blue', default => 'danger' }; @endphp
                                 <tr>
-                                    <td><span class="kc-code">{{ $r['file'] }}</span></td>
-                                    <td>{{ $r['program'] ?? '—' }}</td>
-                                    <td><span class="kc-badge {{ $tone }}"><span class="kc-dot"></span>{{ __($r['result']) }}</span></td>
-                                    <td class="kc-meta">{{ $r['reason'] }}</td>
+                                    <td class="rt-primary rt-w-md"><span class="ui-mono">{{ $r['file'] }}</span></td>
+                                    <td class="rt-w-md" data-label="{{ __('Programa asignado') }}">{{ $r['program'] ?? '—' }}</td>
+                                    <td class="rt-aside"><x-ui.badge :tone="$tone" dot>{{ __($r['result']) }}</x-ui.badge></td>
+                                    <td class="rt-w-lg t-2" data-label="{{ __('Motivo') }}">{{ $r['reason'] }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
                     </table>
                 </div>
-            </div>
+            </section>
         @endif
 
-        {{-- 4) Barra de herramientas --}}
-        <div class="kc-toolbar">
-            <div class="kc-search">
-                <x-ui.icon name="search" />
-                <input type="text" wire:model.live.debounce.350ms="search" placeholder="{{ __('Buscar por código o nombre…') }}" aria-label="{{ __('Buscar por código o nombre') }}">
+        {{-- 4) Listado de fuentes: barra de herramientas + tabla --}}
+        <div class="ui-card ui-card--list">
+            <div class="ui-toolbar">
+                <x-ui.search wire:model.live.debounce.350ms="search" placeholder="{{ __('Buscar por código o nombre…') }}" aria-label="{{ __('Buscar por código o nombre') }}" />
+                <x-ui.filters :active="$kcActiveFilters">
+                    @include('ai::livewire.knowledge._dropdown', [
+                        'model' => 'filterCategory', 'live' => true, 'emptyOption' => true,
+                        'options' => $kcLineOptions->all(),
+                        'placeholder' => __('Todas'), 'label' => __('Línea:'), 'aria' => __('Filtrar por línea'),
+                    ])
+                    @include('ai::livewire.knowledge._dropdown', [
+                        'model' => 'filterType', 'live' => true, 'emptyOption' => true,
+                        'options' => collect($types)->map(fn ($l) => __($l))->put('sin_tipo', __('Sin tipo'))->all(),
+                        'placeholder' => __('Todos'), 'label' => __('Tipo:'), 'aria' => __('Filtrar por tipo'),
+                    ])
+                    @include('ai::livewire.knowledge._dropdown', [
+                        'model' => 'filterStatus', 'live' => true, 'emptyOption' => true,
+                        'options' => ['active' => __('Activas'), 'inactive' => __('Inactivas')],
+                        'placeholder' => __('Todos'), 'label' => __('Estado:'), 'aria' => __('Filtrar por estado'),
+                    ])
+                    @if (! $kcNoFilters)
+                        <x-ui.button variant="ghost" icon="x" wire:click="clearFilters">{{ __('Limpiar') }}</x-ui.button>
+                    @endif
+                </x-ui.filters>
             </div>
-            @include('ai::livewire.knowledge._dropdown', [
-                'model' => 'filterCategory', 'live' => true, 'emptyOption' => true,
-                'options' => $kcLineOptions->all(),
-                'placeholder' => __('Todas'), 'label' => __('Línea:'), 'aria' => __('Filtrar por línea'),
-            ])
-            @include('ai::livewire.knowledge._dropdown', [
-                'model' => 'filterType', 'live' => true, 'emptyOption' => true,
-                'options' => collect($types)->map(fn ($l) => __($l))->put('sin_tipo', __('Sin tipo'))->all(),
-                'placeholder' => __('Todos'), 'label' => __('Tipo:'), 'aria' => __('Filtrar por tipo'),
-            ])
-            @include('ai::livewire.knowledge._dropdown', [
-                'model' => 'filterStatus', 'live' => true, 'emptyOption' => true,
-                'options' => ['active' => __('Activas'), 'inactive' => __('Inactivas')],
-                'placeholder' => __('Todos'), 'label' => __('Estado:'), 'aria' => __('Filtrar por estado'),
-            ])
-            @if ($search !== '' || $filterCategory !== '' || $filterStatus !== '' || $filterType !== '')
-                <button type="button" wire:click="clearFilters" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="x" /> {{ __('Limpiar') }}</button>
-            @endif
-        </div>
 
-        {{-- 5) Tabla --}}
-        <div class="kc-card kc-table-card">
-            <div class="kc-table-scroll">
-                <table class="kc-table">
+            {{-- Prioridad y secciones: columnas si caben; si no, bajo el nombre (contenedor ≤ 960 px). --}}
+            <div class="mca-table-scroll ui-cq">
+                <table class="ui-table">
                     <thead>
                         <tr>
-                            <th class="kc-fit">{{ __('Código') }}</th>
-                            <th class="kc-col-name">{{ __('Nombre') }}</th>
-                            <th class="kc-fit">{{ __('Línea / tipo') }}</th>
-                            <th class="kc-col-num kc-fit">{{ __('Prior.') }}</th>
-                            <th class="kc-col-num kc-fit">{{ __('Secc.') }}</th>
-                            <th class="kc-fit">{{ __('Agentes') }}</th>
-                            <th class="kc-fit">{{ __('Estado') }}</th>
-                            <th class="kc-fit" style="text-align:right">{{ __('Acciones') }}</th>
+                            <th class="ui-cq-wide">{{ __('Código') }}</th>
+                            <th>{{ __('Nombre') }}</th>
+                            <th>{{ __('Línea / tipo') }}</th>
+                            <th class="ui-cq-wide t-end">{{ __('Prior.') }}</th>
+                            <th class="ui-cq-wide">{{ __('Secc.') }}</th>
+                            <th>{{ __('Agentes') }}</th>
+                            <th>{{ __('Estado') }}</th>
+                            <th class="t-end">{{ __('Acciones') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse ($sources as $s)
                             @php $active = $s['status'] === 'active'; @endphp
-                            <tr wire:key="ks-{{ $s['id'] }}" @class(['is-off' => ! $active])>
-                                <td><span class="kc-code">{{ $s['code'] }}</span></td>
-                                <td title="{{ $s['last_synced_at'] ? __('Sincronizado :t', ['t' => $s['last_synced_at']->diffForHumans()]) : __('Sin sincronizar') }}">
-                                    <div class="kc-name">{{ $s['name'] }}</div>
+                            <tr wire:key="ks-{{ $s['id'] }}">
+                                <td class="ui-cq-wide" data-label="{{ __('Código') }}"><span class="ui-mono">{{ $s['code'] }}</span></td>
+                                <td class="rt-primary rt-w-lg" title="{{ $s['last_synced_at'] ? __('Sincronizado :t', ['t' => $s['last_synced_at']->diffForHumans()]) : __('Sin sincronizar') }}">
+                                    <span class="ui-cell-title">{{ $s['name'] }}</span>
                                     @if ($s['program'])
-                                        <div @class(['kc-prog', 'gone' => $s['program']['gone']]) title="{{ $s['program']['name'] }}{{ $s['program']['gone'] ? ' — '.__('ya no está activo en el catálogo') : '' }}">
-                                            <x-ui.icon name="book-open" /><span>{{ $s['program']['name'] }}</span>
-                                        </div>
+                                        <span @class(['t-sub', 'ui-strike' => $s['program']['gone']]) title="{{ $s['program']['name'] }}{{ $s['program']['gone'] ? ' — '.__('ya no está activo en el catálogo') : '' }}">
+                                            <x-ui.icon name="book-open" class="ui-inline-ic" /> {{ $s['program']['name'] }}
+                                        </span>
                                     @endif
-                                    <div class="kc-meta kc-meta-num">{{ __('Prior. :p · :n secc.', ['p' => $s['priority'], 'n' => $s['sections']]) }}</div>
+                                    <span class="t-sub ui-cq-narrow"><span class="ui-mono">{{ $s['code'] }}</span> · {{ __('Prior. :p · :n secc.', ['p' => $s['priority'], 'n' => $s['sections']]) }}</span>
                                 </td>
-                                <td>
+                                <td data-label="{{ __('Línea / tipo') }}">
                                     @php
                                         $catKnown = KnowledgeTaxonomy::isLine($s['category']);
                                         $catLabel = $s['category'] === null ? null : ($catKnown ? __((string) KnowledgeTaxonomy::lineLabel($s['category'])) : $s['category']);
@@ -324,50 +300,50 @@
                                         $typeLabel = $typeLabel !== null ? __($typeLabel) : null;
                                     @endphp
                                     @if ($catLabel)
-                                        <span @class(['kc-badge', 'kc-cat', 't-blue' => $catKnown, 't-amber' => ! $catKnown]) title="{{ $catKnown ? $catLabel : __(':v — fuera de la lista de líneas', ['v' => $catLabel]) }}">{{ $catLabel }}</span>
+                                        <x-ui.badge :tone="$catKnown ? 'blue' : 'warning'" title="{{ $catKnown ? $catLabel : __(':v — fuera de la lista de líneas', ['v' => $catLabel]) }}">{{ $catLabel }}</x-ui.badge>
                                     @else
-                                        <span class="kc-badge t-amber">{{ __('Sin línea') }}</span>
+                                        <x-ui.badge tone="warning">{{ __('Sin línea') }}</x-ui.badge>
                                     @endif
-                                    <div @class(['kc-type', 'unknown' => $typeLabel === null])>{{ $typeLabel ?? __('Sin tipo') }}</div>
+                                    <span @class(['t-sub', 'ui-text-warning' => $typeLabel === null])>{{ $typeLabel ?? __('Sin tipo') }}</span>
                                 </td>
-                                <td class="kc-num kc-col-num">{{ $s['priority'] }}</td>
-                                <td class="kc-col-num"><span class="kc-sec"><x-ui.icon name="book-open" /> {{ $s['sections'] }}</span></td>
-                                <td>
+                                <td class="ui-cq-wide t-end t-2" data-label="{{ __('Prior.') }}">{{ $s['priority'] }}</td>
+                                <td class="ui-cq-wide t-2" data-label="{{ __('Secc.') }}">{{ $s['sections'] }}</td>
+                                <td data-label="{{ __('Agentes') }}">
                                     @if ($s['agents'] !== [])
-                                        <span class="kc-avatars" title="{{ implode(', ', $s['agents']) }}">
+                                        <span class="ui-avatars" title="{{ implode(', ', $s['agents']) }}">
                                             @foreach (array_slice($s['agents'], 0, 3) as $agentName)
-                                                @php $col = $kcAvatar($agentName); @endphp
-                                                <span class="kc-av" style="background:{{ $col['bg'] }};color:{{ $col['fg'] }}">{{ Str::upper(Str::substr($agentName, 0, 1)) }}</span>
+                                                <x-ui.avatar :name="$agentName" class="ui-avatar--sm" />
                                             @endforeach
                                             @if (count($s['agents']) > 3)
-                                                <span class="kc-av kc-av-more">+{{ count($s['agents']) - 3 }}</span>
+                                                <span class="ui-avatar ui-avatar--sm ui-tone--neutral" aria-hidden="true">+{{ count($s['agents']) - 3 }}</span>
                                             @endif
+                                            <span class="ui-sr">{{ implode(', ', $s['agents']) }}</span>
                                         </span>
                                     @else
-                                        <span class="kc-none">— {{ __('Ninguno') }} —</span>
+                                        <span class="t-nil">— {{ __('Ninguno') }} —</span>
                                     @endif
                                 </td>
-                                <td>
+                                <td class="rt-aside" data-label="{{ __('Estado') }}">
                                     @if ($active)
-                                        <span class="kc-badge t-green"><span class="kc-dot"></span>{{ __('Activa') }}</span>
+                                        <x-ui.badge tone="success" dot>{{ __('Activa') }}</x-ui.badge>
                                     @else
-                                        <span class="kc-badge t-gray"><span class="kc-dot"></span>{{ __('Inactiva') }}</span>
+                                        <x-ui.badge tone="neutral" dot>{{ __('Inactiva') }}</x-ui.badge>
                                     @endif
                                 </td>
-                                <td>
-                                    <div class="kc-actions">
-                                        <button type="button" wire:click="view({{ $s['id'] }})" class="kc-icon-btn" title="{{ __('Ver contenido') }}" aria-label="{{ __('Ver contenido') }}"><x-ui.icon name="eye" /></button>
-                                        <button type="button" wire:click="toggleStatus({{ $s['id'] }})" @class(['kc-icon-btn', 'go' => ! $active]) title="{{ $active ? __('Desactivar') : __('Activar') }}" aria-label="{{ $active ? __('Desactivar') : __('Activar') }}"><x-ui.icon name="power" /></button>
-                                        <button type="button" wire:click="confirmDelete({{ $s['id'] }})" class="kc-icon-btn danger" title="{{ __('Borrar') }}" aria-label="{{ __('Borrar') }}"><x-ui.icon name="trash" /></button>
+                                <td class="rt-actions">
+                                    <div class="t-actions">
+                                        <x-ui.button icon="eye" wire:click="view({{ $s['id'] }})" title="{{ __('Ver contenido') }}" aria-label="{{ __('Ver contenido') }}" />
+                                        <x-ui.button icon="power" wire:click="toggleStatus({{ $s['id'] }})" title="{{ $active ? __('Desactivar') : __('Activar') }}" aria-label="{{ $active ? __('Desactivar') : __('Activar') }}" />
+                                        <x-ui.button variant="danger" icon="trash" wire:click="confirmDelete({{ $s['id'] }})" title="{{ __('Borrar') }}" aria-label="{{ __('Borrar') }}" />
                                     </div>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8">
-                                    <div class="kc-empty">
-                                        <span class="kc-ic t-blue"><x-ui.icon name="book-open" /></span>
-                                        <p>{{ __('No hay fuentes que coincidan. Sube archivos .md o ajusta los filtros.') }}</p>
+                                <td colspan="8" class="rt-empty">
+                                    <div class="ui-empty">
+                                        <div class="ui-empty-ic"><x-ui.icon name="book-open" /></div>
+                                        {{ __('No hay fuentes que coincidan. Sube archivos .md o ajusta los filtros.') }}
                                     </div>
                                 </td>
                             </tr>
@@ -375,155 +351,164 @@
                     </tbody>
                 </table>
             </div>
+            <div class="ui-pager"><span>{{ __('Mostrando :n de :t fuentes', ['n' => count($sources), 't' => $summary['total']]) }}</span></div>
         </div>
-        <div class="kc-foot">{{ __('Mostrando :n de :t fuentes', ['n' => count($sources), 't' => $summary['total']]) }}</div>
+    </div>
 
-        {{-- Drawer de contenido --}}
-        @if ($viewingId !== null)
-            <div class="kc-overlay" wire:click="closeDrawer"></div>
-            <aside class="kc-drawer" aria-label="{{ __('Contenido de la fuente') }}">
-                <div class="kc-drawer-head">
-                    <span class="kc-ic t-blue"><x-ui.icon name="file-text" /></span>
-                    <strong>{{ $viewingName }}</strong>
-                    <button type="button" wire:click="closeDrawer" class="kc-icon-btn" aria-label="{{ __('Cerrar') }}"><x-ui.icon name="x" /></button>
+    {{-- Contenido de la fuente (antes panel lateral; ahora ventana del kit) --}}
+    @if ($viewingId !== null)
+        <div class="ui-modal-bg" wire:click="closeDrawer">
+            <div class="ui-modal ui-modal--lg" wire:click.stop role="dialog" aria-modal="true" aria-labelledby="kc-view-title">
+                <div class="ui-modal-h">
+                    <h2 class="ui-modal-title" id="kc-view-title"><x-ui.icon name="file-text" /> {{ $viewingName }}</h2>
+                    <x-ui.button variant="ghost" icon="x" wire:click="closeDrawer" :aria-label="__('Cerrar')" />
                 </div>
-                <div class="kc-drawer-body">
+                <div class="ui-modal-b">
                     {{-- Enlace oficial: lo usa el asesor en las respuestas de catálogo de esta línea --}}
-                    <form wire:submit="saveUrl" class="kc-field" data-testid="official-link">
-                        <span class="kc-field-label">{{ __('Enlace oficial') }}</span>
-                        <div style="display:flex; gap:.5rem; align-items:center">
-                            <input type="url" wire:model="viewingUrl" class="kc-input" placeholder="https://" maxlength="500" @disabled(! $canEditUrl) style="flex:1">
+                    <form wire:submit="saveUrl" class="ui-field" data-testid="official-link">
+                        <label class="ui-label" for="kc-official-url">{{ __('Enlace oficial') }}</label>
+                        <div class="ui-input-row">
+                            <input id="kc-official-url" type="url" wire:model="viewingUrl" placeholder="https://" maxlength="500" @disabled(! $canEditUrl)
+                                @class(['ui-input', 'is-invalid' => $errors->has('viewingUrl')]) @error('viewingUrl') aria-describedby="kc-official-url-error" @enderror>
                             @if ($canEditUrl)
-                                <button type="submit" class="kc-btn kc-btn-primary kc-btn-sm">{{ __('Guardar') }}</button>
+                                <x-ui.button type="submit" variant="primary">{{ __('Guardar') }}</x-ui.button>
                             @endif
                         </div>
-                        <small class="kc-sub">{{ __('Página pública que el asesor comparte al listar los programas de esta línea. Solo https.') }}</small>
-                        @error('viewingUrl') <span class="kc-err">{{ $message }}</span> @enderror
+                        <p class="ui-help">{{ __('Página pública que el asesor comparte al listar los programas de esta línea. Solo https.') }}</p>
+                        @error('viewingUrl') <p class="ui-error" id="kc-official-url-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
                     </form>
-                    @if ($viewingSections !== [])
-                        <nav class="kc-drawer-nav">
-                            <h5>{{ __('Secciones') }}</h5>
-                            @foreach ($viewingSections as $sec)
-                                <div>{{ $sec }}</div>
-                            @endforeach
-                        </nav>
-                    @endif
-                    <div class="kc-prose">{!! $viewingHtml !!}</div>
+                    <div @class(['ui-doc' => $viewingSections !== []])>
+                        @if ($viewingSections !== [])
+                            <nav aria-label="{{ __('Secciones') }}">
+                                <p class="ui-card-kicker ui-card-kicker--flush">{{ __('Secciones') }}</p>
+                                <ul class="ui-doc-nav">
+                                    @foreach ($viewingSections as $sec)
+                                        <li>{{ $sec }}</li>
+                                    @endforeach
+                                </ul>
+                            </nav>
+                        @endif
+                        <div class="ui-prose">{!! $viewingHtml !!}</div>
+                    </div>
                 </div>
-            </aside>
-        @endif
+            </div>
+        </div>
+    @endif
 
-        {{-- Modal «Añadir programa» (alta individual en el catálogo) --}}
-        @if ($showAddProgram)
-            <div class="kc-modal-wrap" wire:click="closeAddProgram">
-                <div class="kc-modal" wire:click.stop role="dialog" aria-modal="true" aria-labelledby="kc-add-program-title">
-                    <h2 id="kc-add-program-title">{{ __('Añadir programa al catálogo') }}</h2>
-                    <p>{{ __('Se crea en el catálogo institucional, activo, y queda elegido para subir su ficha.') }}</p>
-                    <form wire:submit="createProgram" class="kc-modal-form">
-                        <label class="kc-field">
-                            <span class="kc-field-label">{{ __('Nombre del programa') }}</span>
-                            <input type="text" wire:model="newProgramName" class="kc-input" placeholder="{{ __('Ej.: Micro MBA') }}" maxlength="200" autofocus>
-                            @error('newProgramName') <span class="kc-err">{{ $message }}</span> @enderror
-                        </label>
-                        <label class="kc-field">
-                            <span class="kc-field-label">{{ __('Código') }}</span>
-                            <input type="text" wire:model="newProgramCode" class="kc-input" placeholder="{{ __('Ej.: MMBA-001') }}" maxlength="40">
-                            @error('newProgramCode') <span class="kc-err">{{ $message }}</span> @enderror
-                        </label>
-                        <div class="kc-field">
-                            <span class="kc-field-label">{{ __('Línea') }}</span>
+    {{-- Modal «Añadir programa» (alta individual en el catálogo) --}}
+    @if ($showAddProgram)
+        <div class="ui-modal-bg" wire:click="closeAddProgram">
+            <div class="ui-modal ui-modal--sm" wire:click.stop role="dialog" aria-modal="true" aria-labelledby="kc-add-program-title">
+                <div class="ui-modal-h">
+                    <div>
+                        <h2 class="ui-modal-title" id="kc-add-program-title"><x-ui.icon name="plus" /> {{ __('Añadir programa al catálogo') }}</h2>
+                        <p class="ui-modal-sub">{{ __('Se crea en el catálogo institucional, activo, y queda elegido para subir su ficha.') }}</p>
+                    </div>
+                    <x-ui.button variant="ghost" icon="x" wire:click="closeAddProgram" :aria-label="__('Cerrar')" />
+                </div>
+                <form wire:submit="createProgram" class="ui-modal-form">
+                    <div class="ui-modal-b">
+                        <x-ui.field :label="__('Nombre del programa')" for="kc-np-name" :error="$errors->first('newProgramName')">
+                            <input id="kc-np-name" type="text" wire:model="newProgramName" placeholder="{{ __('Ej.: Micro MBA') }}" maxlength="200" autofocus
+                                @class(['ui-input', 'is-invalid' => $errors->has('newProgramName')]) @error('newProgramName') aria-describedby="kc-np-name-error" @enderror>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Código')" for="kc-np-code" :error="$errors->first('newProgramCode')">
+                            <input id="kc-np-code" type="text" wire:model="newProgramCode" placeholder="{{ __('Ej.: MMBA-001') }}" maxlength="40"
+                                @class(['ui-input', 'is-invalid' => $errors->has('newProgramCode')]) @error('newProgramCode') aria-describedby="kc-np-code-error" @enderror>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Línea')" for="kc-np-line" :error="$errors->first('newProgramLine')">
                             @include('ai::livewire.knowledge._dropdown', [
-                                'model' => 'newProgramLine', 'live' => true, 'field' => true,
+                                'model' => 'newProgramLine', 'live' => true, 'field' => true, 'id' => 'kc-np-line',
                                 'options' => collect($programLines)->map(fn ($l) => __($l))->all(),
                                 'placeholder' => __('Elige la línea…'), 'aria' => __('Línea del programa'),
                             ])
-                            @error('newProgramLine') <span class="kc-err">{{ $message }}</span> @enderror
-                        </div>
+                        </x-ui.field>
                         @if ($newProgramHasAreas)
-                            <div class="kc-field">
-                                <span class="kc-field-label">{{ __('Área') }}</span>
+                            <x-ui.field :label="__('Área')" for="kc-np-area" :error="$errors->first('newProgramArea')">
                                 @include('ai::livewire.knowledge._dropdown', [
-                                    'model' => 'newProgramArea', 'live' => false, 'field' => true,
+                                    'model' => 'newProgramArea', 'live' => false, 'field' => true, 'id' => 'kc-np-area',
                                     'options' => $areas->mapWithKeys(fn ($a) => [$a->id => $a->name_es])->all(),
                                     'placeholder' => __('— elige un área —'), 'aria' => __('Área'),
                                 ])
-                                @error('newProgramArea') <span class="kc-err">{{ $message }}</span> @enderror
-                            </div>
+                            </x-ui.field>
                         @endif
-                        <label class="kc-field">
-                            <span class="kc-field-label">{{ __('URL de la ficha (opcional)') }}</span>
-                            <input type="url" wire:model="newProgramUrl" class="kc-input" placeholder="https://" maxlength="500">
-                            @error('newProgramUrl') <span class="kc-err">{{ $message }}</span> @enderror
-                        </label>
+                        <x-ui.field :label="__('URL de la ficha (opcional)')" for="kc-np-url" :error="$errors->first('newProgramUrl')">
+                            <input id="kc-np-url" type="url" wire:model="newProgramUrl" placeholder="https://" maxlength="500"
+                                @class(['ui-input', 'is-invalid' => $errors->has('newProgramUrl')]) @error('newProgramUrl') aria-describedby="kc-np-url-error" @enderror>
+                        </x-ui.field>
 
                         @if ($inactiveMatchId !== null)
-                            <div class="kc-modal-note">
-                                {{ __('Ese programa ya existe pero está inactivo. Puedes activarlo en lugar de crear otro.') }}
-                                <div style="margin-top:8px"><button type="button" wire:click="activateMatchedProgram" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="check" /> {{ __('Activar el existente') }}</button></div>
+                            <div class="ui-callout ui-tone--warning ui-callout--stack">
+                                <span>{{ __('Ese programa ya existe pero está inactivo. Puedes activarlo en lugar de crear otro.') }}</span>
+                                <div><x-ui.button size="sm" icon="check" wire:click="activateMatchedProgram">{{ __('Activar el existente') }}</x-ui.button></div>
                             </div>
                         @endif
+                    </div>
 
-                        <div class="kc-modal-foot">
-                            <button type="button" wire:click="closeAddProgram" class="kc-btn kc-btn-ghost kc-btn-sm">{{ __('Cancelar') }}</button>
-                            <button type="submit" wire:loading.attr="disabled" wire:target="createProgram" class="kc-btn kc-btn-primary kc-btn-sm">
-                                <span wire:loading.remove wire:target="createProgram" class="kc-inl"><x-ui.icon name="plus" /> {{ __('Crear programa') }}</span>
-                                <span wire:loading.inline-flex wire:target="createProgram" class="kc-gap"><span class="mca-spin"></span> {{ __('Creando…') }}</span>
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                    <div class="ui-modal-f">
+                        <x-ui.button variant="ghost" wire:click="closeAddProgram">{{ __('Cancelar') }}</x-ui.button>
+                        <x-ui.button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="createProgram">
+                            <span wire:loading.remove wire:target="createProgram" class="ui-btn-label"><x-ui.icon name="plus" /> {{ __('Crear programa') }}</span>
+                            <span wire:loading.inline-flex wire:target="createProgram"><span class="ui-spin"></span>&nbsp;{{ __('Creando…') }}</span>
+                        </x-ui.button>
+                    </div>
+                </form>
             </div>
-        @endif
+        </div>
+    @endif
 
-        {{-- Modal «Importar programas» (alta masiva: revisar y después crear) --}}
-        @if ($showImportPrograms)
-            <div class="kc-modal-wrap" wire:click="closeImportPrograms">
-                <div class="kc-modal kc-modal-wide" wire:click.stop role="dialog" aria-modal="true" aria-labelledby="kc-import-title">
-                    <h2 id="kc-import-title">{{ __('Importar programas al catálogo') }}</h2>
-                    <p>{!! __('Una fila por programa: <code>nombre | código | línea | área | URL</code>. Área solo en Microcredenciales (obligatoria ahí); URL opcional. Se admite pegar desde Excel (tabuladores) o separar con <code>|</code> o <code>;</code>.') !!}</p>
-                    <p class="kc-auto-help">{{ __('Líneas válidas:') }} @foreach ($programLines as $slug => $label)<code>{{ $slug }}</code>@if (! $loop->last), @endif @endforeach</p>
+    {{-- Modal «Importar programas» (alta masiva: revisar y después crear) --}}
+    @if ($showImportPrograms)
+        <div class="ui-modal-bg" wire:click="closeImportPrograms">
+            <div class="ui-modal ui-modal--md" wire:click.stop role="dialog" aria-modal="true" aria-labelledby="kc-import-title">
+                <div class="ui-modal-h">
+                    <h2 class="ui-modal-title" id="kc-import-title"><x-ui.icon name="upload" /> {{ __('Importar programas al catálogo') }}</h2>
+                    <x-ui.button variant="ghost" icon="x" wire:click="closeImportPrograms" :aria-label="__('Cerrar')" />
+                </div>
+                <div class="ui-modal-b">
+                    <p class="ui-help">{!! __('Una fila por programa: <code>nombre | código | línea | área | URL</code>. Área solo en Microcredenciales (obligatoria ahí); URL opcional. Se admite pegar desde Excel (tabuladores) o separar con <code>|</code> o <code>;</code>.') !!}</p>
+                    <p class="ui-help">{{ __('Líneas válidas:') }} @foreach ($programLines as $slug => $label)<code>{{ $slug }}</code>@if (! $loop->last), @endif @endforeach</p>
 
-                    <label class="kc-field">
-                        <span class="kc-field-label">{{ __('Programas') }}</span>
-                        <textarea wire:model="importText" class="kc-input kc-import-text" rows="7" spellcheck="false"
+                    <x-ui.field :label="__('Programas')" for="kc-import-text" :error="$errors->first('importText')">
+                        <textarea id="kc-import-text" wire:model="importText" rows="7" spellcheck="false"
+                                  @class(['ui-input', 'ui-textarea', 'ui-mono', 'is-invalid' => $errors->has('importText')]) @error('importText') aria-describedby="kc-import-text-error" @enderror
                                   placeholder="Micro MBA | MMBA-001 | micro_mba&#10;{{ __('Diploma Avanzado en Dirección Estratégica') }} | DA-020 | diplomas_avanzados"></textarea>
-                        @error('importText') <span class="kc-err">{{ $message }}</span> @enderror
-                    </label>
+                    </x-ui.field>
 
                     @if ($importPreview !== [])
                         @php $s = $importPreview['summary'] ?? []; @endphp
-                        <div class="kc-import-summary">
+                        <div class="ui-chips" role="status">
                             @if ($importResult !== [])
-                                <span class="kc-badge t-green">{{ __(':n creados', ['n' => $importResult['created']]) }}</span>
-                                <span class="kc-badge t-amber">{{ __(':n ya existían', ['n' => $importResult['duplicate']]) }}</span>
-                                <span class="kc-badge t-red">{{ __(':n omitidos por errores', ['n' => $importResult['error']]) }}</span>
+                                <x-ui.badge tone="success">{{ __(':n creados', ['n' => $importResult['created']]) }}</x-ui.badge>
+                                <x-ui.badge tone="warning">{{ __(':n ya existían', ['n' => $importResult['duplicate']]) }}</x-ui.badge>
+                                <x-ui.badge tone="danger">{{ __(':n omitidos por errores', ['n' => $importResult['error']]) }}</x-ui.badge>
                             @else
-                                <span class="kc-badge t-green">{{ __(':n se crearán', ['n' => $s['create'] ?? 0]) }}</span>
-                                <span class="kc-badge t-amber">{{ __(':n duplicados', ['n' => $s['duplicate'] ?? 0]) }}</span>
-                                <span class="kc-badge t-red">{{ __(':n con errores', ['n' => $s['error'] ?? 0]) }}</span>
+                                <x-ui.badge tone="success">{{ __(':n se crearán', ['n' => $s['create'] ?? 0]) }}</x-ui.badge>
+                                <x-ui.badge tone="warning">{{ __(':n duplicados', ['n' => $s['duplicate'] ?? 0]) }}</x-ui.badge>
+                                <x-ui.badge tone="danger">{{ __(':n con errores', ['n' => $s['error'] ?? 0]) }}</x-ui.badge>
                             @endif
                             @if ($importPreview['truncated'] ?? false)
-                                <span class="kc-badge t-gray">{{ __('Solo se procesan las primeras :n filas.', ['n' => \Modules\Catalog\Services\ProgramProvisioningService::MAX_BULK_ROWS]) }}</span>
+                                <x-ui.badge tone="neutral" class="ui-badge--wrap">{{ __('Solo se procesan las primeras :n filas.', ['n' => \Modules\Catalog\Services\ProgramProvisioningService::MAX_BULK_ROWS]) }}</x-ui.badge>
                             @endif
                         </div>
-                        <div class="kc-import-table">
-                            <table>
+                        <div class="ui-scroll-box">
+                            <table class="ui-table ui-table--dense">
                                 <thead><tr><th>#</th><th>{{ __('Código') }}</th><th>{{ __('Nombre') }}</th><th>{{ __('Línea') }}</th><th>{{ __('Resultado') }}</th></tr></thead>
                                 <tbody>
                                     @foreach ($importPreview['rows'] ?? [] as $r)
                                         <tr wire:key="imp-{{ $r['line'] }}">
-                                            <td class="t-mut">{{ $r['line'] }}</td>
-                                            <td><span class="kc-code">{{ $r['code'] !== '' ? $r['code'] : '—' }}</span></td>
-                                            <td>{{ $r['name'] !== '' ? $r['name'] : '—' }}</td>
-                                            <td>{{ $r['program_line'] !== '' ? __($r['program_line']) : '—' }}</td>
-                                            <td>
+                                            <td class="t-3" data-label="#">{{ $r['line'] }}</td>
+                                            <td data-label="{{ __('Código') }}"><span class="ui-mono">{{ $r['code'] !== '' ? $r['code'] : '—' }}</span></td>
+                                            <td class="rt-primary">{{ $r['name'] !== '' ? $r['name'] : '—' }}</td>
+                                            <td data-label="{{ __('Línea') }}">{{ $r['program_line'] !== '' ? __($r['program_line']) : '—' }}</td>
+                                            <td data-label="{{ __('Resultado') }}">
                                                 @switch($r['status'])
-                                                    @case('created') <span class="kc-badge t-green">{{ __('Creado') }}</span> @break
-                                                    @case('create') <span class="kc-badge t-green">{{ __('Se creará') }}</span> @break
-                                                    @case('duplicate') <span class="kc-badge t-amber">{{ __('Ya existe') }}</span> @break
-                                                    @default <span class="kc-badge t-red">{{ __('Error') }}</span>
+                                                    @case('created') <x-ui.badge tone="success">{{ __('Creado') }}</x-ui.badge> @break
+                                                    @case('create') <x-ui.badge tone="success">{{ __('Se creará') }}</x-ui.badge> @break
+                                                    @case('duplicate') <x-ui.badge tone="warning">{{ __('Ya existe') }}</x-ui.badge> @break
+                                                    @default <x-ui.badge tone="danger">{{ __('Error') }}</x-ui.badge>
                                                 @endswitch
-                                                @if ($r['message'] !== '') <div class="kc-import-msg">{{ $r['message'] }}</div> @endif
+                                                @if ($r['message'] !== '') <span class="t-sub">{{ $r['message'] }}</span> @endif
                                             </td>
                                         </tr>
                                     @endforeach
@@ -531,48 +516,48 @@
                             </table>
                         </div>
                     @endif
+                </div>
 
-                    <div class="kc-modal-foot">
-                        <button type="button" wire:click="closeImportPrograms" class="kc-btn kc-btn-ghost kc-btn-sm">{{ $importResult !== [] ? __('Cerrar') : __('Cancelar') }}</button>
-                        @if ($importResult === [])
-                            <button type="button" wire:click="previewImport" wire:loading.attr="disabled" wire:target="previewImport" class="kc-btn kc-btn-ghost kc-btn-sm"><x-ui.icon name="search" /> {{ __('Revisar') }}</button>
-                            @if (($importPreview['summary']['create'] ?? 0) > 0)
-                                <button type="button" wire:click="confirmImport" wire:loading.attr="disabled" wire:target="confirmImport" class="kc-btn kc-btn-primary kc-btn-sm">
-                                    <span wire:loading.remove wire:target="confirmImport" class="kc-inl"><x-ui.icon name="check" /> {{ __('Crear :n programa(s)', ['n' => $importPreview['summary']['create']]) }}</span>
-                                    <span wire:loading.inline-flex wire:target="confirmImport" class="kc-gap"><span class="mca-spin"></span> {{ __('Creando…') }}</span>
-                                </button>
-                            @endif
+                <div class="ui-modal-f">
+                    <x-ui.button variant="ghost" wire:click="closeImportPrograms">{{ $importResult !== [] ? __('Cerrar') : __('Cancelar') }}</x-ui.button>
+                    @if ($importResult === [])
+                        <x-ui.button icon="search" wire:click="previewImport" wire:loading.attr="disabled" wire:target="previewImport">{{ __('Revisar') }}</x-ui.button>
+                        @if (($importPreview['summary']['create'] ?? 0) > 0)
+                            <x-ui.button variant="primary" wire:click="confirmImport" wire:loading.attr="disabled" wire:target="confirmImport">
+                                <span wire:loading.remove wire:target="confirmImport" class="ui-btn-label"><x-ui.icon name="check" /> {{ __('Crear :n programa(s)', ['n' => $importPreview['summary']['create']]) }}</span>
+                                <span wire:loading.inline-flex wire:target="confirmImport"><span class="ui-spin"></span>&nbsp;{{ __('Creando…') }}</span>
+                            </x-ui.button>
                         @endif
-                    </div>
+                    @endif
                 </div>
             </div>
-        @endif
+        </div>
+    @endif
 
-        {{-- Modal de borrado --}}
-        @if ($deletingId !== null)
-            <div class="kc-modal-wrap" wire:click="cancelDelete">
-                <div class="kc-modal" wire:click.stop role="dialog" aria-modal="true">
-                    <div style="display:flex;gap:12px;align-items:flex-start">
-                        <span class="kc-ic t-red"><x-ui.icon name="alert-triangle" /></span>
-                        <div>
-                            <h2>{{ __('Borrar fuente de conocimiento') }}</h2>
-                            <p>{{ __('Vas a eliminar «:name». Se borrará la fila, sus asignaciones a agentes y su archivo .md. Esta acción no se puede deshacer.', ['name' => $deletingName]) }}</p>
-                            @if ($deletingAgents !== [])
-                                <div class="kc-modal-note"><strong>{{ __('La usan :n agente(s):', ['n' => count($deletingAgents)]) }}</strong> {{ implode(', ', $deletingAgents) }}</div>
-                            @else
-                                <p style="margin:0">{{ __('Ningún agente la tiene asignada.') }}</p>
-                            @endif
-                        </div>
-                    </div>
-                    <div class="kc-modal-foot">
-                        <button type="button" wire:click="cancelDelete" class="kc-btn kc-btn-ghost kc-btn-sm">{{ __('Cancelar') }}</button>
-                        <button type="button" wire:click="delete" wire:loading.attr="disabled" class="kc-btn kc-btn-danger kc-btn-sm">
-                            <span wire:loading.remove wire:target="delete" class="kc-inl"><x-ui.icon name="trash" /> {{ __('Borrar definitivamente') }}</span>
-                            <span wire:loading.inline-flex wire:target="delete" class="kc-gap"><span class="mca-spin"></span> {{ __('Borrando…') }}</span>
-                        </button>
-                    </div>
+    {{-- Modal de borrado --}}
+    @if ($deletingId !== null)
+        <div class="ui-modal-bg" wire:click="cancelDelete">
+            <div class="ui-modal ui-modal--sm" wire:click.stop role="dialog" aria-modal="true" aria-labelledby="kc-delete-title">
+                <div class="ui-modal-h">
+                    <h2 class="ui-modal-title" id="kc-delete-title"><x-ui.icon name="alert-triangle" class="ui-text-danger" /> {{ __('Borrar fuente de conocimiento') }}</h2>
+                    <x-ui.button variant="ghost" icon="x" wire:click="cancelDelete" :aria-label="__('Cerrar')" />
+                </div>
+                <div class="ui-modal-b">
+                    <p class="ui-note-body">{{ __('Vas a eliminar «:name». Se borrará la fila, sus asignaciones a agentes y su archivo .md. Esta acción no se puede deshacer.', ['name' => $deletingName]) }}</p>
+                    @if ($deletingAgents !== [])
+                        <div class="ui-callout ui-tone--warning"><x-ui.icon name="alert-triangle" /><span><b>{{ __('La usan :n agente(s):', ['n' => count($deletingAgents)]) }}</b> {{ implode(', ', $deletingAgents) }}</span></div>
+                    @else
+                        <p class="ui-help">{{ __('Ningún agente la tiene asignada.') }}</p>
+                    @endif
+                </div>
+                <div class="ui-modal-f">
+                    <x-ui.button variant="ghost" wire:click="cancelDelete">{{ __('Cancelar') }}</x-ui.button>
+                    <x-ui.button variant="danger" wire:click="delete" wire:loading.attr="disabled">
+                        <span wire:loading.remove wire:target="delete" class="ui-btn-label"><x-ui.icon name="trash" /> {{ __('Borrar definitivamente') }}</span>
+                        <span wire:loading.inline-flex wire:target="delete"><span class="ui-spin"></span>&nbsp;{{ __('Borrando…') }}</span>
+                    </x-ui.button>
                 </div>
             </div>
-        @endif
-    </div>
+        </div>
+    @endif
 </div>

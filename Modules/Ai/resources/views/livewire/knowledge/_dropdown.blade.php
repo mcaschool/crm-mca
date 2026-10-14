@@ -1,5 +1,6 @@
 {{--
-    Desplegable propio del Centro de Conocimiento (Alpine, incluido con Livewire).
+    Desplegable propio del Centro de Conocimiento (Alpine, incluido con Livewire). Presentación
+    del kit: botón con aspecto de .ui-select y opciones en .ui-menu (.ui-listbox).
 
     El enlace con Livewire NO cambia: un <select> nativo oculto lleva el mismo wire:model
     (con o sin .live) y este componente solo le escribe el valor y dispara «change». El valor
@@ -14,16 +15,18 @@
       $label        prefijo gris del botón (filtros) o null
       $aria         etiqueta accesible
       $emptyOption  bool — ofrecer el valor vacío como opción (p. ej. «Todas»)
-      $field        bool — ancho completo (tarjetas) en vez de «pastilla» (filtros)
+      $field        bool — ancho completo (tarjetas) en vez de filtro de la barra
+      $id           id opcional del botón (para <label for>)
 --}}
 @php
     $kcDdLive = $live ?? false;
     $kcDdLabel = $label ?? null;
     $kcDdEmpty = $emptyOption ?? false;
     $kcDdField = $field ?? false;
+    $kcDdId = $id ?? null;
     $kcDdOptions = collect($options)->mapWithKeys(fn ($l, $v) => [(string) $v => (string) $l]);
 @endphp
-<div @class(['kc-dd', 'kc-dd-field' => $kcDdField]) wire:key="dd-{{ $model }}"
+<div @class(['ui-listbox', 'ui-listbox--block' => $kcDdField]) wire:key="dd-{{ $model }}"
      x-data="{
         open: false,
         active: -1,
@@ -61,43 +64,46 @@
           (p. ej. una respuesta de Livewire que llega con el panel ya abierto). --}}
      @keydown.escape.window="if (open) { $event.preventDefault(); close(true) }"
      @click.outside="close(false)">
-    <select wire:model{{ $kcDdLive ? '.live' : '' }}="{{ $model }}" x-ref="native" class="kc-native" tabindex="-1" aria-hidden="true">
+    <select wire:model{{ $kcDdLive ? '.live' : '' }}="{{ $model }}" x-ref="native" class="ui-sr" tabindex="-1" aria-hidden="true">
         <option value="">{{ $placeholder }}</option>
         @foreach ($kcDdOptions as $v => $l)
             <option value="{{ $v }}">{{ $l }}</option>
         @endforeach
     </select>
 
-    <button type="button" x-ref="btn" class="kc-dd-btn" @click="toggle()"
+    {{-- En los filtros, un valor distinto de «todos» resalta el control (como x-ui.select :active). --}}
+    <button type="button" x-ref="btn" @if ($kcDdId) id="{{ $kcDdId }}" @endif
+            @class(['ui-select', 'ui-listbox-btn', 'ui-select--filter' => ! $kcDdField])
+            @unless ($kcDdField) :class="{ 'is-active': value !== '' }" @endunless
+            @click="toggle()"
             @keydown.arrow-down.prevent="show()" @keydown.arrow-up.prevent="show()"
             aria-haspopup="listbox" :aria-expanded="open ? 'true' : 'false'" aria-label="{{ $aria }}">
         @if ($kcDdLabel)
-            <span class="kc-dd-lbl">{{ $kcDdLabel }}</span>
+            <span class="ui-listbox-lbl">{{ $kcDdLabel }}</span>
         @endif
-        <span class="kc-dd-val" wire:ignore x-text="labelFor(value)" :class="{ 'is-ph': value === '' && ! @js($kcDdEmpty) }">{{ $placeholder }}</span>
-        <x-ui.icon name="chevron-down" class="kc-dd-chev" />
+        <span class="ui-listbox-val" wire:ignore x-text="labelFor(value)" :class="{ 'is-ph': value === '' && ! @js($kcDdEmpty) }">{{ $placeholder }}</span>
     </button>
 
-    <div x-ref="panel" class="kc-dd-panel" x-show="open" x-cloak role="listbox" aria-label="{{ $aria }}"
+    <div x-ref="panel" class="ui-menu" x-show="open" x-cloak role="listbox" aria-label="{{ $aria }}"
          @keydown.arrow-down.prevent="move(1)" @keydown.arrow-up.prevent="move(-1)"
          @keydown.home.prevent="edge(false)" @keydown.end.prevent="edge(true)"
          @keydown.enter.prevent="$event.target.closest('[role=option]')?.click()"
          @keydown.tab="close(false)">
         @if ($kcDdEmpty)
-            <button type="button" role="option" class="kc-dd-opt" data-value="" data-label="{{ $placeholder }}"
-                    :class="{ 'on': value === '' }" :aria-selected="value === '' ? 'true' : 'false'" @click="choose('')">
+            <button type="button" role="option" class="ui-menu-item" data-value="" data-label="{{ $placeholder }}"
+                    :aria-selected="value === '' ? 'true' : 'false'" @click="choose('')">
                 <span>{{ $placeholder }}</span>
-                <svg class="kc-dd-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                <x-ui.icon name="check" class="ui-menu-check" aria-hidden="true" />
             </button>
         @endif
         @forelse ($kcDdOptions as $v => $l)
-            <button type="button" role="option" class="kc-dd-opt" data-value="{{ $v }}" data-label="{{ $l }}" wire:key="ddo-{{ $model }}-{{ $v }}"
-                    :class="{ 'on': value === @js($v) }" :aria-selected="value === @js($v) ? 'true' : 'false'" @click="choose(@js($v))">
+            <button type="button" role="option" class="ui-menu-item" data-value="{{ $v }}" data-label="{{ $l }}" wire:key="ddo-{{ $model }}-{{ $v }}"
+                    :aria-selected="value === @js($v) ? 'true' : 'false'" @click="choose(@js($v))">
                 <span>{{ $l }}</span>
-                <svg class="kc-dd-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                <x-ui.icon name="check" class="ui-menu-check" aria-hidden="true" />
             </button>
         @empty
-            <div class="kc-dd-none">{{ __('Sin resultados') }}</div>
+            <div class="ui-menu-empty">{{ __('Sin resultados') }}</div>
         @endforelse
     </div>
 </div>
