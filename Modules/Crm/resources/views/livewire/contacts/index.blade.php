@@ -1,5 +1,5 @@
 <div class="mca-page">
-    <x-ui.page-header :title="__('Contactos')" :count="$contacts->count()" :subtitle="__('Personas que han hablado con un asesor o han dejado sus datos.')" />
+    <x-ui.page-header :title="__('Contactos')" :count="$contacts->total()" :subtitle="__('Personas que han hablado con un asesor o han dejado sus datos.')" />
 
     <div class="ui-card ui-card--list">
         <div class="ui-toolbar">
@@ -54,5 +54,6 @@
             </tbody>
         </table>
         </div>
+        <x-ui.pager :paginator="$contacts" />
     </div>
 </div>

@@ -5,18 +5,26 @@ declare(strict_types=1);
 namespace Modules\Crm\Livewire\Contacts;
 
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Collection;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithPagination;
 use Modules\Crm\Models\Contact;
 
 /**
  * Listado de contactos con busqueda por nombre/correo. Aislado por scope global.
+ *
+ * Paginado: la cabecera muestra el TOTAL real (COUNT de la consulta filtrada, sin cargar las
+ * filas) y el paginador, el tramo visible. Antes se cargaban como máximo 200 y se contaban esas.
  */
 #[Layout('layouts.app')]
 class Index extends Component
 {
+    use WithPagination;
+
+    public const PER_PAGE = 25;
+
     #[Url]
     public string $search = '';
 
@@ -32,10 +40,15 @@ class Index extends Component
         $this->dispatch('crm-badges-updated', leads: $counts['leads'], contacts: $counts['contacts']);
     }
 
+    public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
     /**
-     * @return Collection<int, Contact>
+     * @return LengthAwarePaginator<int, Contact>
      */
-    private function contacts(): Collection
+    private function contacts(): LengthAwarePaginator
     {
         $term = trim($this->search);
 
@@ -49,8 +62,8 @@ class Index extends Component
                 });
             })
             ->orderByDesc('created_at')
-            ->limit(200)
-            ->get();
+            ->orderByDesc('id')
+            ->paginate(self::PER_PAGE);
     }
 
     public function render(): View
