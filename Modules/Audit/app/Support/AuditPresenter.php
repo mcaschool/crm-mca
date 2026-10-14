@@ -69,6 +69,19 @@ final class AuditPresenter
         'meta_lead_page.receiving_enabled' => ['label' => 'Recepción de formularios activada', 'group' => 'ok'],
         'meta_lead_page.receiving_paused' => ['label' => 'Recepción de formularios en pausa', 'group' => 'neutral'],
         'meta_lead_page.reception_test' => ['label' => 'Prueba completa de recepción', 'group' => 'info'],
+        // Publicador (borradores, programación y gestión por red)
+        'social_post.draft_saved' => ['label' => 'Borrador de publicación guardado', 'group' => 'neutral'],
+        'social_post.scheduled' => ['label' => 'Publicación programada', 'group' => 'info'],
+        'social_post.rescheduled' => ['label' => 'Publicación reprogramada', 'group' => 'info'],
+        'social_post.cancelled' => ['label' => 'Programación cancelada', 'group' => 'warn'],
+        'social_post.returned_to_draft' => ['label' => 'Publicación devuelta a borrador', 'group' => 'neutral'],
+        'social_post.published_now' => ['label' => 'Publicación lanzada manualmente', 'group' => 'info'],
+        'social_post.deleted' => ['label' => 'Borrador de publicación eliminado', 'group' => 'warn'],
+        'social_post.retry' => ['label' => 'Reintento de publicación en una red', 'group' => 'info'],
+        'social_post.remote_deleted' => ['label' => 'Publicación eliminada de Facebook', 'group' => 'warn'],
+        'social_post.remote_updated' => ['label' => 'Texto editado en Facebook', 'group' => 'info'],
+        'social_post.executed' => ['label' => 'Publicación ejecutada', 'group' => 'ok'],
+        'social_post.interrupted' => ['label' => 'Publicación interrumpida', 'group' => 'warn'],
     ];
 
     /** @var array<string, string> */
@@ -82,6 +95,7 @@ final class AuditPresenter
         'Modules\Catalog\Models\Program' => 'Programa',
         'Modules\Social\Models\MetaConnection' => 'Conexión con Meta',
         'Modules\Social\Models\MetaLeadPage' => 'Página de formularios',
+        'Modules\Social\Models\SocialPost' => 'Publicación',
         'Modules\Crm\Models\VideoRoom' => 'Sala de videoconferencia',
     ];
 

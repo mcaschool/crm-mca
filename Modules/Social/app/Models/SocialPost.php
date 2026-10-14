@@ -47,6 +47,8 @@ use Modules\Social\Database\Factories\SocialPostFactory;
  * @property string|null $last_error
  * @property Carbon|null $cancelled_at
  * @property int|null $cancelled_by
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  */
 class SocialPost extends Model
 {

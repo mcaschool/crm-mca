@@ -160,6 +160,9 @@ $panel->group(function () {
 
     // Publicador de contenido (FB Página + Instagram; acceso canPublishSocial, gated en mount).
     Route::get('/social/publicar', \Modules\Social\Livewire\Publisher::class)->name('social.publisher');
+    Route::get('/social/publicar/historial', \Modules\Social\Livewire\PublisherHistory::class)->name('social.publisher.history');
+    Route::get('/social/publicar/programadas', \Modules\Social\Livewire\PublisherScheduled::class)->name('social.publisher.scheduled');
+    Route::get('/social/publicar/calendario', \Modules\Social\Livewire\PublisherCalendar::class)->name('social.publisher.calendar');
 
     // Admin de canales sociales (Configuraciones; SOLO Admin, SocialChannelPolicy en mount).
     Route::get('/social/canales', \Modules\Social\Livewire\Channels::class)->name('social.channels');

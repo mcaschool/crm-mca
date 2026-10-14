@@ -28,6 +28,8 @@ use Modules\Social\Database\Factories\SocialPostTargetFactory;
  * @property Carbon|null $last_attempt_at
  * @property string|null $permalink
  * @property Carbon|null $remote_deleted_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  */
 class SocialPostTarget extends Model
 {

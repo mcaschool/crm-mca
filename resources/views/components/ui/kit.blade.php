@@ -1078,6 +1078,58 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
   .ui-pub-res{flex-wrap:wrap}
   .ui-pub-res .ui-list-aside{flex-basis:100%;padding-left:32px}
 }
+/* publicador · programación, historial, programadas y calendario editorial */
+.ui-pub-editing{align-items:center;margin:0 0 16px}
+.ui-pub-when{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ui-pub-when .ui-select{font-size:13.5px}
+.ui-pub-thumb{position:relative;width:48px;height:48px;flex:0 0 auto;display:grid;place-items:center;overflow:hidden;border-radius:8px;
+  color:var(--mca-text-3);background:var(--mca-surface-2);box-shadow:inset 0 0 0 1px var(--mca-line)}
+.ui-pub-thumb.is-story{width:36px}
+.ui-pub-thumb img,.ui-pub-thumb video{width:100%;height:100%;object-fit:cover;display:block}
+.ui-pub-thumb > .ic{width:18px;height:18px}
+.ui-pub-thumb-badge{position:absolute;right:3px;bottom:3px;width:16px;height:16px;display:grid;place-items:center;border-radius:4px;color:#fff;background:rgba(19,37,61,.72)}
+.ui-pub-thumb-badge .ic{width:10px;height:10px}
+.ui-pub-excerpt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;white-space:normal;max-width:340px}
+.ui-pub-netstat{display:inline-flex;align-items:center;gap:8px}
+.ui-pub-netstat-i{position:relative;display:inline-flex}
+.ui-pub-netstat-i > i{position:absolute;right:-3px;bottom:-3px;width:9px;height:9px;border-radius:50%;background:var(--tone);box-shadow:0 0 0 2px var(--mca-surface)}
+.ui-pub-row{align-items:center;gap:12px}
+.ui-pub-row-main{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:3px;padding:0;border:0;background:none;font:inherit;text-align:left;color:inherit;cursor:pointer;border-radius:6px}
+.ui-pub-row-main:hover .ui-list-title{color:var(--mca-blue)}
+.ui-pub-row-main:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+.ui-pub-detail{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:20px;align-items:start}
+.ui-pub-detail-media{display:grid;place-items:center;padding:10px;border-radius:var(--mca-r-ctl);background:var(--mca-surface-2);box-shadow:inset 0 0 0 1px var(--mca-line)}
+.ui-pub-detail-media img,.ui-pub-detail-media video{display:block;max-width:100%;max-height:420px;border-radius:6px}
+.ui-pub-caption-view{margin:6px 0 0;padding:10px 12px;border-radius:var(--mca-r-ctl);background:var(--mca-surface-2);font-size:13.5px;line-height:1.55;color:var(--mca-text);white-space:pre-line;overflow-wrap:anywhere;max-height:240px;overflow:auto}
+.ui-pub-cal-title{margin:0;display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;color:var(--mca-text)}
+.ui-pub-cal .ui-cal-month{border-top:1px solid var(--mca-line)}
+.ui-pub-chip{width:100%;border:0;background:none;font:inherit;text-align:left;cursor:pointer}
+.ui-pub-chip:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+.ui-pub-chip-nets{display:inline-flex;gap:2px;flex:0 0 auto}
+.ui-pub-chip-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.ui-pub-chip.is-cancelled .ui-pub-chip-t{text-decoration:line-through;color:var(--mca-text-3)}
+@container cell (max-width:129px){.ui-pub-chip-nets{display:none}}
+.ui-pub-agenda{display:flex;flex-direction:column}
+.ui-pub-agenda-day + .ui-pub-agenda-day{border-top:1px solid var(--mca-line)}
+.ui-pub-agenda-h{margin:0;padding:12px 18px 6px;font-size:13px;font-weight:600;color:var(--mca-text-2)}
+.ui-pub-agenda-h.is-today{color:var(--mca-blue)}
+.ui-pub-agenda-day .ui-list > li:first-child > .ui-list-item{border-top:0}
+.ui-pub-agenda .ui-list-item{padding-left:18px;padding-right:18px}
+.ui-pub-agenda-time{flex:0 0 46px;font-size:13px;font-weight:600;color:var(--mca-text);font-variant-numeric:tabular-nums}
+.ui-pub-agenda .ui-empty{padding:40px 20px}
+@media(max-width:767px){
+  .ui-pub-detail{grid-template-columns:minmax(0,1fr)}
+  .ui-pub-excerpt{max-width:none}
+}
+@media(max-width:640px){
+  .ui-pub-when{grid-template-columns:minmax(0,1fr)}
+  .ui-pub-editing{flex-wrap:wrap}
+  .ui-pub-cal .ui-toolbar{flex-wrap:wrap}
+  .ui-pub-row{flex-wrap:wrap}
+  .ui-pub-row > .ui-list-main,.ui-pub-row > .ui-pub-row-main{flex:1 1 150px;min-width:150px}
+  .ui-pub-row > .ui-badge{flex:0 0 auto;margin-left:auto}
+  .ui-pub-agenda .ui-list-item{padding-left:14px;padding-right:14px}
+}
 
 /* ==== etapa 6 · GRUPO A · Ajustes, notificaciones y perfil ==== */
 /* pestañas de una sección (p. ej. Ajustes): enlaces con role="tab"; la selección se marca con

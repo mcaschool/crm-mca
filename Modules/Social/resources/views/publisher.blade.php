@@ -15,6 +15,26 @@
 @endphp
 <div class="mca-page" wire:key="social-publisher">
     <x-ui.page-header :title="__('Publicador')" :subtitle="__('Publica un Post, un Reel o una Historia en la Página de Facebook y en Instagram.')" />
+    @include('social::partials.publisher-tabs')
+
+    @if ($notice)
+        <div class="ui-alert ui-tone--{{ $noticeTone }}" role="status"><x-ui.icon name="{{ $noticeTone === 'success' ? 'check' : 'alert-triangle' }}" /> {{ $notice }}</div>
+    @endif
+    @if ($editingPost)
+        @php $editTz = $editingPost->timezone ?: $scheduleTz; @endphp
+        <div class="ui-callout ui-tone--blue ui-pub-editing" data-testid="pub-editing">
+            <x-ui.icon name="pencil" />
+            <span>
+                @if ($editingPost->status === 'scheduled' && $editingPost->scheduled_at)
+                    {{ __('Editando una publicación programada para el :date (:tz).', ['date' => $editingPost->scheduled_at->copy()->setTimezone($editTz)->translatedFormat('j M Y · H:i'), 'tz' => $editTz]) }}
+                @else
+                    {{ __('Editando un borrador. Guárdalo, prográmalo o publícalo cuando esté listo.') }}
+                @endif
+            </span>
+            <span class="sp"></span>
+            <a href="{{ route('social.publisher') }}" class="ui-link">{{ __('Nueva publicación') }}</a>
+        </div>
+    @endif
 
     <div class="ui-pub" x-data="{ chars: ($wire.caption || '').length }" x-init="$wire.$watch('caption', v => chars = (v || '').length)">
         {{-- ===================== Contenido ===================== --}}
@@ -50,8 +70,18 @@
                 @if ($isVideo)
                     {{-- Subida de VIDEO (Reel / Historia de video). Requisito: MP4; el resto son
                          recomendaciones (Meta valida duración/FPS/resolución al publicar). --}}
-                    <label @class(['ui-drop', 'has-file' => (bool) $video, 'is-invalid' => $errors->has('video')])>
-                        @if ($video)
+                    <label @class(['ui-drop', 'has-file' => (bool) $video || (bool) $keptMedia, 'is-invalid' => $errors->has('video')])>
+                        @if (! $video && $keptMedia)
+                            {{-- Video guardado en el borrador / programada: se conserva si no se elige otro. --}}
+                            <span class="ui-drop-preview"><video src="{{ $keptMedia->mediaUrl() }}" preload="metadata" controls playsinline></video></span>
+                            <span class="ui-drop-file">
+                                <span class="ui-drop-meta">
+                                    <span class="ui-drop-title">{{ $keptMedia->media_name ?? __('Video guardado') }}</span>
+                                    <span class="ui-drop-hint">{{ __('Guardado en la publicación') }}@if ($keptMedia->media_size) · {{ number_format($keptMedia->media_size / 1048576, 1, '.', '') }} MB @endif</span>
+                                </span>
+                                <span class="ui-btn ui-btn--secondary ui-btn--sm" aria-hidden="true"><x-ui.icon name="refresh" /> {{ __('Haz clic para cambiar el video') }}</span>
+                            </span>
+                        @elseif ($video)
                             {{-- Identificación del archivo elegido: nombre ORIGINAL + tamaño real
                                  + máximo aplicable en este momento (cambia con las redes). --}}
                             <span class="ui-drop-file">
@@ -82,8 +112,17 @@
                     <div wire:loading wire:target="video" class="ui-help"><span class="ui-spin"></span> {{ __('Subiendo video…') }}</div>
                     @error('video') <p class="ui-error" id="pub-file-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
                 @else
-                    <label @class(['ui-drop', 'has-file' => (bool) $image, 'is-invalid' => $errors->has('image'), 'is-story' => $contentType === 'story'])>
-                        @if ($image)
+                    <label @class(['ui-drop', 'has-file' => (bool) $image || (bool) $keptMedia, 'is-invalid' => $errors->has('image'), 'is-story' => $contentType === 'story'])>
+                        @if (! $image && $keptMedia)
+                            <span class="ui-drop-preview"><img src="{{ $keptMedia->mediaUrl() }}" alt="{{ __('Vista previa') }}"></span>
+                            <span class="ui-drop-file">
+                                <span class="ui-drop-meta">
+                                    <span class="ui-drop-title">{{ $keptMedia->media_name ?? __('Imagen guardada') }}</span>
+                                    <span class="ui-drop-hint">{{ __('Guardada en la publicación') }}</span>
+                                </span>
+                                <span class="ui-btn ui-btn--secondary ui-btn--sm" aria-hidden="true"><x-ui.icon name="refresh" /> {{ __('Haz clic para cambiar la imagen') }}</span>
+                            </span>
+                        @elseif ($image)
                             <span class="ui-drop-preview"><img src="{{ $image->temporaryUrl() }}" alt="{{ __('Vista previa') }}"></span>
                             <span class="ui-drop-file">
                                 <span class="ui-drop-meta">
@@ -168,7 +207,7 @@
                     <dl class="ui-meta ui-pub-sum">
                         <dt>{{ __('Formato') }}</dt><dd>{{ $formats[$contentType][0] }} · {{ $isVideo ? __('Video') : __('Imagen') }}</dd>
                         <dt>{{ __('Archivo') }}</dt>
-                        <dd>@if ($file)<span class="ui-break">{{ $file->getClientOriginalName() }}</span>@else<span class="t-nil">{{ __('Sin archivo') }}</span>@endif</dd>
+                        <dd>@if ($file)<span class="ui-break">{{ $file->getClientOriginalName() }}</span>@elseif ($keptMedia)<span class="ui-break">{{ $keptMedia->media_name ?? __('Archivo guardado') }}</span>@else<span class="t-nil">{{ __('Sin archivo') }}</span>@endif</dd>
                         <dt>{{ __('Descripción') }}</dt>
                         <dd>@if ($contentType === 'story')<span class="t-nil">{{ __('No aplica') }}</span>@else<span x-text="chars > 0 ? chars + ' ' + (chars === 1 ? @js(__('carácter')) : @js(__('caracteres'))) : @js(__('Sin descripción'))">{{ $caption !== '' ? trans_choice(':n carácter|:n caracteres', mb_strlen($caption), ['n' => mb_strlen($caption)]) : __('Sin descripción') }}</span>@endif</dd>
                         <dt>{{ __('Destinos') }}</dt>
@@ -180,6 +219,33 @@
                             @endforelse
                         </dd>
                     </dl>
+                    <div class="ui-field">
+                        <span class="ui-label" id="pub-when-l">{{ __('Cuándo') }}</span>
+                        <div class="ui-seg ui-seg--fill" role="group" aria-labelledby="pub-when-l">
+                            <button type="button" wire:click="setWhen('now')" aria-pressed="{{ $when === 'now' ? 'true' : 'false' }}">{{ __('Publicar ahora') }}</button>
+                            <button type="button" wire:click="setWhen('schedule')" aria-pressed="{{ $when === 'schedule' ? 'true' : 'false' }}">{{ __('Programar') }}</button>
+                        </div>
+                    </div>
+                    @if ($when === 'schedule')
+                        <div class="ui-pub-when" data-testid="pub-schedule">
+                            <x-ui.field :label="__('Fecha')" for="pub-date" :error="$errors->first('scheduleDate')">
+                                <input id="pub-date" type="date" wire:model="scheduleDate" @class(['ui-input', 'is-invalid' => $errors->has('scheduleDate')]) @error('scheduleDate') aria-invalid="true" aria-describedby="pub-date-error" @enderror>
+                            </x-ui.field>
+                            <x-ui.field :label="__('Hora')" for="pub-time">
+                                <input id="pub-time" type="time" wire:model="scheduleTime" class="ui-input">
+                            </x-ui.field>
+                            <x-ui.field :label="__('Zona horaria')" for="pub-tz" class="ui-span-full">
+                                <select id="pub-tz" wire:model="scheduleTz" class="ui-select">
+                                    @foreach ($timezones as $z)<option value="{{ $z }}">{{ $z }}</option>@endforeach
+                                </select>
+                            </x-ui.field>
+                        </div>
+                        <button type="button" class="ui-btn ui-btn--primary ui-pub-go" wire:click="schedule" wire:target="schedule" wire:loading.attr="disabled">
+                            <span class="ui-btn-label" wire:loading.remove wire:target="schedule"><x-ui.icon name="clock" /> {{ __('Programar publicación') }}</span>
+                            <span wire:loading wire:target="schedule"><span class="ui-spin"></span> {{ __('Guardando…') }}</span>
+                        </button>
+                        <p class="ui-help">{{ __('MCA CRM la publicará sola a esa hora, aunque nadie tenga el panel abierto.') }}</p>
+                    @else
                     <button type="submit" form="pub-form" class="ui-btn ui-btn--primary ui-pub-go" wire:target="publish" wire:loading.attr="disabled">
                         <span class="ui-btn-label" wire:loading.remove wire:target="publish"><x-ui.icon name="send" />
                             @if ($contentType === 'reel') {{ __('Publicar Reel') }}
@@ -189,6 +255,11 @@
                         <span wire:loading wire:target="publish"><span class="ui-spin"></span> {{ __('Publicando…') }}</span>
                     </button>
                     <p class="ui-help">{{ __('Se publica de inmediato en cada red elegida; el resultado de cada una aparece abajo.') }}</p>
+                    @endif
+                    <button type="button" class="ui-btn ui-btn--secondary" wire:click="saveDraft" wire:target="saveDraft" wire:loading.attr="disabled" data-testid="pub-draft">
+                        <span class="ui-btn-label" wire:loading.remove wire:target="saveDraft"><x-ui.icon name="file-text" /> {{ __('Guardar borrador') }}</span>
+                        <span wire:loading wire:target="saveDraft"><span class="ui-spin"></span> {{ __('Guardando…') }}</span>
+                    </button>
                 </div>
             </section>
 

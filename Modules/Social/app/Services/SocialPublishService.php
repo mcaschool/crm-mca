@@ -87,7 +87,7 @@ final class SocialPublishService
 
             $channel = $available[$network] ?? null;
             $target ??= new SocialPostTarget(['social_post_id' => $post->id, 'network' => $network]);
-            $target->social_channel_id = $channel?->id ?? $target->social_channel_id;
+            $target->social_channel_id = $channel->id ?? $target->social_channel_id;
             $target->status = 'pending';
             $target->attempts = (int) $target->attempts + 1;
             $target->last_attempt_at = now();

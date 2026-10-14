@@ -86,7 +86,7 @@
                     </a>
                 @endif
                 @if (auth()->user()?->canPublishSocial())
-                    <a href="{{ route('social.publisher') }}" class="mca-nav-item {{ request()->routeIs('social.publisher') ? 'on' : '' }}">
+                    <a href="{{ route('social.publisher') }}" class="mca-nav-item {{ request()->routeIs('social.publisher*') ? 'on' : '' }}">
                         <x-ui.icon name="image" /> {{ __('Publicador') }}
                     </a>
                 @endif
