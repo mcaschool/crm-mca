@@ -853,6 +853,12 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
 .ui-inbox-list-h{padding:16px 18px 12px;border-bottom:1px solid var(--mca-line)}
 .ui-inbox-list-h h1{margin:0;display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700;letter-spacing:-.01em;color:var(--mca-text)}
 .ui-inbox-list-h p{margin:3px 0 0;font-size:12.5px;color:var(--mca-text-3)}
+/* búsqueda y filtros de la lista: buscador a todo el ancho, dos selectores y «solo no leídas» */
+.ui-inbox-filters{display:flex;flex-direction:column;gap:8px;padding:10px 14px 12px;border-bottom:1px solid var(--mca-line)}
+.ui-inbox-filters .ui-search{width:100%}
+.ui-inbox-filters-row{display:flex;align-items:center;gap:8px;min-width:0}
+.ui-inbox-filters-row > .ui-select{flex:1 1 0;min-width:0;width:100%}
+.ui-inbox-filters-n{margin-left:auto;font-size:12.5px;color:var(--mca-text-3);font-variant-numeric:tabular-nums}
 .ui-inbox-list-h p b{color:var(--mca-blue);font-weight:600}
 .ui-inbox-convs{flex:1;min-height:0;overflow-y:auto;margin:0;padding:6px;list-style:none;overscroll-behavior:contain}
 .ui-conv{display:flex;align-items:flex-start;gap:12px;width:100%;padding:10px 10px;border:0;border-radius:var(--mca-r-ctl);background:none;font:inherit;text-align:left;color:var(--mca-text);cursor:pointer}

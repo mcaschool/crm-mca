@@ -9,7 +9,7 @@
         return [$initials, $tones[crc32($name) % count($tones)]];
     };
     $attention = ['waiting_human' => 'warning', 'error' => 'danger'];
-    $unreadTotal = (int) $conversations->sum('unread_count');
+    $providerNames = ['whatsapp' => 'WhatsApp', 'instagram' => 'Instagram', 'messenger' => 'Messenger'];
 @endphp
 <div class="ui-inbox-host" wire:key="social-inbox" wire:poll.2s>
     <div class="ui-inbox" x-data="{ info: window.matchMedia('(min-width: 1440px)').matches }" wire:ignore.self :class="{ 'is-info': info }">
@@ -17,13 +17,39 @@
         {{-- ===================== Conversaciones ===================== --}}
         <aside class="ui-card ui-inbox-list" aria-label="{{ __('Conversaciones') }}">
             <div class="ui-inbox-list-h">
-                <h1>{{ __('Bandeja social') }} <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $conversations->count() }}<span class="ui-sr"> {{ __('conversaciones') }}</span></span></h1>
+                <h1>{{ __('Bandeja social') }} <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $totalConversations }}<span class="ui-sr"> {{ __('conversaciones') }}</span></span></h1>
                 <p>
                     @if ($unreadTotal > 0)
                         <b>{{ trans_choice(':n mensaje sin leer|:n mensajes sin leer', $unreadTotal, ['n' => $unreadTotal]) }}</b> ·
                     @endif
-                    {{ __(':n conversaciones', ['n' => $conversations->count()]) }}
+                    {{ __(':n conversaciones', ['n' => $totalConversations]) }}
                 </p>
+            </div>
+
+            {{-- Búsqueda y filtros: solo consultas locales (no marcan leído ni llaman a Meta) --}}
+            <div class="ui-inbox-filters" role="search" aria-label="{{ __('Buscar y filtrar conversaciones') }}">
+                <x-ui.search wire:model.live.debounce.300ms="search" :placeholder="__('Nombre o identificador').'…'" :aria-label="__('Buscar por nombre o identificador del contacto')" data-testid="inbox-search" />
+                <div class="ui-inbox-filters-row">
+                    <x-ui.select filter :active="$channel !== ''" wire:model.live="channel" :aria-label="__('Filtrar por canal')" data-testid="inbox-channel">
+                        <option value="">{{ __('Canal · todos') }}</option>
+                        @foreach ($channels as $ch)
+                            <option value="{{ $ch->id }}">{{ $providerNames[$ch->provider] ?? $ch->provider }} · {{ $ch->display_name }}</option>
+                        @endforeach
+                    </x-ui.select>
+                    <x-ui.select filter :active="$attentionFilter !== ''" wire:model.live="attentionFilter" :aria-label="__('Filtrar por estado de atención')" data-testid="inbox-attention">
+                        <option value="">{{ __('Atención · todas') }}</option>
+                        @foreach ($attentionStates as $value => $label)
+                            <option value="{{ $value }}">{{ __($label) }}</option>
+                        @endforeach
+                    </x-ui.select>
+                </div>
+                <div class="ui-inbox-filters-row">
+                    <button type="button" class="ui-chip" wire:click="toggleUnreadOnly" aria-pressed="{{ $unreadOnly ? 'true' : 'false' }}" data-testid="inbox-unread">{{ __('Solo no leídas') }}</button>
+                    @if ($filtered)
+                        <span class="ui-inbox-filters-n" role="status">{{ __(':n de :total', ['n' => $conversations->count(), 'total' => $totalConversations]) }}</span>
+                        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" wire:click="clearFilters">{{ __('Limpiar') }}</button>
+                    @endif
+                </div>
             </div>
             <ul class="ui-inbox-convs" role="list">
                 @forelse ($conversations as $conv)
@@ -63,8 +89,13 @@
                 @empty
                     <li class="ui-empty ui-inbox-empty-list">
                         <div class="ui-empty-ic"><x-ui.icon name="inbox" /></div>
-                        <b>{{ __('No hay conversaciones todavía.') }}</b>
-                        {{ __('Aparecerán aquí los mensajes de WhatsApp, Instagram y Messenger de los canales conectados.') }}
+                        @if ($filtered)
+                            <b>{{ __('Ninguna conversación coincide.') }}</b>
+                            {{ __('Prueba con otra búsqueda o quita algún filtro.') }}
+                        @else
+                            <b>{{ __('No hay conversaciones todavía.') }}</b>
+                            {{ __('Aparecerán aquí los mensajes de WhatsApp, Instagram y Messenger de los canales conectados.') }}
+                        @endif
                     </li>
                 @endforelse
             </ul>

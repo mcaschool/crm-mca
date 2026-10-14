@@ -9,6 +9,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Modules\Crm\Support\UserTimezone;
+use Modules\Social\Models\SocialChannel;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialWhatsAppTemplate;
 use Modules\Social\Services\SocialAutomationService;
@@ -30,6 +31,17 @@ class Inbox extends Component
 
     public ?int $selectedId = null;
 
+    // ── Búsqueda y filtros de la lista (solo consultas locales: no marcan leído ni llaman a Meta) ──
+    public string $search = '';
+
+    /** Id de la cuenta (canal) o '' = todas. */
+    public string $channel = '';
+
+    /** Estado de atención (SocialConversation::AUTOMATION_STATES) o '' = todos. */
+    public string $attentionFilter = '';
+
+    public bool $unreadOnly = false;
+
     public string $draft = '';
 
     /**
@@ -43,6 +55,16 @@ class Inbox extends Component
     public function mount(): void
     {
         abort_unless(auth()->user()?->canWorkCrm() ?? false, 403);
+    }
+
+    public function clearFilters(): void
+    {
+        $this->reset(['search', 'channel', 'attentionFilter', 'unreadOnly']);
+    }
+
+    public function toggleUnreadOnly(): void
+    {
+        $this->unreadOnly = ! $this->unreadOnly;
     }
 
     /** Selecciona una conversación (validada contra el scope de institución) y la marca leída. */
@@ -272,12 +294,29 @@ class Inbox extends Component
 
     public function render(): View
     {
+        $term = trim($this->search);
+        $filtered = $term !== '' || $this->channel !== '' || $this->attentionFilter !== '' || $this->unreadOnly;
         $conversations = SocialConversation::query()
             ->with('channel')
+            ->when($term !== '', function ($q) use ($term): void {
+                $like = '%'.addcslashes($term, '\%_').'%';
+                $q->where(fn ($w) => $w->where('contact_name', 'like', $like)
+                    ->orWhere('contact_external_id', 'like', $like)
+                    ->orWhere('external_conversation_id', 'like', $like));
+            })
+            ->when($this->channel !== '' && ctype_digit($this->channel), fn ($q) => $q->where('social_channel_id', (int) $this->channel))
+            ->when(array_key_exists($this->attentionFilter, SocialConversation::AUTOMATION_STATES), fn ($q) => $q->where('automation_state', $this->attentionFilter))
+            ->when($this->unreadOnly, fn ($q) => $q->where('unread_count', '>', 0))
             ->orderByDesc('last_message_at')
             ->orderByDesc('id')
             ->limit(50)
             ->get();
+
+        // Totales de la bandeja completa (no del tramo filtrado) para la cabecera.
+        $totals = SocialConversation::query()
+            ->selectRaw('COUNT(*) as n, COALESCE(SUM(unread_count), 0) as unread')
+            ->first();
+        $channels = SocialChannel::query()->orderBy('provider')->orderBy('display_name')->get(['id', 'provider', 'display_name']);
 
         $selected = $this->selectedId !== null
             ? SocialConversation::query()->with(['channel.advisorBot', 'automationChanger'])->find($this->selectedId)
@@ -321,6 +360,11 @@ class Inbox extends Component
 
         return view('social::inbox', [
             'conversations' => $conversations,
+            'filtered' => $filtered,
+            'totalConversations' => (int) ($totals->n ?? 0),
+            'unreadTotal' => (int) ($totals->unread ?? 0),
+            'channels' => $channels,
+            'attentionStates' => SocialConversation::AUTOMATION_STATES,
             'selected' => $selected,
             'messages' => $messages,
             'canReply' => $canReply,

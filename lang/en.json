@@ -2373,5 +2373,15 @@
     "¿Desactivar el canal «:name»? Dejará de usarse para atender y enviar mensajes hasta que se vuelva a activar.": "Deactivate the “:name” channel? It will stop being used to handle and send messages until reactivated.",
     "¿Desactivar el programa «:name»? Dejará de ofrecerse en el chat, el emparejador y los asesores.": "Deactivate the “:name” program? It will no longer be offered in the chat, the matcher or the advisors.",
     "¿Desactivar la integración «:name»? Los procesos que la usan (por ejemplo, las respuestas de IA de los asesores) dejarán de funcionar hasta que vuelva a activarse.": "Deactivate the “:name” integration? The processes that use it (for example, the advisors' AI replies) will stop working until it is reactivated.",
-    "Ámbito": "Scope"
+    "Ámbito": "Scope",
+    ":n de :total": ":n of :total",
+    "Atención · todas": "Attention · all",
+    "Buscar por nombre o identificador del contacto": "Search by contact name or identifier",
+    "Buscar y filtrar conversaciones": "Search and filter conversations",
+    "Canal · todos": "Channel · all",
+    "Filtrar por canal": "Filter by channel",
+    "Filtrar por estado de atención": "Filter by attention status",
+    "Ninguna conversación coincide.": "No conversations match.",
+    "Nombre o identificador": "Name or identifier",
+    "Solo no leídas": "Unread only"
 }
