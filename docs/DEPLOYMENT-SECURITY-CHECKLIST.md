@@ -157,6 +157,18 @@ Notas:
 - **Verificar primero en seco** desde SSH: `php artisan crm:purge-retention --dry-run`
   (muestra cuántos mensajes borraría, por institución, sin tocar nada).
 
+### Publicaciones programadas del Publicador
+
+No necesita nada nuevo en el servidor: la misma entrada `schedule:run` cada minuto (Opción A)
+ejecuta `social:publish-scheduled`. El comando publica en el momento lo que ya venció (sin
+worker permanente ni cola externa), reanuda los videos de Instagram que Meta sigue procesando y
+marca como fallidas las ejecuciones interrumpidas (>15 min) sin reintentarlas solas.
+- Requisitos: el cron por minuto activo, `php artisan migrate` (migración
+  `2026_10_21_100000_add_scheduling_to_social_posts`) y `storage:link` (los archivos viven en el
+  disco `public`, carpeta `social-posts/`, y Meta los descarga por su URL pública).
+- Opcional: `SOCIAL_INSTAGRAM_DAILY_LIMIT` (50 por defecto, el límite de Meta por cuenta y 24 h).
+- Comprobación manual: `php artisan social:publish-scheduled` (publica solo lo vencido).
+
 ---
 
 ## 6. Pruebas de humo post-deploy (en el server, no solo local)
