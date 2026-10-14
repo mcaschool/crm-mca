@@ -1,480 +1,491 @@
-<div>
-    <x-ui.styles />
-    {{-- Botones con icono + texto en la MISMA línea (8px). El icono SVG es de bloque (preflight),
-         así que el contenedor del texto debe ser flex en línea. Los estados wire:loading usan
-         wire:loading.inline-flex (sin display propio aquí, para no anular el ocultado). --}}
-    <style>
-        .adv-form .btn{gap:8px}
-        .adv-form .mca-section h3{display:flex;align-items:center;gap:8px}
-        .adv-bi{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
-        .adv-bg{align-items:center;gap:8px;white-space:nowrap}
-        .adv-form .mca-seg button,.adv-form .mca-filebtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
-    </style>
-    <div class="mca-panel adv-form mca-page">
-        <div class="mca-head">
-            <div style="display:flex;align-items:center;gap:12px">
-                <a href="{{ route('advisors.index') }}" class="btn btn-ghost btn-sm" title="{{ __('Volver') }}" aria-label="{{ __('Volver') }}"><x-ui.icon name="chevron-left" class="ic" style="width:16px;height:16px" /></a>
-                <div>
-                    <h1 class="mca-h1">{{ $editing ? __('Configurar asesor') : __('Crear asesor') }}</h1>
-                    <p class="mca-sub">{{ $editing ? __('Identidad, tipo, foto, proceso de IA y conocimiento.') : __('Identidad, tipo, foto y proceso de IA.') }}</p>
-                </div>
-            </div>
-        </div>
+<div class="mca-page ui-record">
+    <x-ui.page-header
+        :title="$editing ? __('Configurar asesor') : __('Crear asesor')"
+        :subtitle="$editing ? __('Identidad, tipo, foto, proceso de IA y conocimiento.') : __('Identidad, tipo, foto y proceso de IA.')"
+        :back="route('advisors.index')" :backLabel="__('Asesores Inteligentes')" />
 
-        @if (session('status'))
-            <div class="mca-toast ok fade"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
-        @endif
-        @if (session('status_error'))
-            <div class="mca-toast err fade"><x-ui.icon name="x" class="ic" /> {{ session('status_error') }}</div>
-        @endif
+    @if (session('status'))
+        <div class="ui-alert ui-alert--flush ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('status') }}</div>
+    @endif
+    @if (session('status_error'))
+        <div class="ui-alert ui-alert--flush ui-tone--danger" role="alert"><x-ui.icon name="x" /> {{ session('status_error') }}</div>
+    @endif
 
+    {{-- Índice de secciones (anclas: todos los campos siguen visibles en la página) --}}
+    @if ($type === 'ia')
+        <nav class="ui-subnav" aria-label="{{ __('Secciones del asesor') }}">
+            <a href="#adv-identity"><x-ui.icon name="user" /> {{ __('Identidad') }}</a>
+            <a href="#adv-ai"><x-ui.icon name="cpu" /> {{ __('IA') }}</a>
+            <a href="#adv-prompt"><x-ui.icon name="user-cog" /> {{ __('Instrucciones') }}</a>
+            <a href="#adv-widget"><x-ui.icon name="message-circle" /> {{ __('Widget') }}</a>
+            @if ($editing)
+                <a href="#adv-test"><x-ui.icon name="sparkles" /> {{ __('Prueba') }}</a>
+                @if (class_exists(\Modules\Social\Livewire\AdvisorChannels::class))
+                    <a href="#adv-channels"><x-ui.icon name="inbox" /> {{ __('Canales') }}</a>
+                @endif
+                <a href="#adv-corrections"><x-ui.icon name="check" /> {{ __('Correcciones') }} <span class="ui-badge ui-badge--count ui-tone--neutral">{{ count($corrections) }}</span></a>
+                <a href="#adv-knowledge"><x-ui.icon name="book-open" /> {{ __('Conocimiento') }} <span class="ui-badge ui-badge--count ui-tone--neutral">{{ count($sources) }}</span></a>
+                @if ($embedSnippet)
+                    <a href="#adv-embed"><x-ui.icon name="globe" /> {{ __('Incrustar') }}</a>
+                @endif
+            @endif
+        </nav>
+    @endif
+
+    {{-- Secciones que guarda «Guardar cambios» / «Crear asesor» (la barra queda fija al pie mientras se editan) --}}
+    <div class="ui-stack">
         {{-- Identidad --}}
-        <div class="card card-p fade">
-            <div style="display:flex;flex-wrap:wrap;gap:24px">
-                {{-- Avatar (solo en edicion; en creacion se sube tras guardar) --}}
-                <div style="text-align:center">
-                    <span class="mca-av lg" style="margin:0 auto">
-                        @if ($avatar)
-                            <img src="{{ $avatar->temporaryUrl() }}" alt="preview">
-                        @elseif ($avatarUrl)
-                            <img src="{{ $avatarUrl }}" alt="{{ $name }}">
-                        @else
-                            <x-ui.icon name="graduation-cap" />
-                        @endif
-                    </span>
+        <section class="ui-card" id="adv-identity" aria-labelledby="adv-identity-t">
+            <div class="ui-card-h"><x-ui.icon name="user" class="ui-card-ic" /><h2 id="adv-identity-t">{{ __('Identidad') }}</h2></div>
+            <div class="ui-card-p ui-identity">
+                {{-- Foto (solo en edición; en creación se sube tras guardar) --}}
+                <div class="ui-photo">
+                    @if ($avatar)
+                        <span class="ui-avatar ui-avatar--photo ui-tone--blue"><img src="{{ $avatar->temporaryUrl() }}" alt="{{ __('Vista previa de la foto') }}"></span>
+                    @else
+                        <x-ui.avatar :name="$name" :src="$avatarUrl" :seed="$botId" class="ui-avatar--photo" />
+                    @endif
                     @if ($editing)
-                        <div style="margin-top:10px;display:flex;flex-direction:column;align-items:center;gap:6px">
-                            <label class="mca-filebtn">
-                                <x-ui.icon name="upload" class="ic" style="width:15px;height:15px" /> {{ __('Elegir foto') }}
-                                <input type="file" wire:model="avatar" accept=".png,.jpg,.jpeg,.svg,.webp,.gif" class="hidden">
-                            </label>
-                            <span wire:loading wire:target="avatar" class="mca-help"><span class="mca-spin"></span> {{ __('Cargando…') }}</span>
-                            @error('avatar') <span class="mca-err">{{ $message }}</span> @enderror
-                            <div style="display:flex;gap:6px">
+                        <label class="ui-btn ui-btn--secondary ui-btn--sm">
+                            <x-ui.icon name="upload" /> {{ __('Elegir foto') }}
+                            <input type="file" wire:model="avatar" accept=".png,.jpg,.jpeg,.svg,.webp,.gif" class="hidden">
+                        </label>
+                        <span wire:loading wire:target="avatar" class="ui-help"><span class="ui-spin"></span> {{ __('Cargando…') }}</span>
+                        @error('avatar') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                        @if ($avatar || $avatarUrl)
+                            <div class="ui-actions-row">
                                 @if ($avatar)
-                                    <button type="button" wire:click="saveAvatar" class="btn btn-primary btn-sm">{{ __('Guardar foto') }}</button>
+                                    <x-ui.button size="sm" variant="primary" icon="check" wire:click="saveAvatar">{{ __('Guardar foto') }}</x-ui.button>
                                 @endif
                                 @if ($avatarUrl)
-                                    <button type="button" wire:click="removeAvatar" class="btn btn-ghost btn-sm">{{ __('Quitar') }}</button>
+                                    <x-ui.button size="sm" variant="ghost" wire:click="removeAvatar">{{ __('Quitar') }}</x-ui.button>
                                 @endif
                             </div>
-                            <span class="mca-help">{{ __('PNG, JPG, SVG o WebP · máx 1 MB') }}</span>
-                        </div>
+                        @endif
+                        <p class="ui-help">{{ __('PNG, JPG, SVG o WebP · máx 1 MB') }}</p>
                     @else
-                        <span class="mca-help" style="display:block;margin-top:8px;max-width:9rem">{{ __('La foto se sube al guardar') }}</span>
+                        <p class="ui-help">{{ __('La foto se sube al guardar') }}</p>
                     @endif
                 </div>
 
-                {{-- Campos --}}
-                <div style="flex:1;min-width:240px">
-                    <div class="field">
-                        <label>{{ __('Nombre del asesor') }}</label>
-                        <input type="text" wire:model="name" maxlength="60" placeholder="{{ __('Ej. Celia') }}">
-                        @error('name') <span class="mca-err">{{ $message }}</span> @enderror
-                        <div class="mca-help">{{ __('El widget y los saludos leen este valor.') }}</div>
-                    </div>
+                <div class="ui-form-grid">
+                    <x-ui.field class="ui-span-full" :label="__('Nombre del asesor')" for="adv-name" required :error="$errors->first('name')" :help="__('El widget y los saludos leen este valor.')">
+                        <input id="adv-name" type="text" wire:model="name" maxlength="60" placeholder="{{ __('Ej. Celia') }}" @if ($errors->has('name')) aria-describedby="adv-name-error" @endif @class(['ui-input', 'is-invalid' => $errors->has('name')])>
+                    </x-ui.field>
 
-                    <div class="field">
-                        <label>{{ __('Tipo') }}</label>
-                        <div class="mca-seg">
-                            <button type="button" wire:click="$set('type','ia')" class="{{ $type === 'ia' ? 'active' : '' }}">
-                                <x-ui.icon name="bot" class="ic" style="width:15px;height:15px" /> {{ __('IA') }}
+                    <div class="ui-field">
+                        <span class="ui-label" id="adv-type-l">{{ __('Tipo') }}</span>
+                        <div class="ui-seg ui-seg--icons" role="group" aria-labelledby="adv-type-l">
+                            <button type="button" wire:click="$set('type','ia')" aria-pressed="{{ $type === 'ia' ? 'true' : 'false' }}">
+                                <x-ui.icon name="bot" /> {{ __('IA') }}
                             </button>
-                            <button type="button" wire:click="$set('type','human')" class="{{ $type === 'human' ? 'active' : '' }}">
-                                <x-ui.icon name="user" class="ic" style="width:15px;height:15px" /> {{ __('Humano') }}
+                            <button type="button" wire:click="$set('type','human')" aria-pressed="{{ $type === 'human' ? 'true' : 'false' }}">
+                                <x-ui.icon name="user" /> {{ __('Humano') }}
                             </button>
                         </div>
-                        <div class="mca-help">{{ __('“IA” opera hoy. “Humano” queda como ficha etiqueta para intervención en vivo (futuro).') }}</div>
+                        <p class="ui-help">{{ __('“IA” opera hoy. “Humano” queda como ficha etiqueta para intervención en vivo (futuro).') }}</p>
                     </div>
 
-                    <div class="field">
-                        <label>{{ __('Estado') }}</label>
-                        <div class="mca-seg">
-                            <button type="button" wire:click="$set('status','active')" class="{{ $status === 'active' ? 'active' : '' }}">{{ __('Activo') }}</button>
-                            <button type="button" wire:click="$set('status','inactive')" class="{{ $status === 'inactive' ? 'active' : '' }}">{{ __('Inactivo') }}</button>
+                    <div class="ui-field">
+                        <span class="ui-label" id="adv-status-l">{{ __('Estado') }}</span>
+                        <div class="ui-seg" role="group" aria-labelledby="adv-status-l">
+                            <button type="button" wire:click="$set('status','active')" aria-pressed="{{ $status === 'active' ? 'true' : 'false' }}">{{ __('Activo') }}</button>
+                            <button type="button" wire:click="$set('status','inactive')" aria-pressed="{{ $status === 'inactive' ? 'true' : 'false' }}">{{ __('Inactivo') }}</button>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
         {{-- Configuración de IA (solo tipo IA) --}}
         @if ($type === 'ia')
-            <div class="card card-p fade" style="margin-top:16px">
-                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">
-                    <h3>{{ __('Configuración de IA') }}</h3>
-                    <p class="mca-sub">{!! __('Proceso de conversación e idioma. Las credenciales se gestionan en :link (no se duplican aquí).', ['link' => '<a href="'.e(route('integrations.index')).'" style="color:var(--mca);font-weight:600">'.e(__('Integraciones')).'</a>']) !!}</p>
-                </div>
-                <div style="display:flex;flex-wrap:wrap;gap:16px">
-                    <div class="field" style="flex:1;min-width:160px;margin-bottom:0">
-                        <label>{{ __('Idioma principal') }}</label>
-                        <select wire:model="language">
-                            <option value="es">Español</option>
-                            <option value="en">English</option>
-                        </select>
-                    </div>
-                    <div class="field" style="flex:1;min-width:200px;margin-bottom:0">
-                        <label>{{ __('Proveedor (integración)') }}</label>
-                        <select wire:model.live="integrationId">
-                            <option value="">{{ __('— Elegir —') }}</option>
-                            @foreach ($integrations as $int)
-                                <option value="{{ $int->id }}">{{ $int->name }} ({{ $int->provider }})</option>
-                            @endforeach
-                        </select>
-                        @if ($integrations->isEmpty())
-                            <div class="mca-help">{!! __('No hay proveedores de IA. :link.', ['link' => '<a href="'.e(route('integrations.index')).'" style="color:var(--mca)">'.e(__('Configura uno')).'</a>']) !!}</div>
-                        @endif
-                    </div>
-                    <div class="field" style="flex:1;min-width:160px;margin-bottom:0">
-                        <label>{{ __('Modelo') }}</label>
-                        <input type="text" wire:model.blur="model" maxlength="100" placeholder="{{ __('Ej. qwen3.7-plus') }}">
-                    </div>
-                </div>
-                <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:16px">
-                    <div class="field" style="flex:2;min-width:240px;margin-bottom:0">
-                        <label for="adv-retrieval">{{ __('Búsqueda en el conocimiento') }}</label>
-                        <select id="adv-retrieval" wire:model="knowledgeRetrieval" data-testid="knowledge-retrieval">
-                            <option value="classic">{{ __('Clásica') }}</option>
-                            <option value="precise">{{ __('Precisa (recomendada si el asesor atiende varias líneas)') }}</option>
-                        </select>
-                        <div class="mca-help">{{ __('La precisa entiende variantes de las palabras, reconoce el programa nombrado, mantiene el tema en los seguimientos y solo deja enlaces que estén en el conocimiento. En «Probar asesor» muestra el diagnóstico de cada respuesta.') }}</div>
-                        @error('knowledgeRetrieval') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                    <div class="field" style="flex:1;min-width:160px;margin-bottom:0">
-                        <label for="adv-limit">{{ __('Respuestas de IA por conversación') }}</label>
-                        <input id="adv-limit" type="number" min="1" max="200" wire:model="messageLimit" placeholder="{{ (int) config('crm.celia.message_limit', 15) }}" data-testid="message-limit">
-                        <div class="mca-help">{{ __('Vacío = el valor general (:n).', ['n' => (int) config('crm.celia.message_limit', 15)]) }}</div>
-                        @error('messageLimit') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                    <div class="field" style="flex:1;min-width:160px;margin-bottom:0">
-                        <label for="adv-typing">{{ __('Espera mínima antes de responder') }}</label>
-                        <input id="adv-typing" type="number" min="0" max="8" wire:model="typingDelay" data-testid="typing-delay">
-                        <div class="mca-help">{{ __('Segundos (0–8) que se muestra «está escribiendo…» como mínimo. Si la IA tarda más, la respuesta sale en cuanto llega. 0 = sin espera.') }}</div>
-                        @error('typingDelay') <span class="mca-err">{{ $message }}</span> @enderror
+            <section class="ui-card" id="adv-ai" aria-labelledby="adv-ai-t">
+                <div class="ui-card-h"><x-ui.icon name="cpu" class="ui-card-ic" /><h2 id="adv-ai-t">{{ __('Configuración de IA') }}</h2></div>
+                <div class="ui-card-p">
+                    <p class="ui-card-desc">{!! __('Proceso de conversación e idioma. Las credenciales se gestionan en :link (no se duplican aquí).', ['link' => '<a href="'.e(route('integrations.index')).'" class="ui-link">'.e(__('Integraciones')).'</a>']) !!}</p>
+                    <div class="ui-form-grid ui-form-grid--fluid">
+                        <x-ui.field :label="__('Idioma principal')" for="adv-lang" :error="$errors->first('language')">
+                            <select id="adv-lang" wire:model="language" @class(['ui-select', 'is-invalid' => $errors->has('language')])>
+                                <option value="es">Español</option>
+                                <option value="en">English</option>
+                            </select>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Proveedor (integración)')" for="adv-int" :error="$errors->first('integrationId')">
+                            <select id="adv-int" wire:model.live="integrationId" @class(['ui-select', 'is-invalid' => $errors->has('integrationId')])>
+                                <option value="">{{ __('— Elegir —') }}</option>
+                                @foreach ($integrations as $int)
+                                    <option value="{{ $int->id }}">{{ $int->name }} ({{ $int->provider }})</option>
+                                @endforeach
+                            </select>
+                            @if ($integrations->isEmpty())
+                                <p class="ui-help">{!! __('No hay proveedores de IA. :link.', ['link' => '<a href="'.e(route('integrations.index')).'" class="ui-link">'.e(__('Configura uno')).'</a>']) !!}</p>
+                            @endif
+                        </x-ui.field>
+                        <x-ui.field :label="__('Modelo')" for="adv-model" :error="$errors->first('model')">
+                            <input id="adv-model" type="text" wire:model.blur="model" maxlength="100" placeholder="{{ __('Ej. qwen3.7-plus') }}" @class(['ui-input', 'is-invalid' => $errors->has('model')])>
+                        </x-ui.field>
+
+                        <x-ui.field :label="__('Búsqueda en el conocimiento')" for="adv-retrieval" :error="$errors->first('knowledgeRetrieval')"
+                                    :help="__('La precisa entiende variantes de las palabras, reconoce el programa nombrado, mantiene el tema en los seguimientos y solo deja enlaces que estén en el conocimiento. En «Probar asesor» muestra el diagnóstico de cada respuesta.')">
+                            <select id="adv-retrieval" wire:model="knowledgeRetrieval" data-testid="knowledge-retrieval" @if ($errors->has('knowledgeRetrieval')) aria-describedby="adv-retrieval-error" @endif @class(['ui-select', 'is-invalid' => $errors->has('knowledgeRetrieval')])>
+                                <option value="classic">{{ __('Clásica') }}</option>
+                                <option value="precise">{{ __('Precisa (recomendada si el asesor atiende varias líneas)') }}</option>
+                            </select>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Respuestas de IA por conversación')" for="adv-limit" :error="$errors->first('messageLimit')"
+                                    :help="__('Vacío = el valor general (:n).', ['n' => (int) config('crm.celia.message_limit', 15)])">
+                            <input id="adv-limit" type="number" min="1" max="200" inputmode="numeric" wire:model="messageLimit" placeholder="{{ (int) config('crm.celia.message_limit', 15) }}" data-testid="message-limit" @if ($errors->has('messageLimit')) aria-describedby="adv-limit-error" @endif @class(['ui-input', 'is-invalid' => $errors->has('messageLimit')])>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Espera mínima antes de responder')" for="adv-typing" :error="$errors->first('typingDelay')"
+                                    :help="__('Segundos (0–8) que se muestra «está escribiendo…» como mínimo. Si la IA tarda más, la respuesta sale en cuanto llega. 0 = sin espera.')">
+                            <input id="adv-typing" type="number" min="0" max="8" inputmode="numeric" wire:model="typingDelay" data-testid="typing-delay" @if ($errors->has('typingDelay')) aria-describedby="adv-typing-error" @endif @class(['ui-input', 'is-invalid' => $errors->has('typingDelay')])>
+                        </x-ui.field>
                     </div>
                 </div>
-            </div>
+            </section>
 
             {{-- Identidad e instrucciones: cómo es y cómo responde ESTE asesor --}}
-            <div class="card card-p fade" style="margin-top:16px">
-                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">
-                    <h3><x-ui.icon name="user-cog" class="ic" style="width:17px;height:17px" /> {{ __('Identidad e instrucciones') }}</h3>
-                    <p class="mca-sub">{{ __('Cómo se presenta y cómo responde este asesor. Se combina siempre con las reglas de la institución (es un asistente virtual, no inventa datos y responde solo con su conocimiento), que no se pueden desactivar desde aquí.') }}</p>
-                </div>
-                @if ($usesGlobalPrompt)
-                    <div class="mca-help" style="margin-bottom:12px;padding:10px 12px;border-radius:10px;background:var(--mca-blue-soft)">{{ __('Este asesor usa ahora las instrucciones generales de siempre. Cuando completes esta sección, pasará a usar las suyas.') }}</div>
-                @endif
-                <div class="field">
-                    <label for="adv-role">{{ __('Función o presentación') }}</label>
-                    <input id="adv-role" type="text" wire:model="roleDescription" maxlength="255" placeholder="{{ __('Ej.: asesora de Diplomas Avanzados de la escuela') }}">
-                    <div class="mca-help">{{ __('El nombre público es el «Nombre del asesor» de arriba.') }}</div>
-                    @error('roleDescription') <span class="mca-err">{{ $message }}</span> @enderror
-                </div>
-                <div class="field">
-                    <label for="adv-instructions">{{ __('Instrucciones del asesor') }}</label>
-                    <textarea id="adv-instructions" wire:model="instructions" rows="7" maxlength="6000" placeholder="{{ __('Qué hace, a quién atiende, qué debe priorizar y cómo debe orientar a cada persona…') }}"></textarea>
-                    @error('instructions') <span class="mca-err">{{ $message }}</span> @enderror
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
-                    <div class="field" style="margin-bottom:0">
-                        <label for="adv-tone">{{ __('Tono de comunicación') }}</label>
-                        <input id="adv-tone" type="text" wire:model="tone" maxlength="255" placeholder="{{ __('Ej.: cercano y profesional, frases breves') }}">
-                        @error('tone') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                    <div class="field" style="margin-bottom:0">
-                        <label for="adv-notfound">{{ __('Mensaje para información no encontrada') }}</label>
-                        <input id="adv-notfound" type="text" wire:model="notFoundMessage" maxlength="500" placeholder="{{ __('Ej.: No tengo ese dato; te recomiendo revisar la ficha del programa.') }}">
-                        @error('notFoundMessage') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                    <div class="field" style="margin-bottom:0">
-                        <label for="adv-limits">{{ __('Límites: asuntos que no debe responder') }}</label>
-                        <textarea id="adv-limits" wire:model="restrictions" rows="3" maxlength="2000" placeholder="{{ __('Ej.: precios concretos, temas médicos o legales, otras instituciones…') }}"></textarea>
-                        @error('restrictions') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                    <div class="field" style="margin-bottom:0">
-                        <label for="adv-handoff">{{ __('Cuándo transferir a una persona') }}</label>
-                        <textarea id="adv-handoff" wire:model="handoffRules" rows="3" maxlength="2000" placeholder="{{ __('Ej.: si pide hablar con alguien, si quiere una beca especial o si está molesto.') }}"></textarea>
-                        @error('handoffRules') <span class="mca-err">{{ $message }}</span> @enderror
+            <section class="ui-card" id="adv-prompt" aria-labelledby="adv-prompt-t">
+                <div class="ui-card-h"><x-ui.icon name="user-cog" class="ui-card-ic" /><h2 id="adv-prompt-t">{{ __('Identidad e instrucciones') }}</h2></div>
+                <div class="ui-card-p">
+                    <p class="ui-card-desc">{{ __('Cómo se presenta y cómo responde este asesor. Se combina siempre con las reglas de la institución (es un asistente virtual, no inventa datos y responde solo con su conocimiento), que no se pueden desactivar desde aquí.') }}</p>
+                    <div class="ui-form-grid">
+                        @if ($usesGlobalPrompt)
+                            <div class="ui-callout ui-callout--sm ui-tone--blue ui-span-full"><x-ui.icon name="bot" /> <span>{{ __('Este asesor usa ahora las instrucciones generales de siempre. Cuando completes esta sección, pasará a usar las suyas.') }}</span></div>
+                        @endif
+                        <x-ui.field class="ui-span-full" :label="__('Función o presentación')" for="adv-role" :error="$errors->first('roleDescription')" :help="__('El nombre público es el «Nombre del asesor» de arriba.')">
+                            <input id="adv-role" type="text" wire:model="roleDescription" maxlength="255" placeholder="{{ __('Ej.: asesora de Diplomas Avanzados de la escuela') }}" @class(['ui-input', 'is-invalid' => $errors->has('roleDescription')])>
+                        </x-ui.field>
+                        <x-ui.field class="ui-span-full" :label="__('Instrucciones del asesor')" for="adv-instructions" :error="$errors->first('instructions')">
+                            <textarea id="adv-instructions" wire:model="instructions" rows="7" maxlength="6000" placeholder="{{ __('Qué hace, a quién atiende, qué debe priorizar y cómo debe orientar a cada persona…') }}" @class(['ui-input ui-textarea', 'is-invalid' => $errors->has('instructions')])></textarea>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Tono de comunicación')" for="adv-tone" :error="$errors->first('tone')">
+                            <input id="adv-tone" type="text" wire:model="tone" maxlength="255" placeholder="{{ __('Ej.: cercano y profesional, frases breves') }}" @class(['ui-input', 'is-invalid' => $errors->has('tone')])>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Mensaje para información no encontrada')" for="adv-notfound" :error="$errors->first('notFoundMessage')">
+                            <input id="adv-notfound" type="text" wire:model="notFoundMessage" maxlength="500" placeholder="{{ __('Ej.: No tengo ese dato; te recomiendo revisar la ficha del programa.') }}" @class(['ui-input', 'is-invalid' => $errors->has('notFoundMessage')])>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Límites: asuntos que no debe responder')" for="adv-limits" :error="$errors->first('restrictions')">
+                            <textarea id="adv-limits" wire:model="restrictions" rows="3" maxlength="2000" placeholder="{{ __('Ej.: precios concretos, temas médicos o legales, otras instituciones…') }}" @class(['ui-input ui-textarea', 'is-invalid' => $errors->has('restrictions')])></textarea>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Cuándo transferir a una persona')" for="adv-handoff" :error="$errors->first('handoffRules')">
+                            <textarea id="adv-handoff" wire:model="handoffRules" rows="3" maxlength="2000" placeholder="{{ __('Ej.: si pide hablar con alguien, si quiere una beca especial o si está molesto.') }}" @class(['ui-input ui-textarea', 'is-invalid' => $errors->has('handoffRules')])></textarea>
+                        </x-ui.field>
                     </div>
                 </div>
-            </div>
+            </section>
 
             {{-- Presentación del widget: los dos textos visibles antes de abrir el chat --}}
-            <div class="card card-p fade" style="margin-top:16px">
-                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">
-                    <h3><x-ui.icon name="message-circle" class="ic" style="width:17px;height:17px" /> {{ __('Presentación del widget') }}</h3>
-                    <p class="mca-sub">{{ __('Lo que ve el visitante en la web antes de abrir el chat. Déjalo vacío para usar el texto actual del widget. Texto plano: se admiten emojis, no HTML.') }}</p>
+            <section class="ui-card" id="adv-widget" aria-labelledby="adv-widget-t">
+                <div class="ui-card-h"><x-ui.icon name="message-circle" class="ui-card-ic" /><h2 id="adv-widget-t">{{ __('Presentación del widget') }}</h2></div>
+                <div class="ui-card-p ui-stack">
+                    <p class="ui-card-desc">{{ __('Lo que ve el visitante en la web antes de abrir el chat. Déjalo vacío para usar el texto actual del widget. Texto plano: se admiten emojis, no HTML.') }}</p>
+                    <div class="ui-form-grid">
+                        <x-ui.field :label="__('Mensaje de bienvenida')" :hint="__('Español')" for="adv-welcome-es" :error="$errors->first('welcomeEs')">
+                            <input id="adv-welcome-es" type="text" wire:model="welcomeEs" maxlength="200" placeholder="{{ $widgetDefaults['es']['welcome'] ?? '' }}" @class(['ui-input', 'is-invalid' => $errors->has('welcomeEs')])>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Texto del botón')" :hint="__('Español')" for="adv-button-es" :error="$errors->first('buttonEs')">
+                            <input id="adv-button-es" type="text" wire:model="buttonEs" maxlength="40" placeholder="{{ $widgetDefaults['es']['button'] ?? '' }}" @class(['ui-input', 'is-invalid' => $errors->has('buttonEs')])>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Mensaje de bienvenida')" hint="English" for="adv-welcome-en" :error="$errors->first('welcomeEn')">
+                            <input id="adv-welcome-en" type="text" wire:model="welcomeEn" maxlength="200" placeholder="{{ $widgetDefaults['en']['welcome'] ?? '' }}" @class(['ui-input', 'is-invalid' => $errors->has('welcomeEn')])>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Texto del botón')" hint="English" for="adv-button-en" :error="$errors->first('buttonEn')">
+                            <input id="adv-button-en" type="text" wire:model="buttonEn" maxlength="40" placeholder="{{ $widgetDefaults['en']['button'] ?? '' }}" @class(['ui-input', 'is-invalid' => $errors->has('buttonEn')])>
+                        </x-ui.field>
+                    </div>
+                    <p class="ui-help">{{ __('El widget ya instalado en la web los recibe al cargar la página (no hace falta cambiar el código incrustado). El indicador «En línea» no cambia.') }}</p>
+                    <div class="ui-form-grid">
+                        <x-ui.field :label="__('Saludo inicial de la conversación')" :hint="__('Español')" for="adv-greeting-es" :error="$errors->first('greetingEs')">
+                            <textarea id="adv-greeting-es" wire:model="greetingEs" rows="2" maxlength="500" data-testid="greeting-es" @class(['ui-input ui-textarea', 'is-invalid' => $errors->has('greetingEs')])></textarea>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Saludo inicial de la conversación')" hint="English" for="adv-greeting-en" :error="$errors->first('greetingEn')">
+                            <textarea id="adv-greeting-en" wire:model="greetingEn" rows="2" maxlength="500" @class(['ui-input ui-textarea', 'is-invalid' => $errors->has('greetingEn')])></textarea>
+                        </x-ui.field>
+                    </div>
+                    <p class="ui-help">{{ __('Primer mensaje del asesor al empezar a conversar. Vacío = el saludo por defecto. También lo cambia una respuesta aprobada sobre el saludo en «Probar asesor».') }}</p>
                 </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
-                    <div class="field" style="margin-bottom:0">
-                        <label for="adv-welcome-es">{{ __('Mensaje de bienvenida') }} <span class="mca-help" style="display:inline">· {{ __('Español') }}</span></label>
-                        <input id="adv-welcome-es" type="text" wire:model="welcomeEs" maxlength="200" placeholder="{{ $widgetDefaults['es']['welcome'] ?? '' }}">
-                        @error('welcomeEs') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                    <div class="field" style="margin-bottom:0">
-                        <label for="adv-button-es">{{ __('Texto del botón') }} <span class="mca-help" style="display:inline">· {{ __('Español') }}</span></label>
-                        <input id="adv-button-es" type="text" wire:model="buttonEs" maxlength="40" placeholder="{{ $widgetDefaults['es']['button'] ?? '' }}">
-                        @error('buttonEs') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                    <div class="field" style="margin-bottom:0">
-                        <label for="adv-welcome-en">{{ __('Mensaje de bienvenida') }} <span class="mca-help" style="display:inline">· English</span></label>
-                        <input id="adv-welcome-en" type="text" wire:model="welcomeEn" maxlength="200" placeholder="{{ $widgetDefaults['en']['welcome'] ?? '' }}">
-                        @error('welcomeEn') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                    <div class="field" style="margin-bottom:0">
-                        <label for="adv-button-en">{{ __('Texto del botón') }} <span class="mca-help" style="display:inline">· English</span></label>
-                        <input id="adv-button-en" type="text" wire:model="buttonEn" maxlength="40" placeholder="{{ $widgetDefaults['en']['button'] ?? '' }}">
-                        @error('buttonEn') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                </div>
-                <div class="mca-help" style="margin-top:10px">{{ __('El widget ya instalado en la web los recibe al cargar la página (no hace falta cambiar el código incrustado). El indicador «En línea» no cambia.') }}</div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:16px">
-                    <div class="field" style="margin-bottom:0">
-                        <label for="adv-greeting-es">{{ __('Saludo inicial de la conversación') }} <span class="mca-help" style="display:inline">· {{ __('Español') }}</span></label>
-                        <textarea id="adv-greeting-es" wire:model="greetingEs" rows="2" maxlength="500" data-testid="greeting-es"></textarea>
-                        @error('greetingEs') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                    <div class="field" style="margin-bottom:0">
-                        <label for="adv-greeting-en">{{ __('Saludo inicial de la conversación') }} <span class="mca-help" style="display:inline">· English</span></label>
-                        <textarea id="adv-greeting-en" wire:model="greetingEn" rows="2" maxlength="500"></textarea>
-                        @error('greetingEn') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                </div>
-                <div class="mca-help" style="margin-top:6px">{{ __('Primer mensaje del asesor al empezar a conversar. Vacío = el saludo por defecto. También lo cambia una respuesta aprobada sobre el saludo en «Probar asesor».') }}</div>
-            </div>
+            </section>
         @endif
 
         {{-- Guardar --}}
-        <div style="margin-top:18px;display:flex;align-items:center;gap:12px">
-            <button type="button" wire:click="save" wire:loading.attr="disabled" wire:target="save" class="btn btn-primary">
-                <span wire:loading.remove wire:target="save" class="adv-bi"><x-ui.icon name="check" class="ic" style="width:16px;height:16px" /> {{ $editing ? __('Guardar cambios') : __('Crear asesor') }}</span>
-                <span wire:loading.inline-flex wire:target="save" class="adv-bg"><span class="mca-spin"></span> {{ __('Guardando…') }}</span>
+        <div class="ui-savebar">
+            <p class="ui-savebar-note ui-hide-sm">{{ $type === 'ia' ? __('Guarda la identidad, la configuración de IA, las instrucciones y el widget.') : __('Guarda la identidad del asesor.') }}</p>
+            <x-ui.button :href="route('advisors.index')" variant="ghost">{{ __('Cancelar') }}</x-ui.button>
+            <button type="button" wire:click="save" wire:loading.attr="disabled" wire:target="save" class="ui-btn ui-btn--primary">
+                <span wire:loading.remove wire:target="save" class="ui-btn-label"><x-ui.icon name="check" /> {{ $editing ? __('Guardar cambios') : __('Crear asesor') }}</span>
+                <span wire:loading.inline-flex wire:target="save" class="ui-btn-label"><span class="ui-spin"></span> {{ __('Guardando…') }}</span>
             </button>
-            <a href="{{ route('advisors.index') }}" class="btn btn-ghost">{{ __('Cancelar') }}</a>
         </div>
+    </div>
 
-        {{-- Probar asesor (solo IA en edición): enlace privado del modo de prueba --}}
-        @if ($editing && $type === 'ia')
-            <div class="card card-p fade" style="margin-top:22px">
-                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">
-                    <h3><x-ui.icon name="sparkles" class="ic" style="width:17px;height:17px" /> {{ __('Probar asesor') }}</h3>
-                    <p class="mca-sub">{{ __('Conversa con el asesor real (mismo modelo, instrucciones y conocimiento) antes de activarlo. Las conversaciones de prueba no crean contactos ni leads, no envían nada a redes y no cuentan en las métricas.') }}</p>
-                </div>
+    {{-- Probar asesor (solo IA en edición): enlace privado del modo de prueba --}}
+    @if ($editing && $type === 'ia')
+        <section class="ui-card" id="adv-test" aria-labelledby="adv-test-t">
+            <div class="ui-card-h"><x-ui.icon name="sparkles" class="ui-card-ic" /><h2 id="adv-test-t">{{ __('Probar asesor') }}</h2></div>
+            <div class="ui-card-p">
+                <p class="ui-card-desc">{{ __('Conversa con el asesor real (mismo modelo, instrucciones y conocimiento) antes de activarlo. Las conversaciones de prueba no crean contactos ni leads, no envían nada a redes y no cuentan en las métricas.') }}</p>
 
                 @if ($previewUrl)
-                    <div x-data="{ copied: false }" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-                        <a href="{{ $previewUrl }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm"><span class="adv-bi"><x-ui.icon name="external-link" class="ic" style="width:15px;height:15px" /> {{ __('Abrir prueba en nueva pestaña') }}</span></a>
-                        <button type="button" class="btn btn-ghost btn-sm" x-on:click="navigator.clipboard.writeText(@js($previewUrl)).then(() => { copied = true; setTimeout(() => copied = false, 2000) })">
-                            <span class="adv-bi" x-show="! copied"><x-ui.icon name="file-text" class="ic" style="width:15px;height:15px" /> {{ __('Copiar enlace') }}</span>
-                            <span class="adv-bi" x-show="copied" x-cloak><x-ui.icon name="check" class="ic" style="width:15px;height:15px" /> {{ __('Copiado') }}</span>
+                    <div x-data="{ copied: false }" class="ui-actions-row ui-actions-row--center">
+                        <a href="{{ $previewUrl }}" target="_blank" rel="noopener noreferrer" class="ui-btn ui-btn--primary ui-btn--sm"><x-ui.icon name="external-link" /> {{ __('Abrir prueba en nueva pestaña') }}</a>
+                        <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" x-on:click="navigator.clipboard.writeText(@js($previewUrl)).then(() => { copied = true; setTimeout(() => copied = false, 2000) })">
+                            <span class="ui-btn-label" x-show="! copied"><x-ui.icon name="file-text" /> {{ __('Copiar enlace') }}</span>
+                            <span class="ui-btn-label" x-show="copied" x-cloak><x-ui.icon name="check" /> {{ __('Copiado') }}</span>
                         </button>
-                        <button type="button" wire:click="generatePreviewLink" wire:confirm="{{ __('El enlace actual dejará de funcionar. ¿Generar uno nuevo?') }}" class="btn btn-ghost btn-sm"><span class="adv-bi"><x-ui.icon name="refresh" class="ic" style="width:15px;height:15px" /> {{ __('Regenerar') }}</span></button>
-                        <button type="button" wire:click="revokePreviewLink" wire:confirm="{{ __('¿Revocar el enlace de prueba? Dejará de funcionar para todos.') }}" class="btn btn-ghost btn-sm"><span class="adv-bi"><x-ui.icon name="x" class="ic" style="width:15px;height:15px" /> {{ __('Revocar') }}</span></button>
+                        <x-ui.button size="sm" variant="ghost" icon="refresh" wire:click="generatePreviewLink" wire:confirm="{{ __('El enlace actual dejará de funcionar. ¿Generar uno nuevo?') }}">{{ __('Regenerar') }}</x-ui.button>
+                        <x-ui.button size="sm" variant="ghost" icon="x" wire:click="revokePreviewLink" wire:confirm="{{ __('¿Revocar el enlace de prueba? Dejará de funcionar para todos.') }}">{{ __('Revocar') }}</x-ui.button>
                     </div>
-                    <div class="mca-help" style="margin-top:8px">{{ __('Enlace privado: compártelo solo con el equipo. Quien lo tenga puede conversar con el asesor en modo de prueba.') }}</div>
+                    <p class="ui-note">{{ __('Enlace privado: compártelo solo con el equipo. Quien lo tenga puede conversar con el asesor en modo de prueba.') }}</p>
                 @else
-                    <button type="button" wire:click="generatePreviewLink" class="btn btn-primary btn-sm"><span class="adv-bi"><x-ui.icon name="plus" class="ic" style="width:15px;height:15px" /> {{ __('Generar enlace de prueba') }}</span></button>
-                @endif
-
-                @if ($feedback && ($feedback['correct'] + $feedback['needs_improvement']) > 0)
-                    <div class="mca-section">
-                        <h3 style="font-size:14px">{{ __('Valoraciones del equipo') }}</h3>
-                        <p class="mca-sub">{{ __(':ok correctas · :bad necesitan mejora. Las marcadas como «Esta es la respuesta correcta» pasan a «Correcciones aprendidas»; los comentarios no cambian nada automáticamente.', ['ok' => $feedback['correct'], 'bad' => $feedback['needs_improvement']]) }}</p>
-                        @foreach ($feedback['recent'] as $f)
-                            <div style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:6px;font-size:13px">
-                                <div class="mca-help">{{ \Illuminate\Support\Str::limit((string) $f->message?->content, 160) }}</div>
-                                @if ($f->comment)
-                                    <div style="margin-top:4px"><strong>{{ __('Observación') }}:</strong> {{ $f->comment }}</div>
-                                @endif
-                            </div>
-                        @endforeach
-                    </div>
+                    <x-ui.button size="sm" variant="primary" icon="plus" wire:click="generatePreviewLink">{{ __('Generar enlace de prueba') }}</x-ui.button>
                 @endif
             </div>
-        @endif
 
-        {{-- Canales de atención automática (Web Chat, Instagram, Messenger, WhatsApp) de este asesor --}}
-        @if ($editing && $type === 'ia' && class_exists(\Modules\Social\Livewire\AdvisorChannels::class))
-            @livewire('social.advisor-channels', ['botId' => $botId], key('advisor-channels-'.$botId))
-        @endif
-
-        {{-- Correcciones aprendidas: respuestas aprobadas por el equipo en «Probar asesor» --}}
-        @if ($editing && $type === 'ia')
-            <div class="card card-p fade" style="margin-top:22px" data-testid="corrections">
-                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">
-                    <h3><x-ui.icon name="check" class="ic" style="width:17px;height:17px" /> {{ __('Correcciones aprendidas') }}</h3>
-                    <p class="mca-sub">{{ __('Respuestas aprobadas por el equipo en «Probar asesor». El asesor las sigue al instante en preguntas equivalentes del mismo tema. Desactiva o elimina las que ya no correspondan.') }}</p>
-                </div>
-                @forelse ($corrections as $c)
-                    <div wire:key="corr-{{ $c->id }}" style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:8px;font-size:13px;{{ $c->active ? '' : 'opacity:.6' }}">
-                        @if ($editingCorrectionId === $c->id)
-                            <div class="field"><label>{{ __('Pregunta') }}</label><textarea wire:model="correctionQuestion" rows="2" maxlength="1000"></textarea>@error('correctionQuestion') <span class="mca-err">{{ $message }}</span> @enderror</div>
-                            <div class="field"><label>{{ __('Tema') }}</label>
-                                <select wire:model="correctionTopic">
-                                    <option value="">{{ __('General (cualquier tema)') }}</option>
-                                    @foreach ($lineLabels as $slug => $label)<option value="{{ $slug }}">{{ __($label) }}</option>@endforeach
-                                </select>@error('correctionTopic') <span class="mca-err">{{ $message }}</span> @enderror</div>
-                            <div class="field"><label>{{ __('Respuesta aprobada') }}</label><textarea wire:model="correctionAnswer" rows="4" maxlength="1000"></textarea>@error('correctionAnswer') <span class="mca-err">{{ $message }}</span> @enderror</div>
-                            <div style="display:flex;gap:8px"><button type="button" wire:click="saveCorrection" class="btn btn-primary btn-sm">{{ __('Guardar') }}</button><button type="button" wire:click="cancelCorrection" class="btn btn-ghost btn-sm">{{ __('Cancelar') }}</button></div>
-                        @else
-                            <div><strong>{{ __('Pregunta') }}:</strong> {{ $c->question }}</div>
-                            <div class="mca-help">{{ __('Tema') }}: {{ $c->topic_line ? __($lineLabels[$c->topic_line] ?? $c->topic_line) : __('General (cualquier tema)') }} · {{ $c->user?->name ?? '—' }} · {{ $c->updated_at?->format('d/m/Y H:i') }} · {{ $c->active ? __('Activa') : __('Desactivada') }}</div>
-                            <div style="margin-top:4px"><strong>{{ __('Respuesta aprobada') }}:</strong> {{ $c->answer }}</div>
-                            <div style="display:flex;gap:8px;margin-top:8px">
-                                <button type="button" wire:click="editCorrection({{ $c->id }})" class="btn btn-ghost btn-sm">{{ __('Editar') }}</button>
-                                <button type="button" wire:click="toggleCorrection({{ $c->id }})" class="btn btn-ghost btn-sm">{{ $c->active ? __('Desactivar') : __('Activar') }}</button>
-                                <button type="button" wire:click="deleteCorrection({{ $c->id }})" wire:confirm="{{ __('¿Eliminar esta corrección? El asesor dejará de usarla.') }}" class="btn btn-soft btn-sm">{{ __('Eliminar') }}</button>
-                            </div>
-                        @endif
-                    </div>
-                @empty
-                    <p class="mca-help" style="margin:0">{{ __('Aún no hay correcciones. En «Probar asesor», marca «Necesita mejora» en una respuesta y escribe la respuesta correcta.') }}</p>
-                @endforelse
-            </div>
-        @endif
-
-        {{-- Base de conocimiento (solo IA en edicion) --}}
-        @if ($editing && $type === 'ia')
-            <div class="card card-p fade" style="margin-top:22px">
-                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+            @if ($feedback && ($feedback['correct'] + $feedback['needs_improvement']) > 0)
+                <div class="ui-card-p ui-card-p--sep">
                     <div>
-                        <h3>{{ __('Base de conocimiento') }}</h3>
-                        <p class="mca-sub" style="margin-bottom:0">{!! __('Sube uno o varios .md: entran a la biblioteca central (upsert por código) y quedan asignados a este asesor. La gestión completa (categorías, otros agentes) está en el :link.', ['link' => '<a href="'.e(route('ai.knowledge.agents')).'" style="color:var(--mca,#1E5AA8);font-weight:600">'.e(__('Centro de Conocimiento')).'</a>']) !!}</p>
+                        <h3 class="ui-vr-title">{{ __('Valoraciones del equipo') }}</h3>
+                        <p class="ui-help">{{ __(':ok correctas · :bad necesitan mejora. Las marcadas como «Esta es la respuesta correcta» pasan a «Correcciones aprendidas»; los comentarios no cambian nada automáticamente.', ['ok' => $feedback['correct'], 'bad' => $feedback['needs_improvement']]) }}</p>
                     </div>
-                    <button type="button" wire:click="sync" wire:loading.attr="disabled" wire:target="sync" class="btn btn-ghost btn-sm">
-                        <span wire:loading.remove wire:target="sync" class="adv-bi"><x-ui.icon name="refresh" class="ic" style="width:15px;height:15px" /> {{ __('Re-sincronizar') }}</span>
-                        <span wire:loading.inline-flex wire:target="sync" class="adv-bg"><span class="mca-spin"></span> …</span>
-                    </button>
-                </div>
-
-                <div class="mca-drop" style="margin-bottom:14px">
-                    <label class="mca-filebtn"><x-ui.icon name="upload" class="ic" style="width:15px;height:15px" /> {{ __('Elegir archivos .md') }}
-                        <input type="file" wire:model="docs" accept=".md" multiple class="hidden">
-                    </label>
-                    <span wire:loading wire:target="docs" class="mca-help" style="margin-left:8px"><span class="mca-spin"></span> {{ __('Cargando…') }}</span>
-                    @error('docs') <div class="mca-err">{{ $message }}</div> @enderror
-                    @if (count($docs))
-                        <div style="margin-top:12px">
-                            <div class="mca-help">{{ __(':n archivo(s) listo(s):', ['n' => count($docs)]) }}</div>
-                            <ul style="margin:6px 0 0;padding-left:18px;font-size:13px" class="mca-muted">
-                                @foreach ($docs as $d)<li>{{ $d->getClientOriginalName() }}</li>@endforeach
-                            </ul>
-                            <button type="button" wire:click="uploadKnowledge" class="btn btn-primary btn-sm" style="margin-top:10px">{{ __('Subir y sincronizar') }}</button>
-                        </div>
+                    @if (count($feedback['recent']))
+                        <ul class="ui-list ui-list--boxed">
+                            @foreach ($feedback['recent'] as $f)
+                                <li class="ui-list-item">
+                                    <span class="ui-list-main">
+                                        <span class="ui-list-meta">{{ \Illuminate\Support\Str::limit((string) $f->message?->content, 160) }}</span>
+                                        @if ($f->comment)
+                                            <span><b class="ui-strong">{{ __('Observación') }}:</b> {{ $f->comment }}</span>
+                                        @endif
+                                    </span>
+                                </li>
+                            @endforeach
+                        </ul>
                     @endif
                 </div>
+            @endif
+        </section>
+    @endif
 
-                @forelse ($sources as $source)
-                    <div class="mca-doc fade" wire:key="ks-{{ $source->id }}">
-                        <span class="di"><x-ui.icon name="file-text" class="ic" style="width:18px;height:18px" /></span>
-                        <div class="dm">
-                            <b>{{ $source->name }}</b>
-                            <span>{{ $source->code }} · {{ $source->last_synced_at ? __('sincronizado :t', ['t' => $source->last_synced_at->diffForHumans()]) : __('sin sincronizar') }}@if (! $source->pivot->is_active) · <em>{{ __('pausada para este asesor') }}</em>@endif</span>
-                        </div>
-                        <button type="button" wire:click="removeKnowledge({{ $source->id }})"
-                                wire:confirm="{{ __('¿Quitar este documento de este asesor? Seguirá disponible en la biblioteca.') }}" class="btn btn-danger btn-sm" title="{{ __('Quitar de este asesor') }}" aria-label="{{ __('Quitar de este asesor') }}">
-                            <x-ui.icon name="trash" class="ic" style="width:15px;height:15px" />
-                        </button>
-                    </div>
-                @empty
-                    <div class="mca-help">{{ __('Sin documentos. Sube uno o varios .md para cargar el conocimiento del asesor.') }}</div>
-                @endforelse
+    {{-- Canales de atención automática (Web Chat, Instagram, Messenger, WhatsApp) de este asesor --}}
+    @if ($editing && $type === 'ia' && class_exists(\Modules\Social\Livewire\AdvisorChannels::class))
+        <div id="adv-channels">
+            @livewire('social.advisor-channels', ['botId' => $botId], key('advisor-channels-'.$botId))
+        </div>
+    @endif
+
+    {{-- Correcciones aprendidas: respuestas aprobadas por el equipo en «Probar asesor» --}}
+    @if ($editing && $type === 'ia')
+        <section class="ui-card" id="adv-corrections" aria-labelledby="adv-corr-t" data-testid="corrections">
+            <div class="ui-card-h"><x-ui.icon name="check" class="ui-card-ic" /><h2 id="adv-corr-t">{{ __('Correcciones aprendidas') }}</h2>
+                <span class="ui-badge ui-badge--count ui-tone--neutral">{{ count($corrections) }}</span>
             </div>
-        @endif
+            <div class="ui-card-p"><p class="ui-card-desc">{{ __('Respuestas aprobadas por el equipo en «Probar asesor». El asesor las sigue al instante en preguntas equivalentes del mismo tema. Desactiva o elimina las que ya no correspondan.') }}</p></div>
+            <ul class="ui-list ui-list--sep">
+                @forelse ($corrections as $c)
+                    <li wire:key="corr-{{ $c->id }}">
+                        @if ($editingCorrectionId === $c->id)
+                            <div class="ui-subform">
+                                <div class="ui-card-p">
+                                    <div class="ui-form-grid">
+                                        <x-ui.field class="ui-span-full" :label="__('Pregunta')" for="corr-q-{{ $c->id }}" :error="$errors->first('correctionQuestion')">
+                                            <textarea id="corr-q-{{ $c->id }}" wire:model="correctionQuestion" rows="2" maxlength="1000" @class(['ui-input ui-textarea', 'is-invalid' => $errors->has('correctionQuestion')])></textarea>
+                                        </x-ui.field>
+                                        <x-ui.field class="ui-span-full" :label="__('Tema')" for="corr-t-{{ $c->id }}" :error="$errors->first('correctionTopic')">
+                                            <select id="corr-t-{{ $c->id }}" wire:model="correctionTopic" @class(['ui-select', 'is-invalid' => $errors->has('correctionTopic')])>
+                                                <option value="">{{ __('General (cualquier tema)') }}</option>
+                                                @foreach ($lineLabels as $slug => $label)<option value="{{ $slug }}">{{ __($label) }}</option>@endforeach
+                                            </select>
+                                        </x-ui.field>
+                                        <x-ui.field class="ui-span-full" :label="__('Respuesta aprobada')" for="corr-a-{{ $c->id }}" :error="$errors->first('correctionAnswer')">
+                                            <textarea id="corr-a-{{ $c->id }}" wire:model="correctionAnswer" rows="4" maxlength="1000" @class(['ui-input ui-textarea', 'is-invalid' => $errors->has('correctionAnswer')])></textarea>
+                                        </x-ui.field>
+                                    </div>
+                                </div>
+                                <div class="ui-card-f ui-card-f--end">
+                                    <x-ui.button size="sm" wire:click="cancelCorrection">{{ __('Cancelar') }}</x-ui.button>
+                                    <x-ui.button size="sm" variant="primary" icon="check" wire:click="saveCorrection">{{ __('Guardar') }}</x-ui.button>
+                                </div>
+                            </div>
+                        @else
+                            <div class="ui-list-item ui-list-item--wrap">
+                                <span class="ui-list-main">
+                                    <span class="ui-list-title">{{ $c->question }}</span>
+                                    <span class="ui-list-meta">{{ __('Tema') }}: {{ $c->topic_line ? __($lineLabels[$c->topic_line] ?? $c->topic_line) : __('General (cualquier tema)') }} · {{ $c->user?->name ?? '—' }} · {{ $c->updated_at?->format('d/m/Y H:i') }}</span>
+                                    <span class="ui-note-body"><b class="ui-strong">{{ __('Respuesta aprobada') }}:</b> {{ $c->answer }}</span>
+                                </span>
+                                <span class="ui-list-aside">
+                                    <x-ui.badge :tone="$c->active ? 'success' : 'neutral'" dot>{{ $c->active ? __('Activa') : __('Desactivada') }}</x-ui.badge>
+                                </span>
+                                <span class="ui-list-foot">
+                                    <x-ui.button size="sm" icon="pencil" wire:click="editCorrection({{ $c->id }})">{{ __('Editar') }}</x-ui.button>
+                                    <x-ui.button size="sm" variant="ghost" icon="power" wire:click="toggleCorrection({{ $c->id }})">{{ $c->active ? __('Desactivar') : __('Activar') }}</x-ui.button>
+                                    <x-ui.button size="sm" variant="danger" icon="trash" wire:click="deleteCorrection({{ $c->id }})" wire:confirm="{{ __('¿Eliminar esta corrección? El asesor dejará de usarla.') }}">{{ __('Eliminar') }}</x-ui.button>
+                                </span>
+                            </div>
+                        @endif
+                    </li>
+                @empty
+                    <li class="ui-list-empty">{{ __('Aún no hay correcciones. En «Probar asesor», marca «Necesita mejora» en una respuesta y escribe la respuesta correcta.') }}</li>
+                @endforelse
+            </ul>
+        </section>
+    @endif
 
-        {{-- Incrustar widget (solo edicion): dos variantes listas para copiar --}}
-        @if ($editing && $embedSnippet)
-            <div class="card card-p fade" style="margin-top:22px"
-                 x-data="{
-                     copiedA: false, copiedB: false,
-                     snippets: { a: @js($embedSnippet), b: @js($embedSnippetJs) },
-                     copy(which) {
-                         const text = this.snippets[which];
-                         const key = 'copied' + which.toUpperCase();
-                         const mark = () => { this[key] = true; setTimeout(() => this[key] = false, 2000) };
-                         if (navigator.clipboard && window.isSecureContext) {
-                             navigator.clipboard.writeText(text).then(mark).catch(() => this.fallback(text, mark));
-                         } else {
-                             this.fallback(text, mark);
-                         }
-                     },
-                     fallback(text, mark) {
-                         const ta = document.createElement('textarea');
-                         ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-                         document.body.appendChild(ta); ta.focus(); ta.select();
-                         try { document.execCommand('copy'); mark(); } catch (e) {}
-                         document.body.removeChild(ta);
-                     }
-                 }">
-                <div class="mca-section" style="border-top:none;padding-top:0;margin-top:0">
-                    <h3><x-ui.icon name="globe" class="ic" style="width:17px;height:17px" /> {{ __('Incrustar widget') }}</h3>
-                    <p class="mca-sub" style="margin-bottom:14px">{!! __('Lleva la <b>clave pública</b> de este asesor (no contiene secretos). Elige la variante según dónde lo pegues.') !!}</p>
+    {{-- Base de conocimiento (solo IA en edición) --}}
+    @if ($editing && $type === 'ia')
+        <section class="ui-card" id="adv-knowledge" aria-labelledby="adv-kb-t">
+            <div class="ui-card-h"><x-ui.icon name="book-open" class="ui-card-ic" /><h2 id="adv-kb-t">{{ __('Base de conocimiento') }}</h2>
+                <span class="ui-badge ui-badge--count ui-tone--neutral">{{ count($sources) }}</span>
+                <span class="sp"></span>
+                <button type="button" wire:click="sync" wire:loading.attr="disabled" wire:target="sync" class="ui-btn ui-btn--secondary ui-btn--sm">
+                    <span wire:loading.remove wire:target="sync" class="ui-btn-label"><x-ui.icon name="refresh" /> {{ __('Re-sincronizar') }}</span>
+                    <span wire:loading.inline-flex wire:target="sync" class="ui-btn-label"><span class="ui-spin"></span> {{ __('Sincronizando…') }}</span>
+                </button>
+            </div>
+            <div class="ui-card-p">
+                <p class="ui-card-desc">{!! __('Sube uno o varios .md: entran a la biblioteca central (upsert por código) y quedan asignados a este asesor. La gestión completa (categorías, otros agentes) está en el :link.', ['link' => '<a href="'.e(route('ai.knowledge.agents')).'" class="ui-link">'.e(__('Centro de Conocimiento')).'</a>']) !!}</p>
+                <div class="ui-actions-row ui-actions-row--center">
+                    <label class="ui-btn ui-btn--secondary ui-btn--sm"><x-ui.icon name="upload" /> {{ __('Elegir archivos .md') }}
+                        <input type="file" wire:model="docs" accept=".md" multiple class="hidden">
+                    </label>
+                    <span wire:loading wire:target="docs" class="ui-help"><span class="ui-spin"></span> {{ __('Cargando…') }}</span>
                 </div>
+                @error('docs') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                @if (count($docs))
+                    <div class="ui-callout ui-callout--stack ui-actions-row--top">
+                        <b>{{ __(':n archivo(s) listo(s):', ['n' => count($docs)]) }}</b>
+                        <ul class="ui-callout-list">
+                            @foreach ($docs as $d)<li>{{ $d->getClientOriginalName() }}</li>@endforeach
+                        </ul>
+                        <x-ui.button size="sm" variant="primary" icon="upload" wire:click="uploadKnowledge">{{ __('Subir y sincronizar') }}</x-ui.button>
+                    </div>
+                @endif
+            </div>
+            <ul class="ui-list ui-list--sep">
+                @forelse ($sources as $source)
+                    <li wire:key="ks-{{ $source->id }}">
+                        <div class="ui-list-item">
+                            <span class="ui-list-ic"><x-ui.icon name="file-text" /></span>
+                            <span class="ui-list-main">
+                                <span class="ui-list-title">{{ $source->name }}</span>
+                                <span class="ui-list-meta"><span class="ui-mono">{{ $source->code }}</span> · {{ $source->last_synced_at ? __('sincronizado :t', ['t' => $source->last_synced_at->diffForHumans()]) : __('sin sincronizar') }}</span>
+                            </span>
+                            <span class="ui-list-aside">
+                                @if (! $source->pivot->is_active)
+                                    <x-ui.badge tone="warning">{{ __('pausada para este asesor') }}</x-ui.badge>
+                                @endif
+                                <x-ui.button size="sm" variant="ghost" icon="trash" wire:click="removeKnowledge({{ $source->id }})"
+                                    wire:confirm="{{ __('¿Quitar este documento de este asesor? Seguirá disponible en la biblioteca.') }}" :title="__('Quitar de este asesor')" :aria-label="__('Quitar de este asesor')" />
+                            </span>
+                        </div>
+                    </li>
+                @empty
+                    <li class="ui-list-empty">{{ __('Sin documentos. Sube uno o varios .md para cargar el conocimiento del asesor.') }}</li>
+                @endforelse
+            </ul>
+        </section>
+    @endif
+
+    {{-- Incrustar widget (solo edición): dos variantes listas para copiar --}}
+    @if ($editing && $embedSnippet)
+        <section class="ui-card" id="adv-embed" aria-labelledby="adv-embed-t"
+             x-data="{
+                 copiedA: false, copiedB: false,
+                 snippets: { a: @js($embedSnippet), b: @js($embedSnippetJs) },
+                 copy(which) {
+                     const text = this.snippets[which];
+                     const key = 'copied' + which.toUpperCase();
+                     const mark = () => { this[key] = true; setTimeout(() => this[key] = false, 2000) };
+                     if (navigator.clipboard && window.isSecureContext) {
+                         navigator.clipboard.writeText(text).then(mark).catch(() => this.fallback(text, mark));
+                     } else {
+                         this.fallback(text, mark);
+                     }
+                 },
+                 fallback(text, mark) {
+                     const ta = document.createElement('textarea');
+                     ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                     document.body.appendChild(ta); ta.focus(); ta.select();
+                     try { document.execCommand('copy'); mark(); } catch (e) {}
+                     document.body.removeChild(ta);
+                 }
+             }">
+            <div class="ui-card-h"><x-ui.icon name="globe" class="ui-card-ic" /><h2 id="adv-embed-t">{{ __('Incrustar widget') }}</h2></div>
+            <div class="ui-card-p">
+                <p class="ui-card-desc">{!! __('Lleva la <b>clave pública</b> de este asesor (no contiene secretos). Elige la variante según dónde lo pegues.') !!}</p>
 
                 {{-- Opción 1: etiqueta <script> --}}
-                <div class="mca-lbl" style="margin-bottom:6px">{!! __('Opción 1 · Etiqueta <code>&lt;script&gt;</code> (pégala antes de <code>&lt;/body&gt;</code>)') !!}</div>
-                <div style="position:relative">
-                    <pre style="background:var(--mca-blue-deep,#13253D);color:#E7EEF7;border-radius:12px;padding:16px 16px 16px 18px;margin:0;font-size:12.5px;line-height:1.55;overflow-x:auto;white-space:pre;font-family:ui-monospace,SFMono-Regular,Menlo,monospace"><code>{{ $embedSnippet }}</code></pre>
-                    <button type="button" @click="copy('a')" class="btn btn-primary btn-sm" style="position:absolute;top:10px;right:10px" :class="{ 'btn-ok': copiedA }">
-                        <span x-show="!copiedA" class="adv-bi"><x-ui.icon name="file-text" class="ic" style="width:14px;height:14px" /> {{ __('Copiar') }}</span>
-                        <span x-show="copiedA" x-cloak class="adv-bi"><x-ui.icon name="check" class="ic" style="width:14px;height:14px" /> {{ __('¡Copiado!') }}</span>
-                    </button>
+                <div class="ui-code">
+                    <div class="ui-code-h">
+                        <span>{!! __('Opción 1 · Etiqueta <code>&lt;script&gt;</code> (pégala antes de <code>&lt;/body&gt;</code>)') !!}</span>
+                        <button type="button" @click="copy('a')" class="ui-btn ui-btn--secondary ui-btn--sm">
+                            <span x-show="!copiedA" class="ui-btn-label"><x-ui.icon name="file-text" /> {{ __('Copiar') }}</span>
+                            <span x-show="copiedA" x-cloak class="ui-btn-label"><x-ui.icon name="check" /> {{ __('¡Copiado!') }}</span>
+                        </button>
+                    </div>
+                    <pre><code>{{ $embedSnippet }}</code></pre>
                 </div>
 
                 {{-- Opción 2: JavaScript puro (WordPress / "Custom Scripts / Footer", sin <script>) --}}
-                <div class="mca-lbl" style="margin:18px 0 6px">{!! __('Opción 2 · JavaScript (WordPress, campo «Custom Scripts / Footer» — sin <code>&lt;script&gt;</code>)') !!}</div>
-                <div style="position:relative">
-                    <pre style="background:var(--mca-blue-deep,#13253D);color:#E7EEF7;border-radius:12px;padding:16px 16px 16px 18px;margin:0;font-size:12.5px;line-height:1.55;overflow-x:auto;white-space:pre;font-family:ui-monospace,SFMono-Regular,Menlo,monospace"><code>{{ $embedSnippetJs }}</code></pre>
-                    <button type="button" @click="copy('b')" class="btn btn-primary btn-sm" style="position:absolute;top:10px;right:10px" :class="{ 'btn-ok': copiedB }">
-                        <span x-show="!copiedB" class="adv-bi"><x-ui.icon name="file-text" class="ic" style="width:14px;height:14px" /> {{ __('Copiar') }}</span>
-                        <span x-show="copiedB" x-cloak class="adv-bi"><x-ui.icon name="check" class="ic" style="width:14px;height:14px" /> {{ __('¡Copiado!') }}</span>
-                    </button>
-                </div>
-
-                <div class="mca-help" style="margin-top:12px">
-                    {!! __('Clave pública de <b>:name</b>: <code>:key</code> · servido desde <code>:url</code>.', ['name' => e($bot->assistant_name), 'key' => e($bot->public_key), 'url' => e(config('crm.widget_embed_url'))]) !!}<br>
-                    {!! __('<code>data-offset-bottom</code> (px) separa el lanzador del borde inferior para no chocar con botones flotantes (p. ej. «subir arriba»). Valor actual: <code>:value</code>; por defecto 24 si se omite.', ['value' => (int) config('crm.widget_offset_bottom', 90)]) !!}
-                </div>
-            </div>
-        @endif
-
-        {{-- Zona de peligro: eliminar (solo edicion) --}}
-        @if ($editing)
-            <div class="mca-danger fade" style="margin-top:22px">
-                <h3>{{ __('Eliminar asesor') }}</h3>
-                @if ($deleteBlockReason)
-                    <p class="mca-sub" style="margin:0 0 4px">{!! __('El borrado es <b>permanente</b> y distinto de desactivar.') !!}</p>
-                    <div class="mca-toast err" style="margin:10px 0 0"><x-ui.icon name="x" class="ic" /> {{ $deleteBlockReason }}</div>
-                @else
-                    <p class="mca-sub" style="margin:0 0 12px">{{ __('Borra permanentemente el asesor y su configuración (conocimiento y proceso). El histórico de conversaciones/leads/eventos NO se borra. Esta acción no se puede deshacer.') }}</p>
-                    <button type="button" wire:click="confirmDelete" class="btn btn-danger">
-                        <x-ui.icon name="trash" class="ic" style="width:16px;height:16px" /> {{ __('Eliminar asesor') }}
-                    </button>
-                @endif
-            </div>
-        @endif
-    </div>
-
-    {{-- Modal de confirmacion (exige teclear el nombre exacto) --}}
-    @if ($confirmingDelete && $bot)
-        <div class="mca-panel adv-form">
-            <div class="mca-modal-bg" wire:key="del-modal">
-                <div class="mca-modal">
-                    <div class="mm-ic"><x-ui.icon name="trash" class="ic" style="width:22px;height:22px" /></div>
-                    <h2>{{ __('Eliminar a :name', ['name' => $bot->assistant_name]) }}</h2>
-                    <p>{!! __('Esta acción es <b>permanente</b> y no se puede deshacer. Se borrarán el asesor, su foto, su base de conocimiento (archivos incluidos) y su configuración de IA.') !!}</p>
-                    <div class="warn">{{ __('El histórico de conversaciones, leads y eventos NO se borra.') }}</div>
-                    <div class="field">
-                        <label class="mca-lbl">{!! __('Escribe <b>:name</b> para confirmar', ['name' => e($bot->assistant_name)]) !!}</label>
-                        <input type="text" wire:model.live="deleteConfirmName" placeholder="{{ $bot->assistant_name }}" autocomplete="off">
-                        @error('deleteConfirmName') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
-                        <button type="button" wire:click="cancelDelete" class="btn btn-ghost">{{ __('Cancelar') }}</button>
-                        <button type="button" wire:click="deleteAdvisor" @disabled(! $deleteNameMatches) class="btn btn-danger-solid">
-                            <x-ui.icon name="trash" class="ic" style="width:15px;height:15px" /> {{ __('Eliminar definitivamente') }}
+                <div class="ui-code">
+                    <div class="ui-code-h">
+                        <span>{!! __('Opción 2 · JavaScript (WordPress, campo «Custom Scripts / Footer» — sin <code>&lt;script&gt;</code>)') !!}</span>
+                        <button type="button" @click="copy('b')" class="ui-btn ui-btn--secondary ui-btn--sm">
+                            <span x-show="!copiedB" class="ui-btn-label"><x-ui.icon name="file-text" /> {{ __('Copiar') }}</span>
+                            <span x-show="copiedB" x-cloak class="ui-btn-label"><x-ui.icon name="check" /> {{ __('¡Copiado!') }}</span>
                         </button>
                     </div>
+                    <pre><code>{{ $embedSnippetJs }}</code></pre>
+                </div>
+
+                <p class="ui-note">
+                    {!! __('Clave pública de <b>:name</b>: <code>:key</code> · servido desde <code>:url</code>.', ['name' => e($bot->assistant_name), 'key' => e($bot->public_key), 'url' => e(config('crm.widget_embed_url'))]) !!}<br>
+                    {!! __('<code>data-offset-bottom</code> (px) separa el lanzador del borde inferior para no chocar con botones flotantes (p. ej. «subir arriba»). Valor actual: <code>:value</code>; por defecto 24 si se omite.', ['value' => (int) config('crm.widget_offset_bottom', 90)]) !!}
+                </p>
+            </div>
+        </section>
+    @endif
+
+    {{-- Zona de peligro: eliminar (solo edición) --}}
+    @if ($editing)
+        <section class="ui-card ui-card--danger" aria-labelledby="adv-del-t">
+            <div class="ui-card-h"><x-ui.icon name="trash" class="ui-card-ic" /><h2 id="adv-del-t">{{ __('Eliminar asesor') }}</h2></div>
+            <div class="ui-card-p">
+                @if ($deleteBlockReason)
+                    <p class="ui-card-desc">{!! __('El borrado es <b>permanente</b> y distinto de desactivar.') !!}</p>
+                    <div class="ui-callout ui-tone--danger"><x-ui.icon name="x" /> <span>{{ $deleteBlockReason }}</span></div>
+                @else
+                    <p class="ui-card-desc">{{ __('Borra permanentemente el asesor y su configuración (conocimiento y proceso). El histórico de conversaciones/leads/eventos NO se borra. Esta acción no se puede deshacer.') }}</p>
+                @endif
+            </div>
+            @unless ($deleteBlockReason)
+                <div class="ui-card-f ui-card-f--end">
+                    <x-ui.button variant="danger" icon="trash" wire:click="confirmDelete">{{ __('Eliminar asesor') }}</x-ui.button>
+                </div>
+            @endunless
+        </section>
+    @endif
+
+    {{-- Modal de confirmación (exige teclear el nombre exacto) --}}
+    @if ($confirmingDelete && $bot)
+        <div class="ui-modal-bg" wire:key="del-modal">
+            <div class="ui-modal ui-modal--sm" role="dialog" aria-modal="true" aria-labelledby="adv-del-modal-t">
+                <div class="ui-modal-h">
+                    <h2 class="ui-modal-title" id="adv-del-modal-t"><x-ui.icon name="trash" /> {{ __('Eliminar a :name', ['name' => $bot->assistant_name]) }}</h2>
+                </div>
+                <div class="ui-modal-b">
+                    <p class="ui-card-desc">{!! __('Esta acción es <b>permanente</b> y no se puede deshacer. Se borrarán el asesor, su foto, su base de conocimiento (archivos incluidos) y su configuración de IA.') !!}</p>
+                    <div class="ui-callout ui-tone--warning"><x-ui.icon name="alert-triangle" /> <span>{{ __('El histórico de conversaciones, leads y eventos NO se borra.') }}</span></div>
+                    <div class="ui-field">
+                        <label class="ui-label" for="adv-del-name">{!! __('Escribe <b>:name</b> para confirmar', ['name' => e($bot->assistant_name)]) !!}</label>
+                        <input id="adv-del-name" type="text" wire:model.live="deleteConfirmName" placeholder="{{ $bot->assistant_name }}" autocomplete="off" @if ($errors->has('deleteConfirmName')) aria-describedby="adv-del-name-error" @endif @class(['ui-input', 'is-invalid' => $errors->has('deleteConfirmName')])>
+                        @error('deleteConfirmName') <p class="ui-error" id="adv-del-name-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                    </div>
+                </div>
+                <div class="ui-modal-f">
+                    <x-ui.button wire:click="cancelDelete">{{ __('Cancelar') }}</x-ui.button>
+                    <button type="button" wire:click="deleteAdvisor" @disabled(! $deleteNameMatches) class="ui-btn ui-btn--danger"><x-ui.icon name="trash" /> {{ __('Eliminar definitivamente') }}</button>
                 </div>
             </div>
         </div>
