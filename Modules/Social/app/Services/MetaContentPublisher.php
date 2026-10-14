@@ -238,6 +238,94 @@ final class MetaContentPublisher
     }
 
     /**
+     * Enlace permanente REAL de un medio de Instagram ya publicado (GET /{media_id}?fields=permalink).
+     * Sirve además como comprobación de que el medio existe en Instagram. Null si Meta no lo da.
+     */
+    public function instagramPermalink(SocialChannel $channel, string $mediaId): ?string
+    {
+        if ($mediaId === '') {
+            return null;
+        }
+        if (($fake = $this->fakeMode()) !== null) {
+            return $fake === 'fail' ? null : 'https://www.instagram.com/p/'.Str::lower(Str::random(11)).'/';
+        }
+
+        $token = (string) ($channel->credentials['token'] ?? '');
+        if ($token === '') {
+            return null;
+        }
+        $version = (string) config('social.graph_version', 'v26.0');
+
+        try {
+            $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()
+                ->get("https://graph.facebook.com/{$version}/{$mediaId}", ['fields' => 'permalink']);
+            $link = $response->json('permalink');
+
+            return $response->successful() && is_string($link) && str_starts_with($link, 'https://') ? $link : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Borra en Facebook una publicación de la Página creada por esta app (DELETE /{post_id}
+     * o /{video_id}; Pages API: «Delete a Post» → {success:true}). Solo se considera borrada
+     * si Meta lo confirma.
+     */
+    public function deleteFacebookObject(SocialChannel $channel, string $objectId): PublishResult
+    {
+        if (($fake = $this->fakeMode()) !== null) {
+            return $fake === 'fail' ? PublishResult::fail('Simulado (local): Facebook no permitió borrar la publicación.') : PublishResult::ok($objectId);
+        }
+
+        [$token, , $base] = $this->facebookContext($channel);
+        if ($token === '' || $objectId === '') {
+            return PublishResult::fail('Canal de Facebook sin token o publicación sin id.');
+        }
+
+        try {
+            $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()->delete("{$base}/{$objectId}");
+        } catch (Throwable $e) {
+            Log::warning('social.publish.fb.delete: error de red', ['error' => $e->getMessage()]);
+
+            return PublishResult::fail('No se pudo contactar con Facebook (red).');
+        }
+
+        return $response->successful() && ($response->json('success') === true || $response->json() === true)
+            ? PublishResult::ok($objectId)
+            : PublishResult::fail($this->friendlyError($response, false));
+    }
+
+    /**
+     * Cambia el texto de una publicación de la Página creada por esta app (POST /{post_id}
+     * {message}; Pages API: «Update a Post» → {success:true}). Solo para publicaciones con
+     * id de post de Página ({page}_{post}), no para videos, reels ni historias.
+     */
+    public function updateFacebookPostMessage(SocialChannel $channel, string $postId, string $message): PublishResult
+    {
+        if (($fake = $this->fakeMode()) !== null) {
+            return $fake === 'fail' ? PublishResult::fail('Simulado (local): Facebook no permitió editar la publicación.') : PublishResult::ok($postId);
+        }
+
+        [$token, , $base] = $this->facebookContext($channel);
+        if ($token === '' || $postId === '') {
+            return PublishResult::fail('Canal de Facebook sin token o publicación sin id.');
+        }
+
+        try {
+            $response = Http::timeout(self::TIMEOUT_SECONDS)->withToken($token)->acceptJson()->post("{$base}/{$postId}", ['message' => $message]);
+        } catch (Throwable $e) {
+            Log::warning('social.publish.fb.update: error de red', ['error' => $e->getMessage()]);
+
+            return PublishResult::fail('No se pudo contactar con Facebook (red).');
+        }
+
+        return $response->successful() && $response->json('success') === true
+            ? PublishResult::ok($postId)
+            : PublishResult::fail($this->friendlyError($response, false));
+    }
+
+    /**
      * media_publish de un contenedor ya FINISHED, con el reintento acotado del error
      * transitorio 2207027 (compartido por el flujo normal y la reanudación).
      */
@@ -568,10 +656,18 @@ final class MetaContentPublisher
      * Atajo SOLO-LOCAL (social.fake_publish = ok|partial|fail) para verificación visual sin
      * tokens reales. 'partial' = Facebook ok, Instagram falla (el caso que más importa mostrar).
      */
-    private function fake(string $network): ?PublishResult
+    /** Modo simulado SOLO-LOCAL (ok|partial|fail) o null. */
+    private function fakeMode(): ?string
     {
         $mode = config('social.fake_publish');
-        if (! is_string($mode) || $mode === '' || ! app()->environment('local')) {
+
+        return is_string($mode) && $mode !== '' && app()->environment('local') ? $mode : null;
+    }
+
+    private function fake(string $network): ?PublishResult
+    {
+        $mode = $this->fakeMode();
+        if ($mode === null) {
             return null;
         }
 

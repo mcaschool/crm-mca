@@ -48,6 +48,14 @@ Schedule::command('crm:agenda-reminders')
     ->everyMinute()
     ->withoutOverlapping(5);
 
+// Publicador: publicaciones programadas que vencieron (todas las instituciones), videos de
+// Instagram que Meta seguía procesando y ejecuciones interrumpidas. Cada publicación se reclama
+// de forma atómica: aunque dos pasadas coincidieran, nada se publica dos veces.
+Schedule::command('social:publish-scheduled')
+    ->everyMinute()
+    ->withoutOverlapping(15)
+    ->runInBackground();
+
 // Estado de la conexión con Meta de cada empresa (caducidad/revocación), para avisar en el panel.
 Schedule::command('social:meta-connections-check')
     ->dailyAt('04:10')

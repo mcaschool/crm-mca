@@ -117,6 +117,9 @@ it('Instagram: contenedor IN_PROGRESS que pasa a FINISHED publica correctamente'
         if (str_contains($url, '/media')) {
             return Http::response(['id' => 'IG_CONT_WAIT'], 200);
         }
+        if (! str_contains($url, 'IG_CONT_WAIT')) {
+            return Http::response([], 200); // enlace permanente del medio ya publicado: no es una consulta de estado
+        }
         $statusCalls++;
 
         return Http::response(['status_code' => $statusCalls < 3 ? 'IN_PROGRESS' : 'FINISHED'], 200);

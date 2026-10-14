@@ -206,4 +206,11 @@ return [
     | definir → publicación real. Los tests no lo usan (usan Http::fake).
     */
     'fake_publish' => env('SOCIAL_FAKE_PUBLISH'),
+
+    /*
+    | Publicador: máximo de publicaciones de Instagram por API cada 24 h y cuenta. Meta lo
+    | fija en 50 (GET /{ig-user-id}/content_publishing_limit) y lo aplica en media_publish;
+    | el CRM lo comprueba antes de llamar para dar un motivo claro. 0 = sin comprobación.
+    */
+    'instagram_daily_limit' => (int) env('SOCIAL_INSTAGRAM_DAILY_LIMIT', 50),
 ];

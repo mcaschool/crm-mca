@@ -116,6 +116,9 @@ it('IG Reel: IN_PROGRESS que pasa a FINISHED publica correctamente', function ()
         if (str_contains($url, '/media')) {
             return Http::response(['id' => 'IG_CONT_V2'], 200);
         }
+        if (! str_contains($url, 'IG_CONT_V2')) {
+            return Http::response([], 200); // enlace permanente del medio ya publicado: no es una consulta de estado
+        }
         $statusCalls++;
 
         return Http::response(['status_code' => $statusCalls < 3 ? 'IN_PROGRESS' : 'FINISHED'], 200);
