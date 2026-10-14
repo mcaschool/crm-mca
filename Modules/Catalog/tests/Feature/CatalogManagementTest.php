@@ -80,13 +80,14 @@ it('activa y desactiva un programa', function () {
     expect($program->fresh()->status)->toBe('inactive');
 });
 
-it('reordena programas intercambiando el display_order', function () {
+it('reordena programas intercambiando su posición', function () {
     $this->actingAs(catalogUser('admin'));
     $first = Program::factory()->create(['display_order' => 10, 'name_es' => 'Primero']);
     $second = Program::factory()->create(['display_order' => 20, 'name_es' => 'Segundo']);
 
     Livewire::test(Index::class)->call('moveUp', $second->id);
 
-    expect($second->fresh()->display_order)->toBe(10);
-    expect($first->fresh()->display_order)->toBe(20);
+    // El orden queda como secuencia 1..n con las dos posiciones intercambiadas.
+    expect($second->fresh()->display_order)->toBe(1);
+    expect($first->fresh()->display_order)->toBe(2);
 });
