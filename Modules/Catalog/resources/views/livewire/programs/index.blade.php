@@ -62,7 +62,8 @@
                         <td class="rt-actions">
                             <div class="t-actions">
                                 <x-ui.button size="sm" icon="pencil" :href="route('catalog.programs.edit', $program)">{{ __('Editar') }}</x-ui.button>
-                                <x-ui.button size="sm" icon="power" wire:click="toggleActive({{ $program->id }})" :title="$active ? __('Desactivar') : __('Activar')" :aria-label="($active ? __('Desactivar') : __('Activar')).' '.$program->name_es" />
+                                <x-ui.button size="sm" icon="power" wire:click="toggleActive({{ $program->id }})" :title="$active ? __('Desactivar') : __('Activar')" :aria-label="($active ? __('Desactivar') : __('Activar')).' '.$program->name_es"
+                                    wire:confirm="{{ $active ? __('¿Desactivar el programa «:name»? Dejará de ofrecerse en el chat, el emparejador y los asesores.', ['name' => $program->name_es]) : __('¿Activar el programa «:name»? Volverá a ofrecerse en el chat, el emparejador y los asesores.', ['name' => $program->name_es]) }}" />
                             </div>
                         </td>
                     </tr>

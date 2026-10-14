@@ -72,7 +72,8 @@
                                     <x-ui.button size="sm" icon="pencil" :href="route('users.edit', $u->id)">{{ __('Editar') }}</x-ui.button>
                                     @if ($u->id !== auth()->id())
                                         <x-ui.button size="sm" icon="power" wire:click="toggleActive({{ $u->id }})"
-                                            title="{{ $active ? __('Desactivar') : __('Activar') }}" aria-label="{{ ($active ? __('Desactivar') : __('Activar')).' '.$u->name }}" />
+                                            title="{{ $active ? __('Desactivar') : __('Activar') }}" aria-label="{{ ($active ? __('Desactivar') : __('Activar')).' '.$u->name }}"
+                                            wire:confirm="{{ $active ? __('¿Desactivar a :name? No podrá iniciar sesión en el panel hasta que se vuelva a activar.', ['name' => $u->name]) : __('¿Activar a :name? Podrá volver a iniciar sesión en el panel.', ['name' => $u->name]) }}" />
                                     @else
                                         <span class="t-gap" aria-hidden="true"></span>
                                     @endif

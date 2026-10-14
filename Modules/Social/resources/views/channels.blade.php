@@ -334,7 +334,8 @@
                             <x-ui.button size="sm" wire:click="edit({{ $c->id }})">{{ __('Editar') }}</x-ui.button>
                             <x-ui.button size="sm" wire:click="editAdvisor({{ $c->id }})">{{ __('Asesor inteligente') }}</x-ui.button>
                             <span class="sp"></span>
-                            <x-ui.button size="sm" variant="ghost" wire:click="toggle({{ $c->id }})">{{ $c->is_active ? __('Desactivar') : __('Activar') }}</x-ui.button>
+                            <x-ui.button size="sm" variant="ghost" wire:click="toggle({{ $c->id }})"
+                                wire:confirm="{{ $c->is_active ? __('¿Desactivar el canal «:name»? Dejará de usarse para atender y enviar mensajes hasta que se vuelva a activar.', ['name' => $c->display_name]) : __('¿Activar el canal «:name»?', ['name' => $c->display_name]) }}">{{ $c->is_active ? __('Desactivar') : __('Activar') }}</x-ui.button>
                         </div>
                     </article>
                 @endforeach
