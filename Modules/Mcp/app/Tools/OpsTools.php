@@ -268,6 +268,21 @@ final class OpsTools
     }
 
     /**
+     * Nombre de la rama a partir del contenido de .git/HEAD («ref: refs/heads/ui/etapa-6» →
+     * «ui/etapa-6»). Conserva las barras del nombre; null si HEAD está desacoplado (hash).
+     */
+    public static function branchFromHead(string $head): ?string
+    {
+        $head = trim($head);
+        if (! str_starts_with($head, 'ref: ')) {
+            return null;
+        }
+        $ref = trim(substr($head, 5));
+
+        return str_starts_with($ref, 'refs/heads/') ? substr($ref, 11) : basename($ref);
+    }
+
+    /**
      * Rama y HEAD leyendo .git directamente (sin exec: funciona aunque el
      * hosting restrinja shell). Usado también por crm_overview.
      *
@@ -280,7 +295,7 @@ final class OpsTools
             return ['available' => false];
         }
         $head = trim($head);
-        $branch = str_starts_with($head, 'ref: ') ? basename(substr($head, 5)) : null;
+        $branch = self::branchFromHead($head);
         $hash = null;
         if ($branch !== null) {
             $refFile = base_path('.git/'.substr($head, 5));

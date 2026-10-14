@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Password;
 use Livewire\Livewire;
@@ -150,13 +151,19 @@ it('audita el cambio de contraseña propio', function () {
     app(CurrentInstitution::class)->set($inst->id);
     test()->actingAs($user);
 
+    // Desde c96f640 Mi perfil ya no pide la contraseña actual (decisión de producto: nueva +
+    // confirmación con Password::defaults(), 2FA obligatorio en el panel). Lo que se audita es el
+    // HECHO del cambio, nunca la clave.
     Livewire::test(MiPerfil::class)
-        ->set('current_password', 'OldPass123!')
         ->set('password', 'NuevaClave123!')
         ->set('password_confirmation', 'NuevaClave123!')
-        ->call('updatePassword');
+        ->call('updatePassword')
+        ->assertHasNoErrors();
 
-    expect(hasAudit('account.password_changed'))->toBeTrue();
+    expect(Hash::check('NuevaClave123!', $user->fresh()->password))->toBeTrue()
+        ->and(hasAudit('account.password_changed'))->toBeTrue();
+    $log = AuditLog::withoutGlobalScopes()->where('action', 'account.password_changed')->firstOrFail();
+    expect(json_encode($log->getAttributes()))->not->toContain('NuevaClave123!')->not->toContain('OldPass123!');
 });
 
 // --- INTEGRACIONES / SECRETOS -------------------------------------------------

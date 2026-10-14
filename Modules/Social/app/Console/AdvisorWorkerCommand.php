@@ -22,7 +22,8 @@ class AdvisorWorkerCommand extends Command
 {
     protected $signature = 'social:advisor-worker
         {--max-time=50 : Segundos máximos de trabajo por ejecución}
-        {--stop-when-empty : Terminar en cuanto la cola esté vacía (solo pruebas)}';
+        {--stop-when-empty : Terminar en cuanto la cola esté vacía (solo pruebas)}
+        {--memory=128 : Límite de memoria del worker en MB (0 = sin límite; solo pruebas en proceso largo)}';
 
     protected $description = 'Procesa las respuestas pendientes del asesor inteligente en redes sociales (cola persistente).';
 
@@ -43,6 +44,9 @@ class AdvisorWorkerCommand extends Command
             '--max-time' => max(5, (int) $this->option('max-time')),
             '--tries' => 3,
             '--sleep' => 1,
+            // Mismo valor por defecto que queue:work. Las pruebas lo desactivan: dentro de una batería
+            // larga el proceso PHP ya supera 128 MB y el worker se detendría tras el primer trabajo.
+            '--memory' => max(0, (int) $this->option('memory')),
         ]);
     }
 }

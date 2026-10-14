@@ -148,7 +148,7 @@ function sautoReady(): void
 
 function sautoRunWorker(): void
 {
-    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true, '--memory' => 0]);
 }
 
 // ── Asignación desde la ficha del asesor ──────────────────────────────────────
@@ -951,7 +951,7 @@ it('el worker sigue escuchando: un trabajo con 2 s de retraso se responde en la 
     expect((int) $job->available_at)->toBeGreaterThan(now()->getTimestamp());   // retrasado: aún no disponible
 
     // Comportamiento anterior (--stop-when-empty): la cola «está vacía» al empezar y termina sin responder.
-    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true, '--memory' => 0]);
     expect($fake->calls)->toHaveCount(0)->and(DB::table('jobs')->count())->toBe(1);
 
     // Producción: sigue escuchando (sleep 1 s) y lo procesa en cuanto vence, en la misma ejecución.

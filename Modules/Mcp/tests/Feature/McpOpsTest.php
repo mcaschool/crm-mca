@@ -137,7 +137,20 @@ it('crm_code_search encuentra clases y crm_git_status reporta rama y HEAD', func
 
     [$git] = mcpTool($token, 'crm_git_status');
     expect($git['available'])->toBeTrue();
-    expect($git['branch'])->toBe('main');
+    // La rama real del checkout (main en producción, cualquier rama de trabajo en desarrollo),
+    // leída de .git/HEAD con su nombre completo, incluidas las barras.
+    $head = trim((string) file_get_contents(base_path('.git/HEAD')));
+    $expected = str_starts_with($head, 'ref: refs/heads/') ? substr($head, 16) : null;
+    expect($git['branch'])->toBe($expected)
+        ->and($git['head'])->toMatch('~^[0-9a-f]{12}$~');
+});
+
+it('crm_git_status conserva las barras del nombre de rama y no inventa rama con HEAD desacoplado', function () {
+    expect(\Modules\Mcp\Tools\OpsTools::branchFromHead("ref: refs/heads/main
+"))->toBe('main')
+        ->and(\Modules\Mcp\Tools\OpsTools::branchFromHead('ref: refs/heads/ui/modernizacion-etapa-6'))->toBe('ui/modernizacion-etapa-6')
+        ->and(\Modules\Mcp\Tools\OpsTools::branchFromHead('ref: refs/heads/fix/a/b'))->toBe('fix/a/b')
+        ->and(\Modules\Mcp\Tools\OpsTools::branchFromHead('3f1c2a9b8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a'))->toBeNull();
 });
 
 it('TODA llamada tools/call queda auditada con parámetros SANEADOS (sin secretos)', function () {

@@ -382,7 +382,7 @@ function scatQueued(): int
 
 function scatWorker(): void
 {
-    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true, '--memory' => 0]);
 }
 
 function scatInbound(Institution $inst, string $body): SocialMessage

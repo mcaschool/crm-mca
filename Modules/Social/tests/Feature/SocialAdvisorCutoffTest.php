@@ -94,7 +94,7 @@ function scutPost(string $provider, string $text, ?string $sender = null, string
 
 function scutWorker(): void
 {
-    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true]);
+    Artisan::call('social:advisor-worker', ['--stop-when-empty' => true, '--memory' => 0]);
 }
 
 function scutIn(Institution $inst, Closure $fn): mixed
