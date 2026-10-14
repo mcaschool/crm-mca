@@ -1,34 +1,23 @@
-<div>
-    <x-ui.styles />
+<div class="mca-page">
     @php
         $providers = \Modules\Social\Models\SocialChannel::PROVIDERS;
         $extLabels = ['whatsapp' => 'Phone Number ID', 'messenger' => 'Page ID', 'instagram' => 'IG User ID'];
     @endphp
 
-    <div class="mca-panel mca-page">
-        <div class="mca-head">
-            <div>
-                <h1 class="mca-h1">{{ __('Canales sociales') }}</h1>
-                <p class="mca-sub">{{ __('Da de alta cada número de WhatsApp, Página de Facebook o cuenta de Instagram. Las credenciales se guardan cifradas; una vez guardado, el token solo se muestra enmascarado y puede reemplazarse.') }}</p>
-            </div>
-            <div class="sp" style="flex:1"></div>
-            @can('create', \Modules\Social\Models\SocialChannel::class)
-                {{-- Grupo de acciones de conexión: Meta y WhatsApp, uno al lado del otro y
-                     alineados a la derecha; hacen wrap natural en pantallas pequeñas. --}}
-                <div style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <a href="{{ route('social.lead-forms') }}" class="btn btn-soft btn-sm">{{ __('Formularios publicitarios') }}</a>
+    <x-ui.page-header class="ui-ph-stack" :title="__('Canales sociales')" :subtitle="__('Da de alta cada número de WhatsApp, Página de Facebook o cuenta de Instagram. Las credenciales se guardan cifradas; una vez guardado, el token solo se muestra enmascarado y puede reemplazarse.')">
+        @can('create', \Modules\Social\Models\SocialChannel::class)
+            <x-slot:actions>
+                <x-ui.button :href="route('social.lead-forms')" icon="file-text">{{ __('Formularios publicitarios') }}</x-ui.button>
                 {{-- «Conectar Meta»: enlace GET normal (SIN wire:navigate: navegar a la
-                     pantalla Meta no debe pasar por Livewire). Estilo primario azul. --}}
-                <a href="{{ route('social.meta') }}" class="btn btn-primary btn-sm"
-                   title="{{ __('Detecta tu Página de Facebook e Instagram con Facebook Login, sin datos técnicos.') }}">
-                    <x-ui.icon name="plug" class="ic" style="width:15px;height:15px" /> {{ __('Conectar Meta') }}
-                </a>
+                     pantalla Meta no debe pasar por Livewire). --}}
+                <x-ui.button :href="route('social.meta')" icon="plug"
+                   title="{{ __('Detecta tu Página de Facebook e Instagram con Facebook Login, sin datos técnicos.') }}">{{ __('Conectar Meta') }}</x-ui.button>
                 {{-- Embedded Signup v4 (Coexistence): el SDK de Facebook SOLO se carga cuando
                      el feature flag está activo y existen App ID + Configuration ID; con el
                      flag apagado esta rama ni se renderiza (imposible conexión accidental). --}}
                 @if ($this->signupReady())
                     @php($waSignupCfg = $this->signupConfig())
-                    <span wire:ignore x-data="waEmbeddedSignup()" style="display:inline-flex;align-items:center;gap:8px">
+                    <span wire:ignore x-data="waEmbeddedSignup()" class="ui-actions-row">
                         <script>
                             window.waEmbeddedSignup = function () {
                                 return {
@@ -130,267 +119,273 @@
                                 };
                             };
                         </script>
-                        <button type="button" class="btn btn-sm" x-on:click="start()" x-bind:disabled="busy"
+                        <button type="button" class="ui-btn ui-btn--secondary" x-on:click="start()" x-bind:disabled="busy"
                                 title="{{ __('Inicia la conexión del WhatsApp Business App (Coexistence).') }}">
-                            <x-ui.icon name="plug" class="ic" style="width:15px;height:15px" />
+                            <x-ui.icon name="plug" />
                             <span x-text="labels[status] ?? labels.idle">{{ __('Conectar WhatsApp Business') }}</span>
                         </button>
-                        <span x-show="message !== ''" x-text="message" style="font-size:12px;color:#8A1C1C;max-width:260px"></span>
+                        <span x-show="message !== ''" x-text="message" class="ui-error" role="alert"></span>
                     </span>
                 @else
-                    <button type="button" class="btn btn-sm" disabled
+                    <button type="button" class="ui-btn ui-btn--secondary ui-btn--wrap" disabled
                             title="{{ __('Configuración pendiente: falta habilitar el Embedded Signup de Meta (SOCIAL_WA_SIGNUP_ENABLED y SOCIAL_WA_SIGNUP_CONFIG_ID).') }}">
-                        <x-ui.icon name="plug" class="ic" style="width:15px;height:15px" />
-                        {{ __('Conectar WhatsApp Business') }} · {{ __('Configuración pendiente') }}
+                        <x-ui.icon name="plug" />
+                        <span>{{ __('Conectar WhatsApp Business') }} · {{ __('Configuración pendiente') }}</span>
                     </button>
                 @endif
-                </div>{{-- /grupo de acciones de conexión --}}
-                <button type="button" wire:click="create" class="btn btn-primary btn-sm" style="margin-left:8px">
-                    <x-ui.icon name="plus" class="ic" style="width:15px;height:15px" /> {{ __('Nuevo canal') }}
-                </button>
-            @endcan
-        </div>
+                <x-ui.button variant="primary" icon="plus" wire:click="create">{{ __('Nuevo canal') }}</x-ui.button>
+            </x-slot:actions>
+        @endcan
+    </x-ui.page-header>
 
+    <div class="ui-stack">
         @if (session('status'))
-            <div class="mca-toast ok"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
+            <div class="ui-alert ui-alert--flush ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('status') }}</div>
         @endif
 
-        <div class="card card-p" style="display:flex;align-items:center;gap:10px;background:var(--mca-warn-soft, #FFF7E6);border-color:#F0DFAE;margin-bottom:18px">
-            <x-ui.icon name="lock" style="width:18px;height:18px;color:#8A6D1B" />
-            <span style="font-size:13px;color:#6B5411">{{ __('Usa el TOKEN PERMANENTE (System User), no el temporal: los tokens temporales caducan y romperían el canal.') }}</span>
+        <div class="ui-callout ui-tone--warning">
+            <x-ui.icon name="lock" />
+            <span>{{ __('Usa el TOKEN PERMANENTE (System User), no el temporal: los tokens temporales caducan y romperían el canal.') }}</span>
         </div>
 
         {{-- ---------------- ASESOR INTELIGENTE DEL CANAL (apagado por defecto) ---------------- --}}
         @if ($advisorChannel)
-            <div class="card card-p fade" style="margin-bottom:22px" data-testid="advisor-panel">
-                <h3 style="margin:0 0 4px;font-size:15px;font-weight:700">{{ __('Asesor inteligente · :channel', ['channel' => $advisorChannel->display_name]) }}</h3>
-                <p class="mca-sub" style="margin:0 0 14px">{{ __('Responde automáticamente los mensajes de este canal con el mismo asesor de la web. Una persona del equipo puede tomar la conversación en cualquier momento.') }}</p>
-                <form wire:submit="saveAdvisor">
-                    <div class="field">
-                        <label>{{ __('Asesor inteligente') }}</label>
-                        <div class="mca-seg">
-                            <button type="button" wire:click="$set('advisorEnabled', false)" class="{{ $advisorEnabled ? '' : 'active' }}">{{ __('Desactivado') }}</button>
-                            <button type="button" wire:click="$set('advisorEnabled', true)" class="{{ $advisorEnabled ? 'active' : '' }}">{{ __('Activado') }}</button>
-                        </div>
-                        @error('advisorEnabled') <span class="mca-err">{{ $message }}</span> @enderror
-                        <div class="mca-help" data-testid="advisor-dispatch">
-                            @if ($advisorPending)
-                                {{ $advisorPending }}
-                            @else
-                                {{ __('Procesamiento automático del servidor: funcionando (última comprobación :when).', ['when' => $advisorLastSeen?->diffForHumans()]) }}
-                            @endif
-                        </div>
-                    </div>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
-                        <div class="field" style="margin-bottom:0">
-                            <label>{{ __('Asesor asignado') }}</label>
-                            <select wire:model="advisorBotId">
-                                <option value="">{{ __('— Elegir —') }}</option>
-                                @foreach ($advisorBots as $b)
-                                    <option value="{{ $b->id }}">{{ $b->assistant_name }}{{ $b->status !== 'active' ? ' ('.__('inactivo').')' : '' }}</option>
-                                @endforeach
-                            </select>
-                            @error('advisorBotId') <span class="mca-err">{{ $message }}</span> @enderror
-                        </div>
-                        <div class="field" style="margin-bottom:0">
-                            <label>{{ __('Espera antes de responder') }}</label>
-                            <select wire:model="advisorDelay">
-                                @foreach (\Modules\Social\Models\SocialChannel::ADVISOR_DELAYS as $d)
-                                    <option value="{{ $d }}">{{ $d === 0 ? __('Responder al momento') : __(':n segundos', ['n' => $d]) }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
+            <section class="ui-card" data-testid="advisor-panel" aria-labelledby="adv-title">
+                <div class="ui-card-h"><x-ui.icon name="bot" class="ui-card-ic" /><h2 id="adv-title">{{ __('Asesor inteligente · :channel', ['channel' => $advisorChannel->display_name]) }}</h2></div>
+                <form wire:submit="saveAdvisor" novalidate>
+                    <div class="ui-card-p ui-stack">
+                        <p class="ui-help">{{ __('Responde automáticamente los mensajes de este canal con el mismo asesor de la web. Una persona del equipo puede tomar la conversación en cualquier momento.') }}</p>
 
-                    <div class="field" style="margin-top:16px">
-                        <label>{{ __('Horario de atención automática') }}</label>
-                        <div class="mca-seg">
-                            <button type="button" wire:click="$set('advisorAlways', true)" class="{{ $advisorAlways ? 'active' : '' }}">{{ __('Siempre') }}</button>
-                            <button type="button" wire:click="$set('advisorAlways', false)" class="{{ $advisorAlways ? '' : 'active' }}">{{ __('Solo en un horario') }}</button>
+                        <div class="ui-field">
+                            <span class="ui-label" id="adv-on-l">{{ __('Asesor inteligente') }}</span>
+                            <div class="ui-seg" role="group" aria-labelledby="adv-on-l">
+                                <button type="button" wire:click="$set('advisorEnabled', false)" aria-pressed="{{ $advisorEnabled ? 'false' : 'true' }}">{{ __('Desactivado') }}</button>
+                                <button type="button" wire:click="$set('advisorEnabled', true)" aria-pressed="{{ $advisorEnabled ? 'true' : 'false' }}">{{ __('Activado') }}</button>
+                            </div>
+                            @error('advisorEnabled') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                            <p class="ui-help" data-testid="advisor-dispatch">
+                                @if ($advisorPending)
+                                    {{ $advisorPending }}
+                                @else
+                                    {{ __('Procesamiento automático del servidor: funcionando (última comprobación :when).', ['when' => $advisorLastSeen?->diffForHumans()]) }}
+                                @endif
+                            </p>
+                        </div>
+
+                        <div class="ui-form-grid">
+                            <x-ui.field :label="__('Asesor asignado')" for="adv-bot" :error="$errors->first('advisorBotId')">
+                                <select id="adv-bot" wire:model="advisorBotId" @class(['ui-select', 'is-invalid' => $errors->has('advisorBotId')]) @error('advisorBotId') aria-describedby="adv-bot-error" @enderror>
+                                    <option value="">{{ __('— Elegir —') }}</option>
+                                    @foreach ($advisorBots as $b)
+                                        <option value="{{ $b->id }}">{{ $b->assistant_name }}{{ $b->status !== 'active' ? ' ('.__('inactivo').')' : '' }}</option>
+                                    @endforeach
+                                </select>
+                            </x-ui.field>
+                            <x-ui.field :label="__('Espera antes de responder')" for="adv-delay">
+                                <select id="adv-delay" wire:model="advisorDelay" class="ui-select">
+                                    @foreach (\Modules\Social\Models\SocialChannel::ADVISOR_DELAYS as $d)
+                                        <option value="{{ $d }}">{{ $d === 0 ? __('Responder al momento') : __(':n segundos', ['n' => $d]) }}</option>
+                                    @endforeach
+                                </select>
+                            </x-ui.field>
+                        </div>
+
+                        <div class="ui-field">
+                            <span class="ui-label" id="adv-hours-l">{{ __('Horario de atención automática') }}</span>
+                            <div class="ui-seg" role="group" aria-labelledby="adv-hours-l">
+                                <button type="button" wire:click="$set('advisorAlways', true)" aria-pressed="{{ $advisorAlways ? 'true' : 'false' }}">{{ __('Siempre') }}</button>
+                                <button type="button" wire:click="$set('advisorAlways', false)" aria-pressed="{{ $advisorAlways ? 'false' : 'true' }}">{{ __('Solo en un horario') }}</button>
+                            </div>
                         </div>
                         @unless ($advisorAlways)
-                            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center">
-                                @foreach ([1 => __('Lun'), 2 => __('Mar'), 3 => __('Mié'), 4 => __('Jue'), 5 => __('Vie'), 6 => __('Sáb'), 7 => __('Dom')] as $num => $day)
-                                    <label style="display:inline-flex;align-items:center;gap:5px;font-weight:500"><input type="checkbox" wire:model="advisorDays" value="{{ $num }}"> {{ $day }}</label>
-                                @endforeach
-                                <span>{{ __('de') }}</span><input type="time" wire:model="advisorFrom" style="width:auto">
-                                <span>{{ __('a') }}</span><input type="time" wire:model="advisorTo" style="width:auto">
-                            </div>
-                            @error('advisorDays') <span class="mca-err">{{ $message }}</span> @enderror
-                            <div class="field" style="margin-top:10px;margin-bottom:0">
-                                <label>{{ __('Mensaje fuera de horario') }}</label>
-                                <textarea wire:model="advisorOffHoursMessage" rows="2" maxlength="1000" placeholder="{{ __('Ej.: Gracias por escribirnos. Te responderemos en nuestro horario de atención.') }}"></textarea>
-                            </div>
+                                <div class="ui-field">
+                                    <span class="ui-label" id="adv-days-l">{{ __('Días') }}</span>
+                                    <div class="ui-checks" role="group" aria-labelledby="adv-days-l">
+                                        @foreach ([1 => __('Lun'), 2 => __('Mar'), 3 => __('Mié'), 4 => __('Jue'), 5 => __('Vie'), 6 => __('Sáb'), 7 => __('Dom')] as $num => $day)
+                                            <label class="ui-check"><input type="checkbox" wire:model="advisorDays" value="{{ $num }}"> {{ $day }}</label>
+                                        @endforeach
+                                    </div>
+                                    @error('advisorDays') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                                </div>
+                                <div class="ui-field">
+                                    <span class="ui-label" id="adv-time-l">{{ __('Horario') }}</span>
+                                    <div class="ui-interval" role="group" aria-labelledby="adv-time-l">
+                                        <span class="sep">{{ __('de') }}</span>
+                                        <input type="time" wire:model="advisorFrom" class="ui-input" aria-label="{{ __('Desde') }}">
+                                        <span class="sep">{{ __('a') }}</span>
+                                        <input type="time" wire:model="advisorTo" class="ui-input" aria-label="{{ __('Hasta') }}">
+                                    </div>
+                                </div>
+                                <x-ui.field :label="__('Mensaje fuera de horario')" for="adv-off">
+                                    <textarea id="adv-off" wire:model="advisorOffHoursMessage" rows="2" maxlength="1000" class="ui-input ui-textarea" placeholder="{{ __('Ej.: Gracias por escribirnos. Te responderemos en nuestro horario de atención.') }}"></textarea>
+                                </x-ui.field>
                         @endunless
-                    </div>
 
-                    <div class="field">
-                        <label>{{ __('Transferir a una persona') }}</label>
-                        <label style="display:flex;align-items:center;gap:8px;font-weight:500"><input type="checkbox" wire:model.live="advisorHandoff"> {{ __('Si la persona pide hablar con alguien del equipo, dejar de responder y avisar al equipo.') }}</label>
-                        @if ($advisorHandoff)
-                            <textarea wire:model="advisorHandoffMessage" rows="2" maxlength="1000" style="margin-top:8px" placeholder="{{ __('Te pongo en contacto con una persona del equipo. Te responderá por aquí en cuanto esté disponible.') }}"></textarea>
-                        @endif
-                    </div>
+                        <div class="ui-field">
+                            <span class="ui-label">{{ __('Transferir a una persona') }}</span>
+                            <label class="ui-check"><input type="checkbox" wire:model.live="advisorHandoff"> {{ __('Si la persona pide hablar con alguien del equipo, dejar de responder y avisar al equipo.') }}</label>
+                            @if ($advisorHandoff)
+                                <textarea wire:model="advisorHandoffMessage" rows="2" maxlength="1000" class="ui-input ui-textarea" aria-label="{{ __('Transferir a una persona') }}" placeholder="{{ __('Te pongo en contacto con una persona del equipo. Te responderá por aquí en cuanto esté disponible.') }}"></textarea>
+                            @endif
+                        </div>
 
-                    <div class="field">
-                        <div class="mca-help">{{ __('Cuando una persona del equipo responde en una conversación, el asesor deja de responder en ella hasta que alguien lo reactive desde la bandeja.') }}</div>
+                        <p class="ui-help">{{ __('Cuando una persona del equipo responde en una conversación, el asesor deja de responder en ella hasta que alguien lo reactive desde la bandeja.') }}</p>
                     </div>
-
-                    <div style="display:flex;gap:8px">
-                        <button type="submit" class="btn btn-primary btn-sm">{{ __('Guardar') }}</button>
-                        <button type="button" wire:click="cancelAdvisor" class="btn btn-ghost btn-sm">{{ __('Cancelar') }}</button>
+                    <div class="ui-card-f ui-card-f--end">
+                        <x-ui.button variant="ghost" wire:click="cancelAdvisor">{{ __('Cancelar') }}</x-ui.button>
+                        <x-ui.button type="submit" variant="primary" icon="check">{{ __('Guardar') }}</x-ui.button>
                     </div>
                 </form>
-            </div>
+            </section>
         @endif
 
         {{-- ---------------- FORMULARIO (alta / edición) ---------------- --}}
         @if ($showForm)
-            <div class="card card-p fade" style="margin-bottom:22px">
-                <h3 style="margin:0 0 14px;font-size:15px;font-weight:700">{{ $editingId ? __('Editar canal') : __('Nuevo canal') }}</h3>
-                <form wire:submit="save">
-                    <div class="field">
-                        <label>{{ __('Proveedor') }}</label>
-                        <select wire:model.live="provider" @disabled($editingId)>
-                            @foreach ($providers as $key => $label)
-                                <option value="{{ $key }}">{{ $label }}</option>
-                            @endforeach
-                        </select>
-                        @if ($editingId) <p class="mca-help">{{ __('El proveedor no se cambia al editar.') }}</p> @endif
-                        @error('provider') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
+            <form class="ui-card" wire:submit="save" novalidate>
+                <div class="ui-card-h"><x-ui.icon name="{{ $editingId ? 'pencil' : 'plus' }}" class="ui-card-ic" /><h2>{{ $editingId ? __('Editar canal') : __('Nuevo canal') }}</h2></div>
+                <div class="ui-card-p">
+                    <div class="ui-form-grid">
+                        <x-ui.field :label="__('Proveedor')" for="ch-provider" :error="$errors->first('provider')" :help="$editingId ? __('El proveedor no se cambia al editar.') : null">
+                            <select id="ch-provider" wire:model.live="provider" @disabled($editingId) @class(['ui-select', 'is-invalid' => $errors->has('provider')]) @error('provider') aria-describedby="ch-provider-error" @enderror>
+                                @foreach ($providers as $key => $label)
+                                    <option value="{{ $key }}">{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </x-ui.field>
 
-                    <div class="field">
-                        <label>{{ __('Nombre para distinguirlo') }}</label>
-                        <input type="text" wire:model="display_name" placeholder="{{ __('Ej. Admisiones · Línea 1') }}">
-                        @error('display_name') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
+                        <x-ui.field :label="__('Nombre para distinguirlo')" for="ch-name" :error="$errors->first('display_name')">
+                            <input id="ch-name" type="text" wire:model="display_name" placeholder="{{ __('Ej. Admisiones · Línea 1') }}" @class(['ui-input', 'is-invalid' => $errors->has('display_name')]) @error('display_name') aria-describedby="ch-name-error" @enderror>
+                        </x-ui.field>
 
-                    <div class="field">
-                        <label>{{ $extLabels[$provider] ?? __('Identificador externo') }}</label>
-                        <input type="text" wire:model="external_id" autocomplete="off">
-                        @error('external_id') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
+                        <x-ui.field :label="$extLabels[$provider] ?? __('Identificador externo')" for="ch-ext" :error="$errors->first('external_id')">
+                            <input id="ch-ext" type="text" wire:model="external_id" autocomplete="off" @class(['ui-input', 'ui-mono', 'is-invalid' => $errors->has('external_id')]) @error('external_id') aria-describedby="ch-ext-error" @enderror>
+                        </x-ui.field>
 
-                    <div class="field">
-                        <label>{{ __('Token de acceso') }}</label>
-                        @if ($currentTokenMask)
-                            <p class="mca-help" style="margin-top:0;margin-bottom:6px">
-                                {{ __('Actual') }}: <span style="font-family:ui-monospace,monospace">{{ $currentTokenMask }}</span>
-                                — {{ __('deja el campo vacío para conservarlo, o escribe uno nuevo para reemplazarlo.') }}
-                            </p>
-                        @endif
-                        <input type="password" wire:model="token" autocomplete="off"
-                               placeholder="{{ $editingId ? __('Reemplazar token') : __('Pega el token permanente') }}">
-                        @error('token') <span class="mca-err">{{ $message }}</span> @enderror
-                    </div>
-
-                    @if ($provider === 'whatsapp')
-                        <div class="field">
-                            <label>WABA ID</label>
-                            <input type="text" wire:model="waba_id" autocomplete="off" placeholder="{{ __('ID de la cuenta de WhatsApp Business (para plantillas)') }}">
-                            <p class="mca-help">{{ __('Necesario para gestionar plantillas. Se guarda cifrado junto al token.') }}</p>
-                            @error('waba_id') <span class="mca-err">{{ $message }}</span> @enderror
+                        <div class="ui-field">
+                            <label class="ui-label" for="ch-token">{{ __('Token de acceso') }}</label>
+                            @if ($currentTokenMask)
+                                <p class="ui-help">
+                                    {{ __('Actual') }}: <span class="ui-mono">{{ $currentTokenMask }}</span>
+                                    — {{ __('deja el campo vacío para conservarlo, o escribe uno nuevo para reemplazarlo.') }}
+                                </p>
+                            @endif
+                            <input id="ch-token" type="password" wire:model="token" autocomplete="off" @class(['ui-input', 'is-invalid' => $errors->has('token')]) @error('token') aria-describedby="ch-token-error" @enderror
+                                   placeholder="{{ $editingId ? __('Reemplazar token') : __('Pega el token permanente') }}">
+                            @error('token') <p class="ui-error" id="ch-token-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
                         </div>
-                    @endif
 
-                    <div class="field">
-                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                            <input type="checkbox" wire:model="is_active" style="width:16px;height:16px"> {{ __('Canal activo') }}
-                        </label>
-                    </div>
+                        @if ($provider === 'whatsapp')
+                            <x-ui.field label="WABA ID" for="ch-waba" :error="$errors->first('waba_id')" :help="__('Necesario para gestionar plantillas. Se guarda cifrado junto al token.')">
+                                <input id="ch-waba" type="text" wire:model="waba_id" autocomplete="off" placeholder="{{ __('ID de la cuenta de WhatsApp Business (para plantillas)') }}" @class(['ui-input', 'is-invalid' => $errors->has('waba_id')]) @error('waba_id') aria-describedby="ch-waba-error" @enderror>
+                            </x-ui.field>
+                        @endif
 
-                    <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
-                        <button type="submit" class="btn btn-primary">{{ __('Guardar') }}</button>
-                        <button type="button" wire:click="cancel" class="btn btn-ghost">{{ __('Cancelar') }}</button>
+                        <div class="ui-span-full">
+                            <label class="ui-check"><input type="checkbox" wire:model="is_active"> {{ __('Canal activo') }}</label>
+                        </div>
                     </div>
-                </form>
-            </div>
+                </div>
+                <div class="ui-card-f ui-card-f--end">
+                    <x-ui.button variant="ghost" wire:click="cancel">{{ __('Cancelar') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary" icon="check">{{ __('Guardar') }}</x-ui.button>
+                </div>
+            </form>
         @endif
 
-        {{-- ---------------- LISTA (tarjetas lado a lado, igual que los webhooks) ---------------- --}}
-        <div class="mca-grid">
+        {{-- ---------------- LISTA (fichas lado a lado) ---------------- --}}
+        <div class="ui-grid">
             @forelse ($grouped as $providerKey => $list)
                 @foreach ($list as $c)
-                    <div class="card card-p" wire:key="ch-{{ $c->id }}" style="display:flex;flex-direction:column">
-                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                            @include('social::partials.provider-icon', ['provider' => $providerKey, 'size' => 16])
-                            <span style="font-size:12px;font-weight:600;color:var(--muted)">{{ $providers[$providerKey] ?? $providerKey }}</span>
+                    <article class="ui-card ui-entity" wire:key="ch-{{ $c->id }}">
+                        <div class="ui-entity-h">
+                            <span class="ui-brand-ic">@include('social::partials.provider-icon', ['provider' => $providerKey, 'size' => 20])</span>
+                            <div class="ui-person-text">
+                                <h3 class="ui-entity-title">{{ $c->display_name }}</h3>
+                                <span class="ui-cell-sub">{{ $providers[$providerKey] ?? $providerKey }}</span>
+                            </div>
+                            <x-ui.badge :tone="$c->is_active ? 'success' : 'neutral'" dot>{{ $c->is_active ? __('Activo') : __('Inactivo') }}</x-ui.badge>
                         </div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-                            <h3 style="font-size:14.5px;font-weight:700;margin:0">{{ $c->display_name }}</h3>
-                            <span class="badge {{ $c->is_active ? 'badge-on' : 'badge-off' }}">{{ $c->is_active ? __('activo') : __('inactivo') }}</span>
-                        </div>
-                        <div style="margin-top:8px;font-size:13px;color:var(--muted);flex:1">
-                            <div>{{ $extLabels[$providerKey] ?? __('ID') }}: <span style="font-family:ui-monospace,monospace">{{ $c->external_id ?: '—' }}</span></div>
-                            <div style="margin-top:2px">{{ __('Token') }}: <span style="font-family:ui-monospace,monospace">{{ $masks[$c->id] }}</span></div>
-                            @if ($providerKey === 'whatsapp')
-                                <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
-                                    <span class="badge {{ $c->connection_status === 'offboarded' ? 'badge-off' : 'badge-on' }}">{{ __($c->connectionLabel()) }}</span>
-                                </div>
-                                @if ($c->connection_status === 'offboarded')
-                                    <div style="margin-top:4px;font-size:12px;color:#8A1C1C">
-                                        {{ __('El teléfono se desconectó de la API: los envíos están bloqueados hasta reconectar. Las credenciales se conservan.') }}
-                                    </div>
+                        <div class="ui-entity-b ui-stack">
+                            <dl class="ui-meta">
+                                <dt>{{ $extLabels[$providerKey] ?? __('ID') }}</dt>
+                                <dd>@if ($c->external_id)<span class="ui-mono">{{ $c->external_id }}</span>@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>{{ __('Token') }}</dt>
+                                <dd><span class="ui-mono">{{ $masks[$c->id] }}</span></dd>
+                            </dl>
+                            <div class="ui-person-line">
+                                @if ($providerKey === 'whatsapp')
+                                    <x-ui.badge :tone="$c->connection_status === 'offboarded' ? 'danger' : 'success'" dot>{{ __($c->connectionLabel()) }}</x-ui.badge>
                                 @endif
-                            @endif
-                            {{-- Asesor inteligente del canal (apagado por defecto) --}}
-                            <div style="margin-top:8px">
+                                {{-- Asesor inteligente del canal (apagado por defecto) --}}
                                 @if ($c->advisor_enabled && $c->advisorBot)
-                                    <span class="badge badge-on" data-testid="advisor-badge-{{ $c->id }}">{{ __('Asesor inteligente: :name', ['name' => $c->advisorBot->assistant_name]) }}</span>
+                                    <x-ui.badge tone="blue" icon="bot" data-testid="advisor-badge-{{ $c->id }}">{{ __('Asesor inteligente: :name', ['name' => $c->advisorBot->assistant_name]) }}</x-ui.badge>
                                 @else
-                                    <span class="badge badge-off" data-testid="advisor-badge-{{ $c->id }}">{{ __('Asesor inteligente desactivado') }}</span>
+                                    <x-ui.badge tone="neutral" icon="bot" data-testid="advisor-badge-{{ $c->id }}">{{ __('Asesor inteligente desactivado') }}</x-ui.badge>
                                 @endif
                             </div>
+                            @if ($providerKey === 'whatsapp' && $c->connection_status === 'offboarded')
+                                <div class="ui-callout ui-callout--sm ui-tone--danger" role="status">
+                                    <x-ui.icon name="alert-triangle" />
+                                    <span>{{ __('El teléfono se desconectó de la API: los envíos están bloqueados hasta reconectar. Las credenciales se conservan.') }}</span>
+                                </div>
+                            @endif
                         </div>
-                        <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px">
-                            <button type="button" wire:click="editAdvisor({{ $c->id }})" class="btn btn-soft btn-sm">{{ __('Asesor inteligente') }}</button>
-                            <button type="button" wire:click="edit({{ $c->id }})" class="btn btn-primary btn-sm">{{ __('Editar') }}</button>
-                            <button type="button" wire:click="toggle({{ $c->id }})" class="btn btn-soft btn-sm">
-                                {{ $c->is_active ? __('Desactivar') : __('Activar') }}
-                            </button>
+                        <div class="ui-card-f">
+                            <x-ui.button size="sm" wire:click="edit({{ $c->id }})">{{ __('Editar') }}</x-ui.button>
+                            <x-ui.button size="sm" wire:click="editAdvisor({{ $c->id }})">{{ __('Asesor inteligente') }}</x-ui.button>
+                            <span class="sp"></span>
+                            <x-ui.button size="sm" variant="ghost" wire:click="toggle({{ $c->id }})">{{ $c->is_active ? __('Desactivar') : __('Activar') }}</x-ui.button>
                         </div>
-                    </div>
+                    </article>
                 @endforeach
             @empty
-                <p style="color:var(--muted);font-size:13.5px;margin:14px 2px">{{ __('Aún no hay canales configurados. Crea el primero con «Nuevo canal».') }}</p>
+                <div class="ui-card ui-empty ui-span-full">
+                    <div class="ui-empty-ic"><x-ui.icon name="message-circle" /></div>
+                    {{ __('Aún no hay canales configurados. Crea el primero con «Nuevo canal».') }}
+                </div>
             @endforelse
         </div>
 
         {{-- ---------------- AYUDA DE WEBHOOK ---------------- --}}
-        <div style="margin:28px 0 10px">
-            <h2 style="font-size:14px;font-weight:700;margin:0">{{ __('Webhook — pégalo en Meta') }}</h2>
-            <p class="mca-sub" style="margin-top:2px">{{ __('Callback URL y Verify Token que se configuran en el panel de Meta al suscribir cada webhook. Solo lectura.') }}</p>
-        </div>
-        <div class="mca-grid">
-            @foreach ($webhooks as $wh)
-                <div class="card card-p" wire:key="wh-{{ $wh['provider'] }}">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-                        @include('social::partials.provider-icon', ['provider' => $wh['provider'], 'size' => 18])
-                        <h3 style="font-size:14px;font-weight:700;margin:0">{{ $wh['label'] }}</h3>
-                    </div>
-
-                    <label style="font-size:11.5px;font-weight:600;color:var(--muted)">{{ __('Callback URL') }}</label>
-                    <div style="display:flex;align-items:center;gap:6px;margin:3px 0 10px">
-                        <code style="flex:1;min-width:0;overflow:auto;white-space:nowrap;font-size:12px;background:var(--mca-page-bg,#F4F6F9);padding:6px 8px;border-radius:8px">{{ $wh['callback'] }}</code>
-                        <button type="button" class="btn btn-soft btn-sm" x-data="{c:false}"
-                                @click="navigator.clipboard.writeText($el.dataset.copy); c=true; setTimeout(()=>c=false,1200)"
-                                data-copy="{{ $wh['callback'] }}"
-                                x-text="c ? '{{ __('¡Copiado!') }}' : '{{ __('Copiar') }}'">{{ __('Copiar') }}</button>
-                    </div>
-
-                    <label style="font-size:11.5px;font-weight:600;color:var(--muted)">{{ __('Verify Token') }}</label>
-                    <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
-                        <code style="flex:1;min-width:0;overflow:auto;white-space:nowrap;font-size:12px;background:var(--mca-page-bg,#F4F6F9);padding:6px 8px;border-radius:8px">{{ $wh['verify'] ?: __('(define SOCIAL_WEBHOOK_VERIFY_TOKEN)') }}</code>
-                        @if ($wh['verify'])
-                            <button type="button" class="btn btn-soft btn-sm" x-data="{c:false}"
-                                    @click="navigator.clipboard.writeText($el.dataset.copy); c=true; setTimeout(()=>c=false,1200)"
-                                    data-copy="{{ $wh['verify'] }}"
-                                    x-text="c ? '{{ __('¡Copiado!') }}' : '{{ __('Copiar') }}'">{{ __('Copiar') }}</button>
-                        @endif
-                    </div>
+        <section class="ui-card" aria-labelledby="wh-title">
+            <div class="ui-card-h">
+                <x-ui.icon name="globe" class="ui-card-ic" />
+                <div class="ui-split-main">
+                    <h2 id="wh-title">{{ __('Webhook — pégalo en Meta') }}</h2>
+                    <span class="ui-cell-sub">{{ __('Callback URL y Verify Token que se configuran en el panel de Meta al suscribir cada webhook. Solo lectura.') }}</span>
                 </div>
-            @endforeach
-        </div>
+            </div>
+            <div class="ui-vr-grid ui-vr-grid--3">
+                @foreach ($webhooks as $wh)
+                    <div class="ui-vr" wire:key="wh-{{ $wh['provider'] }}">
+                        <h3 class="ui-vr-title ui-person-line">@include('social::partials.provider-icon', ['provider' => $wh['provider'], 'size' => 18]) {{ $wh['label'] }}</h3>
+
+                        <div class="ui-field">
+                            <span class="ui-label">{{ __('Callback URL') }}</span>
+                            <div class="ui-copy">
+                                <span class="ui-copy-text">{{ $wh['callback'] }}</span>
+                                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" x-data="{c:false}"
+                                        @click="navigator.clipboard.writeText($el.dataset.copy); c=true; setTimeout(()=>c=false,1200)"
+                                        data-copy="{{ $wh['callback'] }}"
+                                        x-text="c ? '{{ __('¡Copiado!') }}' : '{{ __('Copiar') }}'">{{ __('Copiar') }}</button>
+                            </div>
+                        </div>
+
+                        <div class="ui-field">
+                            <span class="ui-label">{{ __('Verify Token') }}</span>
+                            <div class="ui-copy">
+                                <span class="ui-copy-text">{{ $wh['verify'] ?: __('(define SOCIAL_WEBHOOK_VERIFY_TOKEN)') }}</span>
+                                @if ($wh['verify'])
+                                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" x-data="{c:false}"
+                                            @click="navigator.clipboard.writeText($el.dataset.copy); c=true; setTimeout(()=>c=false,1200)"
+                                            data-copy="{{ $wh['verify'] }}"
+                                            x-text="c ? '{{ __('¡Copiado!') }}' : '{{ __('Copiar') }}'">{{ __('Copiar') }}</button>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </section>
     </div>
 </div>
