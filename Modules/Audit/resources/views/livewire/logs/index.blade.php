@@ -43,7 +43,7 @@
             <tbody>
                 @forelse ($logs as $log)
                     <tr wire:key="log-{{ $log->id }}">
-                        <td class="rt-sticky t-2" data-label="{{ __('Fecha / hora') }}">{{ $log->created_at?->translatedFormat('d M Y · H:i') ?? '—' }}</td>
+                        <td class="rt-sticky t-2" data-label="{{ __('Fecha / hora') }}">{{ $log->created_at?->userTz()->translatedFormat('d M Y · H:i') ?? '—' }}</td>
                         <td class="rt-primary">
                             <div class="ui-person">
                                 @if ($log->user)

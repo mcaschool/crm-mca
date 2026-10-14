@@ -106,7 +106,7 @@
                                 <span class="t-nil">—</span>
                             @endif
                         </td>
-                        <td class="t-2" data-label="{{ __('Fecha') }}">{{ $lead->created_at?->translatedFormat('d M Y') ?? '—' }}</td>
+                        <td class="t-2" data-label="{{ __('Fecha') }}">{{ $lead->created_at?->userTz()->translatedFormat('d M Y') ?? '—' }}</td>
                     </tr>
                 @empty
                     <tr>

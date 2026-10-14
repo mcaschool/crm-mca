@@ -163,7 +163,7 @@
                     @php $prevDay = null; $prevDir = null; @endphp
                     @forelse ($messages as $msg)
                         @php
-                            $at = $msg->provider_timestamp ?? $msg->created_at;
+                            $at = ($msg->provider_timestamp ?? $msg->created_at)?->copy()->setTimezone($tz);
                             $day = optional($at)->toDateString();
                             $failed = in_array($msg->status, ['failed', 'failed_window', 'delivery_unknown'], true);
                             $atts = is_array($msg->attachments) ? $msg->attachments : [];
@@ -211,7 +211,7 @@
                                 <div class="ui-bubble-text">—</div>
                             @endif
                             <span class="ui-bubble-meta">
-                                <time datetime="{{ optional($at)->toIso8601String() }}">{{ optional($at)->format('d/m H:i') }}</time>
+                                <time datetime="{{ optional($at)->toIso8601String() }}" title="{{ optional($at)->format('d/m/Y H:i') }} · {{ $tz }}">{{ optional($at)->format('H:i') }}</time>
                                 @if ($out)
                                     @switch($msg->status)
                                         @case('pending') · {{ __('Enviando…') }} @break
@@ -358,8 +358,8 @@
                     @if ($selected->provider === 'whatsapp' && $canReply)
                         <div><dt>{{ __('Ventana de 24 h') }}</dt><dd><x-ui.badge :tone="$waWindowOpen ? 'success' : 'warning'" dot>{{ $waWindowOpen ? __('Abierta') : __('Cerrada') }}</x-ui.badge></dd></div>
                     @endif
-                    <div><dt>{{ __('Primer contacto') }}</dt><dd>{{ optional($selected->created_at)->format('d/m/Y H:i') }}</dd></div>
-                    <div><dt>{{ __('Último mensaje') }}</dt><dd>{{ optional($selected->last_message_at)->format('d/m/Y H:i') ?? '—' }}</dd></div>
+                    <div><dt>{{ __('Primer contacto') }}</dt><dd>{{ $selected->created_at?->copy()->setTimezone($tz)->format('d/m/Y H:i') ?? '—' }}</dd></div>
+                    <div><dt>{{ __('Último mensaje') }}</dt><dd>{{ $selected->last_message_at?->copy()->setTimezone($tz)->format('d/m/Y H:i') ?? '—' }}</dd></div>
                 </dl>
             </aside>
         @endif

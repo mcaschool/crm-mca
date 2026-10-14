@@ -311,7 +311,7 @@
                             <div class="ui-list-item ui-list-item--wrap">
                                 <span class="ui-list-main">
                                     <span class="ui-list-title">{{ $c->question }}</span>
-                                    <span class="ui-list-meta">{{ __('Tema') }}: {{ $c->topic_line ? __($lineLabels[$c->topic_line] ?? $c->topic_line) : __('General (cualquier tema)') }} · {{ $c->user?->name ?? '—' }} · {{ $c->updated_at?->format('d/m/Y H:i') }}</span>
+                                    <span class="ui-list-meta">{{ __('Tema') }}: {{ $c->topic_line ? __($lineLabels[$c->topic_line] ?? $c->topic_line) : __('General (cualquier tema)') }} · {{ $c->user?->name ?? '—' }} · {{ $c->updated_at?->userTz()->format('d/m/Y H:i') }}</span>
                                     <span class="ui-note-body"><b class="ui-strong">{{ __('Respuesta aprobada') }}:</b> {{ $c->answer }}</span>
                                 </span>
                                 <span class="ui-list-aside">

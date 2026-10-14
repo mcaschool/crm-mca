@@ -146,7 +146,7 @@
                         <tbody>
                             @forelse ($activity as $a)
                                 <tr wire:key="act-{{ $a->id }}">
-                                    <td class="t-2" data-label="{{ __('Fecha') }}">{{ $a->created_at?->format('d/m H:i:s') }}</td>
+                                    <td class="t-2" data-label="{{ __('Fecha') }}">{{ $a->created_at?->userTz()->format('d/m H:i:s') }}</td>
                                     <td class="rt-primary"><span class="ui-mono">{{ $a->tool }}</span></td>
                                     <td class="t-2" data-label="{{ __('Acción') }}">{{ $a->action ?: '—' }}</td>
                                     <td class="rt-aside" data-label="{{ __('Resultado') }}">

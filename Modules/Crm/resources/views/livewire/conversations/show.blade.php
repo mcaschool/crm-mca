@@ -38,7 +38,7 @@
                                 $html = preg_replace('~(https?://[^\s<]+)~u', '<a href="$1" target="_blank" rel="noopener">$1</a>', $html);
                             @endphp
                             <div class="ui-msg {{ $isUser ? 'ui-msg--in' : '' }}" wire:key="msg-{{ $message->id }}">
-                                <div class="ui-msg-from">{{ $from }} · <time datetime="{{ $message->created_at?->toIso8601String() }}" title="{{ $message->created_at?->translatedFormat('d M Y · H:i') }}">{{ $message->created_at?->diffForHumans() }}</time></div>
+                                <div class="ui-msg-from">{{ $from }} · <time datetime="{{ $message->created_at?->toIso8601String() }}" title="{{ $message->created_at?->userTz()->translatedFormat('d M Y · H:i') }}">{{ $message->created_at?->diffForHumans() }}</time></div>
                                 <div class="ui-msg-bubble">{!! nl2br($html) !!}</div>
                             </div>
                         @endforeach
@@ -63,7 +63,7 @@
                                 <span class="ui-tl-ic ui-tone--neutral"><x-ui.icon name="{{ $event->icon() }}" /></span>
                                 <div class="ui-tl-body">
                                     {{ $event->label() }}@if ($detail)<span class="ui-tl-detail">: {{ $detail }}</span>@endif
-                                    <div class="ui-tl-time"><time datetime="{{ $event->created_at?->toIso8601String() }}" title="{{ $event->created_at?->translatedFormat('d M Y · H:i') }}">{{ $event->created_at?->diffForHumans() }}</time></div>
+                                    <div class="ui-tl-time"><time datetime="{{ $event->created_at?->toIso8601String() }}" title="{{ $event->created_at?->userTz()->translatedFormat('d M Y · H:i') }}">{{ $event->created_at?->diffForHumans() }}</time></div>
                                 </div>
                             </li>
                         @endforeach

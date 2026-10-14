@@ -8,6 +8,7 @@ use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use Modules\Crm\Support\UserTimezone;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialWhatsAppTemplate;
 use Modules\Social\Services\SocialAutomationService;
@@ -329,6 +330,8 @@ class Inbox extends Component
             'waChosen' => $waChosen,
             // ¿El último mensaje saliente lo envió la IA o una persona?
             'lastOutbound' => $messages->where('direction', 'outbound')->last(),
+            // Las fechas se guardan en UTC; se presentan en la zona de quien mira.
+            'tz' => UserTimezone::for(auth()->user()),
         ]);
     }
 }

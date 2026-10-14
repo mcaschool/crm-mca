@@ -299,7 +299,7 @@
 
                         <dl class="ui-meta">
                             <dt>{{ __('Última sincronización') }}</dt>
-                            <dd>{{ $detail->last_synced_at?->format('d/m/Y H:i') ?? '—' }}</dd>
+                            <dd>{{ $detail->last_synced_at?->userTz()->format('d/m/Y H:i') ?? '—' }}</dd>
                             <dt>{{ __('ID en Meta') }}</dt>
                             <dd>@if ($detail->meta_template_id)<span class="ui-mono">{{ $detail->meta_template_id }}</span>@else<span class="t-nil">—</span>@endif</dd>
                         </dl>

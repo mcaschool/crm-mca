@@ -64,8 +64,8 @@
                                 'active' => __('Conectada'), 'expiring' => __('Renovar pronto'), 'expired' => __('Caducada'), 'invalid' => __('No válida'),
                             ][$state] ?? $state }}</x-ui.badge></span>
                             <p class="ui-help">
-                                {{ __('Conectada por :who el :date.', ['who' => $connection->connectedBy?->name ?? '—', 'date' => $connection->connected_at?->format('d/m/Y')]) }}
-                                {{ $connection->renewBy() ? __('Renovar antes del :date.', ['date' => $connection->renewBy()->format('d/m/Y')]) : __('Sin caducidad.') }}
+                                {{ __('Conectada por :who el :date.', ['who' => $connection->connectedBy?->name ?? '—', 'date' => $connection->connected_at?->userTz()->format('d/m/Y')]) }}
+                                {{ $connection->renewBy() ? __('Renovar antes del :date.', ['date' => $connection->renewBy()->userTz()->format('d/m/Y')]) : __('Sin caducidad.') }}
                             </p>
                         @endif
                     </div>
@@ -152,7 +152,7 @@
                                 <p class="ui-help">{{ __('Para transferirla, quien tenga control total de la Página en Meta debe conectar Meta desde tu empresa, o la otra empresa debe dejar de usarla.') }}</p>
                             @endif
                             @if ($page->released_at && ! $page->selected)
-                                <p class="ui-callout ui-callout--sm ui-callout--stack ui-tone--deep" data-testid="page-released-{{ $page->id }}"><b>{{ __('La Página pasó a otra empresa') }}</b><span>{{ __('El :date otra empresa con control total de la Página en Meta la transfirió. Los contactos que ya recibiste siguen en tu CRM.', ['date' => $page->released_at->format('d/m/Y')]) }}</span></p>
+                                <p class="ui-callout ui-callout--sm ui-callout--stack ui-tone--deep" data-testid="page-released-{{ $page->id }}"><b>{{ __('La Página pasó a otra empresa') }}</b><span>{{ __('El :date otra empresa con control total de la Página en Meta la transfirió. Los contactos que ya recibiste siguen en tu CRM.', ['date' => $page->released_at->userTz()->format('d/m/Y')]) }}</span></p>
                             @endif
                             @if ($page->selected)
                                 <ul class="ui-list ui-list--boxed">
@@ -245,7 +245,7 @@
                                     <li class="{{ $markClass($checks['read_contacts'] ?? null) }}"><b>{{ $mark($checks['read_contacts'] ?? null) }}</b>{{ __('Lectura de contactos autorizada por Meta') }}
                                         @if (($checks['read_contacts'] ?? null) === 'na') <span class="ui-cell-sub">({{ __('sin formularios con los que probar') }})</span> @endif</li>
                                 </ul>
-                                <p class="ui-help">{{ __('Última comprobación: :date.', ['date' => $page->access_checked_at->format('d/m/Y H:i')]) }}
+                                <p class="ui-help">{{ __('Última comprobación: :date.', ['date' => $page->access_checked_at->userTz()->format('d/m/Y H:i')]) }}
                                     @if ($page->verified() && ($checks['list_forms'] ?? null) === 'fail') {{ __('Puedes recibir contactos; para traer formularios nuevos hace falta que Meta permita listarlos.') }} @endif</p>
                             @endif
                             {{-- Distinto de la lectura autorizada: demuestra que un contacto entraría de verdad en su destino. --}}
@@ -253,8 +253,8 @@
                             <div class="ui-checklist" data-testid="reception-test-{{ $page->id }}">
                                 <span class="{{ ['passed' => 'is-ok', 'failed' => 'is-fail'][$rt['status'] ?? ''] ?? '' }}">
                                     @php($rtText = match ($rt['status'] ?? null) {
-                                        'passed' => __('superada el :date con «:form».', ['date' => \Illuminate\Support\Carbon::parse($rt['at'])->format('d/m/Y H:i'), 'form' => $rt['form']]),
-                                        'failed' => __('fallida el :date: :detail', ['date' => \Illuminate\Support\Carbon::parse($rt['at'])->format('d/m/Y H:i'), 'detail' => $rt['detail']]),
+                                        'passed' => __('superada el :date con «:form».', ['date' => \Illuminate\Support\Carbon::parse($rt['at'])->userTz()->format('d/m/Y H:i'), 'form' => $rt['form']]),
+                                        'failed' => __('fallida el :date: :detail', ['date' => \Illuminate\Support\Carbon::parse($rt['at'])->userTz()->format('d/m/Y H:i'), 'detail' => $rt['detail']]),
                                         default => __('sin hacer. Crea un contacto de prueba de Meta y lo pasa por el CRM sin guardarlo.'),
                                     })
                                     <b>{{ ['passed' => '✓', 'failed' => '✗'][$rt['status'] ?? ''] ?? '–' }}</b>{{ __('Prueba completa de recepción') }}: {{ $rtText }}
@@ -304,7 +304,7 @@
                                             {{ __('Para activarla, elige un formulario y asígnale un destino (pasos 2 y 3).') }}
                                         @else
                                             {{ trans_choice(':n formulario listo.|:n formularios listos.', $ready, ['n' => $ready]) }}
-                                            @if ($page->last_polled_at) {{ __('Última búsqueda: :date.', ['date' => $page->last_polled_at->format('d/m/Y H:i')]) }} @endif
+                                            @if ($page->last_polled_at) {{ __('Última búsqueda: :date.', ['date' => $page->last_polled_at->userTz()->format('d/m/Y H:i')]) }} @endif
                                             @if ((((array) ($page->access_result ?? []))['reception_test']['status'] ?? null) !== 'passed')
                                                 <span data-testid="reception-test-hint-{{ $page->id }}">{{ __('Recomendado antes o después de activar: «Prueba completa de recepción» (paso 4).') }}</span>
                                             @endif
@@ -334,7 +334,7 @@
                     <li><b>·</b>{{ __('Conexión') }}: {{ $connection ? ([
                         'active' => __('Conectada'), 'expiring' => __('Renovar pronto'), 'expired' => __('Caducada'), 'invalid' => __('No válida'), 'disconnected' => __('Sin conexión'),
                     ][$connection->effectiveStatus()] ?? '—') : __('Sin conexión') }}
-                        @if ($connection?->last_checked_at) — {{ __('revisada el :date', ['date' => $connection->last_checked_at->format('d/m/Y H:i')]) }} @endif</li>
+                        @if ($connection?->last_checked_at) — {{ __('revisada el :date', ['date' => $connection->last_checked_at->userTz()->format('d/m/Y H:i')]) }} @endif</li>
                     @if ($connection && $connection->scopes !== null)
                         @php($granted = collect($neededPermissions)->filter(fn ($p) => in_array($p, $connection->scopes, true)))
                         <li><b>·</b>{{ __('Permisos de Meta concedidos a esta conexión: :n de :t necesarios.', ['n' => $granted->count(), 't' => count($neededPermissions)]) }}
@@ -349,7 +349,7 @@
                             {{ __('leer contactos') }} {{ $mark($checks['read_contacts'] ?? null) }} ·
                             {{ __('prueba completa') }} {{ ['passed' => '✓', 'failed' => '✗'][((array) ($page->access_result ?? []))['reception_test']['status'] ?? ''] ?? '–' }} ·
                             {{ $page->receiving() ? __('recibiendo') : __('en pausa') }}
-                            @if ($page->last_polled_at) · {{ __('última búsqueda :date', ['date' => $page->last_polled_at->format('d/m/Y H:i')]) }} @endif
+                            @if ($page->last_polled_at) · {{ __('última búsqueda :date', ['date' => $page->last_polled_at->userTz()->format('d/m/Y H:i')]) }} @endif
                             @if ($page->last_error) <div class="ui-help ui-text-danger">{{ $page->last_error }}</div> @endif
                         </li>
                     @endforeach
@@ -380,7 +380,7 @@
                                     <span class="ui-list-meta ui-text-danger">{{ $r->error }}</span>
                                 @endif
                             </span>
-                            <span class="ui-list-aside ui-list-meta">{{ $r->created_at?->format('d/m/Y H:i') }}</span>
+                            <span class="ui-list-aside ui-list-meta">{{ $r->created_at?->userTz()->format('d/m/Y H:i') }}</span>
                         </li>
                     @endforeach
                 </ul>

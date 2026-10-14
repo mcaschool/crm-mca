@@ -113,10 +113,10 @@
                                     <x-ui.badge tone="blue" icon="sparkles">{{ __('Diagnóstico') }}</x-ui.badge>
                                 @endif
                                 @if ($incompany->diagnostico_at)
-                                    <span class="ui-list-meta">{{ __('Vio su diagnóstico:') }} {{ $incompany->diagnostico_at->translatedFormat('d M Y · H:i') }}</span>
+                                    <span class="ui-list-meta">{{ __('Vio su diagnóstico:') }} {{ $incompany->diagnostico_at->userTz()->translatedFormat('d M Y · H:i') }}</span>
                                 @endif
                                 @if ($incompany->solicita_contacto_at)
-                                    <span class="ui-list-meta ui-text-danger">{{ __('Pidió contacto:') }} {{ $incompany->solicita_contacto_at->translatedFormat('d M Y · H:i') }}</span>
+                                    <span class="ui-list-meta ui-text-danger">{{ __('Pidió contacto:') }} {{ $incompany->solicita_contacto_at->userTz()->translatedFormat('d M Y · H:i') }}</span>
                                 @endif
                             </div>
                             <dl class="ui-meta ui-meta--spaced">
@@ -230,7 +230,7 @@
                                         </span>
                                         <span class="ui-list-meta">
                                             {{ __('Como') }} <b>{{ $em->from_name ?: $em->from_address }}</b>
-                                            · {{ ($em->sent_at ?? $em->created_at)?->translatedFormat('d M Y · H:i') }}
+                                            · {{ ($em->sent_at ?? $em->created_at)?->userTz()->translatedFormat('d M Y · H:i') }}
                                             · {{ __('por :name', ['name' => $em->sentByUser?->name ?? __('Equipo')]) }}
                                             @if ($em->files_count) · {{ $em->files_count }} {{ __('adjunto(s)') }}@endif
                                         </span>
@@ -256,7 +256,7 @@
                                     <x-ui.avatar :name="$note->author_name ?: __('Equipo')" :seed="$note->author_name ?: 'Equipo'" />
                                     <div class="ui-list-main">
                                         <span class="ui-note-body">{{ $note->body }}</span>
-                                        <span class="ui-list-meta">— {{ $note->author_name ?: __('Equipo') }} · {{ $note->created_at?->translatedFormat('d M') }}</span>
+                                        <span class="ui-list-meta">— {{ $note->author_name ?: __('Equipo') }} · {{ $note->created_at?->userTz()->translatedFormat('d M') }}</span>
                                     </div>
                                 </div>
                             </li>
@@ -285,7 +285,7 @@
                                     <span class="ui-tl-ic ui-tone--{{ $evTone($ev) }}"><x-ui.icon name="{{ $ev->icon() }}" /></span>
                                     <div class="ui-tl-body">
                                         {{ $ev->label() }}@if ($evDetail)<span class="ui-tl-detail">: {{ $evDetail }}</span>@endif
-                                        <div class="ui-tl-time">{{ $ev->created_at?->translatedFormat('d M Y · H:i') }}</div>
+                                        <div class="ui-tl-time">{{ $ev->created_at?->userTz()->translatedFormat('d M Y · H:i') }}</div>
                                     </div>
                                 </li>
                             @endforeach
@@ -563,7 +563,7 @@
                             → {{ $viewingEmail->to_address }}
                         </p>
                         <p class="ui-modal-sub">
-                            {{ ($viewingEmail->sent_at ?? $viewingEmail->created_at)?->translatedFormat('d M Y · H:i') }}
+                            {{ ($viewingEmail->sent_at ?? $viewingEmail->created_at)?->userTz()->translatedFormat('d M Y · H:i') }}
                             · {{ __('por :name', ['name' => $viewingEmail->sentByUser?->name ?? __('Equipo')]) }}
                             · {{ $viewingEmail->status === 'sent' ? __('Enviado') : __('Falló') }}
                         </p>

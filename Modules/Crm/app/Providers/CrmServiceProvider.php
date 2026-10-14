@@ -68,6 +68,14 @@ class CrmServiceProvider extends ModuleServiceProvider
     {
         parent::boot();
 
+        // Presentación de fechas en la zona de quien mira (se guardan en UTC): $fecha->userTz().
+        foreach ([\Carbon\Carbon::class, \Carbon\CarbonImmutable::class] as $carbon) {
+            $carbon::macro('userTz', function () {
+                /** @var \Carbon\CarbonInterface $this */
+                return $this->copy()->setTimezone(\Modules\Crm\Support\UserTimezone::current());
+            });
+        }
+
         Gate::policy(Lead::class, LeadPolicy::class);
         Gate::policy(Contact::class, ContactPolicy::class);
 
