@@ -63,7 +63,7 @@
             <div class="ui-card-h"><x-ui.icon name="book-open" class="ui-card-ic" /><h2 id="cfg-kb-t">{{ __('Bases de conocimiento') }}</h2>
                 <span class="ui-badge ui-badge--count ui-tone--neutral">{{ count($sources) }}</span>
                 <span class="sp"></span>
-                <button type="button" wire:click="sync" wire:loading.attr="disabled" class="ui-btn ui-btn--secondary ui-btn--sm">
+                <button type="button" wire:click="sync" wire:loading.attr="disabled" wire:target="sync" class="ui-btn ui-btn--secondary ui-btn--sm">
                     <span wire:loading.remove wire:target="sync" class="ui-btn-label"><x-ui.icon name="refresh" /> {{ __('Re-sincronizar') }}</span>
                     <span wire:loading.inline-flex wire:target="sync" class="ui-btn-label"><span class="ui-spin"></span> {{ __('Sincronizando…') }}</span>
                 </button>
