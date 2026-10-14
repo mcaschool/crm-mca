@@ -956,7 +956,7 @@ it('el worker sigue escuchando: un trabajo con 2 s de retraso se responde en la 
 
     // Producción: sigue escuchando (sleep 1 s) y lo procesa en cuanto vence, en la misma ejecución.
     $started = microtime(true);
-    Artisan::call('social:advisor-worker', ['--max-time' => 6]);
+    Artisan::call('social:advisor-worker', ['--max-time' => 6, '--memory' => 0]);   // el límite de memoria no es lo que se prueba
     $elapsed = microtime(true) - $started;
 
     expect($fake->calls)->toHaveCount(1)
