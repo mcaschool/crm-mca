@@ -38,7 +38,7 @@ beforeEach(function () {
     Http::preventStrayRequests();
     config(['crm.video.retries' => 0]);
     // licensed: correos de asesores con licencia en la cuenta · hosts: anfitrión de cada reunión creada
-    $GLOBALS['vc'] = (object) ['calls' => [], 'faked' => false, 'opts' => [], 'n' => 0, 'licensed' => [], 'hosts' => []];
+    $GLOBALS['vc'] = (object) ['calls' => [], 'faked' => false, 'opts' => [], 'n' => 0, 'licensed' => [], 'hosts' => [], 'settings' => []];
 });
 
 /** Da al asesor una licencia en la cuenta Zoom simulada (será el anfitrión de su reunión). */
@@ -138,27 +138,41 @@ function vcFake(array $o = []): void
         if ($is('/meetings') && $m === 'GET' && $is('/users/')) {
             return Http::response(['meetings' => $o['zoom_existing'] ?? [], 'next_page_token' => '']);
         }
+        // Lo que la cuenta aplica realmente: puede bloquear la sala de espera o «unirse antes».
+        $applied = function (array $s) use ($o): array {
+            $waiting = ($o['account_no_waiting_room'] ?? false) ? false : (($o['account_locks_jbh'] ?? false) ? true : (bool) $s['waiting_room']);
+            $jbh = ($o['account_locks_jbh'] ?? false) ? false : (bool) $s['join_before_host'];
+
+            return ['join_before_host' => $jbh, 'waiting_room' => $waiting];
+        };
         if ($is('/meetings') && $m === 'POST') {
             if (($o['zoom_create'] ?? 'ok') === '500') {
                 return Http::response(['message' => 'internal'], 500);
+            }
+            if (($o['zoom_create'] ?? 'ok') === '400') { // restricción real de la cuenta, con su motivo
+                return Http::response(['code' => 3161, 'message' => 'Meeting hosting and scheduling capabilities are not allowed for your user account. See https://support.zoom.us/x'], 400);
             }
             $n = ++$t->n;
             $host = (string) preg_replace('~.*/users/([^/]+)/meetings.*~', '$1', $url);
             $join = $o['zoom_join'] ?? 'https://us02web.zoom.us/j/8123456789'.$n.'?pwd=abc'.$n;
             $t->hosts['8123456789'.$n] = $host;
-            // Una cuenta que bloquea la sala de espera la devuelve desactivada aunque se pida.
-            $waiting = ($o['account_no_waiting_room'] ?? false) ? false : $r['settings']['waiting_room'];
+            $t->settings['8123456789'.$n] = $applied($r['settings']);
 
             return Http::response(['id' => (int) ('8123456789'.$n), 'host_id' => $host, 'type' => 3, 'topic' => $r['topic'], 'agenda' => $r['agenda'],
                 'join_url' => $join, 'start_url' => 'https://us02web.zoom.us/s/8123456789'.$n.'?zak=SECRETZAK', 'password' => 'abc'.$n,
-                'settings' => ['join_before_host' => $r['settings']['join_before_host'], 'waiting_room' => $waiting]], 201);
+                'settings' => $t->settings['8123456789'.$n]], 201);
+        }
+        if (preg_match('~api\.zoom\.us/v2/meetings/(\d+)$~', $url, $mm) && $m === 'PATCH') {
+            $t->settings[$mm[1]] = $applied($r['settings']);
+
+            return Http::response(null, 204);
         }
         if (preg_match('~api\.zoom\.us/v2/meetings/(\d+)$~', $url, $mm)) {
             $k = substr($mm[1], -1);
 
             return Http::response(['id' => (int) $mm[1], 'host_id' => $o['meeting_host'] ?? ($t->hosts[$mm[1]] ?? 'HOSTINST'), 'type' => 3,
                 'join_url' => 'https://us02web.zoom.us/j/'.$mm[1].'?pwd=abc'.$k, 'start_url' => 'https://us02web.zoom.us/s/x?zak=SECRETZAK',
-                'settings' => $o['meeting_settings'] ?? ['join_before_host' => false, 'waiting_room' => true]]);
+                'settings' => $o['meeting_settings'] ?? ($t->settings[$mm[1]] ?? ['join_before_host' => false, 'waiting_room' => true])]);
         }
 
         return Http::response(['unexpected' => $url], 599);
@@ -377,63 +391,163 @@ it('asesor con licencia: es el anfitrión real de su reunión sin hora fija (sal
         ->and($room->fresh()->status)->toBe('active');
 });
 
-it('asesor sin licencia: no crea ninguna sala (ni con el anfitrión institucional ni con «unirse antes»), lo informa y conserva el enlace manual', function () {
+it('sin licencia individual: cada usuario recibe su propia reunión del anfitrión institucional (id y enlace distintos), reutilizada y sin privilegios de anfitrión', function () {
+    ['admin' => $admin, 'advisor' => $adv] = vcInst();
+    $other = User::factory()->create(['institution_id' => $adv->institution_id, 'role' => 'admissions', 'department' => 'Admisiones', 'status' => 'active']);
+    vcProfile($other);
+    vcFake(['basic' => [strtolower($adv->email)]]); // uno es Basic en la cuenta; el otro ni siquiera es usuario de Zoom
+    vcZoom();
+
+    $a = vcRooms()->generate($adv, 'zoom', $admin);
+    $b = vcRooms()->generate($other, 'zoom', $admin);
+    expect($a->status)->toBe('active')->and($a->host_status)->toBe('institutional_host')->and($a->advisorCanHost())->toBeFalse()
+        ->and($a->host_key)->toBe('zoom:HOSTINST')->and($a->host_note)->toContain('Anfitrión técnico')->toContain('no es anfitrión en Zoom')
+        ->and($b->remote_id)->not->toBe($a->remote_id)->and($b->join_url)->not->toBe($a->join_url)
+        ->and(MeetingProfile::forUser($adv->id)->zoom_url)->toBe($a->join_url)
+        ->and(MeetingProfile::forUser($other->id)->zoom_url)->toBe($b->join_url);
+    // Creadas con el anfitrión institucional, sala de espera y sin «unirse antes» (modalidad por defecto).
+    Http::assertSent(fn (Request $r) => $r->method() === 'POST' && str_ends_with($r->url(), '/users/HOSTINST/meetings')
+        && $r['type'] === 3 && $r['default_password'] === true && $r['settings']['waiting_room'] === true && $r['settings']['join_before_host'] === false);
+    expect(vcCount('POST https://api.zoom.us'))->toBe(2);
+
+    // Reutilización: la sala válida no se vuelve a crear.
+    expect(vcRooms()->generate($adv, 'zoom', $admin)->id)->toBe($a->id)->and(vcCount('POST https://api.zoom.us'))->toBe(2);
+
+    // Integración con el Calendario: la actividad nueva copia el enlace del usuario y cuenta para el anfitrión institucional.
+    $act = vcActivity($adv, 'zoom', '2026-10-19 15:00');
+    expect($act->meeting_link)->toBe($a->join_url)->and($act->video_host_key)->toBe('zoom:HOSTINST');
+
+    // En el perfil se ve que no dirige la reunión (sin atribuirle privilegios).
+    Livewire::actingAs($adv)->test(VideoRooms::class, ['ownerId' => $adv->id])
+        ->assertSee('No: el anfitrión técnico es la cuenta institucional')->assertSee('Abrir Zoom')->assertDontSee('Sí: es el anfitrión');
+});
+
+it('con un enlace manual en el perfil crea la sala sin sustituirlo hasta que un administrador lo decida', function () {
     ['admin' => $admin, 'advisor' => $adv] = vcInst();
     $manual = 'https://us02web.zoom.us/j/99999999999?pwd=manual';
     MeetingProfile::forUser($adv->id)->forceFill(['zoom_url' => $manual])->save();
-    vcFake(['basic' => [strtolower($adv->email)]]); // usuario de la cuenta, pero Basic (sin licencia)
-    $zoom = vcZoom();
-
-    try {
-        vcRooms()->generate($adv, 'zoom', $admin);
-        $this->fail('no debía crear la sala');
-    } catch (VideoProviderException $e) {
-        expect($e->kind)->toBe('advisor_not_host')->and($e->userMessage())->toContain('no podría iniciar ni dirigir')->toContain('enlace manual');
-    }
-    Http::assertNotSent(fn (Request $r) => $r->method() === 'POST' && str_contains($r->url(), '/meetings'));
-    expect(VideoRoom::query()->count())->toBe(0)
-        ->and(MeetingProfile::forUser($adv->id)->zoom_url)->toBe($manual)
-        ->and($zoom->fresh()->status)->toBe('active'); // la conexión institucional sigue sana
-
-    // Tampoco si no existe en la cuenta; y desde el perfil se ve el motivo, con el enlace manual utilizable.
     vcFake();
-    Livewire::actingAs($admin)->test(VideoRooms::class, ['ownerId' => $adv->id])
-        ->call('generateFor', 'zoom')->assertSee('no podría iniciar ni dirigir')
-        ->assertSee($manual)->assertSee('Abrir Zoom');
-    expect(VideoRoom::query()->count())->toBe(0);
-    $act = vcActivity($adv, 'zoom', '2026-10-19 15:00');
-    expect($act->meeting_link)->toBe($manual)->and($act->video_host_key)->toBeNull();
+    vcZoom();
+    $room = vcRooms()->generate($adv, 'zoom', $admin);
+    expect($room->status)->toBe('active')->and(MeetingProfile::forUser($adv->id)->zoom_url)->toBe($manual);
+    vcRooms()->assign($room, $admin);
+    expect(MeetingProfile::forUser($adv->id)->zoom_url)->toBe($room->join_url);
 });
 
-it('configuración incompatible: una reunión que el asesor no dirige (sala de espera sin anfitrión) no se da por operativa', function () {
+it('una sala heredada del anfitrión institucional sigue siendo válida; con licencia se regenera como propia y al perderla deja de serlo', function () {
     ['admin' => $admin, 'advisor' => $adv] = vcInst();
     vcZoom();
-    // Reunión heredada del anfitrión institucional, con sala de espera: el asesor no podría admitir a nadie.
     $legacy = 'https://us02web.zoom.us/j/81234567895?pwd=abc5';
     $room = VideoRoom::query()->create(['user_id' => $adv->id, 'provider' => 'zoom', 'remote_id' => '81234567895', 'join_url' => $legacy,
-        'join_url_hash' => Activity::roomHash($legacy), 'host_key' => 'zoom:HOSTINST', 'status' => 'active', 'host_status' => 'institutional_host']);
+        'join_url_hash' => Activity::roomHash($legacy), 'host_key' => 'zoom:HOSTINST', 'status' => 'error', 'host_status' => 'not_host']);
     MeetingProfile::forUser($adv->id)->forceFill(['zoom_url' => $legacy])->save();
-    vcFake(['meeting_host' => 'HOSTINST', 'meeting_settings' => ['join_before_host' => true, 'waiting_room' => true]]);
+    vcFake(['meeting_host' => 'HOSTINST']);
 
     $checked = vcRooms()->check($room, $admin);
-    expect($checked->status)->toBe('error')->and($checked->host_status)->toBe('not_host')->and($checked->advisorCanHost())->toBeFalse()
-        ->and($checked->host_note)->toContain('no lo convierte en anfitrión')->toContain('no se considera operativa')
-        ->and(MeetingProfile::forUser($adv->id)->zoom_url)->toBe($legacy); // nada se borra ni se cambia solo
-    expect(fn () => vcRooms()->applyToFutureActivities($checked, $admin))->toThrow(\Illuminate\Validation\ValidationException::class);
-    Livewire::actingAs($admin)->test(VideoRooms::class, ['ownerId' => $adv->id])
-        ->assertSee('No: el asesor no es el anfitrión')->assertSee('no se considera operativa')
-        ->assertDontSee('Aplicar a actividades sin enlace')->assertSee('Generar reunión de Zoom');
+    expect($checked->status)->toBe('active')->and($checked->host_status)->toBe('institutional_host')->and($checked->advisorCanHost())->toBeFalse()
+        ->and($checked->last_error)->toBeNull()->and(MeetingProfile::forUser($adv->id)->zoom_url)->toBe($legacy);
 
-    // Con licencia, la regeneración crea SU reunión con sala de espera y la asigna en lugar de la heredada.
+    // Una reunión de otra persona (ni del usuario ni del anfitrión institucional) no es operativa.
+    vcFake(['meeting_host' => 'OTRAPERSONA']);
+    expect(vcRooms()->check($room, $admin)->status)->toBe('error')->and($room->fresh()->host_status)->toBe('not_host');
+
+    // Con licencia, la regeneración crea SU reunión (anfitrión real) y reemplaza la heredada.
     vcLicense($adv);
     vcFake();
-    $new = vcRooms()->generate($adv, 'zoom', $admin);
+    $new = vcRooms()->generate($adv, 'zoom', $admin, true);
     expect($new->host_status)->toBe('advisor_host')->and($new->status)->toBe('active')->and($room->fresh()->status)->toBe('replaced')
         ->and(MeetingProfile::forUser($adv->id)->zoom_url)->toBe($new->join_url);
 
-    // Si el asesor pierde la licencia, la revisión deja de considerarla operativa.
+    // Si pierde la licencia, su reunión deja de considerarse operativa (no se le siguen atribuyendo privilegios).
     $GLOBALS['vc']->licensed = [];
     expect(vcRooms()->check($new, $admin)->status)->toBe('error');
+});
+
+it('acceso sin anfitrión: exige una decisión explícita, se aplica a las reuniones institucionales (no a las de anfitriones con licencia) e informa si Zoom lo bloquea', function () {
+    ['admin' => $admin, 'advisor' => $adv] = vcInst();
+    $licensed = User::factory()->create(['institution_id' => $adv->institution_id, 'role' => 'admissions', 'department' => 'Admisiones', 'status' => 'active']);
+    vcProfile($licensed);
+    vcLicense($licensed);
+    vcFake();
+    vcZoom();
+    $inst = vcRooms()->generate($adv, 'zoom', $admin);
+    $own = vcRooms()->generate($licensed, 'zoom', $admin);
+
+    // Sin confirmar las implicaciones no se aplica nada.
+    $c = Livewire::actingAs($admin)->test(Connections::class)
+        ->assertSee('Con sala de espera (recomendado)')
+        ->set('zoomAccess', 'hostless')->assertSee('Implicaciones de seguridad')
+        ->call('saveZoomAccess')->assertHasErrors('zoomHostlessAck');
+    Http::assertNotSent(fn (Request $r) => $r->method() === 'PATCH');
+    expect(vcRooms()->hostless(Integration::query()->where('type', 'zoom')->sole()))->toBeFalse();
+
+    $c->set('zoomHostlessAck', true)->call('saveZoomAccess')->assertHasNoErrors()->assertSee('Salas actualizadas: 1');
+    Http::assertSent(fn (Request $r) => $r->method() === 'PATCH' && str_ends_with($r->url(), '/meetings/'.$inst->remote_id)
+        && $r['settings']['join_before_host'] === true && $r['settings']['waiting_room'] === false && $r['settings']['jbh_time'] === 0);
+    Http::assertNotSent(fn (Request $r) => $r->method() === 'PATCH' && str_ends_with($r->url(), '/meetings/'.$own->remote_id));
+    expect($inst->fresh()->host_note)->toContain('Acceso sin anfitrión')->and($inst->fresh()->join_url)->toBe($inst->join_url)
+        ->and(\Modules\Audit\Models\AuditLog::query()->where('action', 'video_room.access_mode_changed')->exists())->toBeTrue();
+
+    // Las salas nuevas del anfitrión institucional ya nacen con esa modalidad (con contraseña).
+    $third = User::factory()->create(['institution_id' => $adv->institution_id, 'role' => 'marketing', 'status' => 'active']);
+    vcRooms()->generate($third, 'zoom', $admin);
+    Http::assertSent(fn (Request $r) => $r->method() === 'POST' && str_ends_with($r->url(), '/users/HOSTINST/meetings')
+        && $r['default_password'] === true && $r['settings']['join_before_host'] === true && $r['settings']['waiting_room'] === false);
+
+    // Si la cuenta de Zoom bloquea «unirse antes», se informa en la sala (no se da por aplicado).
+    vcFake(['account_locks_jbh' => true]);
+    $fourth = User::factory()->create(['institution_id' => $adv->institution_id, 'role' => 'admin', 'status' => 'active']);
+    expect(vcRooms()->generate($fourth, 'zoom', $admin)->host_note)->toContain('no lo aplicó');
+
+    // Volver a la sala de espera no necesita confirmación.
+    vcFake();
+    Livewire::actingAs($admin)->test(Connections::class)->set('zoomAccess', 'waiting_room')->call('saveZoomAccess')->assertHasNoErrors();
+    expect(vcRooms()->hostless(Integration::query()->where('type', 'zoom')->sole()))->toBeFalse()
+        ->and($inst->fresh()->host_note)->toContain('no es anfitrión en Zoom');
+});
+
+it('salas para todos los usuarios activos con acceso al Calendario (no solo asesores), respetando permisos e institución', function () {
+    ['admin' => $admin, 'advisor' => $adv] = vcInst();
+    $marketing = User::factory()->create(['institution_id' => $adv->institution_id, 'role' => 'marketing', 'status' => 'active', 'name' => 'Marta Marketing']);
+    $inactive = User::factory()->create(['institution_id' => $adv->institution_id, 'role' => 'admissions', 'status' => 'inactive', 'name' => 'Ignacio Inactivo']);
+    vcFake();
+    vcZoom();
+
+    Livewire::actingAs($admin)->test(Connections::class)
+        ->assertSee('Salas permanentes por usuario')->assertSee('Marta Marketing')->assertDontSee('Ignacio Inactivo')
+        ->call('generateRoom', $marketing->id, 'zoom')
+        ->assertSet('videoTarget', $marketing->id.'|zoom')->assertSet('videoNoticeError', false);
+    expect(vcRooms()->current($marketing->id, 'zoom')?->status)->toBe('active');
+
+    // Inactivo o de otra institución: no.
+    expect(fn () => vcRooms()->generate($inactive, 'zoom', $admin))->toThrow(\Illuminate\Validation\ValidationException::class);
+    Livewire::actingAs($admin)->test(Connections::class)->call('generateRoom', $inactive->id, 'zoom')->assertNotFound();
+    $foreignInst = Institution::factory()->create();
+    $foreign = User::factory()->create(['institution_id' => $foreignInst->id, 'role' => 'admin', 'status' => 'active']);
+    Livewire::actingAs($admin)->test(Connections::class)->call('generateRoom', $foreign->id, 'zoom')->assertNotFound();
+
+    // Solo la administración genera salas o decide la modalidad de acceso.
+    Livewire::actingAs($adv)->test(Connections::class)->assertForbidden();
+    expect(fn () => vcRooms()->setZoomAccess(true, $adv))->toThrow(\Illuminate\Auth\Access\AuthorizationException::class);
+});
+
+it('una restricción real de Zoom se comunica con su motivo junto al usuario y su botón, sin crear sala', function () {
+    ['admin' => $admin, 'advisor' => $adv] = vcInst();
+    vcFake(['zoom_create' => '400']);
+    vcZoom();
+
+    $c = Livewire::actingAs($admin)->test(Connections::class)->call('generateRoom', $adv->id, 'zoom')
+        ->assertSet('videoTarget', $adv->id.'|zoom')->assertSet('videoNoticeError', true);
+    $html = $c->html();
+    // El aviso va en la celda del usuario (junto a «Generar sala»), no en la cabecera de la página.
+    expect($html)->toMatch('~vc-adv-'.$adv->id.'.*?data-testid="vc-row-notice".*?Meeting hosting and scheduling capabilities are not allowed~s')
+        ->not->toContain('support.zoom.us')
+        ->and(substr_count($html, 'Respuesta del proveedor'))->toBe(1);
+    expect(VideoRoom::query()->count())->toBe(0);
+
+    // Lo mismo en el bloque del perfil de reuniones.
+    Livewire::actingAs($admin)->test(VideoRooms::class, ['ownerId' => $adv->id])->call('generateFor', 'zoom')
+        ->assertSeeHtml('data-testid="vr-notice"')->assertSee('Meeting hosting and scheduling capabilities');
 });
 
 it('si la cuenta no aplica la sala de espera solicitada, se avisa (sin desactivarla el CRM)', function () {
@@ -679,7 +793,7 @@ it('solo la administración gestiona conexiones y salas; el asesor ve y abre su 
 
     Livewire::actingAs($adv)->test(VideoRooms::class, ['ownerId' => $adv->id])
         ->assertSee('Abrir Google Meet')->assertSee('Abrir Zoom')->assertSee('https://meet.google.com/abc-defg-hij')
-        ->assertSee('Sí: el asesor es el anfitrión')
+        ->assertSee('Sí: es el anfitrión con su licencia de Zoom')
         ->assertDontSee('Regenerar')->assertDontSee('zak')->assertDontSee('ya29')
         ->call('generateFor', 'zoom')->assertForbidden();
     $other = User::factory()->create(['institution_id' => $adv->institution_id, 'role' => 'admissions', 'department' => 'Admisiones', 'status' => 'active']);
