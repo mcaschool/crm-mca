@@ -17,7 +17,7 @@
                     </x-ui.field>
                     <x-ui.field class="ui-span-full" :label="__('Correo')" for="lc-email" required :error="$errors->first('email')"
                         :help="__('Si el correo ya existe en la institución, se enriquece ese contacto (no se duplica).')">
-                        <input id="lc-email" type="email" wire:model="email" maxlength="190" placeholder="persona@email.com" autocomplete="email"
+                        <input id="lc-email" type="email" wire:model="email" maxlength="190" placeholder="{{ __('persona@email.com') }}" autocomplete="email"
                             @class(['ui-input', 'is-invalid' => $errors->has('email')]) @error('email') aria-invalid="true" aria-describedby="lc-email-error" @enderror>
                     </x-ui.field>
                 </div>
@@ -33,8 +33,8 @@
                     </x-ui.field>
                     <x-ui.field :label="__('Idioma')" for="lc-lang" :error="$errors->first('preferred_language')">
                         <select id="lc-lang" wire:model="preferred_language" @class(['ui-select', 'is-invalid' => $errors->has('preferred_language')])>
-                            <option value="es">Español</option>
-                            <option value="en">English</option>
+                            <option value="es">{{ __('Español') }}</option>
+                            <option value="en">{{ __('English') }}</option>
                         </select>
                     </x-ui.field>
                 </div>
@@ -58,7 +58,7 @@
                     <x-ui.field :label="__('Interés')" for="lc-interest" :error="$errors->first('interest_level')">
                         <select id="lc-interest" wire:model="interest_level" @class(['ui-select', 'is-invalid' => $errors->has('interest_level')])>
                             @foreach ($interestLevels as $l)
-                                <option value="{{ $l->value }}">{{ $l->label() }}</option>
+                                <option value="{{ $l->value }}">{{ __($l->label()) }}</option>
                             @endforeach
                         </select>
                     </x-ui.field>

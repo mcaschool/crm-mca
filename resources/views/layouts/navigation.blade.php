@@ -23,7 +23,7 @@
             <div class="brand-mark"><x-ui.icon name="shield" /></div>
             <div>
                 <div class="brand-name">MCA School</div>
-                <div class="brand-sub">PANEL · CRM</div>
+                <div class="brand-sub">{{ __('PANEL · CRM') }}</div>
             </div>
         @endif
     </div>
@@ -32,7 +32,7 @@
 
     <nav class="mca-nav">
         <div class="mca-nav-group">
-            <div class="mca-nav-label">CAPTACIÓN</div>
+            <div class="mca-nav-label">{{ __('CAPTACIÓN') }}</div>
             <a href="{{ route('dashboard') }}" class="mca-nav-item {{ request()->routeIs('dashboard') ? 'on' : '' }}">
                 <x-ui.icon name="home" /> {{ __('Inicio') }}
             </a>
@@ -71,7 +71,7 @@
 
         @if (auth()->user()?->canWorkCrm() || auth()->user()?->canPublishSocial())
             <div class="mca-nav-group">
-                <div class="mca-nav-label">SOCIAL MEDIA</div>
+                <div class="mca-nav-label">{{ __('SOCIAL MEDIA') }}</div>
                 @if (auth()->user()?->canWorkCrm())
                     {{-- Solo se consulta si hay institución en contexto (algunas vistas que usan
                          este layout, como el perfil, se sirven fuera del grupo de panel). --}}
@@ -99,7 +99,7 @@
         @endif
 
         <div class="mca-nav-group">
-            <div class="mca-nav-label">CONFIGURACIÓN</div>
+            <div class="mca-nav-label">{{ __('CONFIGURACIÓN') }}</div>
             <a href="{{ route('advisors.index') }}" class="mca-nav-item {{ request()->routeIs('advisors.*') || request()->routeIs('ai.advisor.*') ? 'on' : '' }}">
                 <x-ui.icon name="bot" /> {{ __('Asesores Inteligentes') }}
             </a>
@@ -161,7 +161,7 @@
             </span>
             <div style="flex:1;min-width:0">
                 <div class="t1">{{ $u->name }}</div>
-                <div class="t2">{{ $u->role->label() }}</div>
+                <div class="t2">{{ __($u->role->label()) }}</div>
             </div>
             <x-ui.icon name="chevron-up" class="chev" style="width:16px;height:16px" />
         </button>

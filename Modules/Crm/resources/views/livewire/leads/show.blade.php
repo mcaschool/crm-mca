@@ -7,8 +7,8 @@
         $notesList = $lead->leadNotes;
         if ($incompany) {
             $modalidadLabel = match ($incompany->modalidad) {
-                'grupo' => 'Grupo',
-                'persona' => 'Individual',
+                'grupo' => __('Grupo'),
+                'persona' => __('Individual'),
                 default => $incompany->modalidad ?: '—',
             };
             $ruta = $incompany->programRoute();
@@ -25,7 +25,7 @@
     @endphp
 
     <div class="ui-record">
-        <a href="{{ route('crm.leads.index') }}" class="ui-back"><x-ui.icon name="chevron-left" /> Volver a leads</a>
+        <a href="{{ route('crm.leads.index') }}" class="ui-back"><x-ui.icon name="chevron-left" /> {{ __('Volver a leads') }}</a>
 
         @if (session('status'))
             <div class="ui-alert ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('status') }}</div>
@@ -40,23 +40,23 @@
                 <div class="ui-person-line">
                     <h1 class="ui-record-title">{{ $fullName }}</h1>
                     @if ($incompany)
-                        <x-ui.badge tone="gold" icon="building-2">Empresa</x-ui.badge>
+                        <x-ui.badge tone="gold" icon="building-2">{{ __('Empresa') }}</x-ui.badge>
                     @endif
                 </div>
                 <div class="ui-record-meta">
-                    <span><x-ui.icon name="{{ $incompany ? 'briefcase' : 'bot' }}" /> Captado por <b>{{ $lead->capturedByLabel() }}</b></span>
+                    <span><x-ui.icon name="{{ $incompany ? 'briefcase' : 'bot' }}" /> {{ __('Captado por') }} <b>{{ ($lead->capturedByLabel() === 'Recomendador InCompany' ? __('Recomendador InCompany') : $lead->capturedByLabel()) }}</b></span>
                     <span><x-ui.icon name="mail" /> {!! str_replace('@', '@<wbr>', e($c->email ?? '—')) !!}</span>
                     @if ($lead->sourceLabel())
-                        <span><x-ui.icon name="activity" /> Motivo: <b>{{ $lead->sourceLabel() }}</b></span>
+                        <span><x-ui.icon name="activity" /> {{ __('Motivo:') }} <b>{{ $lead->sourceLabel() }}</b></span>
                     @endif
                 </div>
             </div>
             <div class="ui-record-actions">
                 @if ($isTerminal || ! $canAct)
-                    <x-ui.badge :tone="['new' => 'blue', 'contacted' => 'teal', 'qualified' => 'warning', 'enrolled' => 'success'][$lead->status->value] ?? 'neutral'" :icon="$isTerminal ? 'check' : 'clock'">{{ $lead->status->label() }}</x-ui.badge>
+                    <x-ui.badge :tone="['new' => 'blue', 'contacted' => 'teal', 'qualified' => 'warning', 'enrolled' => 'success'][$lead->status->value] ?? 'neutral'" :icon="$isTerminal ? 'check' : 'clock'">{{ __($lead->status->label()) }}</x-ui.badge>
                 @else
                     <div class="ui-dropdown">
-                        <button type="button" class="ui-btn ui-btn--secondary" wire:click="$toggle('statusMenuOpen')" aria-haspopup="menu" aria-expanded="{{ $statusMenuOpen ? 'true' : 'false' }}" title="Cambiar estado">
+                        <button type="button" class="ui-btn ui-btn--secondary" wire:click="$toggle('statusMenuOpen')" aria-haspopup="menu" aria-expanded="{{ $statusMenuOpen ? 'true' : 'false' }}" title="{{ __('Cambiar estado') }}">
                             <x-ui.lead-status :status="$lead->status" />
                             <x-ui.icon name="chevron-down" />
                         </button>
@@ -78,13 +78,13 @@
                     <x-ui.button icon="calendar" :href="route('crm.agenda.create', ['lead' => $lead->id])">{{ __('Programar actividad') }}</x-ui.button>
                 @endcan
                 @if ($canAct)
-                    <x-ui.button icon="arrow-right-left" href="#transfer">Transferir</x-ui.button>
+                    <x-ui.button icon="arrow-right-left" href="#transfer">{{ __('Transferir') }}</x-ui.button>
                 @else
-                    <x-ui.badge tone="neutral" icon="eye">solo lectura</x-ui.badge>
+                    <x-ui.badge tone="neutral" icon="eye">{{ __('solo lectura') }}</x-ui.badge>
                 @endif
-                <x-ui.button icon="download" wire:click="exportOne">Exportar</x-ui.button>
+                <x-ui.button icon="download" wire:click="exportOne">{{ __('Exportar') }}</x-ui.button>
                 @if ($canEmail)
-                    <x-ui.button variant="primary" icon="mail" wire:click="openCompose">Enviar correo</x-ui.button>
+                    <x-ui.button variant="primary" icon="mail" wire:click="openCompose">{{ __('Enviar correo') }}</x-ui.button>
                 @endif
             </div>
         </header>
@@ -92,7 +92,7 @@
         @if ($incompany)
             <div class="ui-callout ui-tone--gold">
                 <x-ui.icon name="briefcase" />
-                <span><b>Lead de formulario · Recomendador InCompany.</b> No tuvo conversación de chat; su diagnóstico está en el Perfil InCompany.</span>
+                <span><b>{{ __('Lead de formulario · Recomendador InCompany.') }}</b> {{ __('No tuvo conversación de chat; su diagnóstico está en el Perfil InCompany.') }}</span>
             </div>
         @endif
 
@@ -102,37 +102,37 @@
                 @if ($incompany)
                     <section class="ui-card" aria-labelledby="h-incompany">
                         <div class="ui-card-h">
-                            <x-ui.icon name="briefcase" class="ui-card-ic" /><h2 id="h-incompany">Perfil InCompany</h2><span class="sp"></span>
-                            <x-ui.badge tone="gold">EMPRESA</x-ui.badge>
+                            <x-ui.icon name="briefcase" class="ui-card-ic" /><h2 id="h-incompany">{{ __('Perfil InCompany') }}</h2><span class="sp"></span>
+                            <x-ui.badge tone="gold">{{ __('EMPRESA') }}</x-ui.badge>
                         </div>
                         <div class="ui-card-p">
                             <div class="ui-person-line">
                                 @if ($incHot)
-                                    <x-ui.badge tone="danger" icon="alert-triangle">Solicitó contacto</x-ui.badge>
+                                    <x-ui.badge tone="danger" icon="alert-triangle">{{ __('Solicitó contacto') }}</x-ui.badge>
                                 @else
-                                    <x-ui.badge tone="blue" icon="sparkles">Diagnóstico</x-ui.badge>
+                                    <x-ui.badge tone="blue" icon="sparkles">{{ __('Diagnóstico') }}</x-ui.badge>
                                 @endif
                                 @if ($incompany->diagnostico_at)
-                                    <span class="ui-list-meta">Vio su diagnóstico: {{ $incompany->diagnostico_at->translatedFormat('d M Y · H:i') }}</span>
+                                    <span class="ui-list-meta">{{ __('Vio su diagnóstico:') }} {{ $incompany->diagnostico_at->translatedFormat('d M Y · H:i') }}</span>
                                 @endif
                                 @if ($incompany->solicita_contacto_at)
-                                    <span class="ui-list-meta ui-text-danger">Pidió contacto: {{ $incompany->solicita_contacto_at->translatedFormat('d M Y · H:i') }}</span>
+                                    <span class="ui-list-meta ui-text-danger">{{ __('Pidió contacto:') }} {{ $incompany->solicita_contacto_at->translatedFormat('d M Y · H:i') }}</span>
                                 @endif
                             </div>
                             <dl class="ui-meta ui-meta--spaced">
-                                <dt>Empresa</dt><dd class="ui-strong">{{ $incompany->nombre_empresa }}</dd>
-                                <dt>Contacto</dt><dd>{{ $incompany->nombre_contacto }}</dd>
-                                <dt>Sector</dt><dd>@if ($incompany->sector){{ $incompany->sector }}@else<span class="t-nil">—</span>@endif</dd>
-                                <dt>Tamaño</dt><dd>@if ($incompany->tamano_empresa){{ $incompany->tamano_empresa }}@else<span class="t-nil">—</span>@endif</dd>
-                                <dt>Modalidad</dt><dd>{{ $modalidadLabel }} · {{ $incompany->cantidad_personas }} {{ $incompany->cantidad_personas === 1 ? 'persona' : 'personas' }}</dd>
-                                <dt>Área a desarrollar</dt><dd>@if ($incompany->area_desarrollo){{ $incompany->area_desarrollo }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>{{ __('Empresa') }}</dt><dd class="ui-strong">{{ $incompany->nombre_empresa }}</dd>
+                                <dt>{{ __('Contacto') }}</dt><dd>{{ $incompany->nombre_contacto }}</dd>
+                                <dt>{{ __('Sector') }}</dt><dd>@if ($incompany->sector){{ $incompany->sector }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>{{ __('Tamaño') }}</dt><dd>@if ($incompany->tamano_empresa){{ $incompany->tamano_empresa }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>{{ __('Modalidad') }}</dt><dd>{{ $modalidadLabel }} · {{ $incompany->cantidad_personas }} {{ $incompany->cantidad_personas === 1 ? __('persona') : __('personas') }}</dd>
+                                <dt>{{ __('Área a desarrollar') }}</dt><dd>@if ($incompany->area_desarrollo){{ $incompany->area_desarrollo }}@else<span class="t-nil">—</span>@endif</dd>
                             </dl>
                         </div>
                     </section>
 
                     {{-- Ruta formativa propuesta (nombre enlazado al catálogo, sin precio) --}}
                     <section class="ui-card" aria-labelledby="h-ruta">
-                        <div class="ui-card-h"><x-ui.icon name="book-open" class="ui-card-ic" /><h2 id="h-ruta">Ruta formativa propuesta</h2></div>
+                        <div class="ui-card-h"><x-ui.icon name="book-open" class="ui-card-ic" /><h2 id="h-ruta">{{ __('Ruta formativa propuesta') }}</h2></div>
                         <ol class="ui-list">
                             @forelse ($ruta as $r)
                                 <li wire:key="ic-prog-{{ $r['position'] }}">
@@ -150,41 +150,41 @@
                                                 <span class="ui-list-meta ui-mono">{{ $r['program']->course_idnumber ?: $r['code'] }}</span>
                                             @else
                                                 <span class="ui-list-title ui-mono">{{ $r['code'] }}</span>
-                                                <span class="ui-list-meta">Código recibido</span>
+                                                <span class="ui-list-meta">{{ __('Código recibido') }}</span>
                                             @endif
                                         </div>
                                         <div class="ui-list-aside">
                                             @if ($r['linked'])
-                                                <x-ui.badge tone="success" icon="check">En catálogo</x-ui.badge>
+                                                <x-ui.badge tone="success" icon="check">{{ __('En catálogo') }}</x-ui.badge>
                                             @else
-                                                <x-ui.badge tone="danger" icon="alert-triangle">Sin enlazar</x-ui.badge>
+                                                <x-ui.badge tone="danger" icon="alert-triangle">{{ __('Sin enlazar') }}</x-ui.badge>
                                             @endif
                                         </div>
                                     </div>
                                 </li>
                             @empty
-                                <li class="ui-list-empty">Sin programas indicados.</li>
+                                <li class="ui-list-empty">{{ __('Sin programas indicados.') }}</li>
                             @endforelse
                         </ol>
-                        <p class="ui-card-note">Los nombres se enlazan al catálogo por su código. Sin precio: para InCompany se negocia por propuesta.</p>
+                        <p class="ui-card-note">{{ __('Los nombres se enlazan al catálogo por su código. Sin precio: para InCompany se negocia por propuesta.') }}</p>
                     </section>
                 @endif
 
                 {{-- Navegación por secciones del historial (anclas: nada queda oculto) --}}
-                <nav class="ui-subnav" aria-label="Secciones de la ficha">
+                <nav class="ui-subnav" aria-label="{{ __('Secciones de la ficha') }}">
                     @unless ($incompany)
-                        <a href="#conversation"><x-ui.icon name="message-circle" /> Conversación <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $messages->count() }}</span></a>
+                        <a href="#conversation"><x-ui.icon name="message-circle" /> {{ __('Conversación') }} <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $messages->count() }}</span></a>
                     @endunless
-                    <a href="#email"><x-ui.icon name="mail" /> Correo <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $emails->count() }}</span></a>
-                    <a href="#notes"><x-ui.icon name="sticky-note" /> Notas <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $notesList->count() }}</span></a>
-                    <a href="#events"><x-ui.icon name="clock" /> Eventos <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $events->count() }}</span></a>
-                    <a href="#enrollment"><x-ui.icon name="graduation-cap" /> Matrícula</a>
+                    <a href="#email"><x-ui.icon name="mail" /> {{ __('Correo') }} <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $emails->count() }}</span></a>
+                    <a href="#notes"><x-ui.icon name="sticky-note" /> {{ __('Notas') }} <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $notesList->count() }}</span></a>
+                    <a href="#events"><x-ui.icon name="clock" /> {{ __('Eventos') }} <span class="ui-badge ui-badge--count ui-tone--neutral">{{ $events->count() }}</span></a>
+                    <a href="#enrollment"><x-ui.icon name="graduation-cap" /> {{ __('Matrícula') }}</a>
                 </nav>
 
                 @unless ($incompany)
                     {{-- Conversación (solo si de verdad hubo mensajes; si no, una nota compacta) --}}
                     <section class="ui-card" id="conversation" aria-labelledby="h-conv">
-                        <div class="ui-card-h"><x-ui.icon name="message-circle" class="ui-card-ic" /><h2 id="h-conv">Conversación</h2>
+                        <div class="ui-card-h"><x-ui.icon name="message-circle" class="ui-card-ic" /><h2 id="h-conv">{{ __('Conversación') }}</h2>
                             @if ($messages->isNotEmpty())<span class="ui-badge ui-badge--count ui-tone--neutral">{{ $messages->count() }}</span>@endif
                         </div>
                         @if ($messages->isNotEmpty())
@@ -192,7 +192,7 @@
                                 @foreach ($messages as $msg)
                                     @php
                                         $isUser = $msg->sender_type === 'user';
-                                        $label = $isUser ? ($first ?: 'Prospecto') : ($msg->sender_type === 'celia' ? ($lead->bot->assistant_name ?? 'Celia') : 'MCA School');
+                                        $label = $isUser ? ($first ?: __('Prospecto')) : ($msg->sender_type === 'celia' ? ($lead->bot->assistant_name ?? 'Celia') : 'MCA School');
                                         $html = e($msg->content);
                                         $html = preg_replace('~(https?://[^\s<]+)~u', '<a href="$1" target="_blank" rel="noopener">$1</a>', $html);
                                     @endphp
@@ -204,7 +204,7 @@
                             </div>
                         @else
                             <div class="ui-card-p">
-                                <div class="ui-callout"><x-ui.icon name="message-circle" /><span>Este lead no tiene conversación registrada.</span></div>
+                                <div class="ui-callout"><x-ui.icon name="message-circle" /><span>{{ __('Este lead no tiene conversación registrada.') }}</span></div>
                             </div>
                         @endif
                     </section>
@@ -213,12 +213,12 @@
                 {{-- Correo: enviar + historial --}}
                 <section class="ui-card" id="email" aria-labelledby="h-email">
                     <div class="ui-card-h">
-                        <x-ui.icon name="mail" class="ui-card-ic" /><h2 id="h-email">Correo</h2><span class="sp"></span>
+                        <x-ui.icon name="mail" class="ui-card-ic" /><h2 id="h-email">{{ __('Correo') }}</h2><span class="sp"></span>
                         @if ($canEmail)
-                            <x-ui.button size="sm" icon="mail" wire:click="openCompose">Enviar correo a {{ $first ?: 'este contacto' }}</x-ui.button>
+                            <x-ui.button size="sm" icon="mail" wire:click="openCompose">{{ __('Enviar correo a :name', ['name' => $first ?: __('este contacto')]) }}</x-ui.button>
                         @endif
                     </div>
-                    <p class="ui-card-kicker">Correos enviados</p>
+                    <p class="ui-card-kicker">{{ __('Correos enviados') }}</p>
                     <ul class="ui-list">
                         @forelse ($emails as $em)
                             <li wire:key="email-{{ $em->id }}">
@@ -226,55 +226,55 @@
                                     <span class="ui-tl-ic ui-tone--blue"><x-ui.icon name="mail" /></span>
                                     <span class="ui-list-main">
                                         <span class="ui-list-title">{{ $em->subject }}
-                                            @if ($em->status !== 'sent') <x-ui.badge tone="danger">falló</x-ui.badge>@endif
+                                            @if ($em->status !== 'sent') <x-ui.badge tone="danger">{{ __('falló') }}</x-ui.badge>@endif
                                         </span>
                                         <span class="ui-list-meta">
-                                            Como <b>{{ $em->from_name ?: $em->from_address }}</b>
+                                            {{ __('Como') }} <b>{{ $em->from_name ?: $em->from_address }}</b>
                                             · {{ ($em->sent_at ?? $em->created_at)?->translatedFormat('d M Y · H:i') }}
-                                            · por {{ $em->sentByUser?->name ?? 'Equipo' }}
-                                            @if ($em->files_count) · {{ $em->files_count }} adjunto(s)@endif
+                                            · {{ __('por :name', ['name' => $em->sentByUser?->name ?? __('Equipo')]) }}
+                                            @if ($em->files_count) · {{ $em->files_count }} {{ __('adjunto(s)') }}@endif
                                         </span>
                                     </span>
-                                    <span class="ui-list-aside ui-link">Abrir ›</span>
+                                    <span class="ui-list-aside ui-link">{{ __('Abrir') }} ›</span>
                                 </button>
                             </li>
                         @empty
-                            <li class="ui-list-empty">Aún no se han enviado correos.</li>
+                            <li class="ui-list-empty">{{ __('Aún no se han enviado correos.') }}</li>
                         @endforelse
                     </ul>
                 </section>
 
                 {{-- Notas internas --}}
                 <section class="ui-card" id="notes" aria-labelledby="h-notes">
-                    <div class="ui-card-h"><x-ui.icon name="sticky-note" class="ui-card-ic" /><h2 id="h-notes">Notas internas</h2>
+                    <div class="ui-card-h"><x-ui.icon name="sticky-note" class="ui-card-ic" /><h2 id="h-notes">{{ __('Notas internas') }}</h2>
                         @if ($notesList->isNotEmpty())<span class="ui-badge ui-badge--count ui-tone--neutral">{{ $notesList->count() }}</span>@endif
                     </div>
                     <ul class="ui-list">
                         @forelse ($notesList as $note)
                             <li wire:key="note-{{ $note->id }}">
                                 <div class="ui-list-item">
-                                    <x-ui.avatar :name="$note->author_name ?: 'Equipo'" :seed="$note->author_name ?: 'Equipo'" />
+                                    <x-ui.avatar :name="$note->author_name ?: __('Equipo')" :seed="$note->author_name ?: 'Equipo'" />
                                     <div class="ui-list-main">
                                         <span class="ui-note-body">{{ $note->body }}</span>
-                                        <span class="ui-list-meta">— {{ $note->author_name ?: 'Equipo' }} · {{ $note->created_at?->translatedFormat('d M') }}</span>
+                                        <span class="ui-list-meta">— {{ $note->author_name ?: __('Equipo') }} · {{ $note->created_at?->translatedFormat('d M') }}</span>
                                     </div>
                                 </div>
                             </li>
                         @empty
-                            <li class="ui-list-empty">Aún no hay notas.</li>
+                            <li class="ui-list-empty">{{ __('Aún no hay notas.') }}</li>
                         @endforelse
                     </ul>
                     @if ($canAct)
                         <div class="ui-inline-form">
-                            <input type="text" class="ui-input" wire:model="newNote" wire:keydown.enter="addNote" placeholder="Añadir una nota…" aria-label="Añadir una nota">
-                            <x-ui.button variant="primary" icon="plus" wire:click="addNote" aria-label="Guardar nota" />
+                            <input type="text" class="ui-input" wire:model="newNote" wire:keydown.enter="addNote" placeholder="{{ __('Añadir una nota…') }}" aria-label="{{ __('Añadir una nota') }}">
+                            <x-ui.button variant="primary" icon="plus" wire:click="addNote" :aria-label="__('Guardar nota')" />
                         </div>
                     @endif
                 </section>
 
                 {{-- Eventos --}}
                 <section class="ui-card" id="events" aria-labelledby="h-events">
-                    <div class="ui-card-h"><x-ui.icon name="clock" class="ui-card-ic" /><h2 id="h-events">Eventos</h2>
+                    <div class="ui-card-h"><x-ui.icon name="clock" class="ui-card-ic" /><h2 id="h-events">{{ __('Eventos') }}</h2>
                         @if ($events->isNotEmpty())<span class="ui-badge ui-badge--count ui-tone--neutral">{{ $events->count() }}</span>@endif
                     </div>
                     @if ($events->isNotEmpty())
@@ -291,20 +291,20 @@
                             @endforeach
                         </ol>
                     @else
-                        <p class="ui-list-empty">Sin eventos registrados.</p>
+                        <p class="ui-list-empty">{{ __('Sin eventos registrados.') }}</p>
                     @endif
                 </section>
 
                 {{-- Matrícula · Moodle (dormido) --}}
                 <section class="ui-card" id="enrollment" aria-labelledby="h-moodle">
-                    <div class="ui-card-h"><x-ui.icon name="graduation-cap" class="ui-card-ic" /><h2 id="h-moodle">Matrícula · Moodle</h2><span class="sp"></span>
-                        <x-ui.badge tone="neutral">Se activa con integración Moodle</x-ui.badge>
+                    <div class="ui-card-h"><x-ui.icon name="graduation-cap" class="ui-card-ic" /><h2 id="h-moodle">{{ __('Matrícula · Moodle') }}</h2><span class="sp"></span>
+                        <x-ui.badge tone="neutral">{{ __('Se activa con integración Moodle') }}</x-ui.badge>
                     </div>
                     <div class="ui-card-p">
                         <dl class="ui-meta ui-meta--muted">
                             <dt>Course ID</dt><dd>—</dd>
                             <dt>Moodle User</dt><dd>—</dd>
-                            <dt>Culminación</dt><dd>—</dd>
+                            <dt>{{ __('Culminación') }}</dt><dd>—</dd>
                         </dl>
                     </div>
                 </section>
@@ -313,30 +313,30 @@
             {{-- LATERAL · datos del contacto, resultado del emparejador y seguimiento --}}
             <aside class="ui-record-side">
                 <section class="ui-card" aria-labelledby="h-personal">
-                    <div class="ui-card-h"><x-ui.icon name="user" class="ui-card-ic" /><h2 id="h-personal">Datos personales</h2></div>
+                    <div class="ui-card-h"><x-ui.icon name="user" class="ui-card-ic" /><h2 id="h-personal">{{ __('Datos personales') }}</h2></div>
                     <div class="ui-card-p">
                         <dl class="ui-meta ui-meta--spaced">
-                            <dt>Nombre</dt><dd class="ui-strong">{{ $fullName }}</dd>
-                            <dt>Correo</dt><dd>{!! str_replace('@', '@<wbr>', e($c->email ?? '—')) !!}</dd>
+                            <dt>{{ __('Nombre') }}</dt><dd class="ui-strong">{{ $fullName }}</dd>
+                            <dt>{{ __('Correo') }}</dt><dd>{!! str_replace('@', '@<wbr>', e($c->email ?? '—')) !!}</dd>
                             <dt>WhatsApp</dt><dd>@if ($phoneDisplay){{ $phoneDisplay }}@else<span class="t-nil">—</span>@endif</dd>
-                            <dt>País</dt><dd>@if ($c->country){{ $c->country }}@else<span class="t-nil">—</span>@endif</dd>
+                            <dt>{{ __('País') }}</dt><dd>@if ($c->country){{ $c->country }}@else<span class="t-nil">—</span>@endif</dd>
                         </dl>
-                        <div class="ui-callout ui-callout--sm"><x-ui.icon name="lock" /><span>Acceso a datos personales registrado en auditoría.</span></div>
+                        <div class="ui-callout ui-callout--sm"><x-ui.icon name="lock" /><span>{{ __('Acceso a datos personales registrado en auditoría.') }}</span></div>
                     </div>
                 </section>
 
                 @unless ($incompany)
                     <section class="ui-card" aria-labelledby="h-matcher">
-                        <div class="ui-card-h"><x-ui.icon name="sparkles" class="ui-card-ic" /><h2 id="h-matcher">Resultado del emparejador</h2></div>
+                        <div class="ui-card-h"><x-ui.icon name="sparkles" class="ui-card-ic" /><h2 id="h-matcher">{{ __('Resultado del emparejador') }}</h2></div>
                         <div class="ui-card-p">
                             <dl class="ui-meta ui-meta--spaced">
-                                <dt>Motivación</dt><dd>@if ($motivacion){{ $motivacion }}@else<span class="t-nil">—</span>@endif</dd>
-                                <dt>Meta</dt><dd>@if ($lead->goal){{ $lead->goal }}@else<span class="t-nil">—</span>@endif</dd>
-                                <dt>Área</dt><dd>@if ($lead->area){{ $lead->area }}@else<span class="t-nil">—</span>@endif</dd>
-                                <dt>Momento</dt><dd>@if ($lead->level){{ $lead->level }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>{{ __('Motivación') }}</dt><dd>@if ($motivacion){{ $motivacion }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>{{ __('Meta') }}</dt><dd>@if ($lead->goal){{ $lead->goal }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>{{ __('Área') }}</dt><dd>@if ($lead->area){{ $lead->area }}@else<span class="t-nil">—</span>@endif</dd>
+                                <dt>{{ __('Momento') }}</dt><dd>@if ($lead->level){{ $lead->level }}@else<span class="t-nil">—</span>@endif</dd>
                             </dl>
                             @if ($lead->program)
-                                <div class="ui-callout ui-callout--sm ui-tone--success"><x-ui.icon name="graduation-cap" /><span>Recomendado: <b>{{ $lead->program->name_es }}</b></span></div>
+                                <div class="ui-callout ui-callout--sm ui-tone--success"><x-ui.icon name="graduation-cap" /><span>{{ __('Recomendado:') }} <b>{{ $lead->program->name_es }}</b></span></div>
                             @endif
                         </div>
                     </section>
@@ -344,18 +344,18 @@
 
                 {{-- Transferir seguimiento --}}
                 <section class="ui-card" id="transfer" aria-labelledby="h-transfer">
-                    <div class="ui-card-h"><x-ui.icon name="arrow-right-left" class="ui-card-ic" /><h2 id="h-transfer">Transferir seguimiento</h2></div>
+                    <div class="ui-card-h"><x-ui.icon name="arrow-right-left" class="ui-card-ic" /><h2 id="h-transfer">{{ __('Transferir seguimiento') }}</h2></div>
                     <div class="ui-card-p">
                         @if ($canAct)
-                            <x-ui.field label="Transferir a" for="lead-transfer">
-                                <select id="lead-transfer" class="ui-select" wire:model="transferTarget" wire:change="transfer" aria-label="Transferir seguimiento a">
+                            <x-ui.field :label="__('Transferir a')" for="lead-transfer">
+                                <select id="lead-transfer" class="ui-select" wire:model="transferTarget" wire:change="transfer" aria-label="{{ __('Transferir seguimiento a') }}">
                                     @foreach ($transferOptions as $value => $optLabel)
                                         <option value="{{ $value }}">{{ $optLabel }}</option>
                                     @endforeach
                                 </select>
                             </x-ui.field>
                         @else
-                            <dl class="ui-meta"><dt>Transferir a</dt><dd class="ui-strong">{{ $transferOptions[$transferTarget] ?? '—' }}</dd></dl>
+                            <dl class="ui-meta"><dt>{{ __('Transferir a') }}</dt><dd class="ui-strong">{{ $transferOptions[$transferTarget] ?? '—' }}</dd></dl>
                         @endif
                     </div>
                 </section>
@@ -556,7 +556,7 @@
                 <div class="ui-modal-h">
                     <div>
                         <h2 class="ui-modal-title" id="sent-title">{{ $viewingEmail->subject }}
-                            @if ($viewingEmail->status !== 'sent') <x-ui.badge tone="danger">falló</x-ui.badge>@endif
+                            @if ($viewingEmail->status !== 'sent') <x-ui.badge tone="danger">{{ __('falló') }}</x-ui.badge>@endif
                         </h2>
                         <p class="ui-modal-sub">
                             <b>{{ $viewingEmail->from_name ?: $viewingEmail->from_address }}</b> &lt;{{ $viewingEmail->from_address }}&gt;
@@ -564,11 +564,11 @@
                         </p>
                         <p class="ui-modal-sub">
                             {{ ($viewingEmail->sent_at ?? $viewingEmail->created_at)?->translatedFormat('d M Y · H:i') }}
-                            · por {{ $viewingEmail->sentByUser?->name ?? 'Equipo' }}
-                            · {{ $viewingEmail->status === 'sent' ? 'Enviado' : 'Falló' }}
+                            · {{ __('por :name', ['name' => $viewingEmail->sentByUser?->name ?? __('Equipo')]) }}
+                            · {{ $viewingEmail->status === 'sent' ? __('Enviado') : __('Falló') }}
                         </p>
                     </div>
-                    <x-ui.button variant="ghost" icon="x" wire:click="closeSentEmail" aria-label="Cerrar" />
+                    <x-ui.button variant="ghost" icon="x" wire:click="closeSentEmail" :aria-label="__('Cerrar')" />
                 </div>
 
                 {{-- Cuerpo tal como se envió (formato + imágenes inline resueltas) --}}
@@ -577,14 +577,14 @@
 
                     @if ($viewingEmail->files->isNotEmpty())
                         <div class="ui-field">
-                            <span class="ui-label">Adjuntos</span>
+                            <span class="ui-label">{{ __('Adjuntos') }}</span>
                             <ul class="ui-list ui-list--boxed">
                                 @foreach ($viewingEmail->files as $file)
                                     <li>
                                         <button type="button" class="ui-list-item" wire:click="downloadAttachment({{ $file->id }})">
                                             <x-ui.icon name="file-text" class="ui-card-ic" />
                                             <span class="ui-list-main"><span class="ui-list-title">{{ $file->filename }}</span><span class="ui-list-meta">{{ number_format($file->size / 1024) }} KB</span></span>
-                                            <span class="ui-list-aside ui-link"><x-ui.icon name="download" /> Descargar</span>
+                                            <span class="ui-list-aside ui-link"><x-ui.icon name="download" /> {{ __('Descargar') }}</span>
                                         </button>
                                     </li>
                                 @endforeach
@@ -594,7 +594,7 @@
                 </div>
 
                 <div class="ui-modal-f">
-                    <x-ui.button wire:click="closeSentEmail">Cerrar</x-ui.button>
+                    <x-ui.button wire:click="closeSentEmail">{{ __('Cerrar') }}</x-ui.button>
                 </div>
             </div>
         </div>

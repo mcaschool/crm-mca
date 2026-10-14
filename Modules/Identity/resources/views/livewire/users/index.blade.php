@@ -2,7 +2,7 @@
     <x-ui.page-header :title="__('Usuarios')" :count="$users->count()" :subtitle="__('Personas con acceso al panel, su rol y su estado.')">
         @if ($canManage)
             <x-slot:actions>
-                <x-ui.button variant="primary" icon="plus" :href="route('users.create')">Crear usuario</x-ui.button>
+                <x-ui.button variant="primary" icon="plus" :href="route('users.create')">{{ __('Crear usuario') }}</x-ui.button>
             </x-slot:actions>
         @endif
     </x-ui.page-header>
@@ -16,17 +16,17 @@
             <x-ui.search wire:model.live.debounce.300ms="search" :placeholder="__('Nombre o correo').'…'" :aria-label="__('Buscar por nombre o correo')" />
 
             <x-ui.filters :active="collect([$department, $status])->filter(fn ($v) => $v !== '')->count()">
-                <x-ui.select filter :active="$department !== ''" wire:model.live="department" aria-label="Filtrar por departamento">
-                    <option value="">Departamento · todos</option>
+                <x-ui.select filter :active="$department !== ''" wire:model.live="department" :aria-label="__('Filtrar por departamento')">
+                    <option value="">{{ __('Departamento · todos') }}</option>
                     @foreach ($departments as $dep)
                         <option value="{{ $dep }}">{{ $dep }}</option>
                     @endforeach
                 </x-ui.select>
 
-                <x-ui.select filter :active="$status !== ''" wire:model.live="status" aria-label="Filtrar por estado">
-                    <option value="">Estado · todos</option>
-                    <option value="active">Activo</option>
-                    <option value="inactive">Inactivo</option>
+                <x-ui.select filter :active="$status !== ''" wire:model.live="status" :aria-label="__('Filtrar por estado')">
+                    <option value="">{{ __('Estado · todos') }}</option>
+                    <option value="active">{{ __('Activo') }}</option>
+                    <option value="inactive">{{ __('Inactivo') }}</option>
                 </x-ui.select>
             </x-ui.filters>
         </div>
@@ -35,8 +35,8 @@
         <table class="ui-table">
             <thead>
                 <tr>
-                    <th class="rt-sticky">Usuario</th><th>Estado</th><th>Rol</th><th>Departamento</th>
-                    <th><span class="ui-sr">Acciones</span></th>
+                    <th class="rt-sticky">{{ __('Usuario') }}</th><th>{{ __('Estado') }}</th><th>{{ __('Rol') }}</th><th>{{ __('Departamento') }}</th>
+                    <th><span class="ui-sr">{{ __('Acciones') }}</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -49,17 +49,17 @@
                                 <div class="ui-person-text">
                                     <div class="ui-person-line">
                                         <span class="ui-person-name">{{ $u->name }}</span>
-                                        @if ($u->id === auth()->id())<x-ui.badge tone="blue">Tú</x-ui.badge>@endif
+                                        @if ($u->id === auth()->id())<x-ui.badge tone="blue">{{ __('Tú') }}</x-ui.badge>@endif
                                     </div>
                                     <span class="ui-person-mail">{!! str_replace('@', '@<wbr>', e($u->email)) !!}</span>
                                 </div>
                             </div>
                         </td>
-                        <td class="rt-aside" data-label="Estado">
-                            <x-ui.badge :tone="$active ? 'success' : 'neutral'" dot>{{ $active ? 'Activo' : 'Inactivo' }}</x-ui.badge>
+                        <td class="rt-aside" data-label="{{ __('Estado') }}">
+                            <x-ui.badge :tone="$active ? 'success' : 'neutral'" dot>{{ $active ? __('Activo') : __('Inactivo') }}</x-ui.badge>
                         </td>
-                        <td data-label="Rol">{{ $u->role->label() }}</td>
-                        <td data-label="Departamento">
+                        <td data-label="{{ __('Rol') }}">{{ __($u->role->label()) }}</td>
+                        <td data-label="{{ __('Departamento') }}">
                             @if ($u->department)
                                 <span class="t-2">{{ $u->department }}</span>
                             @else
@@ -69,10 +69,10 @@
                         <td @class(['rt-actions' => $canManage])>
                             @if ($canManage)
                                 <div class="t-actions">
-                                    <x-ui.button size="sm" icon="pencil" :href="route('users.edit', $u->id)">Editar</x-ui.button>
+                                    <x-ui.button size="sm" icon="pencil" :href="route('users.edit', $u->id)">{{ __('Editar') }}</x-ui.button>
                                     @if ($u->id !== auth()->id())
                                         <x-ui.button size="sm" icon="power" wire:click="toggleActive({{ $u->id }})"
-                                            title="{{ $active ? 'Desactivar' : 'Activar' }}" aria-label="{{ ($active ? 'Desactivar' : 'Activar').' '.$u->name }}" />
+                                            title="{{ $active ? __('Desactivar') : __('Activar') }}" aria-label="{{ ($active ? __('Desactivar') : __('Activar')).' '.$u->name }}" />
                                     @else
                                         <span class="t-gap" aria-hidden="true"></span>
                                     @endif
@@ -85,8 +85,8 @@
                         <td colspan="5" class="rt-empty">
                             <div class="ui-empty">
                                 <div class="ui-empty-ic"><x-ui.icon name="users" /></div>
-                                <b>Sin usuarios que coincidan.</b>
-                                Prueba con otra búsqueda o quita algún filtro.
+                                <b>{{ __('Sin usuarios que coincidan.') }}</b>
+                                {{ __('Prueba con otra búsqueda o quita algún filtro.') }}
                             </div>
                         </td>
                     </tr>

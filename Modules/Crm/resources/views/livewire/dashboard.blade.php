@@ -7,8 +7,8 @@
         $firstName = Str::of($name)->explode(' ')->first() ?: $name;
 
         $personaLabel = match ($persona) {
-            'admin' => 'Administrador', 'admisiones' => 'Admisiones', 'academico' => 'Académico',
-            'marketing' => 'Marketing', 'soporte' => 'Soporte', default => 'Panel',
+            'admin' => __('Administrador'), 'admisiones' => __('Admisiones'), 'academico' => __('Académico'),
+            'marketing' => __('Marketing'), 'soporte' => __('Soporte'), default => __('Panel'),
         };
         $leadName = fn ($lead) => trim(($lead->contact->first_name ?? '').' '.($lead->contact->last_name ?? '')) ?: '—';
         $newLeadMeta = fn ($lead) => implode(' · ', array_filter([$lead->goal, $lead->area, $lead->created_at?->diffForHumans()])) ?: '—';
@@ -16,22 +16,22 @@
     @endphp
 
     <div class="mca-home mca-page">
-        <x-ui.page-header :title="'Hola, '.$firstName" :subtitle="Str::ucfirst(now()->translatedFormat('l j \d\e F')).' · '.__('Resumen de tu actividad')">
+        <x-ui.page-header :title="__('Hola, :name', ['name' => $firstName])" :subtitle="Str::ucfirst(now()->translatedFormat(__('l j \d\e F'))).' · '.__('Resumen de tu actividad')">
             <x-slot:badge><x-ui.badge :tone="$readOnly ? 'neutral' : 'blue'">{{ $personaLabel }}</x-ui.badge></x-slot:badge>
             <x-slot:actions>
                 @if ($canCreate)
-                    <x-ui.button icon="plus" :href="route('crm.leads.create')">Nuevo lead</x-ui.button>
+                    <x-ui.button icon="plus" :href="route('crm.leads.create')">{{ __('Nuevo lead') }}</x-ui.button>
                 @endif
                 @switch($persona)
                     @case('academico')
                     @case('soporte')
-                        <x-ui.button variant="primary" icon="inbox" :href="route('crm.leads.index', ['mine' => 1])">Mis referidos</x-ui.button>
+                        <x-ui.button variant="primary" icon="inbox" :href="route('crm.leads.index', ['mine' => 1])">{{ __('Mis referidos') }}</x-ui.button>
                         @break
                     @case('marketing')
-                        <x-ui.button icon="users" :href="route('crm.leads.index')">Ver e informar</x-ui.button>
+                        <x-ui.button icon="users" :href="route('crm.leads.index')">{{ __('Ver e informar') }}</x-ui.button>
                         @break
                     @default
-                        <x-ui.button variant="primary" icon="users" :href="route('crm.leads.index')">Ver leads</x-ui.button>
+                        <x-ui.button variant="primary" icon="users" :href="route('crm.leads.index')">{{ __('Ver leads') }}</x-ui.button>
                 @endswitch
             </x-slot:actions>
         </x-ui.page-header>
@@ -40,18 +40,18 @@
         <div class="home-kpis">
             @switch($persona)
                 @case('academico')
-                    <x-ui.kpi label="Referidos a ti" :value="$counts['referredToMe']" icon="user-plus" tone="blue" />
-                    <x-ui.kpi label="Pendientes de matricular" :value="$counts['referredPending']" icon="clock" tone="warning" />
-                    <x-ui.kpi label="Matriculados (mes)" :value="$counts['enrolledMonth']" icon="graduation-cap" tone="success" />
-                    <x-ui.kpi label="Conversaciones hoy" :value="$counts['conversationsToday']" icon="message-circle" tone="teal" />
-                    <x-ui.kpi label="Interés corporativo" :value="$counts['corporate']" icon="building-2" tone="gold" :href="$corpUrl" accent title="Ver los leads con interés corporativo" />
+                    <x-ui.kpi :label="__('Referidos a ti')" :value="$counts['referredToMe']" icon="user-plus" tone="blue" />
+                    <x-ui.kpi :label="__('Pendientes de matricular')" :value="$counts['referredPending']" icon="clock" tone="warning" />
+                    <x-ui.kpi :label="__('Matriculados (mes)')" :value="$counts['enrolledMonth']" icon="graduation-cap" tone="success" />
+                    <x-ui.kpi :label="__('Conversaciones hoy')" :value="$counts['conversationsToday']" icon="message-circle" tone="teal" />
+                    <x-ui.kpi :label="__('Interés corporativo')" :value="$counts['corporate']" icon="building-2" tone="gold" :href="$corpUrl" accent :title="__('Ver los leads con interés corporativo')" />
                     @break
                 @case('soporte')
-                    <x-ui.kpi label="Casos referidos" :value="$counts['referredToMe']" icon="inbox" tone="blue" />
-                    <x-ui.kpi label="Pendientes" :value="$counts['referredPending']" icon="clock" tone="warning" />
-                    <x-ui.kpi label="Conversaciones hoy" :value="$counts['conversationsToday']" icon="message-circle" tone="teal" />
-                    <x-ui.kpi label="Matriculados (mes)" :value="$counts['enrolledMonth']" icon="graduation-cap" tone="success" />
-                    <x-ui.kpi label="Interés corporativo" :value="$counts['corporate']" icon="building-2" tone="gold" :href="$corpUrl" accent title="Ver los leads con interés corporativo" />
+                    <x-ui.kpi :label="__('Casos referidos')" :value="$counts['referredToMe']" icon="inbox" tone="blue" />
+                    <x-ui.kpi :label="__('Pendientes')" :value="$counts['referredPending']" icon="clock" tone="warning" />
+                    <x-ui.kpi :label="__('Conversaciones hoy')" :value="$counts['conversationsToday']" icon="message-circle" tone="teal" />
+                    <x-ui.kpi :label="__('Matriculados (mes)')" :value="$counts['enrolledMonth']" icon="graduation-cap" tone="success" />
+                    <x-ui.kpi :label="__('Interés corporativo')" :value="$counts['corporate']" icon="building-2" tone="gold" :href="$corpUrl" accent :title="__('Ver los leads con interés corporativo')" />
                     @break
                 @case('marketing')
                     @php
@@ -59,11 +59,11 @@
                         $deltaConv = $counts['conversationsPrevMonth'] > 0 ? (int) round(($counts['conversationsMonth'] - $counts['conversationsPrevMonth']) / $counts['conversationsPrevMonth'] * 100) : null;
                         $conversion = $counts['leadsMonth'] > 0 ? round($counts['enrolledMonth'] / $counts['leadsMonth'] * 100, 1) : 0;
                     @endphp
-                    <x-ui.kpi label="Leads (mes)" :value="$counts['leadsMonth']" icon="user-plus" tone="blue" :trend="$deltaLeads" />
-                    <x-ui.kpi label="Conversaciones" :value="$counts['conversationsMonth']" icon="message-circle" tone="teal" :trend="$deltaConv" />
-                    <x-ui.kpi label="Matriculados" :value="$counts['enrolledMonth']" icon="graduation-cap" tone="success" />
-                    <x-ui.kpi label="Conversión" :value="$conversion.'%'" icon="percent" tone="warning" />
-                    <x-ui.kpi label="Interés corporativo" :value="$counts['corporate']" icon="building-2" tone="gold" :href="$corpUrl" accent title="Ver los leads con interés corporativo" />
+                    <x-ui.kpi :label="__('Leads (mes)')" :value="$counts['leadsMonth']" icon="user-plus" tone="blue" :trend="$deltaLeads" />
+                    <x-ui.kpi :label="__('Conversaciones')" :value="$counts['conversationsMonth']" icon="message-circle" tone="teal" :trend="$deltaConv" />
+                    <x-ui.kpi :label="__('Matriculados')" :value="$counts['enrolledMonth']" icon="graduation-cap" tone="success" />
+                    <x-ui.kpi :label="__('Conversión')" :value="$conversion.'%'" icon="percent" tone="warning" />
+                    <x-ui.kpi :label="__('Interés corporativo')" :value="$counts['corporate']" icon="building-2" tone="gold" :href="$corpUrl" accent :title="__('Ver los leads con interés corporativo')" />
                     @break
                 @default {{-- admin / admisiones: cada indicador abre su listado filtrado --}}
                     @foreach ([
@@ -76,8 +76,8 @@
                     ] as $k => [$label, $icon, $tone])
                         <x-ui.kpi :label="__($label)" :value="$kpis[$k]['n']" :icon="$icon" :tone="$tone" :href="$kpis[$k]['url']" data-kpi="{{ $k }}" />
                     @endforeach
-                    <x-ui.kpi label="Conversaciones hoy" :value="$counts['conversationsToday']" icon="message-circle" tone="teal" />
-                    <x-ui.kpi label="Interés corporativo" :value="$counts['corporate']" icon="building-2" tone="gold" :href="$corpUrl" accent title="Ver los leads con interés corporativo" />
+                    <x-ui.kpi :label="__('Conversaciones hoy')" :value="$counts['conversationsToday']" icon="message-circle" tone="teal" />
+                    <x-ui.kpi :label="__('Interés corporativo')" :value="$counts['corporate']" icon="building-2" tone="gold" :href="$corpUrl" accent :title="__('Ver los leads con interés corporativo')" />
             @endswitch
         </div>
 
@@ -128,25 +128,25 @@
                     <section class="ui-card">
                         <div class="ui-card-h">
                             <x-ui.icon name="inbox" class="ui-card-ic" />
-                            <h2>{{ $persona === 'soporte' ? 'Mis casos referidos' : 'Mis referidos' }}</h2>
+                            <h2>{{ $persona === 'soporte' ? __('Mis casos referidos') : __('Mis referidos') }}</h2>
                             @if ($counts['referredToMe'] > 0)<x-ui.badge class="ui-badge--count">{{ $counts['referredToMe'] }}</x-ui.badge>@endif
                             <span class="sp"></span>
-                            <a class="ui-link" href="{{ route('crm.leads.index', ['mine' => 1]) }}">Ver todos <x-ui.icon name="chevron-right" /></a>
+                            <a class="ui-link" href="{{ route('crm.leads.index', ['mine' => 1]) }}">{{ __('Ver todos') }} <x-ui.icon name="chevron-right" /></a>
                         </div>
                         <div class="ui-card-b">
                             @forelse ($referrals as $lead)
                                 @php
                                     $rm = $referralMeta[(int) $lead->contact_id] ?? null;
-                                    $metaText = $rm ? 'Transferido por '.$rm['by'].' · '.($rm['at']?->diffForHumans() ?? '') : 'Referido a ti';
+                                    $metaText = $rm ? __('Transferido por :name', ['name' => $rm['by']]).' · '.($rm['at']?->diffForHumans() ?? '') : __('Referido a ti');
                                 @endphp
                                 @include('crm::livewire.partials.home-leadrow', ['lead' => $lead, 'metaText' => $metaText, 'corporate' => $corporate, 'leadName' => $leadName])
                             @empty
-                                <div class="home-empty"><x-ui.icon name="inbox" /> No tienes referidos por ahora.</div>
+                                <div class="home-empty"><x-ui.icon name="inbox" /> {{ __('No tienes referidos por ahora.') }}</div>
                             @endforelse
                         </div>
                     </section>
                     <section class="ui-card">
-                        <div class="ui-card-h"><x-ui.icon name="activity" class="ui-card-ic" /><h2>Actividad reciente</h2></div>
+                        <div class="ui-card-h"><x-ui.icon name="activity" class="ui-card-ic" /><h2>{{ __('Actividad reciente') }}</h2></div>
                         <div class="ui-card-b">@include('crm::livewire.partials.home-activity', ['activity' => $activity])</div>
                     </section>
                 </div>
@@ -155,11 +155,11 @@
             @case('marketing')
                 <div class="home-cols">
                     <section class="ui-card">
-                        <div class="ui-card-h"><x-ui.icon name="bar-chart" class="ui-card-ic" /><h2>Leads por área</h2><span class="sp"></span><x-ui.badge>Este mes</x-ui.badge></div>
-                        <x-ui.chart-bars :rows="$leadsByArea" empty-message="Aún no hay leads por área." />
+                        <div class="ui-card-h"><x-ui.icon name="bar-chart" class="ui-card-ic" /><h2>{{ __('Leads por área') }}</h2><span class="sp"></span><x-ui.badge>{{ __('Este mes') }}</x-ui.badge></div>
+                        <x-ui.chart-bars :rows="$leadsByArea" :empty-message="__('Aún no hay leads por área.')" />
                     </section>
                     <section class="ui-card">
-                        <div class="ui-card-h"><x-ui.icon name="funnel" class="ui-card-ic" /><h2>Embudo de estados</h2></div>
+                        <div class="ui-card-h"><x-ui.icon name="funnel" class="ui-card-ic" /><h2>{{ __('Embudo de estados') }}</h2></div>
                         <x-ui.funnel :segments="$funnel" />
                     </section>
                 </div>
@@ -170,32 +170,32 @@
                     <section class="ui-card">
                         <div class="ui-card-h">
                             <x-ui.icon name="user-plus" class="ui-card-ic" />
-                            <h2>Leads nuevos sin contactar</h2>
+                            <h2>{{ __('Leads nuevos sin contactar') }}</h2>
                             @if ($counts['new'] > 0)<x-ui.badge class="ui-badge--count">{{ $counts['new'] }}</x-ui.badge>@endif
                             <span class="sp"></span>
-                            <a class="ui-link" href="{{ $kpis['new']['url'] }}">Ver todos <x-ui.icon name="chevron-right" /></a>
+                            <a class="ui-link" href="{{ $kpis['new']['url'] }}">{{ __('Ver todos') }} <x-ui.icon name="chevron-right" /></a>
                         </div>
                         <div class="ui-card-b">
                             @forelse ($newLeads as $lead)
                                 @include('crm::livewire.partials.home-leadrow', ['lead' => $lead, 'metaText' => $newLeadMeta($lead), 'corporate' => $corporate, 'leadName' => $leadName])
                             @empty
-                                <div class="home-empty"><x-ui.icon name="check" /> No hay leads nuevos sin contactar.</div>
+                                <div class="home-empty"><x-ui.icon name="check" /> {{ __('No hay leads nuevos sin contactar.') }}</div>
                             @endforelse
                         </div>
                     </section>
                     <section class="ui-card">
-                        <div class="ui-card-h"><x-ui.icon name="activity" class="ui-card-ic" /><h2>Actividad reciente</h2></div>
+                        <div class="ui-card-h"><x-ui.icon name="activity" class="ui-card-ic" /><h2>{{ __('Actividad reciente') }}</h2></div>
                         <div class="ui-card-b">@include('crm::livewire.partials.home-activity', ['activity' => $activity])</div>
                     </section>
                 </div>
 
                 <div class="home-cols">
                     <section class="ui-card">
-                        <div class="ui-card-h"><x-ui.icon name="bar-chart" class="ui-card-ic" /><h2>Leads por área</h2><span class="sp"></span><x-ui.badge>Total</x-ui.badge></div>
-                        <x-ui.chart-bars :rows="$leadsByArea" empty-message="Aún no hay leads por área." />
+                        <div class="ui-card-h"><x-ui.icon name="bar-chart" class="ui-card-ic" /><h2>{{ __('Leads por área') }}</h2><span class="sp"></span><x-ui.badge>{{ __('Total') }}</x-ui.badge></div>
+                        <x-ui.chart-bars :rows="$leadsByArea" :empty-message="__('Aún no hay leads por área.')" />
                     </section>
                     <section class="ui-card">
-                        <div class="ui-card-h"><x-ui.icon name="funnel" class="ui-card-ic" /><h2>Embudo de estados</h2></div>
+                        <div class="ui-card-h"><x-ui.icon name="funnel" class="ui-card-ic" /><h2>{{ __('Embudo de estados') }}</h2></div>
                         <x-ui.funnel :segments="$funnel" />
                     </section>
                 </div>

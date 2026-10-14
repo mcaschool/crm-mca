@@ -7,7 +7,7 @@
     </div>
     <div class="ui-row-aside">
         @if (isset($corporate[(int) $lead->contact_id]))
-            <x-ui.badge tone="gold" icon="building-2">Empresa</x-ui.badge>
+            <x-ui.badge tone="gold" icon="building-2">{{ __('Empresa') }}</x-ui.badge>
         @endif
         <x-ui.lead-status :status="$lead->status" />
     </div>

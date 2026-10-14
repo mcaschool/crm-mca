@@ -35,14 +35,27 @@ final class AuditPresenter
         'user.activated' => ['label' => 'Usuario activado', 'group' => 'ok'],
         'user.deactivated' => ['label' => 'Usuario desactivado', 'group' => 'warn'],
         'user.national_id_viewed' => ['label' => 'Acceso a número de identidad', 'group' => 'info'],
+        'user.email_code_changed' => ['label' => 'Cambio del modo código de correo', 'group' => 'neutral'],
         // Integraciones / secretos
         'integration.created' => ['label' => 'Integración creada', 'group' => 'ok'],
         'integration.updated' => ['label' => 'Integración actualizada', 'group' => 'info'],
         'integration.tested' => ['label' => 'Prueba de conexión', 'group' => 'neutral'],
         'integration.activated' => ['label' => 'Integración activada', 'group' => 'ok'],
         'integration.deactivated' => ['label' => 'Integración desactivada', 'group' => 'warn'],
+        'integration.connected' => ['label' => 'Integración conectada', 'group' => 'neutral'],
+        'integration.disconnected' => ['label' => 'Integración desconectada', 'group' => 'neutral'],
         // Acceso a datos personales sensibles
         'contact.personal_data_viewed' => ['label' => 'Acceso a datos personales', 'group' => 'info'],
+        'contact.phone_revealed' => ['label' => 'Teléfono del contacto revelado', 'group' => 'neutral'],
+        // Leads y videoconferencias (etiquetas solo de presentación; el grupo neutral conserva el color previo)
+        'lead.status_changed' => ['label' => 'Cambio de estado del lead', 'group' => 'neutral'],
+        'incompany_lead.received' => ['label' => 'Lead InCompany recibido', 'group' => 'neutral'],
+        'lead_intake.received' => ['label' => 'Lead recibido por integración', 'group' => 'neutral'],
+        'lead_intake.conflict' => ['label' => 'Conflicto al recibir un lead por integración', 'group' => 'neutral'],
+        'video_room.assigned' => ['label' => 'Sala de videoconferencia asignada', 'group' => 'neutral'],
+        'video_room.generated' => ['label' => 'Sala de videoconferencia generada', 'group' => 'neutral'],
+        'video_room.regenerated' => ['label' => 'Sala de videoconferencia regenerada', 'group' => 'neutral'],
+        'video_room.applied' => ['label' => 'Salas de videoconferencia aplicadas', 'group' => 'neutral'],
         // Retencion / mantenimiento
         'retention.purged' => ['label' => 'Purga por retención', 'group' => 'neutral'],
         // Catalogo de programas (alta manual desde el Centro de Conocimiento)
@@ -69,11 +82,12 @@ final class AuditPresenter
         'Modules\Catalog\Models\Program' => 'Programa',
         'Modules\Social\Models\MetaConnection' => 'Conexión con Meta',
         'Modules\Social\Models\MetaLeadPage' => 'Página de formularios',
+        'Modules\Crm\Models\VideoRoom' => 'Sala de videoconferencia',
     ];
 
     public static function actionLabel(string $action): string
     {
-        return self::ACTIONS[$action]['label'] ?? Str::of($action)->replace(['.', '_'], ' ')->ucfirst()->toString();
+        return isset(self::ACTIONS[$action]) ? __(self::ACTIONS[$action]['label']) : Str::of($action)->replace(['.', '_'], ' ')->ucfirst()->toString();
     }
 
     /** Categoria visual del chip: ok | info | warn | danger | neutral. */
@@ -84,7 +98,7 @@ final class AuditPresenter
 
     public static function entityLabel(string $type, int|string|null $id = null): string
     {
-        $label = self::ENTITIES[$type] ?? class_basename($type);
+        $label = isset(self::ENTITIES[$type]) ? __(self::ENTITIES[$type]) : class_basename($type);
 
         return $id ? $label.' #'.$id : $label;
     }

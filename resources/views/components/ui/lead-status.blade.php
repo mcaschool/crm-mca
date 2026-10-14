@@ -12,4 +12,4 @@
         default => 'neutral',
     };
 @endphp
-<x-ui.badge :tone="$tone" dot {{ $attributes }}>{{ $status->label() }}</x-ui.badge>
+<x-ui.badge :tone="$tone" dot {{ $attributes }}>{{ __($status->label()) }}</x-ui.badge>

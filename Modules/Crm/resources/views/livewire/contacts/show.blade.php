@@ -25,7 +25,7 @@
                 </div>
             </div>
             <div class="ui-record-actions">
-                <x-ui.badge tone="blue" icon="users">{{ $contact->leads->count() }} {{ $contact->leads->count() === 1 ? 'lead' : 'leads' }}</x-ui.badge>
+                <x-ui.badge tone="blue" icon="users">{{ $contact->leads->count() }} {{ $contact->leads->count() === 1 ? __('lead') : __('leads') }}</x-ui.badge>
                 <x-ui.badge tone="teal" icon="message-circle">{{ $contact->conversations->count() }} {{ $contact->conversations->count() === 1 ? __('conversación') : __('conversaciones') }}</x-ui.badge>
             </div>
         </header>
@@ -48,7 +48,7 @@
                                 <a href="{{ route('crm.leads.show', $lead) }}" class="ui-list-item">
                                     <span class="ui-list-main">
                                         <span class="ui-list-title">{{ optional($lead->program)->name_es ?: $lead->product_type }}</span>
-                                        <span class="ui-person-line"><x-ui.lead-status :status="$lead->status" /> <span class="ui-list-meta">{{ __('Interés') }}: {{ $lead->interest_level->label() }}</span></span>
+                                        <span class="ui-person-line"><x-ui.lead-status :status="$lead->status" /> <span class="ui-list-meta">{{ __('Interés') }}: {{ __($lead->interest_level->label()) }}</span></span>
                                     </span>
                                     <span class="ui-list-aside ui-link">{{ __('Abrir') }} <x-ui.icon name="chevron-right" /></span>
                                 </a>

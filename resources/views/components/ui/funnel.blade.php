@@ -6,7 +6,7 @@
     segments      array de ['label' => string, 'value' => int, 'class' => 'st-new'|'st-con'|'st-seg'|'st-mat'|'st-des']
     emptyMessage  texto del estado vacío
 --}}
-@props(['segments' => [], 'emptyMessage' => 'Aún no hay leads para el embudo.'])
+@props(['segments' => [], 'emptyMessage' => null])
 @php
     $segments = collect($segments);
     $max = max(1, (int) $segments->max('value'));
@@ -16,11 +16,11 @@
     <div class="funnel">
         @foreach ($segments as $s)
             <div class="fn {{ $s['class'] }}">
-                <span class="fl">{{ $s['label'] }}</span>
+                <span class="fl">{{ __($s['label']) }}</span>
                 <div class="ft"><div class="ff" style="width:{{ (int) $s['value'] > 0 ? max(8, (int) round((int) $s['value'] / $max * 100)) : 0 }}%">{{ (int) $s['value'] > 0 ? (int) $s['value'] : '' }}</div></div>
             </div>
         @endforeach
     </div>
 @else
-    <div class="empty">{{ $emptyMessage }}</div>
+    <div class="empty">{{ $emptyMessage ?? __('Aún no hay leads para el embudo.') }}</div>
 @endif

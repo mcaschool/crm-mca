@@ -13,22 +13,22 @@
             <x-ui.search wire:model.live.debounce.400ms="search" :placeholder="__('Nombre o correo').'…'" :aria-label="__('Buscar por nombre o correo')" />
 
             <x-ui.filters :active="collect([$status, $advisor, $area])->filter(fn ($v) => $v !== '')->count()">
-                <x-ui.select filter :active="$status !== ''" wire:model.live="status" aria-label="Filtrar por estado">
-                    <option value="">Estado · todos</option>
+                <x-ui.select filter :active="$status !== ''" wire:model.live="status" :aria-label="__('Filtrar por estado')">
+                    <option value="">{{ __('Estado · todos') }}</option>
                     @foreach ($statuses as $s)
-                        <option value="{{ $s->value }}">{{ $s->label() }}</option>
+                        <option value="{{ $s->value }}">{{ __($s->label()) }}</option>
                     @endforeach
                 </x-ui.select>
 
-                <x-ui.select filter :active="$advisor !== ''" wire:model.live="advisor" aria-label="Filtrar por asesor de origen">
-                    <option value="">Asesor · todos</option>
+                <x-ui.select filter :active="$advisor !== ''" wire:model.live="advisor" :aria-label="__('Filtrar por asesor de origen')">
+                    <option value="">{{ __('Asesor · todos') }}</option>
                     @foreach ($advisors as $a)
                         <option value="{{ $a->id }}">{{ $a->assistant_name }}</option>
                     @endforeach
                 </x-ui.select>
 
-                <x-ui.select filter :active="$area !== ''" wire:model.live="area" aria-label="Filtrar por área">
-                    <option value="">Área · todas</option>
+                <x-ui.select filter :active="$area !== ''" wire:model.live="area" :aria-label="__('Filtrar por área')">
+                    <option value="">{{ __('Área · todas') }}</option>
                     @foreach ($areas as $areaOption)
                         <option value="{{ $areaOption }}">{{ $areaOption }}</option>
                     @endforeach
@@ -38,9 +38,9 @@
 
         @if ($corp === '1')
             <div class="ui-filter-note">
-                <x-ui.badge tone="gold" icon="building-2">Interés corporativo</x-ui.badge>
-                Mostrando solo leads con interés corporativo.
-                <a class="ui-link" href="{{ route('crm.leads.index') }}">Quitar filtro</a>
+                <x-ui.badge tone="gold" icon="building-2">{{ __('Interés corporativo') }}</x-ui.badge>
+                {{ __('Mostrando solo leads con interés corporativo.') }}
+                <a class="ui-link" href="{{ route('crm.leads.index') }}">{{ __('Quitar filtro') }}</a>
             </div>
         @endif
         @if ($mine === '1' || $period === 'month')
@@ -55,7 +55,7 @@
         <table class="ui-table">
             <thead>
                 <tr>
-                    <th class="rt-sticky">Lead</th><th>Estado</th><th>Asesor</th><th>Emparejador</th><th>Empresa</th><th>Fecha</th>
+                    <th class="rt-sticky">{{ __('Lead') }}</th><th>{{ __('Estado') }}</th><th>{{ __('Asesor') }}</th><th>{{ __('Emparejador') }}</th><th>{{ __('Empresa') }}</th><th>{{ __('Fecha') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -80,17 +80,17 @@
                                 </div>
                             </div>
                         </td>
-                        <td class="rt-aside" data-label="Estado"><x-ui.lead-status :status="$lead->status" /></td>
-                        <td class="rt-shrink" data-label="Asesor">
+                        <td class="rt-aside" data-label="{{ __('Estado') }}"><x-ui.lead-status :status="$lead->status" /></td>
+                        <td class="rt-shrink" data-label="{{ __('Asesor') }}">
                             @if ($incompanyLead)
-                                <span class="t-src"><x-ui.icon name="briefcase" /> {{ $lead->capturedByLabel() }}</span>
+                                <span class="t-src"><x-ui.icon name="briefcase" /> {{ ($lead->capturedByLabel() === 'Recomendador InCompany' ? __('Recomendador InCompany') : $lead->capturedByLabel()) }}</span>
                             @elseif ($lead->bot)
                                 <span class="t-src"><x-ui.icon name="bot" /> {{ $lead->bot->assistant_name }}</span>
                             @else
                                 <span class="t-nil">—</span>
                             @endif
                         </td>
-                        <td class="rt-w-sm" data-label="Emparejador">
+                        <td class="rt-w-sm" data-label="{{ __('Emparejador') }}">
                             @if ($lead->goal)
                                 {{ $lead->goal }}@if ($lead->area)<span class="t-sub">{{ $lead->area }}</span>@endif
                             @elseif ($lead->area)
@@ -99,22 +99,22 @@
                                 <span class="t-nil">—</span>
                             @endif
                         </td>
-                        <td data-label="Empresa">
+                        <td data-label="{{ __('Empresa') }}">
                             @if (isset($corporate[(int) $lead->contact_id]) || $lead->isCorporate())
-                                <x-ui.badge tone="gold" icon="building-2">Empresa</x-ui.badge>
+                                <x-ui.badge tone="gold" icon="building-2">{{ __('Empresa') }}</x-ui.badge>
                             @else
                                 <span class="t-nil">—</span>
                             @endif
                         </td>
-                        <td class="t-2" data-label="Fecha">{{ $lead->created_at?->translatedFormat('d M Y') ?? '—' }}</td>
+                        <td class="t-2" data-label="{{ __('Fecha') }}">{{ $lead->created_at?->translatedFormat('d M Y') ?? '—' }}</td>
                     </tr>
                 @empty
                     <tr>
                         <td colspan="6" class="rt-empty">
                             <div class="ui-empty">
                                 <div class="ui-empty-ic"><x-ui.icon name="search" /></div>
-                                <b>No hay leads con esos filtros.</b>
-                                Prueba con otra búsqueda o quita algún filtro.
+                                <b>{{ __('No hay leads con esos filtros.') }}</b>
+                                {{ __('Prueba con otra búsqueda o quita algún filtro.') }}
                             </div>
                         </td>
                     </tr>

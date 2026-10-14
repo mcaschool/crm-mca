@@ -6,7 +6,7 @@
     rows          array de ['label' => string, 'value' => int]
     emptyMessage  texto del estado vacío
 --}}
-@props(['rows' => [], 'emptyMessage' => 'Aún no hay datos para mostrar.'])
+@props(['rows' => [], 'emptyMessage' => null])
 @php
     $rows = collect($rows);
     $max = max(1, (int) $rows->max('value'));
@@ -23,5 +23,5 @@
         @endforeach
     </div>
 @else
-    <div class="empty">{{ $emptyMessage }}</div>
+    <div class="empty">{{ $emptyMessage ?? __('Aún no hay datos para mostrar.') }}</div>
 @endif

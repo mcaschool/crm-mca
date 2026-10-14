@@ -19,5 +19,5 @@
         </div>
     </div>
 @empty
-    <div class="home-empty"><x-ui.icon name="activity" /> Sin actividad reciente.</div>
+    <div class="home-empty"><x-ui.icon name="activity" /> {{ __('Sin actividad reciente.') }}</div>
 @endforelse
