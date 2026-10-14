@@ -56,6 +56,7 @@ final class AuditPresenter
         'video_room.generated' => ['label' => 'Sala de videoconferencia generada', 'group' => 'neutral'],
         'video_room.regenerated' => ['label' => 'Sala de videoconferencia regenerada', 'group' => 'neutral'],
         'video_room.applied' => ['label' => 'Salas de videoconferencia aplicadas', 'group' => 'neutral'],
+        'video_room.access_mode_changed' => ['label' => 'Modalidad de acceso de Zoom cambiada', 'group' => 'warn'],
         // Retencion / mantenimiento
         'retention.purged' => ['label' => 'Purga por retención', 'group' => 'neutral'],
         // Catalogo de programas (alta manual desde el Centro de Conocimiento)

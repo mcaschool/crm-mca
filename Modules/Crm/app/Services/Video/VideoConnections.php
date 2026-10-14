@@ -88,7 +88,11 @@ class VideoConnections
             'kind' => $e->kind,
             'detail' => Str::limit($e->getMessage(), 200),
         ]);
-        $this->recordTest($integration, false, $e->userMessage(), $e->kind === 'auth' ? 'expired' : null);
+        // Un rechazo de Zoom para una reunión concreta (restricción del plan o de la cuenta) no es un
+        // fallo de la conexión: se informa junto a la sala, sin marcar la conexión como fallida.
+        if ($e->kind !== 'rejected') {
+            $this->recordTest($integration, false, $e->userMessage(), $e->kind === 'auth' ? 'expired' : null);
+        }
     }
 
     /** Petición HTTP con tiempo de espera y reintentos SOLO en errores transitorios. */
@@ -114,17 +118,38 @@ class VideoConnections
     {
         $status = $response->status();
         $code = (string) (data_get($response->json(), 'error.status') ?? data_get($response->json(), 'error') ?? data_get($response->json(), 'code') ?? '');
+        $detail = $this->zoomDetail($response, $operation);
         $kind = match (true) {
             $status === 401, $code === 'invalid_grant', $code === '124' => 'auth',
             $status === 404 => 'not_found',
             $status === 429 => 'rate_limited',
             $status === 403, $code === 'PERMISSION_DENIED' => 'permission',
             $status === 400 && $code === 'FAILED_PRECONDITION' => 'license',
+            $status === 400 && $detail !== null => 'rejected',
             $status >= 500 => 'transport',
             default => 'invalid_response',
         };
 
-        return new VideoProviderException($kind, $operation.': HTTP '.$status.($code !== '' && preg_match('/^[A-Za-z0-9_]{1,40}$/', $code) ? ' '.$code : ''));
+        return new VideoProviderException($kind, $operation.': HTTP '.$status.($code !== '' && preg_match('/^[A-Za-z0-9_]{1,40}$/', $code) ? ' '.$code : ''), $detail);
+    }
+
+    /**
+     * Motivo que devuelve la API de Zoom (restricciones del plan o de la cuenta, límites diarios…)
+     * para mostrarlo tal cual a la administración: solo el texto, sin enlaces ni etiquetas, acotado.
+     * El endpoint del token no aporta detalle (podría reflejar datos de las credenciales).
+     */
+    private function zoomDetail(Response $response, string $operation): ?string
+    {
+        if (! str_starts_with($operation, 'zoom.') || $operation === 'zoom.token' || $operation === 'zoom.revoke') {
+            return null;
+        }
+        $message = $response->json('message');
+        if (! is_string($message)) {
+            return null;
+        }
+        $clean = trim((string) preg_replace(['~https?://\S+~i', '/[\x00-\x1F\x7F]+/u', '/\s+/u'], ['', ' ', ' '], strip_tags($message)));
+
+        return $clean === '' ? null : Str::limit($clean, 200);
     }
 
     /**

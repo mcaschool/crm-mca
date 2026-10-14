@@ -10,7 +10,7 @@
                 default => ['neutral', __('Desconectada')],
             };
         };
-        // Estado de la sala de un asesor → [texto, tono]
+        // Estado de la sala de un usuario → [texto, tono]
         $roomLabel = fn ($r) => match ($r?->status) {
             null => [__('Sin sala'), 'neutral'],
             'active' => [__('Activa'), 'success'],
@@ -20,18 +20,19 @@
         $hostLabel = fn ($r) => match ($r?->host_status) {
             'assigned' => __('Coanfitrión asignado'),
             'failed' => __('Sin coanfitrión'),
-            'advisor_host' => __('El asesor es anfitrión'),
-            'not_host', 'institutional_host' => __('El asesor no es anfitrión'),
+            'advisor_host' => __('Anfitrión: el propio usuario (con licencia)'),
+            'institutional_host' => __('Anfitrión técnico: cuenta institucional'),
+            'not_host' => __('Anfitrión no reconocido'),
             default => '—',
         };
     @endphp
 
-    <x-ui.page-header :title="__('Videoconferencias')" :subtitle="__('Una cuenta institucional de Google Meet y una de Zoom. Los asesores nunca conectan cuentas propias: usan las salas que la administración les asigna.')" :back="route('integrations.index')" :back-label="__('Volver a integraciones')" />
+    <x-ui.page-header :title="__('Videoconferencias')" :subtitle="__('Una cuenta institucional de Google Meet y una de Zoom. Los usuarios nunca conectan cuentas propias: usan las salas que la administración les asigna.')" :back="route('integrations.index')" :back-label="__('Volver a integraciones')" />
 
     @if (session('video_status'))
         <div class="ui-alert ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('video_status') }}</div>
     @endif
-    @if ($videoNotice !== '')
+    @if ($videoNotice !== '' && $videoTarget === '')
         <div @class(['ui-alert', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="{{ $videoNoticeError ? 'alert' : 'status' }}">
             <x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> {{ $videoNotice }}
         </div>
@@ -165,14 +166,58 @@
             </form>
         </div>
 
-        {{-- Salas por asesor --}}
+        {{-- Acceso a las reuniones del anfitrión institucional (decisión explícita) --}}
+        @if ($zoom?->status === 'active')
+            <section class="ui-card" aria-labelledby="vc-zaccess-title" wire:key="vc-zaccess">
+                <div class="ui-card-h"><x-ui.icon name="lock" class="ui-card-ic" /><h2 id="vc-zaccess-title">{{ __('Acceso a las reuniones de Zoom sin licencia individual') }}</h2>
+                    <span class="sp"></span><x-ui.badge :tone="$hostless ? 'warning' : 'success'" dot>{{ $hostless ? __('Sin anfitrión') : __('Con sala de espera') }}</x-ui.badge>
+                </div>
+                <p class="ui-card-intro">{{ __('Cada usuario sin licencia en Zoom recibe su propia reunión (id y enlace distintos) del anfitrión técnico institucional. Nadie del CRM es anfitrión de esas reuniones: solo quien entre con la cuenta institucional tiene los controles. Los usuarios con licencia en la cuenta son anfitriones de la suya y no se ven afectados.') }}</p>
+                <div class="ui-card-p ui-stack">
+                    <div class="ui-nets" role="radiogroup" aria-label="{{ __('Modalidad de acceso') }}">
+                        <label class="ui-net"><input type="radio" wire:model.live="zoomAccess" value="waiting_room">
+                            <span class="ui-net-text"><b>{{ __('Con sala de espera (recomendado)') }}</b>
+                                <small>{{ __('Los invitados esperan hasta que alguien inicie la reunión con la cuenta institucional.') }}</small></span></label>
+                        <label class="ui-net"><input type="radio" wire:model.live="zoomAccess" value="hostless">
+                            <span class="ui-net-text"><b>{{ __('Acceso sin anfitrión') }}</b>
+                                <small>{{ __('«Unirse antes que el anfitrión» activado y sala de espera desactivada.') }}</small></span></label>
+                    </div>
+                    @if ($zoomAccess === 'hostless' && ! $hostless)
+                        <div class="ui-callout ui-callout--stack ui-tone--warning" data-testid="vc-hostless-risks">
+                            <b><x-ui.icon name="alert-triangle" /> {{ __('Implicaciones de seguridad') }}</b>
+                            <ul class="ui-callout-list">
+                                <li>{{ __('Cualquiera que tenga el enlace (lleva la contraseña incluida) entra al momento, sin que nadie lo admita, incluso antes que el usuario del CRM.') }}</li>
+                                <li>{{ __('Nadie tiene controles de anfitrión (silenciar a todos, expulsar, bloquear, grabar) salvo quien entre con la cuenta institucional.') }}</li>
+                                <li>{{ __('Una reunión que siga abierta sin anfitrión ocupa la capacidad del anfitrión institucional e impide otras reuniones simultáneas; si ese anfitrión no tiene licencia, Zoom la corta a los 40 minutos.') }}</li>
+                                <li>{{ __('Se mantienen la contraseña y la entrada silenciada. Si la cuenta de Zoom bloquea estas opciones, no se aplicarán y se indicará en cada sala.') }}</li>
+                            </ul>
+                            <label class="ui-check ui-check--top"><input type="checkbox" wire:model="zoomHostlessAck" @error('zoomHostlessAck') aria-invalid="true" aria-describedby="vc-ack-error" @enderror>
+                                <span>{{ __('Entiendo estas implicaciones y decido activar el acceso sin anfitrión para las reuniones del anfitrión institucional.') }}</span></label>
+                            @error('zoomHostlessAck') <p class="ui-error" id="vc-ack-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                        </div>
+                    @endif
+                    @if ($hostlessAt)
+                        <p class="ui-help">{{ __('Última decisión: :mode, por :name, :when.', ['mode' => $hostless ? __('acceso sin anfitrión') : __('sala de espera'), 'name' => $hostlessBy ?? '—', 'when' => $hostlessAt->diffForHumans()]) }}</p>
+                    @endif
+                    @if ($videoNotice !== '' && $videoTarget === 'zoom-access')
+                        <div @class(['ui-callout', 'ui-callout--sm', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="{{ $videoNoticeError ? 'alert' : 'status' }}"><x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> <span>{{ $videoNotice }}</span></div>
+                    @endif
+                </div>
+                <div class="ui-card-f ui-card-f--end">
+                    <x-ui.button size="sm" variant="primary" icon="check" wire:click="saveZoomAccess" wire:loading.attr="disabled" wire:target="saveZoomAccess"
+                        :disabled="($zoomAccess === 'hostless') === $hostless">{{ __('Aplicar modalidad') }}</x-ui.button>
+                </div>
+            </section>
+        @endif
+
+        {{-- Salas por usuario --}}
         <section class="ui-card" aria-labelledby="vc-rooms-title">
-            <div class="ui-card-h"><x-ui.icon name="users" class="ui-card-ic" /><h2 id="vc-rooms-title">{{ __('Salas permanentes por asesor') }}</h2></div>
-            <p class="ui-card-intro">{{ __('Las actividades nuevas copian la sala del perfil. Las ya creadas conservan su enlace; solo las futuras sin enlace pueden recibirla con «Aplicar a actividades sin enlace».') }}</p>
+            <div class="ui-card-h"><x-ui.icon name="users" class="ui-card-ic" /><h2 id="vc-rooms-title">{{ __('Salas permanentes por usuario') }}</h2></div>
+            <p class="ui-card-intro">{{ __('Todos los usuarios activos con acceso al Calendario pueden tener su propia sala. Las actividades nuevas copian la sala del perfil; las ya creadas conservan su enlace y solo las futuras sin enlace pueden recibirla con «Aplicar a actividades sin enlace».') }}</p>
             <div class="mca-table-scroll">
                 <table class="ui-table ui-table--stack-cells ui-table--flat">
                     <thead>
-                        <tr><th>{{ __('Asesor') }}</th><th>Google Meet</th><th>Zoom</th></tr>
+                        <tr><th>{{ __('Usuario') }}</th><th>Google Meet</th><th>Zoom</th></tr>
                     </thead>
                     <tbody>
                         @forelse ($advisors as $advisor)
@@ -180,7 +225,10 @@
                                 <td class="rt-primary">
                                     <div class="ui-person-text">
                                         <span class="ui-cell-title">{{ $advisor->name }}</span>
-                                        <a href="{{ route('crm.agenda.profile', ['user' => $advisor->id]) }}" class="ui-link">{{ __('Perfil de reuniones') }}</a>
+                                        <span class="ui-cell-sub">{{ __($advisor->role?->label() ?? '') }}</span>
+                                        @if (in_array($advisor->id, $withAgenda, true))
+                                            <a href="{{ route('crm.agenda.profile', ['user' => $advisor->id]) }}" class="ui-link">{{ __('Perfil de reuniones') }}</a>
+                                        @endif
                                     </div>
                                 </td>
                                 @foreach (['google_meet' => $google, 'zoom' => $zoom] as $provider => $conn)
@@ -197,6 +245,9 @@
                                             @if ($room && $room->last_checked_at)
                                                 <span class="ui-cell-sub">{{ __('Revisada') }} {{ $room->last_checked_at->diffForHumans() }}</span>
                                             @endif
+                                            @if ($room && $room->status !== 'active' && $room->last_error)
+                                                <span class="ui-cell-sub ui-text-danger">{{ $room->last_error }}</span>
+                                            @endif
                                             @if ($conn?->status === 'active')
                                                 <div class="ui-actions-row">
                                                     @if ($room === null || $room->status !== 'active')
@@ -205,6 +256,11 @@
                                                         <x-ui.button size="sm" icon="refresh" wire:click="checkRoom({{ $room->id }})" wire:loading.attr="disabled">{{ __('Revisar') }}</x-ui.button>
                                                         <x-ui.button size="sm" variant="ghost" wire:click="generateRoom({{ $advisor->id }}, '{{ $provider }}', true)" wire:confirm="{{ __('¿Regenerar la sala? Las actividades ya creadas conservan el enlace anterior.') }}" wire:loading.attr="disabled">{{ __('Regenerar') }}</x-ui.button>
                                                     @endif
+                                                </div>
+                                            @endif
+                                            @if ($videoNotice !== '' && $videoTarget === $advisor->id.'|'.$provider)
+                                                <div @class(['ui-callout', 'ui-callout--sm', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="{{ $videoNoticeError ? 'alert' : 'status' }}" data-testid="vc-row-notice">
+                                                    <x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> <span>{{ $videoNotice }}</span>
                                                 </div>
                                             @endif
                                         </div>
@@ -216,7 +272,7 @@
                                 <td colspan="3" class="rt-empty">
                                     <div class="ui-empty">
                                         <div class="ui-empty-ic"><x-ui.icon name="users" /></div>
-                                        <b>{{ __('No hay asesores activos.') }}</b>
+                                        <b>{{ __('No hay usuarios activos con acceso al Calendario.') }}</b>
                                     </div>
                                 </td>
                             </tr>

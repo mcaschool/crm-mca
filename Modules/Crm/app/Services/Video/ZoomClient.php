@@ -116,22 +116,21 @@ class ZoomClient
     }
 
     /**
-     * Crea una reunión permanente (tipo 3, sin hora fija) cuyo anfitrión es el propio asesor (usuario
-     * con licencia de la cuenta). Sala de espera activa y sin «unirse antes que el anfitrión»: el
-     * asesor la inicia y admite a los invitados. Nunca se relaja la seguridad de la reunión.
+     * Crea una reunión permanente (tipo 3, sin hora fija, nunca la PMI) del anfitrión indicado: el
+     * propio usuario si tiene licencia en la cuenta, o el anfitrión técnico institucional. Siempre
+     * con contraseña y entrada silenciada. Por defecto, sala de espera y sin «unirse antes»; el
+     * acceso sin anfitrión solo se pide cuando la administración lo decidió expresamente.
      *
      * @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool}
      */
-    public function createMeeting(Integration $integration, string $hostId, string $topic, string $agenda): array
+    public function createMeeting(Integration $integration, string $hostId, string $topic, string $agenda, bool $hostless = false): array
     {
         $response = $this->api($integration, 'post', '/users/'.rawurlencode($hostId).'/meetings', [
             'topic' => Str::limit($topic, 190, ''),
             'type' => 3,
             'agenda' => Str::limit($agenda, 1900, ''),
             'default_password' => true,
-            'settings' => [
-                'waiting_room' => true,
-                'join_before_host' => false,
+            'settings' => $this->accessSettings($hostless) + [
                 'host_video' => true,
                 'participant_video' => false,
                 'mute_upon_entry' => true,
@@ -142,6 +141,35 @@ class ZoomClient
         ], 'zoom.meetings.create');
 
         return $this->validMeeting($response);
+    }
+
+    /**
+     * Cambia la modalidad de acceso de una reunión existente (mismo id y mismo enlace) y devuelve lo
+     * que Zoom aplicó realmente: una cuenta puede bloquear estas opciones.
+     *
+     * @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool}
+     */
+    public function updateAccess(Integration $integration, string $id, bool $hostless): array
+    {
+        if (preg_match('/^\d{6,15}$/', $id) !== 1) {
+            throw new VideoProviderException('invalid_response', 'zoom.meeting: id no válido');
+        }
+        $this->api($integration, 'patch', '/meetings/'.$id, ['settings' => $this->accessSettings($hostless)], 'zoom.meetings.update');
+
+        return $this->getMeeting($integration, $id);
+    }
+
+    /**
+     * Sala de espera (por defecto) o acceso sin anfitrión: Zoom exige desactivar la sala de espera
+     * para que «unirse antes que el anfitrión» funcione. La contraseña se mantiene en ambos casos.
+     *
+     * @return array<string, bool|int>
+     */
+    private function accessSettings(bool $hostless): array
+    {
+        return $hostless
+            ? ['waiting_room' => false, 'join_before_host' => true, 'jbh_time' => 0]
+            : ['waiting_room' => true, 'join_before_host' => false];
     }
 
     /** @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool} */
@@ -189,7 +217,11 @@ class ZoomClient
         $call = fn (bool $force) => $this->connections->send(function () use ($integration, $method, $url, $body, $force): Response {
             $request = $this->connections->http($method === 'get')->withToken($this->accessToken($integration, $force));
 
-            return $method === 'get' ? $request->get($url) : $request->post($url, $body);
+            return match ($method) {
+                'get' => $request->get($url),
+                'patch' => $request->patch($url, $body),
+                default => $request->post($url, $body),
+            };
         }, $operation);
 
         $response = $call(false);

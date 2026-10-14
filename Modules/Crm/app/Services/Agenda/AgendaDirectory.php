@@ -32,6 +32,23 @@ class AgendaDirectory
     }
 
     /**
+     * Usuarios que pueden tener una sala permanente de videoconferencia: todos los ACTIVOS de la
+     * institución con acceso al módulo (el Calendario), no solo quienes reciben actividades.
+     *
+     * @return Collection<int,User>
+     */
+    public function roomUsers(): Collection
+    {
+        return User::query()
+            ->where('institution_id', $this->context->idOrFail('videoconferencias'))
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (User $u) => $u->canWorkCrm())
+            ->values();
+    }
+
+    /**
      * Zona de presentación de un usuario: la MISMA regla que el resto del panel (UserTimezone:
      * perfil de reuniones → institución → agenda → aplicación). Antes, sin perfil, el Calendario
      * caía en la zona por defecto de la agenda (UTC) mientras la Bandeja y las fichas usaban la de

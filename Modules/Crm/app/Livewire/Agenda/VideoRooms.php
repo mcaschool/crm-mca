@@ -17,7 +17,7 @@ use Modules\Crm\Services\Video\VideoConnections;
 use Modules\Crm\Services\Video\VideoRoomService;
 
 /**
- * «Salas institucionales» dentro de Calendario › Perfil de reuniones. El asesor ve su enlace
+ * «Salas institucionales» dentro de Calendario › Perfil de reuniones. El usuario ve su enlace
  * permanente, el estado de la sala y si puede dirigirla, y la abre; la administración además la
  * genera, revisa, regenera, asigna al perfil y aplica a actividades futuras sin enlace.
  * Nunca muestra credenciales ni enlaces de anfitrión.
@@ -77,7 +77,7 @@ class VideoRooms extends Component
         abort_unless($actor !== null && $actor->can('create', Activity::class), 403);
         if ($this->ownerId !== $actor->id) {
             abort_unless((new ActivityPolicy)->manageOthers($actor), 403);
-            abort_unless(app(AgendaDirectory::class)->assignableUsers()->contains('id', $this->ownerId), 404);
+            abort_unless(app(AgendaDirectory::class)->roomUsers()->contains('id', $this->ownerId), 404);
         }
     }
 }

@@ -1,6 +1,6 @@
 <section class="ui-card" aria-labelledby="vr-title">
     <div class="ui-card-h"><x-ui.icon name="video" class="ui-card-ic" /><h2 id="vr-title">{{ __('Salas institucionales') }}</h2></div>
-    @if ($videoNotice !== '')
+    @if ($videoNotice !== '' && $videoTarget === '')
         <div class="ui-card-p">
             <div @class(['ui-alert', 'ui-alert--flush', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="status">
                 <x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> {{ $videoNotice }}
@@ -38,7 +38,11 @@
                     @if ($room)
                         @if ($isZoom)
                             <dt>{{ __('Permiso para dirigirla') }}</dt>
-                            <dd>{{ $room->host_status === 'advisor_host' ? __('Sí: el asesor es el anfitrión') : __('No: el asesor no es el anfitrión') }}</dd>
+                            <dd>{{ match ($room->host_status) {
+                                'advisor_host' => __('Sí: es el anfitrión con su licencia de Zoom'),
+                                'institutional_host' => __('No: el anfitrión técnico es la cuenta institucional'),
+                                default => __('No: la reunión no es de este usuario'),
+                            } }}</dd>
                         @else
                             <dt>{{ __('Asignación') }}</dt>
                             <dd>{{ $room->host_status === 'assigned' ? __('Coanfitrión asignado') : __('Sin coanfitrión') }}</dd>
@@ -77,6 +81,11 @@
                         <x-ui.button size="sm" variant="ghost" icon="plug" :href="route('integrations.video')">{{ __('Conectar la cuenta institucional') }}</x-ui.button>
                     @endif
                 </div>
+                @if ($videoNotice !== '' && $videoTarget === $ownerId.'|'.$provider)
+                    <div @class(['ui-callout', 'ui-callout--sm', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="{{ $videoNoticeError ? 'alert' : 'status' }}" data-testid="vr-notice">
+                        <x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> <span>{{ $videoNotice }}</span>
+                    </div>
+                @endif
             </div>
         @endforeach
     </div>
