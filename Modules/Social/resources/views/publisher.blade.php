@@ -1,236 +1,245 @@
-<div class="sp-wrap mca-page" wire:key="social-publisher">
-    <style>
-        .sp-wrap{--sp-blue:#1E5AA8;--sp-ink:#1F2A37;--sp-muted:#6B7686;--sp-line:#E6EAF0;--sp-bg:#F4F6F9;
-            font-family:'DM Sans',system-ui,sans-serif;color:var(--sp-ink)}
-        .sp-wrap *{box-sizing:border-box}
-        .sp-head h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em}
-        .sp-head p{margin:4px 0 18px;font-size:13.5px;color:var(--sp-muted)}
-        .sp-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
-        @media(max-width:900px){.sp-grid{grid-template-columns:1fr}}
-        .sp-card{background:#fff;border:1px solid var(--sp-line);border-radius:14px;padding:18px}
-        /* Zona de imagen */
-        .sp-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
-            min-height:200px;border:1.5px dashed #C7D0DD;border-radius:12px;background:var(--sp-bg);
-            cursor:pointer;color:var(--sp-muted);text-align:center;padding:16px;overflow:hidden}
-        .sp-drop:hover{border-color:var(--sp-blue);color:var(--sp-blue)}
-        .sp-drop__title{font-size:14px;font-weight:600;color:var(--sp-ink)}
-        .sp-drop__hint{font-size:12px}
-        .sp-preview{max-height:280px;width:100%;object-fit:contain;border-radius:8px}
-        .sp-uploading{font-size:12px;color:var(--sp-blue);margin-top:8px}
-        .sp-err{color:#B4231F;font-size:12.5px;margin:8px 2px 0}
-        .sp-field{display:block;margin-top:16px}
-        .sp-field span{display:block;font-size:12.5px;font-weight:600;margin-bottom:6px}
-        .sp-field textarea{width:100%;border:1px solid var(--sp-line);border-radius:10px;padding:10px 12px;
-            font:inherit;font-size:13.5px;resize:vertical;min-height:96px;color:var(--sp-ink)}
-        /* Redes */
-        .sp-nets{margin-top:16px}
-        .sp-nets__label{display:block;font-size:12.5px;font-weight:600;margin-bottom:8px}
-        .sp-net{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--sp-line);
-            border-radius:10px;margin-bottom:8px;font-size:13.5px;font-weight:600;cursor:pointer}
-        .sp-net input{width:16px;height:16px;accent-color:var(--sp-blue);cursor:pointer}
-        .sp-net.off{opacity:.55;cursor:not-allowed}
-        .sp-net em{font-style:normal;font-weight:400;color:var(--sp-muted);font-size:12px}
-        /* Selector de tipo de publicación / medio de la historia */
-        .sp-tabs{display:flex;gap:8px;margin:6px 0 14px}
-        .sp-tab{flex:1;border:1px solid var(--sp-line);background:#fff;border-radius:10px;padding:9px 0;
-            font-family:inherit;font-size:13.5px;font-weight:600;color:var(--sp-muted);cursor:pointer;transition:all .12s}
-        .sp-tab:hover{border-color:var(--sp-blue);color:var(--sp-blue)}
-        .sp-tab.on{border-color:var(--sp-blue);color:var(--sp-blue);background:#EEF4FB}
-        /* Botón */
-        .sp-btn{margin-top:18px;width:100%;border:none;border-radius:10px;height:44px;font-weight:700;
-            font-size:14px;background:var(--sp-blue);color:#fff;cursor:pointer;font-family:inherit}
-        .sp-btn:hover{background:#17497f}
-        .sp-btn:disabled{background:#9db3cf;cursor:progress}
-        /* Resultado */
-        .sp-result h2{margin:0 0 12px;font-size:15px;font-weight:700}
-        .sp-res{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:12px;border:1px solid var(--sp-line);
-            border-radius:10px;margin-bottom:10px}
-        .sp-res.ok{background:#EEF7EF;border-color:#CDE7D0}
-        .sp-res.ko{background:#FCE9E9;border-color:#F1C4C4}
-        .sp-res.wait{background:#FFF8E6;border-color:#F0DFAE}
-        .sp-badge.wait{background:#B7791F;color:#fff}
-        .sp-resume{border:1px solid var(--sp-blue);background:#fff;color:var(--sp-blue);border-radius:8px;
-            padding:4px 12px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
-        .sp-resume:hover{background:#EEF4FB}
-        .sp-resume:disabled{opacity:.6;cursor:progress}
-        .sp-res__err.is-wait{color:#8A6D1B}
-        .sp-res__net{font-weight:700;font-size:14px}
-        .sp-badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:20px}
-        .sp-badge.ok{background:#1E824C;color:#fff}
-        .sp-badge.ko{background:#B4231F;color:#fff}
-        .sp-link{font-size:12.5px;font-weight:600;color:var(--sp-blue);text-decoration:none}
-        .sp-link:hover{text-decoration:underline}
-        .sp-res__err{flex-basis:100%;margin:2px 0 0;font-size:12px;color:#8A1C1C;line-height:1.4}
-        .sp-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-            text-align:center;color:var(--sp-muted);min-height:220px;padding:20px}
-        .sp-empty p{margin:0;font-size:14px;font-weight:600;color:var(--sp-ink)}
-        .sp-empty small{font-size:12.5px;max-width:280px}
-    </style>
+@php
+    $isVideo = $contentType === 'reel'
+        || ($contentType === 'post' && $postMedia === 'video')
+        || ($contentType === 'story' && $storyMedia === 'video');
+    $formats = [
+        'post' => [__('Post'), __('Imagen o video con descripción, en el feed.')],
+        'reel' => [__('Reel'), __('Video vertical con descripción.')],
+        'story' => [__('Historia'), __('Imagen o video a pantalla completa, sin descripción.')],
+    ];
+    $file = $isVideo ? $video : $image;
+    $targets = collect([
+        $toFacebook && $hasFacebook ? 'facebook' : null,
+        $toInstagram && $hasInstagram ? 'instagram' : null,
+    ])->filter();
+@endphp
+<div class="mca-page" wire:key="social-publisher">
+    <x-ui.page-header :title="__('Publicador')" :subtitle="__('Publica un Post, un Reel o una Historia en la Página de Facebook y en Instagram.')" />
 
-    <div class="sp-head">
-        <h1>{{ __('Publicador') }}</h1>
-        <p>{{ __('Publica un Post, un Reel o una Historia en la Página de Facebook y en Instagram.') }}</p>
-    </div>
+    <div class="ui-pub" x-data="{ chars: ($wire.caption || '').length }" x-init="$wire.$watch('caption', v => chars = (v || '').length)">
+        {{-- ===================== Contenido ===================== --}}
+        <form id="pub-form" class="ui-card ui-pub-editor" wire:submit.prevent="publish" novalidate>
+            <div class="ui-card-h"><x-ui.icon name="layers" class="ui-card-ic" /><h2>{{ __('Formato') }}</h2></div>
+            <div class="ui-card-p ui-pub-stack">
+                <div class="ui-field">
+                    <span class="ui-label" id="pub-type-l">{{ __('Tipo de publicación') }}</span>
+                    <div class="ui-seg ui-seg--fill" role="group" aria-labelledby="pub-type-l">
+                        @foreach ($formats as $key => [$label])
+                            <button type="button" wire:click="setContentType('{{ $key }}')" aria-pressed="{{ $contentType === $key ? 'true' : 'false' }}">{{ $label }}</button>
+                        @endforeach
+                    </div>
+                    <p class="ui-help">{{ $formats[$contentType][1] }}</p>
+                </div>
 
-    <div class="sp-grid">
-        {{-- ---------- FORMULARIO ---------- --}}
-        <form class="sp-card" wire:submit.prevent="publish">
-            {{-- Tipo de publicación --}}
-            <span class="sp-nets__label">{{ __('Tipo de publicación') }}</span>
-            <div class="sp-tabs">
-                <button type="button" class="sp-tab {{ $contentType === 'post' ? 'on' : '' }}" wire:click="setContentType('post')">{{ __('Post') }}</button>
-                <button type="button" class="sp-tab {{ $contentType === 'reel' ? 'on' : '' }}" wire:click="setContentType('reel')">{{ __('Reel') }}</button>
-                <button type="button" class="sp-tab {{ $contentType === 'story' ? 'on' : '' }}" wire:click="setContentType('story')">{{ __('Historia') }}</button>
+                {{-- Post e Historia eligen entre imagen o video (el Reel siempre es video) --}}
+                @if ($contentType === 'post' || $contentType === 'story')
+                    @php $mediaNow = $contentType === 'post' ? $postMedia : $storyMedia; $mediaSetter = $contentType === 'post' ? 'setPostMedia' : 'setStoryMedia'; @endphp
+                    <div class="ui-field">
+                        <span class="ui-label" id="pub-media-l">{{ __('Contenido') }}</span>
+                        <div class="ui-seg ui-seg--fill ui-seg--icons" role="group" aria-labelledby="pub-media-l">
+                            <button type="button" wire:click="{{ $mediaSetter }}('image')" aria-pressed="{{ $mediaNow === 'image' ? 'true' : 'false' }}"><x-ui.icon name="image" /> {{ __('Imagen') }}</button>
+                            <button type="button" wire:click="{{ $mediaSetter }}('video')" aria-pressed="{{ $mediaNow === 'video' ? 'true' : 'false' }}"><x-ui.icon name="video" /> {{ __('Video') }}</button>
+                        </div>
+                    </div>
+                @endif
             </div>
 
-            {{-- Post e Historia eligen entre imagen o video (el Reel siempre es video) --}}
-            @if ($contentType === 'post')
-                <span class="sp-nets__label">{{ __('Contenido') }}</span>
-                <div class="sp-tabs">
-                    <button type="button" class="sp-tab {{ $postMedia === 'image' ? 'on' : '' }}" wire:click="setPostMedia('image')">{{ __('Imagen') }}</button>
-                    <button type="button" class="sp-tab {{ $postMedia === 'video' ? 'on' : '' }}" wire:click="setPostMedia('video')">{{ __('Video') }}</button>
-                </div>
-            @elseif ($contentType === 'story')
-                <span class="sp-nets__label">{{ __('Contenido') }}</span>
-                <div class="sp-tabs">
-                    <button type="button" class="sp-tab {{ $storyMedia === 'image' ? 'on' : '' }}" wire:click="setStoryMedia('image')">{{ __('Imagen') }}</button>
-                    <button type="button" class="sp-tab {{ $storyMedia === 'video' ? 'on' : '' }}" wire:click="setStoryMedia('video')">{{ __('Video') }}</button>
-                </div>
-            @endif
-
-            @php($isVideo = $contentType === 'reel'
-                || ($contentType === 'post' && $postMedia === 'video')
-                || ($contentType === 'story' && $storyMedia === 'video'))
-
-            @if ($isVideo)
-                {{-- Subida de VIDEO (Reel / Historia de video). Requisito: MP4; el resto son
-                     recomendaciones (Meta valida duración/FPS/resolución al publicar). --}}
-                <label class="sp-drop">
-                    @if ($video)
-                        {{-- Identificación del archivo elegido: nombre ORIGINAL + tamaño real
-                             + máximo aplicable en este momento (cambia con las redes). --}}
-                        <x-ui.icon name="check" class="w-8 h-8" />
-                        <span class="sp-drop__title">{{ $video->getClientOriginalName() }}</span>
-                        <span class="sp-drop__hint">{{ number_format($video->getSize() / 1048576, 1, '.', '') }} MB · {{ $this->videoMaxLabel() }}</span>
-                        <span class="sp-drop__hint">{{ __('Haz clic para cambiar el video') }}</span>
-                    @else
-                        <x-ui.icon name="image" class="w-8 h-8" />
-                        <span class="sp-drop__title">{{ __('Subir video') }}</span>
-                        <span class="sp-drop__hint">
-                            @if ($contentType === 'reel')
-                                {{ __('MP4 · Máximo 250 MB · 3–90 s · Vertical 9:16 recomendado') }}
-                            @elseif ($contentType === 'post')
-                                {{ __('MP4 · Máximo 250 MB · Vertical u horizontal') }}
-                            @elseif ($toInstagram)
-                                {{ __('MP4 · Máximo 100 MB para Instagram · 3–60 s · Vertical 9:16 recomendado') }}
-                            @else
-                                {{ __('MP4 · Máximo 250 MB · 3–60 s · Vertical 9:16 recomendado') }}
-                            @endif
-                        </span>
-                    @endif
-                    <input type="file" wire:model="video" accept="video/mp4" hidden>
-                </label>
-                <div wire:loading wire:target="video" class="sp-uploading">{{ __('Subiendo video…') }}</div>
-                @error('video') <p class="sp-err">{{ $message }}</p> @enderror
-            @else
-                <label class="sp-drop">
-                    @if ($image)
-                        <img src="{{ $image->temporaryUrl() }}" class="sp-preview" alt="{{ __('Vista previa') }}">
-                        <span class="sp-drop__hint">{{ __('Haz clic para cambiar la imagen') }}</span>
-                    @else
-                        <x-ui.icon name="image" class="w-8 h-8" />
-                        <span class="sp-drop__title">{{ __('Subir imagen') }}</span>
-                        <span class="sp-drop__hint">
-                            {{-- Instagram exige JPEG; sin IG, el PNG también pasa TAL CUAL. --}}
-                            @if ($contentType === 'story')
-                                @if ($toInstagram)
-                                    {{ __('JPEG · Vertical 9:16 recomendado · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+            {{-- ===================== Multimedia ===================== --}}
+            <div class="ui-card-h ui-card-h--sep"><x-ui.icon name="{{ $isVideo ? 'video' : 'image' }}" class="ui-card-ic" /><h2>{{ $isVideo ? __('Video') : __('Imagen') }}</h2><span class="sp"></span><span class="ui-card-sub"><span class="ui-req" aria-hidden="true">*</span> {{ __('obligatorio') }}</span></div>
+            <div class="ui-card-p ui-pub-stack">
+                @if ($isVideo)
+                    {{-- Subida de VIDEO (Reel / Historia de video). Requisito: MP4; el resto son
+                         recomendaciones (Meta valida duración/FPS/resolución al publicar). --}}
+                    <label @class(['ui-drop', 'has-file' => (bool) $video, 'is-invalid' => $errors->has('video')])>
+                        @if ($video)
+                            {{-- Identificación del archivo elegido: nombre ORIGINAL + tamaño real
+                                 + máximo aplicable en este momento (cambia con las redes). --}}
+                            <span class="ui-drop-file">
+                                <span class="ui-drop-ic ui-tone--blue"><x-ui.icon name="video" /></span>
+                                <span class="ui-drop-meta">
+                                    <span class="ui-drop-title">{{ $video->getClientOriginalName() }}</span>
+                                    <span class="ui-drop-hint">{{ number_format($video->getSize() / 1048576, 1, '.', '') }} MB · {{ $this->videoMaxLabel() }}</span>
+                                </span>
+                                <span class="ui-btn ui-btn--secondary ui-btn--sm" aria-hidden="true"><x-ui.icon name="refresh" /> {{ __('Haz clic para cambiar el video') }}</span>
+                            </span>
+                        @else
+                            <span class="ui-drop-ic"><x-ui.icon name="upload" /></span>
+                            <span class="ui-drop-title">{{ __('Subir video') }}</span>
+                            <span class="ui-drop-hint">
+                                @if ($contentType === 'reel')
+                                    {{ __('MP4 · Máximo 250 MB · 3–90 s · Vertical 9:16 recomendado') }}
+                                @elseif ($contentType === 'post')
+                                    {{ __('MP4 · Máximo 250 MB · Vertical u horizontal') }}
+                                @elseif ($toInstagram)
+                                    {{ __('MP4 · Máximo 100 MB para Instagram · 3–60 s · Vertical 9:16 recomendado') }}
                                 @else
-                                    {{ __('JPG y PNG · Vertical 9:16 recomendado · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+                                    {{ __('MP4 · Máximo 250 MB · 3–60 s · Vertical 9:16 recomendado') }}
                                 @endif
-                            @else
-                                @if ($toInstagram)
-                                    {{ __('JPEG · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+                            </span>
+                        @endif
+                        <input type="file" wire:model="video" accept="video/mp4" class="ui-sr" @error('video') aria-invalid="true" aria-describedby="pub-file-error" @enderror>
+                    </label>
+                    <div wire:loading wire:target="video" class="ui-help"><span class="ui-spin"></span> {{ __('Subiendo video…') }}</div>
+                    @error('video') <p class="ui-error" id="pub-file-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                @else
+                    <label @class(['ui-drop', 'has-file' => (bool) $image, 'is-invalid' => $errors->has('image'), 'is-story' => $contentType === 'story'])>
+                        @if ($image)
+                            <span class="ui-drop-preview"><img src="{{ $image->temporaryUrl() }}" alt="{{ __('Vista previa') }}"></span>
+                            <span class="ui-drop-file">
+                                <span class="ui-drop-meta">
+                                    <span class="ui-drop-title">{{ $image->getClientOriginalName() }}</span>
+                                    <span class="ui-drop-hint">{{ $image->getSize() >= 1048576 ? number_format($image->getSize() / 1048576, 1, '.', '').' MB' : max(1, (int) round($image->getSize() / 1024)).' KB' }}</span>
+                                </span>
+                                <span class="ui-btn ui-btn--secondary ui-btn--sm" aria-hidden="true"><x-ui.icon name="refresh" /> {{ __('Haz clic para cambiar la imagen') }}</span>
+                            </span>
+                        @else
+                            <span class="ui-drop-ic"><x-ui.icon name="upload" /></span>
+                            <span class="ui-drop-title">{{ __('Subir imagen') }}</span>
+                            <span class="ui-drop-hint">
+                                {{-- Instagram exige JPEG; sin IG, el PNG también pasa TAL CUAL. --}}
+                                @if ($contentType === 'story')
+                                    @if ($toInstagram)
+                                        {{ __('JPEG · Vertical 9:16 recomendado · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+                                    @else
+                                        {{ __('JPG y PNG · Vertical 9:16 recomendado · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+                                    @endif
                                 @else
-                                    {{ __('JPG y PNG · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+                                    @if ($toInstagram)
+                                        {{ __('JPEG · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+                                    @else
+                                        {{ __('JPG y PNG · MCA no recomprime ni redimensiona el archivo antes de enviarlo a la plataforma.') }}
+                                    @endif
                                 @endif
-                            @endif
-                        </span>
-                    @endif
-                    <input type="file" wire:model="image" accept="image/jpeg,image/png" hidden>
-                </label>
-                <div wire:loading wire:target="image" class="sp-uploading">{{ __('Subiendo imagen…') }}</div>
-                @error('image') <p class="sp-err">{{ $message }}</p> @enderror
-            @endif
-
-            {{-- Las Historias no llevan descripción (las APIs de destino no la usan como un post). --}}
-            @if ($contentType !== 'story')
-                <label class="sp-field">
-                    <span>{{ __('Descripción') }}</span>
-                    <textarea wire:model="caption" rows="4" maxlength="2200"
-                              placeholder="{{ __('Escribe la descripción de la publicación…') }}"></textarea>
-                </label>
-            @endif
-
-            <div class="sp-nets">
-                <span class="sp-nets__label">{{ __('Publicar en') }}</span>
-                <label class="sp-net {{ $hasFacebook ? '' : 'off' }}">
-                    <input type="checkbox" wire:model="toFacebook" @checked($toFacebook && $hasFacebook) @disabled(! $hasFacebook)>
-                    @include('social::partials.provider-icon', ['provider' => 'facebook', 'size' => 18])
-                    {{ __('Facebook (Página)') }} @unless($hasFacebook) <em>· {{ __('sin canal') }}</em> @endunless
-                </label>
-                <label class="sp-net {{ $hasInstagram ? '' : 'off' }}">
-                    <input type="checkbox" wire:model="toInstagram" @checked($toInstagram && $hasInstagram) @disabled(! $hasInstagram)>
-                    @include('social::partials.provider-icon', ['provider' => 'instagram', 'size' => 18])
-                    {{ __('Instagram') }} @unless($hasInstagram) <em>· {{ __('sin canal') }}</em> @endunless
-                </label>
+                            </span>
+                        @endif
+                        <input type="file" wire:model="image" accept="image/jpeg,image/png" class="ui-sr" @error('image') aria-invalid="true" aria-describedby="pub-file-error" @enderror>
+                    </label>
+                    <div wire:loading wire:target="image" class="ui-help"><span class="ui-spin"></span> {{ __('Subiendo imagen…') }}</div>
+                    @error('image') <p class="ui-error" id="pub-file-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                @endif
             </div>
 
-            <button type="submit" class="sp-btn" wire:target="publish" wire:loading.attr="disabled">
-                <span wire:loading.remove wire:target="publish">
-                    @if ($contentType === 'reel') {{ __('Publicar Reel') }}
-                    @elseif ($contentType === 'story') {{ __('Publicar Historia') }}
-                    @else {{ __('Publicar') }} @endif
-                </span>
-                <span wire:loading wire:target="publish">{{ __('Publicando…') }}</span>
-            </button>
+            {{-- ===================== Descripción ===================== --}}
+            <div class="ui-card-h ui-card-h--sep"><x-ui.icon name="file-text" class="ui-card-ic" /><h2>{{ __('Descripción') }}</h2></div>
+            <div class="ui-card-p">
+                {{-- Las Historias no llevan descripción (las APIs de destino no la usan como un post). --}}
+                @if ($contentType !== 'story')
+                    <div class="ui-field">
+                        <label class="ui-sr" for="pub-caption">{{ __('Descripción') }}</label>
+                        <textarea id="pub-caption" wire:model="caption" rows="6" maxlength="2200" x-on:input="chars = $event.target.value.length"
+                                  @class(['ui-input ui-textarea ui-pub-caption', 'is-invalid' => $errors->has('caption')])
+                                  placeholder="{{ __('Escribe la descripción de la publicación…') }}" aria-describedby="pub-caption-count"></textarea>
+                        <div class="ui-pub-count">
+                            @error('caption') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                            <span class="sp"></span>
+                            <span id="pub-caption-count" :class="{ 'is-near': chars > 2000 }" aria-live="polite"><span x-text="chars">{{ mb_strlen($caption) }}</span> / 2200</span>
+                        </div>
+                    </div>
+                @else
+                    <p class="ui-help ui-pub-nodesc"><x-ui.icon name="eye" /> {{ __('Las Historias se publican sin descripción.') }}</p>
+                @endif
+            </div>
+
+            {{-- ===================== Destino ===================== --}}
+            <div class="ui-card-h ui-card-h--sep"><x-ui.icon name="globe" class="ui-card-ic" /><h2>{{ __('Publicar en') }}</h2></div>
+            <div class="ui-card-p">
+                <div class="ui-nets" role="group" aria-label="{{ __('Publicar en') }}">
+                    <label @class(['ui-net', 'is-off' => ! $hasFacebook])>
+                        <input type="checkbox" wire:model.live="toFacebook" @checked($toFacebook && $hasFacebook) @disabled(! $hasFacebook)>
+                        <span class="ui-net-ic">@include('social::partials.provider-icon', ['provider' => 'facebook', 'size' => 22])</span>
+                        <span class="ui-net-text"><b>{{ __('Facebook (Página)') }}</b>
+                            <small>@if ($hasFacebook){{ __('Página de Facebook conectada') }}@else{{ __('sin canal') }}@endif</small></span>
+                    </label>
+                    <label @class(['ui-net', 'is-off' => ! $hasInstagram])>
+                        <input type="checkbox" wire:model.live="toInstagram" @checked($toInstagram && $hasInstagram) @disabled(! $hasInstagram)>
+                        <span class="ui-net-ic">@include('social::partials.provider-icon', ['provider' => 'instagram', 'size' => 22])</span>
+                        <span class="ui-net-text"><b>{{ __('Instagram') }}</b>
+                            <small>@if ($hasInstagram){{ __('Cuenta de Instagram conectada') }}@else{{ __('sin canal') }}@endif</small></span>
+                    </label>
+                </div>
+            </div>
         </form>
 
-        {{-- ---------- RESULTADO POR RED ---------- --}}
-        <div class="sp-card sp-result">
-            @if ($result)
-                <h2>{{ __('Resultado') }}</h2>
-                @foreach ($result as $r)
-                    <div class="sp-res {{ $r['status'] === 'published' ? 'ok' : ($r['status'] === 'processing' ? 'wait' : 'ko') }}">
-                        @include('social::partials.provider-icon', ['provider' => $r['network'] === 'facebook' ? 'facebook' : 'instagram', 'size' => 18])
-                        <span class="sp-res__net">{{ $r['network'] === 'facebook' ? 'Facebook' : 'Instagram' }}</span>
-                        @if ($r['status'] === 'published')
-                            <span class="sp-badge ok"><x-ui.icon name="check" class="w-4 h-4" /> {{ __('Publicado') }}</span>
-                            @if ($r['url'])
-                                <a href="{{ $r['url'] }}" target="_blank" rel="noopener" class="sp-link">{{ __('Ver post') }}</a>
-                            @endif
-                        @elseif ($r['status'] === 'processing')
-                            <span class="sp-badge wait"><x-ui.icon name="clock" class="w-4 h-4" /> {{ __('Procesando') }}</span>
-                            <button type="button" class="sp-resume" wire:click="resumeTarget({{ $r['id'] }})"
-                                    wire:loading.attr="disabled" wire:target="resumeTarget">
-                                <span wire:loading.remove wire:target="resumeTarget">{{ __('Continuar') }}</span>
-                                <span wire:loading wire:target="resumeTarget">{{ __('Comprobando…') }}</span>
-                            </button>
-                        @else
-                            <span class="sp-badge ko"><x-ui.icon name="x" class="w-4 h-4" /> {{ __('Falló') }}</span>
-                        @endif
-                        @if ($r['status'] !== 'published' && $r['error'])
-                            <p class="sp-res__err {{ $r['status'] === 'processing' ? 'is-wait' : '' }}">{{ $r['error'] }}</p>
-                        @endif
-                    </div>
-                @endforeach
-            @else
-                <div class="sp-empty">
-                    <x-ui.icon name="image" class="w-8 h-8" />
-                    <p>{{ __('Aún no has publicado nada') }}</p>
-                    <small>{{ __('Sube una imagen, escribe la descripción y pulsa Publicar. El resultado de cada red aparecerá aquí.') }}</small>
+        {{-- ===================== Publicación y resultado ===================== --}}
+        <aside class="ui-pub-side">
+            <section class="ui-card" aria-labelledby="pub-sum-t">
+                <div class="ui-card-h"><x-ui.icon name="send" class="ui-card-ic" /><h2 id="pub-sum-t">{{ __('Publicación') }}</h2></div>
+                <div class="ui-card-p ui-pub-stack">
+                    <dl class="ui-meta ui-pub-sum">
+                        <dt>{{ __('Formato') }}</dt><dd>{{ $formats[$contentType][0] }} · {{ $isVideo ? __('Video') : __('Imagen') }}</dd>
+                        <dt>{{ __('Archivo') }}</dt>
+                        <dd>@if ($file)<span class="ui-break">{{ $file->getClientOriginalName() }}</span>@else<span class="t-nil">{{ __('Sin archivo') }}</span>@endif</dd>
+                        <dt>{{ __('Descripción') }}</dt>
+                        <dd>@if ($contentType === 'story')<span class="t-nil">{{ __('No aplica') }}</span>@else<span x-text="chars > 0 ? chars + ' ' + (chars === 1 ? @js(__('carácter')) : @js(__('caracteres'))) : @js(__('Sin descripción'))">{{ $caption !== '' ? trans_choice(':n carácter|:n caracteres', mb_strlen($caption), ['n' => mb_strlen($caption)]) : __('Sin descripción') }}</span>@endif</dd>
+                        <dt>{{ __('Destinos') }}</dt>
+                        <dd class="ui-pub-targets">
+                            @forelse ($targets as $t)
+                                <span>@include('social::partials.provider-icon', ['provider' => $t, 'size' => 15]) {{ $t === 'facebook' ? 'Facebook' : 'Instagram' }}</span>
+                            @empty
+                                <span class="t-nil">{{ __('Ninguno') }}</span>
+                            @endforelse
+                        </dd>
+                    </dl>
+                    <button type="submit" form="pub-form" class="ui-btn ui-btn--primary ui-pub-go" wire:target="publish" wire:loading.attr="disabled">
+                        <span class="ui-btn-label" wire:loading.remove wire:target="publish"><x-ui.icon name="send" />
+                            @if ($contentType === 'reel') {{ __('Publicar Reel') }}
+                            @elseif ($contentType === 'story') {{ __('Publicar Historia') }}
+                            @else {{ __('Publicar') }} @endif
+                        </span>
+                        <span wire:loading wire:target="publish"><span class="ui-spin"></span> {{ __('Publicando…') }}</span>
+                    </button>
+                    <p class="ui-help">{{ __('Se publica de inmediato en cada red elegida; el resultado de cada una aparece abajo.') }}</p>
                 </div>
-            @endif
-        </div>
+            </section>
+
+            <section class="ui-card" aria-labelledby="pub-res-t" aria-live="polite">
+                <div class="ui-card-h"><x-ui.icon name="activity" class="ui-card-ic" /><h2 id="pub-res-t">{{ __('Resultado') }}</h2></div>
+                @if ($result)
+                    <ul class="ui-list">
+                        @foreach ($result as $r)
+                            @php
+                                $net = $r['network'] === 'facebook' ? 'facebook' : 'instagram';
+                                [$tone, $icon, $label] = match ($r['status']) {
+                                    'published' => ['success', 'check', __('Publicado')],
+                                    'processing' => ['warning', 'clock', __('Procesando')],
+                                    default => ['danger', 'x', __('Falló')],
+                                };
+                            @endphp
+                            <li wire:key="res-{{ $r['id'] ?? $loop->index }}">
+                                <div class="ui-list-item ui-pub-res">
+                                    <span class="ui-net-ic">@include('social::partials.provider-icon', ['provider' => $net, 'size' => 20])</span>
+                                    <span class="ui-list-main">
+                                        <span class="ui-person-line">
+                                            <span class="ui-list-title">{{ $net === 'facebook' ? 'Facebook' : 'Instagram' }}</span>
+                                            <x-ui.badge :tone="$tone" :icon="$icon">{{ $label }}</x-ui.badge>
+                                        </span>
+                                        @if ($r['status'] !== 'published' && $r['error'])
+                                            <span @class(['ui-pub-err', 'is-wait' => $r['status'] === 'processing'])>{{ $r['error'] }}</span>
+                                        @endif
+                                    </span>
+                                    <span class="ui-list-aside">
+                                        @if ($r['status'] === 'published' && $r['url'])
+                                            <a href="{{ $r['url'] }}" target="_blank" rel="noopener" class="ui-link">{{ __('Ver post') }} <x-ui.icon name="external-link" /></a>
+                                        @elseif ($r['status'] === 'processing')
+                                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" wire:click="resumeTarget({{ $r['id'] }})"
+                                                    wire:loading.attr="disabled" wire:target="resumeTarget">
+                                                <span wire:loading.remove wire:target="resumeTarget">{{ __('Continuar') }}</span>
+                                                <span wire:loading wire:target="resumeTarget"><span class="ui-spin"></span> {{ __('Comprobando…') }}</span>
+                                            </button>
+                                        @endif
+                                    </span>
+                                </div>
+                            </li>
+                        @endforeach
+                    </ul>
+                @else
+                    <div class="ui-empty ui-pub-empty">
+                        <div class="ui-empty-ic"><x-ui.icon name="send" /></div>
+                        <b>{{ __('Aún no has publicado nada') }}</b>
+                        {{ __('Sube una imagen, escribe la descripción y pulsa Publicar. El resultado de cada red aparecerá aquí.') }}
+                    </div>
+                @endif
+            </section>
+        </aside>
     </div>
 </div>

@@ -267,6 +267,9 @@ return [
         'bookingSlug' => 'alias del enlace',
         'programId' => 'programa de interés',
         'instructions' => 'instrucciones',
+
+        // Publicador
+        'caption' => 'descripción',
     ],
 
 ];

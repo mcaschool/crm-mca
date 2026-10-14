@@ -291,6 +291,9 @@ return [
         'bookingSlug' => 'link alias',
         'programId' => 'program of interest',
         'instructions' => 'instructions',
+
+        // Publisher
+        'caption' => 'caption',
     ],
 
 ];
