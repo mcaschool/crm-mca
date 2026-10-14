@@ -2383,5 +2383,10 @@
     "Filtrar por estado de atención": "Filter by attention status",
     "Ninguna conversación coincide.": "No conversations match.",
     "Nombre o identificador": "Name or identifier",
-    "Solo no leídas": "Unread only"
+    "Solo no leídas": "Unread only",
+    "En el CRM": "In the CRM",
+    "Este contacto no tiene leads.": "This contact has no leads.",
+    "Instagram y Messenger no comparten un identificador verificable con los contactos del CRM, así que no se vinculan automáticamente.": "Instagram and Messenger don't share a verifiable identifier with CRM contacts, so they aren't linked automatically.",
+    "Ningún contacto del CRM tiene este número de WhatsApp.": "No CRM contact has this WhatsApp number.",
+    "Vinculado por el número de WhatsApp.": "Linked by WhatsApp number."
 }

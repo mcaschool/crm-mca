@@ -392,6 +392,37 @@
                     <div><dt>{{ __('Primer contacto') }}</dt><dd>{{ $selected->created_at?->copy()->setTimezone($tz)->format('d/m/Y H:i') ?? '—' }}</dd></div>
                     <div><dt>{{ __('Último mensaje') }}</dt><dd>{{ $selected->last_message_at?->copy()->setTimezone($tz)->format('d/m/Y H:i') ?? '—' }}</dd></div>
                 </dl>
+
+                {{-- En el CRM: solo con relación verificable (mismo número de WhatsApp) y permiso para verla --}}
+                <section class="ui-inbox-crm" data-testid="inbox-crm" aria-labelledby="inbox-crm-h">
+                    <h3 id="inbox-crm-h">{{ __('En el CRM') }}</h3>
+                    @if ($crmContact)
+                        @php $crmName = trim($crmContact->first_name.' '.$crmContact->last_name) ?: __('Contacto sin nombre'); @endphp
+                        <a class="ui-inbox-crm-contact" href="{{ route('crm.contacts.show', $crmContact) }}" data-testid="inbox-crm-contact">
+                            <x-ui.icon name="contact" /> <span>{{ $crmName }}</span> <x-ui.icon name="chevron-right" />
+                        </a>
+                        <p class="ui-help">{{ __('Vinculado por el número de WhatsApp.') }}</p>
+                        @if ($crmLeads->isNotEmpty())
+                            <ul class="ui-list ui-list--boxed" role="list">
+                                @foreach ($crmLeads as $crmLead)
+                                    <li><a class="ui-list-item" href="{{ route('crm.leads.show', $crmLead) }}">
+                                        <span class="ui-list-main">
+                                            <span class="ui-list-title">{{ $crmLead->program ? ($crmLead->program->translate('name', app()->getLocale()) ?: $crmLead->program->name_es) : $crmLead->productLabel() }}</span>
+                                            <span class="ui-list-meta">{{ $crmLead->created_at?->userTz()->translatedFormat('d M Y') }}</span>
+                                        </span>
+                                        <x-ui.lead-status :status="$crmLead->status" />
+                                    </a></li>
+                                @endforeach
+                            </ul>
+                        @else
+                            <p class="ui-help">{{ __('Este contacto no tiene leads.') }}</p>
+                        @endif
+                    @elseif ($crmLink === 'none')
+                        <p class="ui-help">{{ __('Ningún contacto del CRM tiene este número de WhatsApp.') }}</p>
+                    @elseif ($crmLink === 'unsupported')
+                        <p class="ui-help">{{ __('Instagram y Messenger no comparten un identificador verificable con los contactos del CRM, así que no se vinculan automáticamente.') }}</p>
+                    @endif
+                </section>
             </aside>
         @endif
     </div>

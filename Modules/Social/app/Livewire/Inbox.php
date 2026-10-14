@@ -14,6 +14,7 @@ use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialWhatsAppTemplate;
 use Modules\Social\Services\SocialAutomationService;
 use Modules\Social\Services\SocialOutboundService;
+use Modules\Social\Support\ConversationContactLink;
 use RuntimeException;
 
 /**
@@ -329,6 +330,21 @@ class Inbox extends Component
                 ->get()
             : collect();
 
+        // Ficha comercial: solo con una relación verificable (mismo número de WhatsApp en la misma
+        // institución) y si quien mira puede ver el contacto. Se calcula; no se guarda nada.
+        $crmLink = null;
+        $crmContact = null;
+        $crmLeads = collect();
+        if ($selected !== null) {
+            $link = ConversationContactLink::resolve($selected);
+            $crmLink = $link['state'];
+            if ($link['contact'] !== null && (auth()->user()?->can('view', $link['contact']) ?? false)) {
+                $crmContact = $link['contact'];
+                $crmLeads = $crmContact->leads()->with('program')->latest()->limit(3)->get()
+                    ->filter(fn ($lead) => auth()->user()->can('view', $lead))->values();
+            }
+        }
+
         $canReply = $selected !== null
             && in_array($selected->provider, SocialOutboundService::SENDABLE, true);
 
@@ -365,6 +381,9 @@ class Inbox extends Component
             'unreadTotal' => (int) ($totals->unread ?? 0),
             'channels' => $channels,
             'attentionStates' => SocialConversation::AUTOMATION_STATES,
+            'crmLink' => $crmLink,
+            'crmContact' => $crmContact,
+            'crmLeads' => $crmLeads,
             'selected' => $selected,
             'messages' => $messages,
             'canReply' => $canReply,

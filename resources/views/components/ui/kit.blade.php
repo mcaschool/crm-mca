@@ -859,6 +859,14 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
 .ui-inbox-filters-row{display:flex;align-items:center;gap:8px;min-width:0}
 .ui-inbox-filters-row > .ui-select{flex:1 1 0;min-width:0;width:100%}
 .ui-inbox-filters-n{margin-left:auto;font-size:12.5px;color:var(--mca-text-3);font-variant-numeric:tabular-nums}
+/* ficha comercial vinculada en el panel de datos de la bandeja */
+.ui-inbox-crm{display:flex;flex-direction:column;gap:8px;padding:14px 18px 18px;border-top:1px solid var(--mca-line)}
+.ui-inbox-crm h3{margin:0;font-size:13px;font-weight:600;color:var(--mca-text)}
+.ui-inbox-crm-contact{display:flex;align-items:center;gap:8px;min-height:40px;padding:6px 10px;border:1px solid var(--mca-line);border-radius:var(--mca-r-ctl);color:var(--mca-text);font-size:13.5px;font-weight:600;text-decoration:none;overflow-wrap:anywhere}
+.ui-inbox-crm-contact:hover{background:var(--mca-surface-hover)}
+.ui-inbox-crm-contact:focus-visible{outline:none;box-shadow:var(--mca-focus)}
+.ui-inbox-crm-contact span{flex:1;min-width:0}
+.ui-inbox-crm-contact .ic{width:16px;height:16px;flex:0 0 auto;color:var(--mca-text-3)}
 .ui-inbox-list-h p b{color:var(--mca-blue);font-weight:600}
 .ui-inbox-convs{flex:1;min-height:0;overflow-y:auto;margin:0;padding:6px;list-style:none;overscroll-behavior:contain}
 .ui-conv{display:flex;align-items:flex-start;gap:12px;width:100%;padding:10px 10px;border:0;border-radius:var(--mca-r-ctl);background:none;font:inherit;text-align:left;color:var(--mca-text);cursor:pointer}
