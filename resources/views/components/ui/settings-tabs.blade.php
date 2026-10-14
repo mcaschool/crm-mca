@@ -4,27 +4,27 @@
   sección es su propia pantalla, pero comparten esta cabecera para leerse como una
   sola pantalla de configuración. Solo-Admin (el gating vive en cada componente).
   Para añadir una sección futura: agrega una entrada a $tabs.
+  Marcado del kit: x-ui.page-header + .ui-tabs / .ui-tab (role="tablist"/"tab", aria-selected).
 --}}
 @php
     $tabs = [
-        ['label' => 'General', 'route' => 'settings.index'],
-        ['label' => 'Remitentes de correo', 'route' => 'settings.email-senders'],
-        ['label' => 'Plantillas de correo', 'route' => 'settings.email-templates'],
+        ['label' => __('General'), 'route' => 'settings.index', 'icon' => 'building'],
+        ['label' => __('Remitentes de correo'), 'route' => 'settings.email-senders', 'icon' => 'mail'],
+        ['label' => __('Plantillas de correo'), 'route' => 'settings.email-templates', 'icon' => 'file-text'],
     ];
+    // En las actualizaciones de Livewire la petición es /livewire/update: la pestaña activa
+    // se deduce de la ruta original de la página para que no se pierda tras cada acción.
+    $currentPath = trim((string) \Livewire\Livewire::originalPath(), '/');
 @endphp
-<div class="mca-head">
-    <div>
-        <h1 class="mca-h1">{{ __('Ajustes') }}</h1>
-        <p class="mca-sub">{{ __('Configuración del panel: marca institucional, remitentes de correo y más.') }}</p>
-    </div>
-</div>
+<x-ui.page-header :title="__('Ajustes')" :subtitle="__('Configuración del panel: marca institucional, remitentes de correo y más.')" />
 
-<div role="tablist" style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin:6px 0 20px;flex-wrap:wrap">
-    @foreach ($tabs as $t)
-        @php $on = request()->routeIs($t['route']); @endphp
-        <a href="{{ route($t['route']) }}" role="tab" aria-selected="{{ $on ? 'true' : 'false' }}"
-            style="padding:9px 15px;font-size:13.5px;font-weight:600;text-decoration:none;margin-bottom:-1px;border-bottom:2px solid {{ $on ? 'var(--mca, #1E5AA8)' : 'transparent' }};color:{{ $on ? 'var(--ink, #13253D)' : 'var(--muted, #61748F)' }}">
-            {{ $t['label'] }}
-        </a>
-    @endforeach
-</div>
+<nav aria-label="{{ __('Secciones de Ajustes') }}">
+    <div role="tablist" class="ui-tabs">
+        @foreach ($tabs as $t)
+            @php $on = request()->routeIs($t['route']) || trim((string) parse_url(route($t['route']), PHP_URL_PATH), '/') === $currentPath; @endphp
+            <a href="{{ route($t['route']) }}" role="tab" class="ui-tab" aria-selected="{{ $on ? 'true' : 'false' }}" @if ($on) aria-current="page" @endif>
+                <x-ui.icon :name="$t['icon']" /> {{ $t['label'] }}
+            </a>
+        @endforeach
+    </div>
+</nav>

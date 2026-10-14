@@ -1,147 +1,146 @@
-<div>
-    <x-ui.styles />
-    <div class="mca-panel mca-page">
-        <div class="mca-head">
-            <div style="display:flex;align-items:center;gap:12px">
-                <a href="{{ route('users.index') }}" class="btn btn-ghost btn-sm" title="Volver"><x-ui.icon name="chevron-left" class="ic" style="width:16px;height:16px" /></a>
-                <div>
-                    <h1 class="mca-h1">{{ $editing ? 'Editar usuario' : 'Crear usuario' }}</h1>
-                    <p class="mca-sub">Perfil de un asesor humano del equipo.</p>
-                </div>
-            </div>
-        </div>
+<div class="mca-page">
+    <div class="ui-narrow">
+        <x-ui.page-header :title="$editing ? __('Editar usuario') : __('Crear usuario')" :subtitle="__('Perfil de un asesor humano del equipo.')" :back="route('users.index')" :backLabel="__('Usuarios')" />
 
         @if (session('status'))
-            <div class="mca-toast ok fade"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
+            <div class="ui-alert ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('status') }}</div>
         @endif
 
-        {{-- Enlace de invitacion (acceso) --}}
-        @if ($invitationLink)
-            <div class="card card-p fade" style="border-color:#cfe0f5;background:#f6faff;margin-bottom:16px">
-                <div style="display:flex;align-items:center;gap:8px;color:var(--mca);font-weight:700;margin-bottom:6px">
-                    <x-ui.icon name="mail" class="ic" style="width:18px;height:18px" /> Enlace de acceso
-                </div>
-                <p class="mca-help" style="margin:0 0 10px">Comparte este enlace con la persona para que fije su contraseña. Caduca por seguridad; puedes generar otro. (En producción se enviaría por correo.)</p>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <input type="text" readonly value="{{ $invitationLink }}" id="invlink"
-                           style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:10px;font-size:12px;background:#fff;color:var(--muted)">
-                    <button type="button" class="btn btn-ghost btn-sm" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('invlink').value);this.textContent='Copiado'">Copiar</button>
-                </div>
-            </div>
-        @endif
-
-        <div class="card card-p fade">
-            @if ($editing)
-                <div style="display:flex;align-items:center;gap:16px;padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--line)">
-                    <span class="mca-av lg">
-                        @if ($avatar)
-                            <img src="{{ $avatar->temporaryUrl() }}" alt="preview">
-                        @elseif ($avatarUrl)
-                            <img src="{{ $avatarUrl }}" alt="{{ $name }}">
-                        @else
-                            <x-ui.icon name="user" />
-                        @endif
-                    </span>
-                    <div>
-                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                            <label class="mca-filebtn">
-                                <x-ui.icon name="upload" class="ic" style="width:15px;height:15px" /> Elegir foto
-                                <input type="file" wire:model="avatar" accept=".png,.jpg,.jpeg,.svg,.webp,.gif" class="hidden">
-                            </label>
-                            @if ($avatar)
-                                <button type="button" wire:click="saveAvatar" class="btn btn-primary btn-sm">Guardar foto</button>
-                            @endif
-                            @if ($avatarUrl)
-                                <button type="button" wire:click="removeAvatar" class="btn btn-ghost btn-sm">Quitar</button>
-                            @endif
-                            <span wire:loading wire:target="avatar" class="mca-help"><span class="mca-spin"></span> Cargando…</span>
-                        </div>
-                        @error('avatar') <span class="mca-err">{{ $message }}</span> @enderror
-                        <div class="mca-help">PNG, JPG, SVG o WebP · máx 1 MB. Sin foto se usa un avatar por defecto.</div>
+        <div class="ui-stack">
+            {{-- Enlace de invitacion (acceso) --}}
+            @if ($invitationLink)
+                <div class="ui-callout ui-tone--blue ui-callout--stack" role="status">
+                    <b><x-ui.icon name="mail" /> {{ __('Enlace de acceso') }}</b>
+                    <span>{{ __('Comparte este enlace con la persona para que fije su contraseña. Caduca por seguridad; puedes generar otro. (En producción se enviaría por correo.)') }}</span>
+                    <div class="ui-inline">
+                        <input type="text" readonly value="{{ $invitationLink }}" id="invlink" class="ui-input ui-mono" aria-label="{{ __('Enlace de acceso') }}">
+                        <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('invlink').value);this.textContent=@js(__('Copiado'))">{{ __('Copiar') }}</button>
                     </div>
                 </div>
             @endif
 
-            <div class="field">
-                <label>Nombre</label>
-                <input type="text" wire:model="name" maxlength="120" placeholder="Nombre y apellidos">
-                @error('name') <span class="mca-err">{{ $message }}</span> @enderror
-            </div>
-
-            <div class="field">
-                <label>Correo (usuario de acceso)</label>
-                @if ($editing)
-                    <input type="email" value="{{ $email }}" disabled style="background:var(--paper);color:var(--muted)">
-                    <div class="mca-help">El correo es la identidad de login y no se puede cambiar tras crear el usuario.</div>
-                @else
-                    <input type="email" wire:model="email" maxlength="190" placeholder="persona@mcaschool.education">
-                    @error('email') <span class="mca-err">{{ $message }}</span> @enderror
-                @endif
-            </div>
-
-            <div class="field">
-                <label>Número de identidad <span class="mca-muted" style="font-weight:400">· dato sensible (cifrado)</span></label>
-                <input type="text" wire:model="nationalId" maxlength="40" autocomplete="off" placeholder="Documento de identidad">
-                @error('nationalId') <span class="mca-err">{{ $message }}</span> @enderror
-                <div class="mca-help">Se guarda cifrado. Solo el Admin lo ve completo aquí; en el resto del sistema aparece enmascarado.</div>
-            </div>
-
-            <div style="display:flex;gap:16px;flex-wrap:wrap">
-                <div class="field" style="flex:1;min-width:180px">
-                    <label>Departamento</label>
-                    <select wire:model="department">
-                        <option value="">— Sin asignar —</option>
-                        @foreach ($departments as $dep)
-                            <option value="{{ $dep }}">{{ $dep }}</option>
-                        @endforeach
-                    </select>
-                    @error('department') <span class="mca-err">{{ $message }}</span> @enderror
-                </div>
-                <div class="field" style="flex:1;min-width:180px">
-                    <label>Rol</label>
-                    <select wire:model="role">
-                        @foreach ($roles as $r)
-                            <option value="{{ $r->value }}">{{ $r->label() }}</option>
-                        @endforeach
-                    </select>
-                    @error('role') <span class="mca-err">{{ $message }}</span> @enderror
-                </div>
-            </div>
-
-            <div class="field" style="margin-bottom:0">
-                <label>Estado</label>
-                <div class="mca-seg">
-                    <button type="button" wire:click="$set('status','active')" class="{{ $status === 'active' ? 'active' : '' }}">Activo</button>
-                    <button type="button" wire:click="$set('status','inactive')" class="{{ $status === 'inactive' ? 'active' : '' }}">Inactivo</button>
-                </div>
-                @error('status') <span class="mca-err">{{ $message }}</span> @enderror
-            </div>
-
-            @if ($canGrantSuperAdmin)
-                <label class="chk" style="margin-top:14px;display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink)">
-                    <input type="checkbox" wire:model="is_super_admin"> Super-admin (ve todas las instituciones)
-                </label>
-            @endif
-
-            <label class="chk" style="margin-top:14px;display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink)">
-                <input type="checkbox" wire:model="canEmailCode" style="margin-top:3px">
-                <span>Modo código de correo (HTML/CSS)
-                    <span class="mca-help" style="display:block;margin-top:2px">Permite al usuario alternar el editor a código HTML con vista previa para diseñar correos y plantillas. El Administrador siempre lo tiene.</span>
-                </span>
-            </label>
-        </div>
-
-        <div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <button type="button" wire:click="save" wire:loading.attr="disabled" wire:target="save" class="btn btn-primary">
-                <span wire:loading.remove wire:target="save"><x-ui.icon name="check" class="ic" style="width:16px;height:16px" /> {{ $editing ? 'Guardar cambios' : 'Crear usuario' }}</span>
-                <span wire:loading wire:target="save"><span class="mca-spin"></span> Guardando…</span>
-            </button>
-            <a href="{{ route('users.index') }}" class="btn btn-ghost">Cancelar</a>
+            {{-- Foto de perfil (solo al editar) --}}
             @if ($editing)
-                <button type="button" wire:click="regenerateInvitation" class="btn btn-ghost" style="margin-left:auto">
-                    <x-ui.icon name="refresh" class="ic" style="width:15px;height:15px" /> Generar enlace de acceso
-                </button>
+                <section class="ui-card" aria-labelledby="uf-photo-title">
+                    <div class="ui-card-h"><x-ui.icon name="image" class="ui-card-ic" /><h2 id="uf-photo-title">{{ __('Foto de perfil') }}</h2></div>
+                    <div class="ui-card-p">
+                        <div class="ui-media">
+                            <x-ui.avatar :name="$name" :src="$avatar ? $avatar->temporaryUrl() : $avatarUrl" size="xl" />
+                            <div class="ui-media-body">
+                                <div class="ui-inline">
+                                    <label class="ui-btn ui-btn--secondary ui-btn--sm">
+                                        <x-ui.icon name="upload" /> {{ __('Elegir foto') }}
+                                        <input type="file" wire:model="avatar" accept=".png,.jpg,.jpeg,.svg,.webp,.gif" class="ui-sr">
+                                    </label>
+                                    @if ($avatar)
+                                        <button type="button" wire:click="saveAvatar" class="ui-btn ui-btn--primary ui-btn--sm"><x-ui.icon name="check" /> {{ __('Guardar foto') }}</button>
+                                    @endif
+                                    @if ($avatarUrl)
+                                        <button type="button" wire:click="removeAvatar" class="ui-btn ui-btn--ghost ui-btn--sm"><x-ui.icon name="trash" /> {{ __('Quitar') }}</button>
+                                    @endif
+                                    <span wire:loading wire:target="avatar" class="ui-help"><span class="ui-spin"></span> {{ __('Cargando…') }}</span>
+                                </div>
+                                @error('avatar') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                                <p class="ui-help">{{ __('PNG, JPG, SVG o WebP · máx 1 MB. Sin foto se usa un avatar por defecto.') }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
             @endif
+
+            {{-- Datos de la persona --}}
+            <section class="ui-card" aria-labelledby="uf-data-title">
+                <div class="ui-card-h"><x-ui.icon name="user" class="ui-card-ic" /><h2 id="uf-data-title">{{ __('Datos personales') }}</h2></div>
+                <div class="ui-card-p">
+                    <div class="ui-form-grid">
+                        <x-ui.field class="ui-span-full" :label="__('Nombre')" for="uf-name" :error="$errors->first('name')">
+                            <input id="uf-name" type="text" wire:model="name" maxlength="120" placeholder="{{ __('Nombre y apellidos') }}" autocomplete="off"
+                                @if ($errors->has('name')) aria-describedby="uf-name-error" @endif @class(['ui-input', 'is-invalid' => $errors->has('name')])>
+                        </x-ui.field>
+
+                        @if ($editing)
+                            <x-ui.field class="ui-span-full" :label="__('Correo (usuario de acceso)')" for="uf-email" :help="__('El correo es la identidad de login y no se puede cambiar tras crear el usuario.')">
+                                <input id="uf-email" type="email" value="{{ $email }}" disabled class="ui-input" aria-describedby="uf-email-help">
+                            </x-ui.field>
+                        @else
+                            <x-ui.field class="ui-span-full" :label="__('Correo (usuario de acceso)')" for="uf-email" :error="$errors->first('email')">
+                                <input id="uf-email" type="email" wire:model="email" maxlength="190" placeholder="persona@mcaschool.education" autocomplete="off"
+                                    @if ($errors->has('email')) aria-describedby="uf-email-error" @endif @class(['ui-input', 'is-invalid' => $errors->has('email')])>
+                            </x-ui.field>
+                        @endif
+
+                        <x-ui.field :label="__('Número de identidad')" :hint="__('dato sensible (cifrado)')" for="uf-nid" :error="$errors->first('nationalId')"
+                            :help="__('Se guarda cifrado. Solo el Admin lo ve completo aquí; en el resto del sistema aparece enmascarado.')">
+                            <input id="uf-nid" type="text" wire:model="nationalId" maxlength="40" autocomplete="off" placeholder="{{ __('Documento de identidad') }}"
+                                aria-describedby="{{ $errors->has('nationalId') ? 'uf-nid-error ' : '' }}uf-nid-help" @class(['ui-input', 'is-invalid' => $errors->has('nationalId')])>
+                        </x-ui.field>
+
+                        <x-ui.field :label="__('Departamento')" for="uf-dep" :error="$errors->first('department')">
+                            <select id="uf-dep" wire:model="department" @if ($errors->has('department')) aria-describedby="uf-dep-error" @endif @class(['ui-select', 'is-invalid' => $errors->has('department')])>
+                                <option value="">— {{ __('Sin asignar') }} —</option>
+                                @foreach ($departments as $dep)
+                                    <option value="{{ $dep }}">{{ $dep }}</option>
+                                @endforeach
+                            </select>
+                        </x-ui.field>
+                    </div>
+                </div>
+            </section>
+
+            {{-- Rol, estado y permisos --}}
+            <section class="ui-card" aria-labelledby="uf-access-title">
+                <div class="ui-card-h">
+                    <x-ui.icon name="shield" class="ui-card-ic" /><h2 id="uf-access-title">{{ __('Rol y acceso') }}</h2>
+                    @if ($editing)
+                        <span class="sp"></span>
+                        <x-ui.button size="sm" icon="refresh" wire:click="regenerateInvitation">{{ __('Generar enlace de acceso') }}</x-ui.button>
+                    @endif
+                </div>
+                <div class="ui-card-p ui-stack">
+                    <div class="ui-form-grid">
+                        <x-ui.field :label="__('Rol')" for="uf-role" :error="$errors->first('role')">
+                            <select id="uf-role" wire:model="role" @if ($errors->has('role')) aria-describedby="uf-role-error" @endif @class(['ui-select', 'is-invalid' => $errors->has('role')])>
+                                @foreach ($roles as $r)
+                                    <option value="{{ $r->value }}">{{ __($r->label()) }}</option>
+                                @endforeach
+                            </select>
+                        </x-ui.field>
+
+                        <div class="ui-field">
+                            <span class="ui-label" id="uf-status-label">{{ __('Estado') }}</span>
+                            <div class="ui-checks--field ui-inline">
+                                <div class="ui-seg" role="group" aria-labelledby="uf-status-label">
+                                    <button type="button" wire:click="$set('status','active')" aria-pressed="{{ $status === 'active' ? 'true' : 'false' }}">{{ __('Activo') }}</button>
+                                    <button type="button" wire:click="$set('status','inactive')" aria-pressed="{{ $status === 'inactive' ? 'true' : 'false' }}">{{ __('Inactivo') }}</button>
+                                </div>
+                            </div>
+                            @error('status') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                        </div>
+                    </div>
+
+                    @if ($canGrantSuperAdmin)
+                        <label class="ui-check">
+                            <input type="checkbox" wire:model="is_super_admin"> {{ __('Super-admin (ve todas las instituciones)') }}
+                        </label>
+                    @endif
+
+                    <label class="ui-check ui-check--top">
+                        <input type="checkbox" wire:model="canEmailCode">
+                        <span class="ui-check-text">
+                            <span class="ui-strong">{{ __('Modo código de correo (HTML/CSS)') }}</span>
+                            <span class="ui-help">{{ __('Permite al usuario alternar el editor a código HTML con vista previa para diseñar correos y plantillas. El Administrador siempre lo tiene.') }}</span>
+                        </span>
+                    </label>
+                </div>
+            </section>
+
+            <div class="ui-form-actions ui-form-actions--end">
+                <x-ui.button variant="ghost" :href="route('users.index')">{{ __('Cancelar') }}</x-ui.button>
+                <button type="button" wire:click="save" wire:loading.attr="disabled" wire:target="save" class="ui-btn ui-btn--primary">
+                    <span wire:loading.remove wire:target="save" class="ui-btn-label"><x-ui.icon name="check" /> {{ $editing ? __('Guardar cambios') : __('Crear usuario') }}</span>
+                    <span wire:loading wire:target="save"><span class="ui-btn-label"><span class="ui-spin"></span> {{ __('Guardando…') }}</span></span>
+                </button>
+            </div>
         </div>
     </div>
 </div>

@@ -1,22 +1,21 @@
+{{--
+  Perfil heredado de Breeze (/profile): ruta conservada por compatibilidad, sin enlace en el
+  menú (el perfil del panel es /mi-perfil). Solo presentación con el kit; formularios, rutas
+  y nombres de campos intactos.
+--}}
 <x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Profile') }}
-        </h2>
-    </x-slot>
+    <div class="mca-page">
+        <div class="ui-narrow">
+            <x-ui.page-header :title="__('Datos de la cuenta')" :subtitle="__('Nombre, correo y contraseña de tu cuenta.')" />
 
-    <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
-                <div class="max-w-xl">
+            <div class="ui-stack">
+                <section class="ui-card" aria-labelledby="pf-info-title">
                     @include('profile.partials.update-profile-information-form')
-                </div>
-            </div>
+                </section>
 
-            <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
-                <div class="max-w-xl">
+                <section class="ui-card" aria-labelledby="pf-pass-title">
                     @include('profile.partials.update-password-form')
-                </div>
+                </section>
             </div>
         </div>
     </div>

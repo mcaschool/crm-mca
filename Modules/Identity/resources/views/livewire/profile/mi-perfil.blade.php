@@ -1,137 +1,136 @@
-<div>
-    <x-ui.styles />
-    <div class="mca-panel mca-page">
-        <p class="mca-sub" style="margin:0 0 18px">Tus datos son gestionados por un administrador. Aquí solo puedes cambiar tu contraseña y tu foto.</p>
+<div class="mca-page">
+    <div class="ui-narrow">
+        <x-ui.page-header :title="__('Mi perfil')" :subtitle="__('Tus datos son gestionados por un administrador. Aquí solo puedes cambiar tu contraseña y tu foto.')" />
 
         @if (session('status'))
-            <div class="mca-toast ok fade"><x-ui.icon name="check" class="ic" /> {{ session('status') }}</div>
+            <div class="ui-alert ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('status') }}</div>
         @endif
 
         @if (session('mustEnable2fa') && ! $user->hasTwoFactorEnabled())
-            <div class="mca-toast err fade"><x-ui.icon name="lock" class="ic" /> La verificación en dos pasos es obligatoria. Actívala aquí abajo para poder usar el panel.</div>
+            <div class="ui-alert ui-tone--danger" role="alert"><x-ui.icon name="lock" /> {{ __('La verificación en dos pasos es obligatoria. Actívala aquí abajo para poder usar el panel.') }}</div>
         @endif
 
-        {{-- Foto de perfil (editable por el propio usuario) --}}
-        <div class="card card-p fade" style="margin-bottom:16px">
-            <div style="display:flex;align-items:center;gap:16px">
-                <span class="mca-av lg">
-                    @if ($avatar)
-                        <img src="{{ $avatar->temporaryUrl() }}" alt="preview">
-                    @elseif ($user->avatarUrl())
-                        <img src="{{ $user->avatarUrl() }}" alt="{{ $user->name }}">
-                    @else
-                        <x-ui.icon name="user" />
-                    @endif
-                </span>
-                <div>
-                    <h3 class="mca-h1" style="font-size:16px;margin:0 0 3px">Foto de perfil</h3>
-                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
-                        <label class="mca-filebtn">
-                            <x-ui.icon name="upload" class="ic" style="width:15px;height:15px" /> Elegir foto
-                            <input type="file" wire:model="avatar" accept=".png,.jpg,.jpeg,.svg,.webp,.gif" class="hidden">
-                        </label>
-                        @if ($avatar)
-                            <button type="button" wire:click="saveAvatar" class="btn btn-primary btn-sm">Guardar foto</button>
-                        @endif
-                        @if ($user->avatarUrl())
-                            <button type="button" wire:click="removeAvatar" class="btn btn-ghost btn-sm">Quitar</button>
-                        @endif
-                        <span wire:loading wire:target="avatar" class="mca-help"><span class="mca-spin"></span> Cargando…</span>
-                    </div>
-                    @error('avatar') <span class="mca-err">{{ $message }}</span> @enderror
-                    <div class="mca-help">PNG, JPG, SVG o WebP · máx 1 MB. Es tu imagen; puedes cambiarla cuando quieras.</div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Datos (solo lectura) --}}
-        <div class="card card-p fade">
-            <h3 class="mca-h1" style="font-size:16px;margin-bottom:16px">Datos personales</h3>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
-                <div>
-                    <div class="mca-lbl">Nombre</div>
-                    <div style="font-weight:600;color:var(--ink)">{{ $user->name }}</div>
-                </div>
-                <div>
-                    <div class="mca-lbl">Correo (usuario de acceso)</div>
-                    <div style="font-weight:600;color:var(--ink)">{{ $user->email }}</div>
-                </div>
-                <div>
-                    <div class="mca-lbl">Número de identidad</div>
-                    <div style="font-weight:600;color:var(--ink);font-family:monospace">{{ $user->maskedNationalId() ?? '—' }}</div>
-                </div>
-                <div>
-                    <div class="mca-lbl">Departamento</div>
-                    <div>@if ($user->department)<span class="badge badge-soft">{{ $user->department }}</span>@else <span class="mca-muted">Sin asignar</span> @endif</div>
-                </div>
-                <div>
-                    <div class="mca-lbl">Rol</div>
-                    <div style="font-weight:600;color:var(--ink)">{{ $user->role->label() }}</div>
-                </div>
-            </div>
-            <div class="mca-help" style="margin-top:14px">Si algún dato es incorrecto, contacta con un administrador. No puedes editarlos desde aquí.</div>
-        </div>
-
-        {{-- Cambiar contraseña --}}
-        <div class="card card-p fade" style="margin-top:16px">
-            <h3 class="mca-h1" style="font-size:16px;margin-bottom:4px">Cambiar contraseña</h3>
-            <p class="mca-sub" style="margin-bottom:16px">Escribe tu nueva contraseña y confírmala. Debe cumplir los requisitos de seguridad.</p>
-
-            <div style="display:flex;gap:16px;flex-wrap:wrap">
-                <div class="field" style="flex:1;min-width:200px">
-                    <label>Nueva contraseña</label>
-                    <input type="password" wire:model="password" autocomplete="new-password">
-                    @error('password') <span class="mca-err">{{ $message }}</span> @enderror
-                </div>
-                <div class="field" style="flex:1;min-width:200px">
-                    <label>Confirmar nueva contraseña</label>
-                    <input type="password" wire:model="password_confirmation" autocomplete="new-password">
-                </div>
-            </div>
-            <button type="button" wire:click="updatePassword" wire:loading.attr="disabled" wire:target="updatePassword" class="btn btn-primary" style="margin-top:6px">
-                <span wire:loading.remove wire:target="updatePassword"><x-ui.icon name="check" class="ic" style="width:16px;height:16px" /> Actualizar contraseña</span>
-                <span wire:loading wire:target="updatePassword"><span class="mca-spin"></span> Guardando…</span>
-            </button>
-        </div>
-
-        {{-- Verificación en dos pasos (2FA TOTP) --}}
-        <div class="card card-p fade" style="margin-top:16px">
-            <h3 class="mca-h1" style="font-size:16px;margin-bottom:4px"><x-ui.icon name="lock" class="ic" style="width:17px;height:17px;vertical-align:-3px" /> Verificación en dos pasos</h3>
-            <p class="mca-sub" style="margin-bottom:16px">Obligatoria para acceder al panel. Usa una app como Google Authenticator, Authy o Microsoft Authenticator.</p>
-
-            @if ($user->hasTwoFactorEnabled())
-                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                    <span class="badge badge-on"><x-ui.icon name="check" class="ic" style="width:13px;height:13px" /> Activa</span>
-                    <button type="button" wire:click="regenerateRecoveryCodes" class="btn btn-ghost btn-sm"><x-ui.icon name="refresh" class="ic" style="width:14px;height:14px" /> Regenerar códigos de recuperación</button>
-                    <button type="button" wire:click="disableTwoFactor" wire:confirm="¿Seguro que quieres desactivar la verificación en dos pasos?" class="btn btn-soft btn-sm">Desactivar</button>
-                </div>
-            @elseif ($user->two_factor_secret !== null)
-                <p class="mca-help" style="margin-top:0;margin-bottom:12px">1) Escanea el código con tu app. 2) Introduce el código de 6 dígitos para confirmar.</p>
-                <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">
-                    <div style="width:210px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px;line-height:0">{!! $twoFactorQr !!}</div>
-                    <div style="flex:1;min-width:220px">
-                        <div class="field">
-                            <label>Código de verificación</label>
-                            <input type="text" wire:model="confirmCode" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code">
-                            @error('confirmCode') <span class="mca-err">{{ $message }}</span> @enderror
+        <div class="ui-stack">
+            {{-- Foto de perfil (editable por el propio usuario) --}}
+            <section class="ui-card" aria-labelledby="me-photo-title">
+                <div class="ui-card-h"><x-ui.icon name="image" class="ui-card-ic" /><h2 id="me-photo-title">{{ __('Foto de perfil') }}</h2></div>
+                <div class="ui-card-p">
+                    <div class="ui-media">
+                        <x-ui.avatar :name="$user->name" :src="$avatar ? $avatar->temporaryUrl() : $user->avatarUrl()" size="xl" />
+                        <div class="ui-media-body">
+                            <div class="ui-inline">
+                                <label class="ui-btn ui-btn--secondary ui-btn--sm">
+                                    <x-ui.icon name="upload" /> {{ __('Elegir foto') }}
+                                    <input type="file" wire:model="avatar" accept=".png,.jpg,.jpeg,.svg,.webp,.gif" class="ui-sr">
+                                </label>
+                                @if ($avatar)
+                                    <button type="button" wire:click="saveAvatar" class="ui-btn ui-btn--primary ui-btn--sm"><x-ui.icon name="check" /> {{ __('Guardar foto') }}</button>
+                                @endif
+                                @if ($user->avatarUrl())
+                                    <button type="button" wire:click="removeAvatar" class="ui-btn ui-btn--ghost ui-btn--sm"><x-ui.icon name="trash" /> {{ __('Quitar') }}</button>
+                                @endif
+                                <span wire:loading wire:target="avatar" class="ui-help"><span class="ui-spin"></span> {{ __('Cargando…') }}</span>
+                            </div>
+                            @error('avatar') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                            <p class="ui-help">{{ __('PNG, JPG, SVG o WebP · máx 1 MB. Es tu imagen; puedes cambiarla cuando quieras.') }}</p>
                         </div>
-                        <button type="button" wire:click="confirmTwoFactor" class="btn btn-primary btn-sm">Confirmar y activar</button>
                     </div>
                 </div>
-            @else
-                <button type="button" wire:click="enableTwoFactor" class="btn btn-primary btn-sm"><x-ui.icon name="lock" class="ic" style="width:14px;height:14px" /> Activar 2FA</button>
-            @endif
+            </section>
 
-            @if ($recoveryCodesShown !== [])
-                <div style="margin-top:16px;background:#FFFDF3;border:1px solid #F3E7BF;border-radius:10px;padding:12px 14px">
-                    <div style="font-weight:700;color:var(--ink);margin-bottom:4px">Códigos de recuperación</div>
-                    <p class="mca-help" style="margin-top:0">Guárdalos en un lugar seguro. Cada uno sirve UNA sola vez si pierdes el teléfono. No se volverán a mostrar.</p>
-                    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-family:monospace;font-size:13.5px;margin:10px 0">
-                        @foreach ($recoveryCodesShown as $rc)<div>{{ $rc }}</div>@endforeach
-                    </div>
-                    <button type="button" wire:click="dismissRecoveryCodes" class="btn btn-ghost btn-sm">Ya los he guardado</button>
+            {{-- Datos (solo lectura) --}}
+            <section class="ui-card" aria-labelledby="me-data-title">
+                <div class="ui-card-h"><x-ui.icon name="user" class="ui-card-ic" /><h2 id="me-data-title">{{ __('Datos personales') }}</h2></div>
+                <div class="ui-card-p">
+                    <dl class="ui-meta ui-meta--spaced ui-meta--stack-sm">
+                        <dt>{{ __('Nombre') }}</dt>
+                        <dd class="ui-strong">{{ $user->name }}</dd>
+                        <dt>{{ __('Correo (usuario de acceso)') }}</dt>
+                        <dd class="ui-strong">{{ $user->email }}</dd>
+                        <dt>{{ __('Número de identidad') }}</dt>
+                        <dd class="ui-mono">{{ $user->maskedNationalId() ?? '—' }}</dd>
+                        <dt>{{ __('Departamento') }}</dt>
+                        <dd>@if ($user->department)<x-ui.badge tone="blue">{{ $user->department }}</x-ui.badge>@else <span class="t-nil">{{ __('Sin asignar') }}</span> @endif</dd>
+                        <dt>{{ __('Rol') }}</dt>
+                        <dd class="ui-strong">{{ __($user->role->label()) }}</dd>
+                    </dl>
                 </div>
-            @endif
+                <p class="ui-card-note">{{ __('Si algún dato es incorrecto, contacta con un administrador. No puedes editarlos desde aquí.') }}</p>
+            </section>
+
+            {{-- Cambiar contraseña --}}
+            <section class="ui-card" aria-labelledby="me-pass-title">
+                <div class="ui-card-h"><x-ui.icon name="lock" class="ui-card-ic" /><h2 id="me-pass-title">{{ __('Cambiar contraseña') }}</h2></div>
+                <div class="ui-card-p ui-stack">
+                    <p class="ui-help">{{ __('Escribe tu nueva contraseña y confírmala. Debe cumplir los requisitos de seguridad.') }}</p>
+                    <div class="ui-form-grid">
+                        <x-ui.field :label="__('Nueva contraseña')" for="me-pass" :error="$errors->first('password')">
+                            <input id="me-pass" type="password" wire:model="password" autocomplete="new-password"
+                                @if ($errors->has('password')) aria-describedby="me-pass-error" @endif @class(['ui-input', 'is-invalid' => $errors->has('password')])>
+                        </x-ui.field>
+                        <x-ui.field :label="__('Confirmar nueva contraseña')" for="me-pass2">
+                            <input id="me-pass2" type="password" wire:model="password_confirmation" autocomplete="new-password" class="ui-input">
+                        </x-ui.field>
+                    </div>
+                </div>
+                <div class="ui-card-f ui-card-f--end">
+                    <button type="button" wire:click="updatePassword" wire:loading.attr="disabled" wire:target="updatePassword" class="ui-btn ui-btn--primary">
+                        <span wire:loading.remove wire:target="updatePassword" class="ui-btn-label"><x-ui.icon name="check" /> {{ __('Actualizar contraseña') }}</span>
+                        <span wire:loading wire:target="updatePassword"><span class="ui-btn-label"><span class="ui-spin"></span> {{ __('Guardando…') }}</span></span>
+                    </button>
+                </div>
+            </section>
+
+            {{-- Verificación en dos pasos (2FA TOTP) --}}
+            <section class="ui-card" aria-labelledby="me-2fa-title">
+                <div class="ui-card-h">
+                    <x-ui.icon name="shield" class="ui-card-ic" /><h2 id="me-2fa-title">{{ __('Verificación en dos pasos') }}</h2>
+                    @if ($user->hasTwoFactorEnabled())
+                        <x-ui.badge tone="success" dot>{{ __('Activa') }}</x-ui.badge>
+                    @endif
+                </div>
+                <div class="ui-card-p ui-stack">
+                    <p class="ui-help">{{ __('Obligatoria para acceder al panel. Usa una app como Google Authenticator, Authy o Microsoft Authenticator.') }}</p>
+
+                    @if ($user->hasTwoFactorEnabled())
+                        <div class="ui-inline">
+                            <x-ui.button size="sm" icon="refresh" wire:click="regenerateRecoveryCodes">{{ __('Regenerar códigos de recuperación') }}</x-ui.button>
+                            <x-ui.button size="sm" variant="danger" wire:click="disableTwoFactor" wire:confirm="{{ __('¿Seguro que quieres desactivar la verificación en dos pasos?') }}">{{ __('Desactivar') }}</x-ui.button>
+                        </div>
+                    @elseif ($user->two_factor_secret !== null)
+                        <p class="ui-help">{{ __('1) Escanea el código con tu app. 2) Introduce el código de 6 dígitos para confirmar.') }}</p>
+                        <div class="ui-media ui-media--top">
+                            <div class="ui-qr" role="img" aria-label="{{ __('Código QR para tu app de autenticación') }}">{!! $twoFactorQr !!}</div>
+                            <div class="ui-media-body">
+                                <x-ui.field :label="__('Código de verificación')" for="me-2fa-code" :error="$errors->first('confirmCode')">
+                                    <input id="me-2fa-code" type="text" wire:model="confirmCode" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code"
+                                        @if ($errors->has('confirmCode')) aria-describedby="me-2fa-code-error" @endif @class(['ui-input', 'ui-mono', 'is-invalid' => $errors->has('confirmCode')])>
+                                </x-ui.field>
+                                <div>
+                                    <x-ui.button variant="primary" size="sm" icon="check" wire:click="confirmTwoFactor">{{ __('Confirmar y activar') }}</x-ui.button>
+                                </div>
+                            </div>
+                        </div>
+                    @else
+                        <div>
+                            <x-ui.button variant="primary" size="sm" icon="lock" wire:click="enableTwoFactor">{{ __('Activar 2FA') }}</x-ui.button>
+                        </div>
+                    @endif
+
+                    @if ($recoveryCodesShown !== [])
+                        <div class="ui-callout ui-tone--warning ui-callout--stack">
+                            <b><x-ui.icon name="alert-triangle" /> {{ __('Códigos de recuperación') }}</b>
+                            <span>{{ __('Guárdalos en un lugar seguro. Cada uno sirve UNA sola vez si pierdes el teléfono. No se volverán a mostrar.') }}</span>
+                            <div class="ui-codes">
+                                @foreach ($recoveryCodesShown as $rc)<div>{{ $rc }}</div>@endforeach
+                            </div>
+                            <div>
+                                <x-ui.button size="sm" wire:click="dismissRecoveryCodes">{{ __('Ya los he guardado') }}</x-ui.button>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+            </section>
         </div>
     </div>
 </div>
