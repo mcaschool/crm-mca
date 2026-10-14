@@ -1,49 +1,77 @@
-<div>
-    <x-ui.styles />
-    <div class="mca-panel mca-page">
+{{-- Conversación del widget (solo lectura): mismo hilo (.ui-chat) y línea de tiempo (.ui-timeline)
+     que la ficha del lead. El prospecto a la derecha; el asesor y el sistema a la izquierda. --}}
+<div class="mca-page">
+    @php
+        $contactFirst = $conversation->contact?->first_name ?: '';
+    @endphp
+    <div class="ui-narrow">
         <x-ui.page-header :title="__('Conversación').' #'.$conversation->id"
             :back="$conversation->contact ? route('crm.contacts.show', $conversation->contact) : null"
-            :back-label="__('Ficha del contacto')" />
+            :back-label="__('Ficha del contacto')">
+            <x-slot:badge><x-ui.badge tone="neutral" icon="eye">{{ __('Solo lectura') }}</x-ui.badge></x-slot:badge>
+        </x-ui.page-header>
 
-        <div style="display:flex;flex-direction:column;gap:16px;max-width:820px">
-            <div class="mca-muted" style="font-size:12.5px">
-                {{ __('Conversación') }} #{{ $conversation->id }} · {{ __('Modo') }}: {{ $conversation->mode }} · {{ __('Idioma') }}: {{ $conversation->language }} ·
-                {{ __('Estado') }}: {{ $conversation->status }} · {{ __('Solo lectura') }}
+        <div class="ui-stack">
+            <div class="ui-record-meta">
+                <span>{{ __('Modo') }}: <b>{{ $conversation->mode }}</b></span>
+                <span>{{ __('Idioma') }}: <b>{{ $conversation->language }}</b></span>
+                <span>{{ __('Estado') }}: <b>{{ $conversation->status }}</b></span>
             </div>
 
-            <div class="card card-p fade">
-                <h3 style="font-size:14.5px;font-weight:600;margin:0 0 14px">{{ __('Mensajes') }}</h3>
-                @forelse ($conversation->messages as $message)
-                    @php $isUser = $message->sender_type === 'user'; @endphp
-                    <div style="margin-bottom:12px;{{ $isUser ? 'text-align:right' : '' }}" wire:key="msg-{{ $message->id }}">
-                        <div style="display:inline-block;max-width:80%;text-align:left;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.5;
-                            {{ $isUser
-                                ? 'background:#FFFCF0;border:1px solid #F6EECB;color:var(--ink);border-bottom-right-radius:4px'
-                                : 'background:var(--mca-blue-soft);color:var(--ink);border-bottom-left-radius:4px' }}">
-                            <div style="font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:3px">{{ $message->sender_type }} · {{ $message->created_at?->diffForHumans() }}</div>
-                            {{ $message->content }}
-                        </div>
+            <section class="ui-card" aria-labelledby="h-conv-msgs">
+                <div class="ui-card-h">
+                    <x-ui.icon name="message-circle" class="ui-card-ic" /><h2 id="h-conv-msgs">{{ __('Mensajes') }}</h2>
+                    @if ($conversation->messages->isNotEmpty())<span class="ui-badge ui-badge--count ui-tone--neutral">{{ $conversation->messages->count() }}</span>@endif
+                </div>
+                @if ($conversation->messages->isNotEmpty())
+                    <div class="ui-chat">
+                        @foreach ($conversation->messages as $message)
+                            @php
+                                $isUser = $message->sender_type === 'user';
+                                $from = match ($message->sender_type) {
+                                    'user' => $contactFirst ?: __('Prospecto'),
+                                    'celia' => 'Celia',
+                                    'system' => __('Sistema'),
+                                    default => $message->sender_type,
+                                };
+                                $html = e($message->content);
+                                $html = preg_replace('~(https?://[^\s<]+)~u', '<a href="$1" target="_blank" rel="noopener">$1</a>', $html);
+                            @endphp
+                            <div class="ui-msg {{ $isUser ? 'ui-msg--in' : '' }}" wire:key="msg-{{ $message->id }}">
+                                <div class="ui-msg-from">{{ $from }} · <time datetime="{{ $message->created_at?->toIso8601String() }}" title="{{ $message->created_at?->translatedFormat('d M Y · H:i') }}">{{ $message->created_at?->diffForHumans() }}</time></div>
+                                <div class="ui-msg-bubble">{!! nl2br($html) !!}</div>
+                            </div>
+                        @endforeach
                     </div>
-                @empty
-                    <p class="mca-muted" style="font-size:13.5px;margin:0">{{ __('Sin mensajes.') }}</p>
-                @endforelse
-            </div>
-
-            <div class="card card-p fade">
-                <h3 style="font-size:14.5px;font-weight:600;margin:0 0 10px">{{ __('Línea de tiempo de eventos') }}</h3>
-                @forelse ($conversation->events as $event)
-                    @php $detail = $event->detail(); @endphp
-                    <div style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;padding:5px 0;color:var(--muted)" wire:key="conv-ev-{{ $event->id }}">
-                        <x-ui.icon name="{{ $event->icon() }}" style="width:14px;height:14px;margin-top:2px;flex:0 0 auto" />
-                        <div>
-                            <span style="color:var(--ink);font-weight:600">{{ $event->label() }}</span>@if ($detail)<span style="color:var(--ink)">: {{ $detail }}</span>@endif
-                            <span> · {{ $event->created_at?->diffForHumans() }}</span>
-                        </div>
+                @else
+                    <div class="ui-card-p">
+                        <div class="ui-callout"><x-ui.icon name="message-circle" /><span>{{ __('Sin mensajes.') }}</span></div>
                     </div>
-                @empty
-                    <p class="mca-muted" style="font-size:13.5px;margin:0">{{ __('Sin eventos.') }}</p>
-                @endforelse
-            </div>
+                @endif
+            </section>
+
+            <section class="ui-card" aria-labelledby="h-conv-events">
+                <div class="ui-card-h">
+                    <x-ui.icon name="clock" class="ui-card-ic" /><h2 id="h-conv-events">{{ __('Línea de tiempo de eventos') }}</h2>
+                    @if ($conversation->events->isNotEmpty())<span class="ui-badge ui-badge--count ui-tone--neutral">{{ $conversation->events->count() }}</span>@endif
+                </div>
+                @if ($conversation->events->isNotEmpty())
+                    <ol class="ui-timeline">
+                        @foreach ($conversation->events as $event)
+                            @php $detail = $event->detail(); @endphp
+                            <li wire:key="conv-ev-{{ $event->id }}">
+                                <span class="ui-tl-ic ui-tone--neutral"><x-ui.icon name="{{ $event->icon() }}" /></span>
+                                <div class="ui-tl-body">
+                                    {{ $event->label() }}@if ($detail)<span class="ui-tl-detail">: {{ $detail }}</span>@endif
+                                    <div class="ui-tl-time"><time datetime="{{ $event->created_at?->toIso8601String() }}" title="{{ $event->created_at?->translatedFormat('d M Y · H:i') }}">{{ $event->created_at?->diffForHumans() }}</time></div>
+                                </div>
+                            </li>
+                        @endforeach
+                    </ol>
+                @else
+                    <p class="ui-list-empty">{{ __('Sin eventos.') }}</p>
+                @endif
+            </section>
         </div>
     </div>
 </div>
