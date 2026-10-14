@@ -579,6 +579,9 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
 .ui-vr-title{margin:0;font-size:14px;font-weight:600;color:var(--mca-text)}
 .ui-vr .ui-meta dd{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 @media(max-width:767px){.ui-vr + .ui-vr{border-left:0;border-top:1px solid var(--mca-line)}}
+/* «Mi sala de Zoom»: iniciar como anfitrión + copiar el enlace de invitados (a lo ancho en móvil) */
+.ui-vr-start form{display:contents}
+@media(max-width:640px){.ui-vr-start > .ui-btn,.ui-vr-start form > .ui-btn{flex:1 1 100%;justify-content:center}}
 /* plantillas de correo del Calendario: editor y vista previa */
 .ui-tpl-key{min-width:260px}
 .ui-tpl-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px}

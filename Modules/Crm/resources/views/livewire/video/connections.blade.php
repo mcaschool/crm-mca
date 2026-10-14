@@ -166,48 +166,63 @@
             </form>
         </div>
 
-        {{-- Acceso a las reuniones del anfitrión institucional (decisión explícita) --}}
+        {{-- Seguridad de las reuniones de Zoom e inicio como anfitrión desde el CRM --}}
         @if ($zoom?->status === 'active')
-            <section class="ui-card" aria-labelledby="vc-zaccess-title" wire:key="vc-zaccess">
-                <div class="ui-card-h"><x-ui.icon name="lock" class="ui-card-ic" /><h2 id="vc-zaccess-title">{{ __('Acceso a las reuniones de Zoom sin licencia individual') }}</h2>
-                    <span class="sp"></span><x-ui.badge :tone="$hostless ? 'warning' : 'success'" dot>{{ $hostless ? __('Sin anfitrión') : __('Con sala de espera') }}</x-ui.badge>
-                </div>
-                <p class="ui-card-intro">{{ __('Cada usuario sin licencia en Zoom recibe su propia reunión (id y enlace distintos) del anfitrión técnico institucional. Nadie del CRM es anfitrión de esas reuniones: solo quien entre con la cuenta institucional tiene los controles. Los usuarios con licencia en la cuenta son anfitriones de la suya y no se ven afectados.') }}</p>
-                <div class="ui-card-p ui-stack">
-                    <div class="ui-nets" role="radiogroup" aria-label="{{ __('Modalidad de acceso') }}">
-                        <label class="ui-net"><input type="radio" wire:model.live="zoomAccess" value="waiting_room">
-                            <span class="ui-net-text"><b>{{ __('Con sala de espera (recomendado)') }}</b>
-                                <small>{{ __('Los invitados esperan hasta que alguien inicie la reunión con la cuenta institucional.') }}</small></span></label>
-                        <label class="ui-net"><input type="radio" wire:model.live="zoomAccess" value="hostless">
-                            <span class="ui-net-text"><b>{{ __('Acceso sin anfitrión') }}</b>
-                                <small>{{ __('«Unirse antes que el anfitrión» activado y sala de espera desactivada.') }}</small></span></label>
+            @php($zoomRooms = $rooms->filter(fn ($r) => $r->provider === 'zoom' && $r->status === 'active'))
+            @php($nSecure = $zoomRooms->filter(fn ($r) => $r->secure === true)->count())
+            @php($nInsecure = $zoomRooms->filter(fn ($r) => $r->secure === false)->count())
+            @php($nUnknown = $zoomRooms->filter(fn ($r) => $r->secure === null)->count())
+            <div class="ui-grid ui-grid--2">
+                <section class="ui-card ui-entity" aria-labelledby="vc-zsec-title" wire:key="vc-zsec">
+                    <div class="ui-card-h"><x-ui.icon name="lock" class="ui-card-ic" /><h2 id="vc-zsec-title">{{ __('Seguridad de las reuniones de Zoom') }}</h2></div>
+                    <div class="ui-card-p ui-grow ui-stack">
+                        <p class="ui-help">{{ __('Todas las salas usan la modalidad segura: sala de espera activa, sin «unirse antes que el anfitrión», con contraseña y entrada silenciada. Los invitados nunca entran sin que el anfitrión los admita.') }}</p>
+                        <dl class="ui-meta">
+                            <dt>{{ __('Protegidas') }}</dt><dd>{{ $nSecure }}</dd>
+                            <dt>{{ __('Sin proteger') }}</dt><dd>@if ($nInsecure > 0)<span class="ui-text-danger">{{ $nInsecure }}</span>@else 0 @endif</dd>
+                            <dt>{{ __('Sin verificar') }}</dt><dd>{{ $nUnknown }}</dd>
+                        </dl>
+                        @if ($nInsecure > 0 || $nUnknown > 0)
+                            <div class="ui-callout ui-callout--sm ui-tone--warning"><x-ui.icon name="alert-triangle" /> <span>{{ __('Solo las salas protegidas se pueden iniciar desde el CRM. Aplica la configuración segura: no cambia los enlaces ni los anfitriones.') }}</span></div>
+                        @endif
+                        @if ($videoNotice !== '' && $videoTarget === 'zoom-security')
+                            <div @class(['ui-callout', 'ui-callout--sm', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="{{ $videoNoticeError ? 'alert' : 'status' }}" data-testid="vc-security-notice"><x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> <span>{{ $videoNotice }}</span></div>
+                        @endif
                     </div>
-                    @if ($zoomAccess === 'hostless' && ! $hostless)
-                        <div class="ui-callout ui-callout--stack ui-tone--warning" data-testid="vc-hostless-risks">
-                            <b><x-ui.icon name="alert-triangle" /> {{ __('Implicaciones de seguridad') }}</b>
-                            <ul class="ui-callout-list">
-                                <li>{{ __('Cualquiera que tenga el enlace (lleva la contraseña incluida) entra al momento, sin que nadie lo admita, incluso antes que el usuario del CRM.') }}</li>
-                                <li>{{ __('Nadie tiene controles de anfitrión (silenciar a todos, expulsar, bloquear, grabar) salvo quien entre con la cuenta institucional.') }}</li>
-                                <li>{{ __('Una reunión que siga abierta sin anfitrión ocupa la capacidad del anfitrión institucional e impide otras reuniones simultáneas; si ese anfitrión no tiene licencia, Zoom la corta a los 40 minutos.') }}</li>
-                                <li>{{ __('Se mantienen la contraseña y la entrada silenciada. Si la cuenta de Zoom bloquea estas opciones, no se aplicarán y se indicará en cada sala.') }}</li>
-                            </ul>
-                            <label class="ui-check ui-check--top"><input type="checkbox" wire:model="zoomHostlessAck" @error('zoomHostlessAck') aria-invalid="true" aria-describedby="vc-ack-error" @enderror>
-                                <span>{{ __('Entiendo estas implicaciones y decido activar el acceso sin anfitrión para las reuniones del anfitrión institucional.') }}</span></label>
-                            @error('zoomHostlessAck') <p class="ui-error" id="vc-ack-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                    <div class="ui-card-f ui-card-f--end">
+                        <x-ui.button size="sm" variant="primary" icon="lock" wire:click="secureZoomRooms" wire:loading.attr="disabled" wire:target="secureZoomRooms"
+                            wire:confirm="{{ __('¿Aplicar la configuración segura a todas las salas de Zoom activas? Se mantienen sus enlaces y anfitriones.') }}">{{ __('Aplicar configuración segura') }}</x-ui.button>
+                    </div>
+                </section>
+
+                <form class="ui-card ui-entity" aria-labelledby="vc-zstart-title" wire:key="vc-zstart" wire:submit="saveHostStart" novalidate>
+                    <div class="ui-card-h"><x-ui.icon name="video" class="ui-card-ic" /><h2 id="vc-zstart-title">{{ __('Iniciar reuniones desde el CRM') }}</h2>
+                        <span class="sp"></span><x-ui.badge :tone="$savedHostStart === 'off' ? 'neutral' : ($savedHostStart === 'pilot' ? 'warning' : 'success')" dot>{{ match ($savedHostStart) { 'all' => __('Todos'), 'pilot' => __('Prueba piloto'), default => __('Desactivado') } }}</x-ui.badge>
+                    </div>
+                    <div class="ui-card-p ui-grow ui-stack">
+                        <p class="ui-help">{{ __('Cada usuario inicia SU reunión como anfitrión con el botón de su perfil, sin credenciales de Zoom. Quienes no tienen licencia individual lo hacen con la identidad técnica institucional y comparten su capacidad. La administración no puede iniciar reuniones ajenas.') }}</p>
+                        <div class="ui-nets" role="radiogroup" aria-label="{{ __('Habilitación') }}">
+                            <label class="ui-net"><input type="radio" wire:model.live="hostStartMode" value="off"><span class="ui-net-text"><b>{{ __('Desactivado') }}</b><small>{{ __('Hasta completar la prueba piloto.') }}</small></span></label>
+                            <label class="ui-net"><input type="radio" wire:model.live="hostStartMode" value="pilot"><span class="ui-net-text"><b>{{ __('Prueba piloto') }}</b><small>{{ __('Solo un usuario.') }}</small></span></label>
+                            <label class="ui-net"><input type="radio" wire:model.live="hostStartMode" value="all"><span class="ui-net-text"><b>{{ __('Todos') }}</b><small>{{ __('Cada usuario con sala protegida.') }}</small></span></label>
                         </div>
-                    @endif
-                    @if ($hostlessAt)
-                        <p class="ui-help">{{ __('Última decisión: :mode, por :name, :when.', ['mode' => $hostless ? __('acceso sin anfitrión') : __('sala de espera'), 'name' => $hostlessBy ?? '—', 'when' => $hostlessAt->diffForHumans()]) }}</p>
-                    @endif
-                    @if ($videoNotice !== '' && $videoTarget === 'zoom-access')
-                        <div @class(['ui-callout', 'ui-callout--sm', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="{{ $videoNoticeError ? 'alert' : 'status' }}"><x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> <span>{{ $videoNotice }}</span></div>
-                    @endif
-                </div>
-                <div class="ui-card-f ui-card-f--end">
-                    <x-ui.button size="sm" variant="primary" icon="check" wire:click="saveZoomAccess" wire:loading.attr="disabled" wire:target="saveZoomAccess"
-                        :disabled="($zoomAccess === 'hostless') === $hostless">{{ __('Aplicar modalidad') }}</x-ui.button>
-                </div>
-            </section>
+                        @if ($hostStartMode === 'pilot')
+                            <x-ui.field :label="__('Usuario de la prueba piloto')" for="vc-pilot" :error="$errors->first('hostStartPilot')">
+                                <select id="vc-pilot" wire:model="hostStartPilot" @class(['ui-select', 'is-invalid' => $errors->has('hostStartPilot')])>
+                                    <option value="">{{ __('Elige un usuario') }}</option>
+                                    @foreach ($pilotCandidates as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+                                </select>
+                            </x-ui.field>
+                        @endif
+                        @if ($videoNotice !== '' && $videoTarget === 'zoom-start')
+                            <div @class(['ui-callout', 'ui-callout--sm', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="{{ $videoNoticeError ? 'alert' : 'status' }}"><x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> <span>{{ $videoNotice }}</span></div>
+                        @endif
+                    </div>
+                    <div class="ui-card-f ui-card-f--end">
+                        <x-ui.button type="submit" size="sm" variant="primary" icon="check" wire:loading.attr="disabled" wire:target="saveHostStart">{{ __('Guardar') }}</x-ui.button>
+                    </div>
+                </form>
+            </div>
         @endif
 
         {{-- Salas por usuario --}}
@@ -240,6 +255,9 @@
                                                 <x-ui.badge :tone="$rTone" :dot="$rTone === 'success'">{{ $rText }}</x-ui.badge>
                                                 @if ($room)
                                                     <span class="t-2">{{ $hostLabel($room) }}</span>
+                                                    @if ($provider === 'zoom' && $room->status === 'active')
+                                                        <x-ui.badge :tone="$room->secure === true ? 'success' : ($room->secure === false ? 'danger' : 'neutral')">{{ $room->secure === true ? __('Protegida') : ($room->secure === false ? __('Sin proteger') : __('Sin verificar')) }}</x-ui.badge>
+                                                    @endif
                                                 @endif
                                             </span>
                                             @if ($room && $room->last_checked_at)

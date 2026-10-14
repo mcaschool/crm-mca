@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Crm\Livewire\Video;
 
-use App\Models\User;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Carbon;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Modules\Audit\Services\AuditService;
@@ -23,8 +21,9 @@ use Modules\Integrations\Models\Integration;
 
 /**
  * Configuración › Integraciones › Videoconferencias: la conexión institucional de Google Meet y
- * la de Zoom, sus pruebas, la capacidad efectiva de Zoom, la modalidad de acceso de las reuniones
- * del anfitrión institucional y las salas de cada usuario con acceso al Calendario.
+ * la de Zoom, sus pruebas, la capacidad efectiva de Zoom, la configuración segura de las reuniones,
+ * la habilitación del inicio como anfitrión desde el CRM (piloto o general) y las salas de cada
+ * usuario con acceso al Calendario.
  * Solo administración (IntegrationPolicy). Los secretos se escriben, nunca se vuelven a mostrar.
  */
 #[Layout('layouts.app')]
@@ -48,11 +47,11 @@ class Connections extends Component
 
     public int $zoomConcurrency = 1;
 
-    /** Modalidad de las reuniones del anfitrión institucional: waiting_room | hostless. */
-    public string $zoomAccess = 'waiting_room';
+    /** Inicio como anfitrión desde el CRM: off | pilot | all. */
+    public string $hostStartMode = 'off';
 
-    /** Confirmación expresa de las implicaciones del acceso sin anfitrión. */
-    public bool $zoomHostlessAck = false;
+    /** Usuario de la prueba piloto (modo pilot). */
+    public ?int $hostStartPilot = null;
 
     public function mount(VideoConnections $connections, VideoCapacity $capacity): void
     {
@@ -65,7 +64,8 @@ class Connections extends Component
         $this->zoomClientId = (string) $zoom?->secret('client_id', '');
         $this->zoomHostEmail = (string) $zoom?->secret('host_email', '');
         $this->zoomConcurrency = $capacity->limit();
-        $this->zoomAccess = app(VideoRoomService::class)->hostless($zoom) ? 'hostless' : 'waiting_room';
+        $this->hostStartMode = app(VideoRoomService::class)->hostStartMode($zoom);
+        $this->hostStartPilot = app(VideoRoomService::class)->hostStartPilotUserId($zoom);
     }
 
     public function saveGoogle(VideoConnections $connections, AuditService $audit): void
@@ -160,35 +160,45 @@ class Connections extends Component
         }
     }
 
-    /**
-     * Decisión explícita de la administración sobre el acceso a las reuniones del anfitrión
-     * institucional. El acceso sin anfitrión exige confirmar sus implicaciones de seguridad.
-     */
-    public function saveZoomAccess(VideoConnections $connections, VideoRoomService $rooms): void
+    /** Aplica la configuración segura a las salas de Zoom existentes (sin regenerar enlaces). */
+    public function secureZoomRooms(VideoConnections $connections, VideoRoomService $rooms): void
     {
         $this->existing($connections, VideoConnections::ZOOM);
-        $this->validate([
-            'zoomAccess' => ['required', 'in:waiting_room,hostless'],
-            'zoomHostlessAck' => $this->zoomAccess === 'hostless' ? ['accepted'] : [],
-        ], [
-            'zoomHostlessAck.accepted' => __('Para activar el acceso sin anfitrión, confirma que conoces y aceptas sus implicaciones de seguridad.'),
-        ]);
-        $this->videoTarget = 'zoom-access';
+        $this->videoTarget = 'zoom-security';
         try {
-            $r = $rooms->setZoomAccess($this->zoomAccess === 'hostless', auth()->user());
+            $r = $rooms->secureExistingRooms(auth()->user());
         } catch (VideoProviderException $e) {
             $this->videoNotice = $e->userMessage();
             $this->videoNoticeError = true;
 
             return;
         }
-        $this->zoomHostlessAck = false;
-        $done = $this->zoomAccess === 'hostless'
-            ? __('Acceso sin anfitrión activado para las reuniones del anfitrión institucional.')
-            : __('Sala de espera activada para las reuniones del anfitrión institucional.');
-        $this->videoNotice = $done.' '.__('Salas actualizadas: :n.', ['n' => $r['updated']])
-            .($r['failed'] !== [] ? ' '.__('Sin actualizar: :list', ['list' => collect($r['failed'])->map(fn ($m, $name) => $name.' ('.$m.')')->implode('; ')]) : '');
-        $this->videoNoticeError = $r['failed'] !== [];
+        $problems = collect($r['insecure'] + $r['failed'])->map(fn ($m, $name) => $name.' ('.$m.')');
+        $this->videoNotice = __('Salas protegidas: :n.', ['n' => $r['secured']])
+            .($problems->isNotEmpty() ? ' '.__('Sin proteger: :list', ['list' => $problems->implode('; ')]) : '');
+        $this->videoNoticeError = $problems->isNotEmpty();
+    }
+
+    /** Habilita el inicio como anfitrión desde el CRM: desactivado, solo piloto o para todos. */
+    public function saveHostStart(VideoConnections $connections, VideoRoomService $rooms): void
+    {
+        $this->existing($connections, VideoConnections::ZOOM);
+        $this->resetErrorBag();
+        $this->videoTarget = 'zoom-start';
+        try {
+            $rooms->setHostStart($this->hostStartMode, $this->hostStartPilot, auth()->user());
+        } catch (VideoProviderException $e) {
+            $this->videoNotice = $e->userMessage();
+            $this->videoNoticeError = true;
+
+            return;
+        }
+        $this->videoNotice = match ($this->hostStartMode) {
+            'all' => __('Inicio como anfitrión habilitado para todos los usuarios con sala protegida.'),
+            'pilot' => __('Inicio como anfitrión habilitado solo para el usuario de la prueba piloto.'),
+            default => __('Inicio como anfitrión desactivado.'),
+        };
+        $this->videoNoticeError = false;
     }
 
     public function disconnectZoom(VideoConnections $connections, ZoomClient $zoom, AuditService $audit): void
@@ -216,9 +226,8 @@ class Connections extends Component
             'zoomMasked' => $zoom?->maskedConfig() ?? [],
             'advisors' => $advisors,
             'withAgenda' => $directory->assignableUsers()->pluck('id')->all(),
-            'hostless' => app(VideoRoomService::class)->hostless($zoom),
-            'hostlessBy' => $zoom?->secret('hostless_decided_by') ? User::query()->whereKey((int) $zoom->secret('hostless_decided_by'))->value('name') : null,
-            'hostlessAt' => $zoom?->secret('hostless_decided_at') ? Carbon::parse((string) $zoom->secret('hostless_decided_at')) : null,
+            'savedHostStart' => app(VideoRoomService::class)->hostStartMode($zoom),
+            'pilotCandidates' => $directory->assignableUsers(),
             'rooms' => $rooms,
             'zoomLimit' => $capacity->limit(),
             'zoomMax' => max(1, (int) config('crm.video.zoom.max_concurrency', 2)),

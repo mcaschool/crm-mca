@@ -12,11 +12,15 @@ use Modules\Integrations\Models\Integration;
 /**
  * Cliente de la cuenta institucional de Zoom con Server-to-Server OAuth (grant
  * account_credentials; nunca JWT heredado) y la API REST oficial v2. Solo se conservan la URL de
- * PARTICIPANTE y datos técnicos mínimos: el enlace de inicio (start_url), las contraseñas y las
- * claves de anfitrión de las respuestas se descartan sin guardarse ni registrarse.
+ * PARTICIPANTE y datos técnicos mínimos: las contraseñas y las claves de anfitrión de las
+ * respuestas se descartan sin guardarse ni registrarse. El enlace de inicio (start_url) solo sale
+ * de aquí con startLink(), en memoria, para la redirección del propio usuario: nunca se guarda.
  */
 class ZoomClient
 {
+    /** Modalidad segura (la única): los invitados esperan a que el anfitrión los admita. */
+    public const SECURE_SETTINGS = ['waiting_room' => true, 'join_before_host' => false];
+
     public function __construct(private readonly VideoConnections $connections) {}
 
     /**
@@ -92,7 +96,7 @@ class ZoomClient
      * Busca una reunión «sin hora fija» ya creada con esta marca (reintentos tras un fallo de
      * comunicación: nunca se duplica la reunión).
      *
-     * @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool}|null
+     * @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool, has_password:bool, started:bool}|null
      */
     public function findByMarker(Integration $integration, string $hostId, string $marker): ?array
     {
@@ -118,19 +122,18 @@ class ZoomClient
     /**
      * Crea una reunión permanente (tipo 3, sin hora fija, nunca la PMI) del anfitrión indicado: el
      * propio usuario si tiene licencia en la cuenta, o el anfitrión técnico institucional. Siempre
-     * con contraseña y entrada silenciada. Por defecto, sala de espera y sin «unirse antes»; el
-     * acceso sin anfitrión solo se pide cuando la administración lo decidió expresamente.
+     * en modalidad segura: contraseña, sala de espera, sin «unirse antes» y entrada silenciada.
      *
-     * @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool}
+     * @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool, has_password:bool, started:bool}
      */
-    public function createMeeting(Integration $integration, string $hostId, string $topic, string $agenda, bool $hostless = false): array
+    public function createMeeting(Integration $integration, string $hostId, string $topic, string $agenda): array
     {
         $response = $this->api($integration, 'post', '/users/'.rawurlencode($hostId).'/meetings', [
             'topic' => Str::limit($topic, 190, ''),
             'type' => 3,
             'agenda' => Str::limit($agenda, 1900, ''),
             'default_password' => true,
-            'settings' => $this->accessSettings($hostless) + [
+            'settings' => self::SECURE_SETTINGS + [
                 'host_video' => true,
                 'participant_video' => false,
                 'mute_upon_entry' => true,
@@ -144,35 +147,82 @@ class ZoomClient
     }
 
     /**
-     * Cambia la modalidad de acceso de una reunión existente (mismo id y mismo enlace) y devuelve lo
-     * que Zoom aplicó realmente: una cuenta puede bloquear estas opciones.
+     * Aplica la modalidad segura a una reunión existente (mismo id y mismo enlace) y devuelve lo que
+     * Zoom aplicó realmente: la cuenta puede bloquear alguna opción.
      *
-     * @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool}
+     * @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool, has_password:bool, started:bool}
      */
-    public function updateAccess(Integration $integration, string $id, bool $hostless): array
+    public function secure(Integration $integration, string $id): array
     {
         if (preg_match('/^\d{6,15}$/', $id) !== 1) {
             throw new VideoProviderException('invalid_response', 'zoom.meeting: id no válido');
         }
-        $this->api($integration, 'patch', '/meetings/'.$id, ['settings' => $this->accessSettings($hostless)], 'zoom.meetings.update');
+        $this->api($integration, 'patch', '/meetings/'.$id, ['settings' => self::SECURE_SETTINGS], 'zoom.meetings.update');
 
         return $this->getMeeting($integration, $id);
     }
 
     /**
-     * Sala de espera (por defecto) o acceso sin anfitrión: Zoom exige desactivar la sala de espera
-     * para que «unirse antes que el anfitrión» funcione. La contraseña se mantiene en ambos casos.
+     * ¿La reunión mantiene la modalidad segura (sala de espera, sin «unirse antes», contraseña)?
      *
-     * @return array<string, bool|int>
+     * @param  array{join_before_host:bool, waiting_room:bool, has_password:bool}  $meeting
      */
-    private function accessSettings(bool $hostless): array
+    public static function isSecure(array $meeting): bool
     {
-        return $hostless
-            ? ['waiting_room' => false, 'join_before_host' => true, 'jbh_time' => 0]
-            : ['waiting_room' => true, 'join_before_host' => false];
+        return $meeting['waiting_room'] && ! $meeting['join_before_host'] && $meeting['has_password'];
     }
 
-    /** @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool} */
+    /**
+     * Enlace de INICIO vigente de la reunión (GET /meetings/{id}), validado: https, dominio de Zoom,
+     * ruta /s/{id} y token de inicio. Es una credencial temporal: se devuelve solo en memoria para
+     * redirigir al propio usuario y nunca se guarda, registra ni audita.
+     *
+     * @return array{meeting:array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool, has_password:bool, started:bool}, start_url:string}
+     */
+    public function startLink(Integration $integration, string $id): array
+    {
+        if (preg_match('/^\d{6,15}$/', $id) !== 1) {
+            throw new VideoProviderException('invalid_response', 'zoom.meeting: id no válido');
+        }
+        $response = $this->api($integration, 'get', '/meetings/'.$id, [], 'zoom.meetings.start');
+        $meeting = $this->validMeeting($response);
+        $start = $response->json('start_url');
+        if (! is_string($start) || ! self::validStartUrl($start, $id)) {
+            throw new VideoProviderException('invalid_response', 'zoom.meeting: enlace de inicio no válido');
+        }
+
+        return ['meeting' => $meeting, 'start_url' => $start];
+    }
+
+    /** Enlace de inicio legítimo de Zoom para ESA reunión (sin credenciales, puertos ni otros dominios). */
+    public static function validStartUrl(string $url, string $meetingId): bool
+    {
+        $p = parse_url($url);
+        if (! is_array($p) || ($p['scheme'] ?? '') !== 'https' || isset($p['user']) || isset($p['pass']) || isset($p['port'])) {
+            return false;
+        }
+        $host = strtolower((string) ($p['host'] ?? ''));
+        if ($host !== 'zoom.us' && ! str_ends_with($host, '.zoom.us')) {
+            return false;
+        }
+        parse_str((string) ($p['query'] ?? ''), $query);
+
+        return ($p['path'] ?? '') === '/s/'.$meetingId && is_string($query['zak'] ?? null) && $query['zak'] !== '';
+    }
+
+    /**
+     * Reuniones EN CURSO del anfitrión (GET /users/{id}/meetings?type=live), para su capacidad.
+     *
+     * @return array<int,string>
+     */
+    public function liveMeetingIds(Integration $integration, string $hostId): array
+    {
+        $response = $this->api($integration, 'get', '/users/'.rawurlencode($hostId).'/meetings?'.http_build_query(['type' => 'live', 'page_size' => 300]), [], 'zoom.meetings.live');
+
+        return collect((array) $response->json('meetings', []))->map(fn ($m) => is_array($m) ? (string) ($m['id'] ?? '') : '')->filter()->values()->all();
+    }
+
+    /** @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool, has_password:bool, started:bool} */
     public function getMeeting(Integration $integration, string $id): array
     {
         if (preg_match('/^\d{6,15}$/', $id) !== 1) {
@@ -235,7 +285,7 @@ class ZoomClient
         return $response;
     }
 
-    /** @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool} */
+    /** @return array{id:string, join_url:string, host_id:string, join_before_host:bool, waiting_room:bool, has_password:bool, started:bool} */
     private function validMeeting(Response $response): array
     {
         $id = (string) $response->json('id', '');
@@ -258,6 +308,9 @@ class ZoomClient
             'host_id' => $host,
             'join_before_host' => (bool) $response->json('settings.join_before_host', false),
             'waiting_room' => (bool) $response->json('settings.waiting_room', false),
+            // Contraseña: la devuelve la API o va cifrada en el enlace de participante (pwd=). No se guarda.
+            'has_password' => (is_string($response->json('password')) && $response->json('password') !== '') || str_contains($join, 'pwd='),
+            'started' => $response->json('status') === 'started',
         ];
     }
 }

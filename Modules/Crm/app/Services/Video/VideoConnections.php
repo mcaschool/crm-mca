@@ -147,7 +147,12 @@ class VideoConnections
         if (! is_string($message)) {
             return null;
         }
-        $clean = trim((string) preg_replace(['~https?://\S+~i', '/[\x00-\x1F\x7F]+/u', '/\s+/u'], ['', ' ', ' '], strip_tags($message)));
+        // Fuera enlaces, parámetros con credenciales (zak, token, pwd…) y cadenas con aspecto de token.
+        $clean = trim((string) preg_replace(
+            ['~https?://\S+~i', '/\b(zak|token|access_token|refresh_token|pwd|password|passcode|key|secret)\s*[=:]\s*\S+/i', '/[A-Za-z0-9._~+\/-]{24,}={0,2}/', '/[\x00-\x1F\x7F]+/u', '/\s+/u'],
+            ['', '[…]', '[…]', ' ', ' '],
+            strip_tags($message),
+        ));
 
         return $clean === '' ? null : Str::limit($clean, 200);
     }

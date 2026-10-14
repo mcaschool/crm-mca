@@ -25,6 +25,7 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * @property string $status active|replaced|missing|error
  * @property string|null $host_status
  * @property string|null $host_note
+ * @property bool|null $secure sala de espera + sin «unirse antes» + contraseña, verificado en Zoom
  * @property int|null $created_by_user_id
  * @property Carbon|null $last_checked_at
  * @property string|null $last_error
@@ -40,7 +41,7 @@ class VideoRoom extends Model
 
     protected $fillable = [
         'institution_id', 'user_id', 'provider', 'remote_id', 'join_url', 'join_url_hash', 'host_key', 'status',
-        'host_status', 'host_note', 'created_by_user_id', 'last_checked_at', 'last_error',
+        'host_status', 'host_note', 'secure', 'created_by_user_id', 'last_checked_at', 'last_error',
     ];
 
     protected $attributes = ['status' => 'active'];
@@ -50,6 +51,7 @@ class VideoRoom extends Model
         return [
             'join_url' => 'encrypted',
             'last_checked_at' => 'datetime',
+            'secure' => 'boolean',
         ];
     }
 
@@ -68,5 +70,15 @@ class VideoRoom extends Model
     public function advisorCanHost(): bool
     {
         return in_array($this->host_status, ['assigned', 'advisor_host'], true);
+    }
+
+    /**
+     * ¿Su usuario puede iniciarla como anfitrión desde el CRM? Solo una reunión de Zoom activa, del
+     * propio usuario con licencia o del anfitrión institucional, y con la seguridad verificada.
+     */
+    public function canStartFromCrm(): bool
+    {
+        return $this->provider === 'zoom' && $this->status === 'active' && $this->secure === true
+            && in_array($this->host_status, ['advisor_host', 'institutional_host'], true);
     }
 }
