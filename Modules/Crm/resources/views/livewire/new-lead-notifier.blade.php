@@ -75,7 +75,7 @@
         <style>
             .mca-topbar .icon-btn.snd-on{color:var(--mca-gold);border-color:var(--mca-gold);background:var(--mca-gold-soft)}
             .mca-lead-toasts{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:10px;max-width:min(360px,calc(100vw - 32px));pointer-events:none}
-            .mca-lead-toast{pointer-events:auto;display:flex;align-items:flex-start;gap:11px;background:var(--mca-card);border:1px solid var(--mca-card-border);border-left:3px solid var(--mca-gold);border-radius:var(--mca-radius-sm);box-shadow:var(--mca-shadow);padding:12px 12px 12px 13px;animation:mcaLeadIn .28s cubic-bezier(.2,.7,.3,1)}
+            .mca-lead-toast{pointer-events:auto;display:flex;align-items:flex-start;gap:11px;background:var(--mca-card);border:1px solid var(--mca-card-border);border-radius:var(--mca-radius-sm);box-shadow:var(--mca-shadow);padding:12px 14px;animation:mcaLeadIn .28s cubic-bezier(.2,.7,.3,1)}
             .mca-lead-toast .lt-ic{flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--mca-gold-soft);color:var(--mca-gold)}
             .mca-lead-toast .lt-bd{flex:1 1 auto;min-width:0}
             .mca-lead-toast .lt-h{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mca-ink-3)}

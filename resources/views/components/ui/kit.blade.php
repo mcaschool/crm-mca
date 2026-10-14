@@ -350,9 +350,9 @@ a.ui-list-item:focus-visible,button.ui-list-item:focus-visible{outline:none;box-
 /* calendario del lead (componente compartido de la agenda) */
 .ui-lead-agenda{display:flex;flex-direction:column;gap:10px;min-width:0}
 .ui-next-activity{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:var(--mca-r-ctl);text-decoration:none;color:inherit;
-  background:var(--mca-blue-soft);box-shadow:inset 3px 0 0 var(--mca-blue)}
+  background:var(--mca-blue-soft);box-shadow:inset 0 0 0 1px #D3E1F3}
 .ui-next-activity:hover{background:#E1ECF8}
-.ui-next-activity:focus-visible{outline:none;box-shadow:inset 3px 0 0 var(--mca-blue),var(--mca-focus)}
+.ui-next-activity:focus-visible{outline:none;box-shadow:inset 0 0 0 1px #D3E1F3,var(--mca-focus)}
 .ui-next-kicker{margin:0;font-size:12px;font-weight:600;color:var(--mca-blue)}
 .ui-next-kicker--muted{color:var(--mca-text-3)}
 .ui-list--compact .ui-list-item{padding:8px 0}
@@ -653,7 +653,7 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
 .ui-cal-foot .sp{flex:1}
 .ui-cal-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:0;list-style:none}
 .ui-cal-legend li{display:inline-flex;align-items:center;gap:6px}
-.ui-cal-legend i{width:12px;height:12px;border-radius:3px;background:var(--tone-soft);border-left:3px solid var(--tone)}
+.ui-cal-legend i{width:12px;height:12px;border-radius:4px;background:var(--tone-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tone) 28%,transparent)}
 
 /* sección de un día (cabecera + actividades) */
 .ui-cal-day{min-width:0}
@@ -678,7 +678,7 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
 
 /* actividad: fila de agenda (por defecto) */
 .ui-cal-ev{position:relative;display:grid;grid-template-columns:96px minmax(0,1fr) auto;align-items:start;gap:4px 14px;padding:12px 16px;
-  border-top:1px solid var(--mca-line);font-size:13.5px;line-height:1.4;color:var(--mca-text);box-shadow:inset 3px 0 0 var(--tone)}
+  border-top:1px solid var(--mca-line);font-size:13.5px;line-height:1.4;color:var(--mca-text)}
 .ui-cal-day-b > .ui-cal-ev:first-child{border-top:0}
 .ui-cal-ev:hover{background:var(--mca-surface-hover)}
 .ui-cal-ev-time{font-weight:700;font-variant-numeric:tabular-nums;color:var(--mca-text);white-space:nowrap;padding-top:1px}
@@ -746,8 +746,8 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
 
   .ui-cal-grid .ui-cal-ev{position:absolute;z-index:3;top:calc(var(--t) * var(--ph) / 60 + 1px);height:max(22px,calc(var(--d) * var(--ph) / 60 - 3px));
     left:calc(var(--l) / var(--n) * (100% - 6px) + 3px);width:calc((100% - 6px) / var(--n) - 2px);
-    display:flex;flex-direction:column;gap:1px;padding:3px 7px 3px 9px;border:0;border-radius:6px;overflow:hidden;font-size:12px;line-height:1.3;
-    background:var(--tone-soft);box-shadow:inset 3px 0 0 var(--tone),0 0 0 1px var(--mca-surface)}
+    display:flex;flex-direction:column;gap:2px;padding:5px 9px;border:0;border-radius:7px;overflow:hidden;font-size:12px;line-height:1.3;
+    background:var(--tone-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tone) 14%,transparent),0 0 0 1px var(--mca-surface)}
   .ui-cal-grid .ui-cal-ev > *,.ui-cal-grid .ui-cal-ev-main > *{flex-shrink:0}
   /* 3 o más a la vez en la semana: sus tarjetas se sustituyen por una tarjeta de grupo (.ui-cal-cluster) */
   .ui-cal-grid:not(.ui-cal-grid--day) .ui-cal-ev.is-stacked{display:none}
@@ -760,7 +760,7 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
   .ui-cal-cluster .ui-cal-chip{padding:1px 2px;font-size:11.5px;gap:5px}
   /* tarjetas estrechas: solo hora de inicio y sin botón de acceso (sigue en la ficha, la vista día y la lista) */
   .ui-cal-grid .ui-cal-ev{container:ev / inline-size}
-  .ui-cal-grid .ui-cal-ev:hover,.ui-cal-grid .ui-cal-ev:focus-within{z-index:20;box-shadow:inset 3px 0 0 var(--tone),0 0 0 1px var(--mca-surface),var(--mca-shadow-pop)}
+  .ui-cal-grid .ui-cal-ev:hover,.ui-cal-grid .ui-cal-ev:focus-within{z-index:20;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tone) 26%,transparent),0 0 0 1px var(--mca-surface),var(--mca-shadow-pop)}
   .ui-cal-grid .ui-cal-ev-time{padding:0;font-size:11.5px;font-weight:600;color:var(--tone);overflow:hidden;text-overflow:ellipsis}
   .ui-cal-grid .ui-cal-ev-ic{display:none}
   .ui-cal-grid .ui-cal-ev-title{padding:0;font-size:12.5px;line-height:1.3;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--lines,1);overflow:hidden}
@@ -773,13 +773,15 @@ a.ui-row:focus-visible{outline:none;box-shadow:var(--mca-focus)}
   .ui-cal-grid .ui-cal-ev.is-cancelled{background:#F4F6F9}
   /* cuánto texto cabe según la duración (≤20 min: una línea; 30 min: hora y título; 1 h+: título en dos líneas y datos) */
   .ui-cal-grid .ui-cal-ev--xs{flex-direction:row;align-items:center;gap:6px;padding-top:0;padding-bottom:0}
+  .ui-cal-grid .ui-cal-ev--sm{gap:0;padding-top:2px;padding-bottom:2px}
+  .ui-cal-grid .ui-cal-ev--sm .ui-cal-ev-time{line-height:1.25}
   .ui-cal-grid .ui-cal-ev--xs .ui-cal-ev-main{flex:1;min-width:0}
   .ui-cal-grid .ui-cal-ev--md,.ui-cal-grid .ui-cal-ev--lg{--lines:2}
   .ui-cal-grid .ui-cal-ev--lg .ui-cal-ev-meta{display:flex;flex-direction:column}
   .ui-cal-grid .ui-cal-ev--lg .ui-cal-ev-meta > span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
   .ui-cal-grid .ui-cal-ev--lg .ui-cal-ev-meta .ic{display:none}
   /* vista día: columna ancha; hora a la izquierda y los datos en línea */
-  .ui-cal-grid--day .ui-cal-ev{flex-direction:row;align-items:flex-start;gap:14px;padding:5px 12px 5px 14px;font-size:12.5px}
+  .ui-cal-grid--day .ui-cal-ev{flex-direction:row;align-items:flex-start;gap:14px;padding:7px 14px;font-size:12.5px}
   .ui-cal-grid--day .ui-cal-ev-time{flex:0 0 auto;min-width:84px;font-size:12px;padding-top:1px}
   .ui-cal-grid--day .ui-cal-ev-main{flex:1;min-width:0;gap:2px}
   .ui-cal-grid--day .ui-cal-ev-title{font-size:13px;--lines:1}
