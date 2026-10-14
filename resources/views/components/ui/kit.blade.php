@@ -1524,4 +1524,10 @@ details.ui-disclosure:not(.ui-card)[open] > summary{border-bottom:0}
   .ui-badge--pulse .dot,.ui-spin{animation:none}
   .ui-btn,.ui-kpi,.ui-kpi-go,.ui-input,.ui-select,.ui-table tbody tr{transition:none}
 }
+/* táctil: segmentados y chips con al menos 34 px de alto en móvil */
+@media(max-width:767px){
+  .ui-seg button,.ui-seg a{height:34px}
+  .ui-chip{height:34px}
+}
+
 </style>
