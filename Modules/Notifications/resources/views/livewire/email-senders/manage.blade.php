@@ -109,14 +109,14 @@
 
                                 {{-- Probar envío --}}
                                 <div class="ui-inline ui-actions-row--top">
-                                    <input type="email" wire:model="testTo" maxlength="190" placeholder="{{ __('Correo de destino para la prueba') }}"
-                                        aria-label="{{ __('Correo de destino para la prueba de :name', ['name' => $sender->name]) }}" @class(['ui-input', 'is-invalid' => $errors->has('testTo')])>
+                                    <input type="email" wire:model="testTo.{{ $sender->id }}" maxlength="190" placeholder="{{ __('Correo de destino para la prueba') }}"
+                                        aria-label="{{ __('Correo de destino para la prueba de :name', ['name' => $sender->name]) }}" @if ($errors->has('testTo.'.$sender->id)) aria-invalid="true" aria-describedby="snd-test-{{ $sender->id }}-error" @endif @class(['ui-input', 'is-invalid' => $errors->has('testTo.'.$sender->id)])>
                                     <button type="button" wire:click="test({{ $sender->id }})" wire:loading.attr="disabled" wire:target="test({{ $sender->id }})" class="ui-btn ui-btn--secondary">
                                         <x-ui.icon name="send" /> {{ __('Probar envío') }}
                                         <span wire:loading wire:target="test({{ $sender->id }})"><span class="ui-spin"></span></span>
                                     </button>
                                 </div>
-                                @error('testTo') <p class="ui-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
+                                @error('testTo.'.$sender->id) <p class="ui-error" id="snd-test-{{ $sender->id }}-error" role="alert"><x-ui.icon name="alert-triangle" /> {{ $message }}</p> @enderror
                             </div>
                             <div class="ui-list-aside">
                                 @if ($sender->status === 'active' && ! $sender->agenda_default)

@@ -45,7 +45,8 @@ class Manage extends Component
     public string $status = 'active';
 
     // --- Probar envio ---
-    public string $testTo = '';
+    /** Correo de destino de la prueba, POR remitente (antes era uno solo compartido por todas las filas). @var array<int|string, string> */
+    public array $testTo = [];
 
     public function mount(): void
     {
@@ -143,7 +144,7 @@ class Manage extends Component
 
         $this->showForm = false;
         $this->resetForm();
-        session()->flash('status', 'Remitente guardado.');
+        session()->flash('status', __('Remitente guardado.'));
     }
 
     public function delete(int $id): void
@@ -151,7 +152,7 @@ class Manage extends Component
         $sender = EmailSender::query()->findOrFail($id);
         $this->authorize('delete', $sender);
         $sender->delete();
-        session()->flash('status', 'Remitente eliminado.');
+        session()->flash('status', __('Remitente eliminado.'));
     }
 
     /**
@@ -168,7 +169,7 @@ class Manage extends Component
             $sender->forceFill(['agenda_default' => true])->save();
         });
 
-        session()->flash('status', "El Calendario enviará sus correos desde {$sender->from_address}.");
+        session()->flash('status', __('El Calendario enviará sus correos desde :address.', ['address' => $sender->from_address]));
     }
 
     /** Envia un correo de prueba por el SMTP del remitente y sella el resultado. */
@@ -177,17 +178,23 @@ class Manage extends Component
         $sender = EmailSender::query()->findOrFail($id);
         $this->authorize('test', $sender);
 
+        $key = 'testTo.'.$sender->id;
         $this->validate(
-            ['testTo' => ['required', 'email', 'max:190']],
+            [$key => ['required', 'email', 'max:190']],
             [],
-            ['testTo' => 'correo de prueba'],
+            [$key => __('correo de prueba')],
         );
+        $to = (string) $this->testTo[$sender->id];
 
-        $ok = $mailer->sendTest($sender, $this->testTo);
+        $ok = $mailer->sendTest($sender, $to);
 
-        session()->flash('status', $ok
-            ? "Correo de prueba enviado a {$this->testTo}."
-            : 'No se pudo enviar la prueba. Revisa las credenciales SMTP y el mensaje del último intento.');
+        // Un fallo ya no se anuncia en el aviso verde de éxito: queda como error en la fila del
+        // remitente (y el detalle técnico en «Última prueba»).
+        if ($ok) {
+            session()->flash('status', __('Correo de prueba enviado a :to.', ['to' => $to]));
+        } else {
+            $this->addError($key, __('No se pudo enviar la prueba. Revisa las credenciales SMTP y el mensaje del último intento.'));
+        }
     }
 
     private function resetForm(): void

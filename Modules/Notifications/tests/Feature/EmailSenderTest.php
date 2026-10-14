@@ -98,7 +98,7 @@ it('"Probar envio" manda un correo desde la direccion del remitente y sella el r
     $sender = EmailSender::factory()->create(['from_address' => 'finanzas@mcaschool.education', 'name' => 'Finanzas MCA']);
 
     Livewire::test(Manage::class)
-        ->set('testTo', 'destino@example.com')
+        ->set('testTo.'.$sender->id, 'destino@example.com')
         ->call('test', $sender->id)
         ->assertHasNoErrors();
 
@@ -119,9 +119,9 @@ it('la prueba exige un correo de destino valido', function () {
     $sender = EmailSender::factory()->create();
 
     Livewire::test(Manage::class)
-        ->set('testTo', 'no-es-correo')
+        ->set('testTo.'.$sender->id, 'no-es-correo')
         ->call('test', $sender->id)
-        ->assertHasErrors('testTo');
+        ->assertHasErrors('testTo.'.$sender->id);
 
     Mail::assertNothingSent();
 });
@@ -130,4 +130,44 @@ it('solo Administrador accede a los remitentes (Marketing NO)', function () {
     mailAdmin('marketing');
 
     Livewire::test(Manage::class)->assertForbidden();
+});
+
+it('una prueba fallida se muestra como error en la fila del remitente, nunca como éxito', function () {
+    mailAdmin();
+    $sender = EmailSender::factory()->create(['name' => 'Remitente roto']);
+    app()->instance(\Modules\Notifications\Services\SenderMailer::class, new class extends \Modules\Notifications\Services\SenderMailer
+    {
+        public function __construct() {}
+
+        public function sendTest(EmailSender $sender, string $to): bool
+        {
+            return false;   // SMTP rechazado: sin red real
+        }
+    });
+
+    Livewire::test(Manage::class)
+        ->set('testTo.'.$sender->id, 'destino@example.com')
+        ->call('test', $sender->id)
+        ->assertHasErrors('testTo.'.$sender->id)
+        ->assertSee('No se pudo enviar la prueba.')
+        ->assertDontSee('Correo de prueba enviado');
+
+    expect(session('status'))->toBeNull();
+});
+
+it('cada remitente tiene su propio correo de prueba: escribir en una fila no rellena las demás', function () {
+    Mail::fake();
+    mailAdmin();
+    $a = EmailSender::factory()->create(['name' => 'Remitente A']);
+    $b = EmailSender::factory()->create(['name' => 'Remitente B']);
+
+    Livewire::test(Manage::class)
+        ->set('testTo.'.$a->id, 'a@example.com')
+        ->assertSet('testTo.'.$a->id, 'a@example.com')
+        ->assertSeeHtml('wire:model="testTo.'.$b->id.'"')
+        ->call('test', $b->id)
+        ->assertHasErrors('testTo.'.$b->id)           // B no tiene destino: solo B marca error
+        ->assertHasNoErrors('testTo.'.$a->id);
+
+    Mail::assertNothingSent();
 });
