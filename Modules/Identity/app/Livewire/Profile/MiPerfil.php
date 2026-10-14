@@ -14,6 +14,7 @@ use Livewire\WithFileUploads;
 use Modules\Audit\Services\AuditService;
 use Modules\Identity\Services\TwoFactorService;
 use Modules\Identity\Services\UserAvatarService;
+use Modules\Identity\Support\EndOtherSessions;
 
 /**
  * "Mi perfil": el propio usuario ve sus datos en SOLO LECTURA (nombre, correo,
@@ -71,6 +72,9 @@ class MiPerfil extends Component
         $user = auth()->user();
         $user->password = Hash::make($this->password);
         $user->save();
+
+        // Quien tuviera otra sesión abierta con la clave anterior queda fuera (esta sigue).
+        EndOtherSessions::for($user);
 
         // Auditoria: solo el HECHO del cambio (jamas la contraseña).
         $audit->log('account.password_changed', $user);

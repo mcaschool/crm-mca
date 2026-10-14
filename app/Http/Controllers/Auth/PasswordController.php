@@ -25,6 +25,7 @@ class PasswordController extends Controller
         $request->user()->update([
             'password' => Hash::make($validated['password']),
         ]);
+        \Modules\Identity\Support\EndOtherSessions::for($request->user());
 
         return back()->with('status', 'password-updated');
     }
