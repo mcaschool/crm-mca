@@ -61,7 +61,7 @@ class Board extends Component
         $this->authorize('viewAny', Lead::class);
         if (! in_array($this->scope, ['mine', 'team'], true)) {
             // La administración ve el equipo; cada asesor empieza por su cartera.
-            $this->scope = auth()->user()->canManageUsers() ? 'team' : 'mine';
+            $this->scope = auth()->user()->canManageCrm() ? 'team' : 'mine';
         }
         $this->resetLimits();
     }

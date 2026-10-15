@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Modules\Identity\Enums;
 
 /**
- * Roles del panel (decision cerrada). Tres roles fijos; sin permisos granulares
+ * Roles funcionales del CRM, más Member sin rol comercial; sin permisos granulares
  * en el dia 1. La autorizacion se resuelve por Policies/Gates, nunca por
  * comparaciones de string dispersas.
  *
@@ -15,6 +15,7 @@ namespace Modules\Identity\Enums;
  */
 enum UserRole: string
 {
+    case Member = 'member';
     case Admin = 'admin';
     case Marketing = 'marketing';
     case Admissions = 'admissions';
@@ -22,6 +23,7 @@ enum UserRole: string
     public function label(): string
     {
         return match ($this) {
+            self::Member => 'Sin rol CRM',
             self::Admin => 'Administrador',
             self::Marketing => 'Marketing',
             self::Admissions => 'Admisiones',

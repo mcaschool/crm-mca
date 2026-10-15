@@ -48,7 +48,7 @@ class DatabaseSeeder extends Seeder
                 ]
             );
 
-            User::query()->firstOrCreate(
+            $admin = User::query()->firstOrCreate(
                 ['email' => 'admin@mcaschool.us'],
                 [
                     'institution_id' => $mca->id,
@@ -60,6 +60,10 @@ class DatabaseSeeder extends Seeder
                     'status' => 'active',
                 ]
             );
+            if ($admin->wasRecentlyCreated) {
+                $admin->forceFill(['is_identity_admin' => true])->save();
+                app(\Modules\CollaborationCore\Services\ApplicationAccess::class)->set($admin, $admin, 'crm', true);
+            }
         });
 
         // Arbol de navegacion guiada BASE (placeholder, administrable).

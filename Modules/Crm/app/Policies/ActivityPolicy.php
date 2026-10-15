@@ -47,19 +47,19 @@ class ActivityPolicy
             return false;
         }
 
-        return $actor->canManageUsers() || $activity->assigned_to_user_id === $actor->id;
+        return $actor->canManageCrm() || $activity->assigned_to_user_id === $actor->id;
     }
 
     /** Asignar actividades a otra persona y filtrar por asesor: solo administración. */
     public function manageOthers(User $actor): bool
     {
-        return $actor->canWorkCrm() && $actor->canManageUsers();
+        return $actor->canWorkCrm() && $actor->canManageCrm();
     }
 
     /** ¿Ve la agenda completa de la institución? Admin y perfiles de solo lectura. */
     public function seesAll(User $actor): bool
     {
-        return $actor->canManageUsers() || $actor->crmReadOnly();
+        return $actor->canWorkCrm() && ($actor->canManageCrm() || $actor->crmReadOnly());
     }
 
     /**
@@ -70,6 +70,9 @@ class ActivityPolicy
      */
     public static function visibleQuery(Builder $query, User $actor): Builder
     {
+        if (! $actor->canWorkCrm()) {
+            return $query->whereRaw('1 = 0');
+        }
         if ((new self)->seesAll($actor)) {
             return $query;
         }

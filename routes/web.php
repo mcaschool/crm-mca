@@ -42,7 +42,7 @@ use Modules\Integrations\Livewire\Integrations\Index as IntegrationsIndex;
 */
 
 Route::get('/', function () {
-    return redirect()->route(auth()->check() ? 'dashboard' : 'login');
+    return redirect()->route(auth()->check() ? (auth()->user()->canWorkCrm() ? 'dashboard' : 'profile.edit') : 'login');
 });
 
 /*
@@ -90,7 +90,7 @@ Route::middleware(['setlocale'])->prefix('reservar')
         Route::post('/{institution}/{advisor}/{type}', [$c, 'store'])->middleware('throttle:booking-submit')->name('booking.store');
     });
 
-$panel = Route::middleware(['auth', 'institution.user', 'setlocale', 'can:access-panel', \App\Http\Middleware\EnsureTwoFactorEnabled::class]);
+$panel = Route::middleware(['auth', 'institution.user', 'setlocale', 'can:access-panel', \App\Http\Middleware\EnsureTwoFactorEnabled::class, \Modules\CollaborationCore\Http\Middleware\RequireCrmAccess::class]);
 
 if ($domain = config('crm.panel_domain')) {
     $panel->domain($domain);

@@ -11,7 +11,7 @@ use Modules\Core\Tenancy\CurrentInstitution;
  * Autorizacion de la gestion de usuarios del panel.
  *
  * Dos ejes que se combinan SIEMPRE:
- *  1. Capacidad: solo Administrador o super-admin gestionan usuarios.
+ *  1. Capacidad: administración institucional de identidades, independiente del rol CRM.
  *  2. Aislamiento: la accion se limita a la institucion ACTIVA del contexto.
  *     Un Admin normal tiene fijada su propia institucion (middleware); el
  *     super-admin tiene la que haya elegido con el cambiador. Asi, incluso el

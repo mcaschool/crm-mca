@@ -35,6 +35,9 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'role' => 'admin',
             'is_super_admin' => false,
+            // Fixtures model migrated legacy users; neutral fixtures never inherit CRM.
+            'crm_legacy_access' => fn (array $a) => in_array($a['role'] instanceof \BackedEnum ? $a['role']->value : $a['role'], ['admin', 'marketing', 'admissions'], true),
+            'is_identity_admin' => fn (array $a) => ($a['role'] instanceof \BackedEnum ? $a['role']->value : $a['role']) === 'admin',
             'preferred_language' => 'es',
             'status' => 'active',
             'remember_token' => Str::random(10),

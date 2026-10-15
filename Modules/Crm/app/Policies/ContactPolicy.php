@@ -25,6 +25,6 @@ class ContactPolicy
 
     public function delete(User $actor, Contact $contact): bool
     {
-        return $actor->canManageUsers();
+        return $actor->canManageCrm();
     }
 }

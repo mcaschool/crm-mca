@@ -43,7 +43,7 @@ use Modules\Institutions\Models\Institution;
  * @property bool $can_email_code
  */
 #[Fillable(['institution_id', 'name', 'email', 'national_id', 'department', 'avatar_path', 'password', 'role', 'is_super_admin', 'preferred_language', 'status', 'can_email_code'])]
-#[Hidden(['password', 'remember_token', 'national_id'])]
+#[Hidden(['password', 'remember_token', 'national_id', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -74,6 +74,8 @@ class User extends Authenticatable
             'two_factor_confirmed_at' => 'datetime',
             'role' => UserRole::class,
             'is_super_admin' => 'boolean',
+            'is_identity_admin' => 'boolean',
+            'crm_legacy_access' => 'boolean',
             'can_email_code' => 'boolean',
             'last_login_at' => 'datetime',
         ];
@@ -149,11 +151,22 @@ class User extends Authenticatable
     }
 
     /**
-     * ¿Puede gestionar usuarios del panel? Solo Administrador o super-admin.
+     * ¿Puede gestionar identidades? Administración institucional independiente del CRM.
      */
     public function canManageUsers(): bool
     {
-        return $this->isSuperAdmin() || $this->role === UserRole::Admin;
+        return $this->isActive() && ($this->isSuperAdmin() || (bool) $this->getAttribute('is_identity_admin'))
+            && $this->institution()->where('status', 'active')->exists();
+    }
+
+    public function canManageCrm(): bool
+    {
+        return $this->canWorkCrm() && ($this->isSuperAdmin() || $this->role === UserRole::Admin);
+    }
+
+    public function canAccessApplication(string $application): bool
+    {
+        return app(\Modules\CollaborationCore\Services\PanelAccessSnapshot::class)->allows($this, $application);
     }
 
     /**
@@ -162,7 +175,7 @@ class User extends Authenticatable
      */
     public function canManageIntegrations(): bool
     {
-        return $this->isSuperAdmin() || $this->role === UserRole::Admin;
+        return $this->canAccessApplication('crm') && ($this->isSuperAdmin() || $this->role === UserRole::Admin);
     }
 
     /**
@@ -170,7 +183,7 @@ class User extends Authenticatable
      */
     public function canViewAudit(): bool
     {
-        return $this->isSuperAdmin() || $this->role === UserRole::Admin;
+        return $this->canAccessApplication('crm') && ($this->isSuperAdmin() || $this->role === UserRole::Admin);
     }
 
     /**
@@ -178,7 +191,7 @@ class User extends Authenticatable
      */
     public function canManageSettings(): bool
     {
-        return $this->isSuperAdmin() || $this->role === UserRole::Admin;
+        return $this->canAccessApplication('crm') && ($this->isSuperAdmin() || $this->role === UserRole::Admin);
     }
 
     /**
@@ -186,9 +199,9 @@ class User extends Authenticatable
      */
     public function canManageCatalog(): bool
     {
-        return $this->isSuperAdmin()
+        return $this->canAccessApplication('crm') && ($this->isSuperAdmin()
             || $this->role === UserRole::Admin
-            || $this->role === UserRole::Marketing;
+            || $this->role === UserRole::Marketing);
     }
 
     /**
@@ -198,19 +211,19 @@ class User extends Authenticatable
      */
     public function canPublishSocial(): bool
     {
-        return $this->isSuperAdmin()
-            || in_array($this->role, [UserRole::Admin, UserRole::Marketing], true);
+        return $this->canAccessApplication('crm') && ($this->isSuperAdmin()
+            || in_array($this->role, [UserRole::Admin, UserRole::Marketing], true));
     }
 
     /**
      * ¿Puede trabajar el CRM? Los tres roles del panel (Admin, Marketing,
      * Admisiones) trabajan los prospectos. Las acciones destructivas se reservan
-     * a Admin (canManageUsers).
+     * a Admin (canManageCrm).
      */
     public function canWorkCrm(): bool
     {
-        return $this->isSuperAdmin()
-            || in_array($this->role, [UserRole::Admin, UserRole::Marketing, UserRole::Admissions], true);
+        return $this->canAccessApplication('crm') && ($this->isSuperAdmin()
+            || in_array($this->role, [UserRole::Admin, UserRole::Marketing, UserRole::Admissions], true));
     }
 
     /**
@@ -252,6 +265,9 @@ class User extends Authenticatable
      */
     public function crmPersona(): string
     {
+        if (! $this->canWorkCrm()) {
+            return 'none';
+        }
         if ($this->isSuperAdmin() || $this->role === UserRole::Admin) {
             return 'admin';
         }
@@ -273,6 +289,6 @@ class User extends Authenticatable
      */
     public function crmReadOnly(): bool
     {
-        return in_array($this->crmPersona(), ['marketing', 'soporte'], true);
+        return in_array($this->crmPersona(), ['none', 'marketing', 'soporte'], true);
     }
 }

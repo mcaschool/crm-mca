@@ -486,7 +486,7 @@ class ActivityService
 
     private function guardAssignee(User $actor, int $assigneeId): User
     {
-        if ($assigneeId !== $actor->id && ! $actor->canManageUsers()) {
+        if ($assigneeId !== $actor->id && ! $actor->canManageCrm()) {
             throw new AuthorizationException(__('Solo un administrador puede asignar actividades a otra persona.'));
         }
         if ($assigneeId === $actor->id) {
