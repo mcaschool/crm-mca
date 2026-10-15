@@ -19,6 +19,11 @@ final class OutboxWorker
         }
         $claim = (string) Str::ulid();
         $row = DB::transaction(function () use ($institutionId, $claim): ?object {
+            // Match domain writers' lock order before touching the outbox indexes.
+            // Release this short lock before any network publication.
+            if (! DB::table('institutions')->where('id', $institutionId)->lockForUpdate()->first()) {
+                return null;
+            }
             $row = DB::table('collab_outbox')->where('institution_id', $institutionId)
                 ->where(function ($q): void {
                     $q->where(function ($q): void {

@@ -1,4 +1,5 @@
 import '../css/teamchat.css';
+import { installSpaces } from './spaces';
 
 // Domain content never travels over the socket. It is fetched through the
 // authenticated API after every wake, including reconnects and fallback polls.
@@ -9,7 +10,7 @@ function startChat(root) {
     const config = JSON.parse(document.querySelector('#teamchat-config').textContent);
     const t = config.labels, $ = (s) => root.querySelector(s);
     const state = { conversations: new Map(), messages: new Map(), drafts: new Map(), pending: new Map(),
-        selected: null, listCursor: null, searchCursor: null, search: '', searchVersion: 0,
+        view: 'direct', selected: null, listCursor: null, searchCursor: null, search: '', searchVersion: 0,
         older: null, newer: null, hasOlder: false, cursor: null, booting: false, syncing: false,
         wake: false, stopped: false, socket: null, connected: false, retry: 0, seen: new Set(),
         notices: new Set(), presence: new Map(), receiptQueue: new Map(), receiptTimer: null };
@@ -23,13 +24,13 @@ function startChat(root) {
     const nearBottom = () => history.scrollHeight - history.scrollTop - history.clientHeight < 100;
     const toBottom = () => { history.scrollTop = history.scrollHeight; $('[data-jump]').hidden = true; };
     const toast = (text) => { $('[data-toast]').textContent = text; $('[data-toast]').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('[data-toast]').hidden = true, 3500); };
-    function error(e) { if (state.stopped) return; $('[data-error] span').textContent = e?.status === 422 ? t.limit : t.error; $('[data-error]').hidden = false; }
+    function error(e) { if (state.stopped) return; if ($('[data-space-dialog]').open) { $('[data-dialog-loading]')?.remove(); let notice=$('[data-dialog-error]'); if(!notice){notice=el('p','tc-dialog-feedback');notice.dataset.dialogError='';notice.setAttribute('role','alert');$('[data-space-panel]').append(notice);} notice.textContent=e?.status===403?t.not_allowed:t.error; } $('[data-error] span').textContent = e?.status === 422 ? t.limit : t.error; $('[data-error]').hidden = false; }
     function stop() {
         if (state.stopped) return;
         state.stopped = true; state.socket?.close(); clearTimeout(retryTimer); clearTimeout(pollTimer);
         clearInterval(presenceTimer); clearInterval(socketWatch); clearTimeout(state.receiptTimer);
         state.conversations.clear(); state.messages.clear(); state.pending.clear(); state.drafts.clear();
-        messages.replaceChildren(); $('[data-list]').replaceChildren(); body.value = ''; body.disabled = true;
+        messages.replaceChildren(); $('[data-list]').replaceChildren(); $('[data-team-tree]').replaceChildren(); $('[data-space-dialog]').close(); body.value = ''; body.disabled = true;
         $('[data-thread]').hidden = true; $('[data-welcome]').hidden = false;
         $('[data-error] span').textContent = t.denied; $('[data-error]').hidden = false;
         $('[data-retry]').hidden = true; $('[data-dismiss]').hidden = true; connection('offline');
@@ -60,7 +61,7 @@ function startChat(root) {
         const peer = directory ? c : c.peer;
         b.append(avatar(peer.name,peer.id));
         const text = el('span','tc-contact-text'), top = el('span','tc-contact-top');
-        top.append(el('strong','',peer.name));
+        top.append(el('strong','',(!directory && c.type !== 'direct' ? (c.type === 'channel' ? '# ' : '◉ ') : '') + peer.name));
         if (!directory) top.append(el('time','',shortDate(c.activity_at)));
         text.append(top);
         const preview = el('span','tc-preview'); preview.append(el('span','',directory ? t.new : c.last_message?.body || t.empty_chat));
@@ -73,7 +74,7 @@ function startChat(root) {
         if (state.search) return;
         const list = $('[data-list]');
         // Reuse unaffected rows: an incoming message never replaces the whole inbox.
-        const ordered = [...state.conversations.values()].sort((a,b) => b.activity_at.localeCompare(a.activity_at) || b.id.localeCompare(a.id));
+        const ordered = [...state.conversations.values()].filter(c => c.type === state.view).sort((a,b) => b.activity_at.localeCompare(a.activity_at) || b.id.localeCompare(a.id));
         const existing = new Map([...list.querySelectorAll('[data-contact]')].map(n => [n.dataset.contact,n]));
         list.querySelector('.tc-empty')?.remove();
         for (const c of ordered) {
@@ -106,23 +107,29 @@ function startChat(root) {
     async function createDirect(id) {
         try {
             const c = await api('/conversations/direct','POST',{participant_id:id});
-            state.conversations.set(c.id,c); state.search = ''; state.searchVersion++; $('[data-search]').value = '';
+            state.conversations.set(c.id,c); spaces.switchView('direct'); state.search = ''; state.searchVersion++; $('[data-search]').value = '';
             renderList(); await openConversation(c.id);
         } catch (e) { error(e); }
     }
     function header() {
         const c = state.conversations.get(state.selected); if (!c) return;
         $('[data-peer-name]').textContent = c.peer.name; $('[data-peer-avatar]').textContent = initials(c.peer.name);
+        $('[data-manage]').hidden = c.type === 'direct';
         const p = state.presence.get(c.peer.id);
         $('[data-peer-presence]').textContent = !p ? t.unknown : p.online ? (p.manual_status === 'busy' ? t.busy : p.manual_status === 'away' ? t.away : t.online) : p.last_seen_at ? t.last_seen + ' · ' + shortDate(p.last_seen_at) : t.offline;
+        if (c.type !== 'direct') $('[data-peer-presence]').textContent = c.member_count + ' · ' + t.members + ' · ' + t[c.visibility];
         body.disabled = !c.can_send; $('[data-form] button').disabled = !c.can_send;
         $('[data-composer-hint]').textContent = c.can_send ? t.hint : t.unavailable;
     }
     async function refreshConversation(id) {
-        try { const c = await api('/conversations/' + id); state.conversations.set(id,c); renderList(); if (id === state.selected) header(); }
+        try { const c = await api('/conversations/' + id); const old = state.conversations.get(id); state.conversations.set(id,c);
+            if (id === state.selected && old?.history_epoch && old.history_epoch !== c.history_epoch) {
+                state.messages.clear(); state.pending.delete(id); state.newer = state.older = null; messages.replaceChildren(); await newerMessages(id);
+            }
+            renderList(); spaces.repaint(); if (id === state.selected) header(); }
         catch (e) {
             if ([403,404].includes(e.status)) {
-                state.conversations.delete(id); renderList();
+                state.conversations.delete(id); state.pending.delete(id); state.drafts.delete(id); renderList(); spaces.repaint();
                 if (id === state.selected) { state.selected = null; state.messages.clear(); messages.replaceChildren(); $('[data-thread]').hidden = true; $('[data-welcome]').hidden = false; root.classList.remove('tc-selected'); }
             } else throw e;
         }
@@ -153,9 +160,14 @@ function startChat(root) {
     function messageNode(m, pending = false) {
         const mine = m.sender_id === config.userId, n = el('article','tc-message' + (mine ? ' mine' : ''));
         n.dataset.message = m.id || m.command_id; n.dataset.status = m.status;
-        const bubble = el('div','tc-bubble'); bubble.append(el('p','tc-message-body',m.body));
+        const bubble = el('div','tc-bubble');
+        if (state.conversations.get(state.selected)?.type !== 'direct') {
+            const sender = el('div','tc-sender'); sender.append(avatar(m.sender_name || config.labels.you,m.sender_id),el('strong','',m.sender_name || t.you)); bubble.append(sender);
+        }
+        bubble.append(el('p','tc-message-body',m.body));
         const meta = el('div','tc-message-meta'); meta.append(el('time','',times.format(new Date(m.created_at))));
         if (mine) meta.append(el('span',m.status,t[m.status]));
+        if (mine && m.id && state.conversations.get(state.selected)?.type !== 'direct' && m.delivered_count) meta.append(el('span','',t.read_by+' '+m.read_count+' · '+t.delivered_to+' '+m.delivered_count));
         if (pending && m.status === 'failed') { const retry = el('button','',t.retry); retry.type = 'button'; retry.onclick = () => transmit(m); meta.append(retry); }
         bubble.append(meta); n.append(bubble); return n;
     }
@@ -168,7 +180,7 @@ function startChat(root) {
         for (const m of [...all,...pending]) {
             const date = dates.format(new Date(m.created_at));
             if (date !== day) { messages.append(el('div','tc-day',date)); day = date; }
-            const id = m.id || m.command_id, signature = JSON.stringify([m.body,m.status,m.created_at]);
+            const id = m.id || m.command_id, signature = JSON.stringify([m.body,m.status,m.created_at,m.delivered_count,m.read_count]);
             let n = current.get(id);
             if (!n || n.dataset.signature !== signature) {
                 const next = messageNode(m,!m.id); next.dataset.signature = signature; if(n) {observer.unobserve(n);n.replaceWith(next);} n = next;
@@ -257,7 +269,7 @@ function startChat(root) {
     async function refreshPresence() {
         if (document.visibilityState !== 'visible') return;
         try { await api('/presence/heartbeat','POST',{}); } catch(e) { if(e.status===403)stop(); throw e; }
-        const ids = [...new Set([...state.conversations.values()].filter(c => c.can_send).map(c=>c.peer.id))].slice(0,50);
+        const ids = [...new Set([...state.conversations.values()].filter(c => c.can_send && c.peer.id).map(c=>c.peer.id))].slice(0,50);
         if(ids.length) {
             const result = await api('/presence?' + ids.map(id=>'user_ids[]='+id).join('&'));
             result.forEach(p => state.presence.set(p.user_id,p)); renderList(); header();
@@ -279,7 +291,7 @@ function startChat(root) {
             // are replayed even if the websocket wakes us during bootstrap.
             let page=await api('/sync?bootstrap=1&limit=100'), cut=page.cursor;
             while(page.nextPageCursor)page=await api('/sync?bootstrap=1&limit=100&cursor='+encodeURIComponent(page.nextPageCursor));
-            await listMore(true); await notices(true);
+            await listMore(true); await spaces.refresh(); await notices(true);
             if(state.selected) { await refreshConversation(state.selected); if(state.selected)await newerMessages(state.selected); }
             state.cursor=cut;
         } catch(e) { if(e.status===403)stop(); else error(e); }
@@ -305,6 +317,8 @@ function startChat(root) {
                     }
                 }
                 for(const id of affected)await refreshConversation(id);
+                if (page.events.some(e => e.type.startsWith('teamchat.team.') || e.type.startsWith('teamchat.channel.'))) await spaces.refresh();
+                if (page.events.some(e => e.type.endsWith('members.changed'))) toast(t.members_changed);
                 for(const id of newMessages)if(id===state.selected)await newerMessages(id);
                 for(const [id,ids]of receipts) {
                     const list=[...ids].filter(v=>state.messages.has(v));
@@ -363,8 +377,10 @@ function startChat(root) {
         await sync();
         // Recheck access even without a domain event (e.g. institutional revocation).
         if(state.selected)await refreshConversation(state.selected).catch(()=>{});
+        if(state.view === 'team')await spaces.refresh().catch(()=>{});
         pollTimer=setTimeout(poll,document.visibilityState==='visible'?10000:30000);
     }
+    const spaces = installSpaces({root, state, t, api, el, renderList, openConversation, refreshConversation, listMore, error, toast});
     $('[data-form]').addEventListener('submit',submit);
     body.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing)submit(e);});
     body.addEventListener('input',()=>{body.style.height='auto';body.style.height=Math.min(132,body.scrollHeight)+'px';});

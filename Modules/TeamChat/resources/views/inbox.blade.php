@@ -24,7 +24,14 @@
                 <button type="button" class="tc-primary" data-new><span aria-hidden="true">＋</span> {{ __('teamchat::chat.new') }}</button>
                 <label class="tc-search"><span aria-hidden="true">⌕</span><input data-search type="search" maxlength="100" autocomplete="off" aria-label="{{ __('teamchat::chat.search') }}" placeholder="{{ __('teamchat::chat.search') }}"></label>
             </div>
+            <nav class="tc-tabs" aria-label="{{ __('teamchat::chat.spaces') }}">
+                @foreach (['direct' => 'chats', 'group' => 'groups', 'team' => 'teams', 'channel' => 'channels'] as $kind => $label)
+                    <button type="button" data-space-tab="{{ $kind }}" aria-pressed="{{ $kind === 'direct' ? 'true' : 'false' }}">{{ __('teamchat::chat.'.$label) }}</button>
+                @endforeach
+            </nav>
+            <div class="tc-space-actions"><button type="button" data-create-group>{{ __('teamchat::chat.create_group') }}</button><button type="button" data-create-team>{{ __('teamchat::chat.create_team') }}</button></div>
             <div class="tc-list" data-list></div>
+            <div class="tc-list" data-team-tree hidden></div>
             <button type="button" class="tc-more" data-list-more hidden>{{ __('teamchat::chat.more') }}</button>
             <footer class="tc-connection" role="status"><i></i><span data-connection>{{ __('teamchat::chat.connecting') }}</span></footer>
         </aside>
@@ -35,7 +42,7 @@
                     <button type="button" class="tc-back" data-back aria-label="{{ __('teamchat::chat.back') }}">←</button>
                     <span class="tc-avatar" data-peer-avatar aria-hidden="true"></span>
                     <div><h2 data-peer-name></h2><p data-peer-presence></p></div>
-                    <span class="tc-header-tag">TeamChat</span>
+                    <button type="button" class="tc-manage" data-manage hidden>{{ __('teamchat::chat.manage') }}</button>
                 </header>
                 <div class="tc-history" data-history tabindex="0" aria-label="{{ __('teamchat::chat.messages') }}">
                     <button type="button" class="tc-more" data-older hidden>{{ __('teamchat::chat.older') }}</button>
@@ -50,6 +57,7 @@
                 </form>
             </div>
         </div>
+        <dialog class="tc-dialog" data-space-dialog aria-labelledby="tc-dialog-title"><div data-space-panel></div></dialog>
         <div class="tc-toast" data-toast role="status" hidden></div>
         <div class="tc-error" data-error role="alert" hidden><span></span><button type="button" data-retry>{{ __('teamchat::chat.retry') }}</button><button type="button" data-dismiss aria-label="{{ __('teamchat::chat.close') }}">×</button></div>
     </section>

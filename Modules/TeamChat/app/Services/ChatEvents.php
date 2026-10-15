@@ -21,10 +21,11 @@ final class ChatEvents
     {
         $version = (int) $conversation->event_version + 1;
         $id = (string) Str::ulid();
+        DB::table('collab_chat_event_access')->insert(['event_id' => $id, 'institution_id' => $actor->institutionId, 'conversation_id' => $conversation->id, 'access_tick' => app(ChatClock::class)->next($actor->institutionId)]);
         $this->recorder->append(new InstitutionContext($actor->institutionId), new EventEnvelope(
             $id, $type, 1, $actor->institutionId, 'teamchat_conversation', $conversation->id, $version, $actor->userId,
             now()->toDateTimeImmutable(), $actor->requestId, null, ['conversation_id' => $conversation->id] + $data),
-            new DeliveryAudience($actor->institutionId, [(int) $conversation->first_user_id, (int) $conversation->second_user_id]));
+            new DeliveryAudience($actor->institutionId, app(ChatAccess::class)->members($conversation)));
         DB::table('collab_chat_conversations')->where('institution_id', $actor->institutionId)->where('id', $conversation->id)->update(['event_version' => $version]);
         $conversation->event_version = $version;
 

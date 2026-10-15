@@ -17,7 +17,10 @@ final class ChatEventPolicy implements EventPolicy
     public function validate(EventEnvelope $event): void
     {
         $fields = match ($event->type) {
-            'teamchat.conversation.created' => ['conversation_id'],
+            'teamchat.conversation.created',
+            'teamchat.group.created', 'teamchat.group.updated', 'teamchat.group.members.changed',
+            'teamchat.team.created', 'teamchat.team.updated', 'teamchat.team.members.changed',
+            'teamchat.channel.created', 'teamchat.channel.updated', 'teamchat.channel.members.changed' => ['conversation_id'],
             'teamchat.message.created' => ['conversation_id', 'message_id', 'sequence'],
             'teamchat.receipt.delivered', 'teamchat.receipt.read' => ['conversation_id', 'message_ids', 'user_id'],
             'teamchat.membership.changed' => ['conversation_id', 'user_id', 'active'],
@@ -57,7 +60,16 @@ final class ChatEventPolicy implements EventPolicy
     public function allows(ActorContext $actor, EventEnvelope $event): bool
     {
         try {
-            $this->access->conversation($actor, $event->aggregateId);
+            $row = $this->access->conversation($actor, $event->aggregateId);
+            $from = $this->access->fromTick($actor, $row);
+            $tick = (int) \Illuminate\Support\Facades\DB::table('collab_chat_event_access')->where('institution_id', $actor->institutionId)->where('event_id', $event->id)->value('access_tick');
+            if ($tick < $from) {
+                return false;
+            }
+            $ids = $event->data['message_ids'] ?? (isset($event->data['message_id']) ? [$event->data['message_id']] : []);
+            if ($ids && \Illuminate\Support\Facades\DB::table('collab_chat_messages')->where('institution_id', $actor->institutionId)->where('conversation_id', $row->id)->whereIn('id', $ids)->where('access_tick', '>=', $from)->count() !== count($ids)) {
+                return false;
+            }
 
             return true;
         } catch (ContractException) {

@@ -61,12 +61,12 @@ if ($mode === 'seed') {
     Artisan::call('migrate', ['--force' => true]);
     $i = Institution::factory()->create(['name' => 'MCA · TeamChat Local']);
     $ids = [];
-    foreach (['alice' => 'Ana Rivera', 'bob' => 'Bruno Martínez'] as $key => $name) {
+    foreach (['alice' => 'Ana Rivera', 'bob' => 'Bruno Martínez', 'carol' => 'Carla Torres', 'diana' => 'Diana López'] as $key => $name) {
         $u = User::factory()->create(['institution_id' => $i->id, 'role' => 'member', 'name' => $name, 'email' => $key.'@teamchat.invalid', 'password' => Illuminate\Support\Facades\Hash::make('LocalChat-Test-2026!'), 'two_factor_secret' => 'JBSWY3DPEHPK3PXP', 'two_factor_confirmed_at' => now()]);
         $ids[$key] = $u->id;
     }
     file_put_contents($fixture, json_encode(['institution' => $i->id] + $ids, JSON_THROW_ON_ERROR));
-    echo "Two isolated fixture users ready\n";
+    echo "Four isolated fixture users ready\n";
     exit;
 }
 $f = json_decode(file_get_contents($fixture), true, 16, JSON_THROW_ON_ERROR);
@@ -108,7 +108,10 @@ if ($mode === 'verify') {
 }
 if ($mode === 'cleanup') {
     DB::table('collab_chat_conversations')->where('institution_id', $f['institution'])->delete();
-    DB::table('sessions')->whereIn('user_id', [$f['alice'], $f['bob']])->delete();
+    DB::table('collab_chat_teams')->where('institution_id', $f['institution'])->delete();
+    DB::table('collab_chat_membership_history')->where('institution_id', $f['institution'])->delete();
+    DB::table('collab_chat_space_commands')->where('institution_id', $f['institution'])->delete();
+    DB::table('sessions')->whereIn('user_id', DB::table('users')->where('institution_id', $f['institution'])->pluck('id'))->delete();
     DB::table('users')->where('institution_id', $f['institution'])->delete();
     DB::table('audit_logs')->where('institution_id', $f['institution'])->delete();
     DB::table('institutions')->where('id', $f['institution'])->delete();

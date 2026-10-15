@@ -76,19 +76,23 @@ final class ChatCommands
                     throw new ContractException('idempotency_conflict', 409);
                 }
 
+                if ((int) $existing->access_tick < $this->access->fromTick($actor, $conversation)) {
+                    throw new ContractException('not_found', 404);
+                }
+
                 return $existing->id;
             }
             $id = (string) Str::ulid();
             $sequence = (int) $conversation->message_sequence + 1;
             DB::table('collab_chat_messages')->insert(['id' => $id, 'institution_id' => $actor->institutionId,
                 'conversation_id' => $conversationId, 'sender_id' => $actor->userId, 'sequence' => $sequence,
-                'command_id' => $commandId, 'request_hash' => $hash, 'body' => $body, 'created_at' => now()]);
+                'command_id' => $commandId, 'request_hash' => $hash, 'body' => $body, 'access_tick' => app(ChatClock::class)->next($actor->institutionId), 'created_at' => now()]);
             DB::table('collab_chat_conversations')->where('id', $conversationId)->where('institution_id', $actor->institutionId)
                 ->update(['message_sequence' => $sequence, 'activity_at' => now()->format('Y-m-d H:i:s.u'), 'updated_at' => now()]);
             $eventId = $this->events->record($actor, $conversation, 'teamchat.message.created', ['message_id' => $id, 'sequence' => $sequence]);
             $this->notifications->enqueue(new InstitutionContext($actor->institutionId),
                 new NotificationIntent((string) Str::ulid(), 'teamchat.message.created', $conversationId, $eventId, 'message.'.$id, now()->addDay()->toDateTimeImmutable()),
-                new NotificationAudience($actor->institutionId, [$this->access->peerId($conversation, $actor->userId)]));
+                new NotificationAudience($actor->institutionId, array_values(array_diff($this->access->members($conversation), [$actor->userId]))));
 
             return $id;
         }, 3);
@@ -111,7 +115,7 @@ final class ChatCommands
             $this->lockInstitution($actor);
             $conversation = $this->lockConversation($actor, $conversationId);
             $this->access->conversation($actor, $conversationId);
-            $messages = DB::table('collab_chat_messages')->where('institution_id', $actor->institutionId)->where('conversation_id', $conversationId)->whereIn('id', $messageIds)->where('sender_id', '!=', $actor->userId)->get();
+            $messages = DB::table('collab_chat_messages')->where('institution_id', $actor->institutionId)->where('conversation_id', $conversationId)->whereIn('id', $messageIds)->where('access_tick', '>=', $this->access->fromTick($actor, $conversation))->where('sender_id', '!=', $actor->userId)->get();
             if ($messages->count() !== count($messageIds)) {
                 throw new ContractException('not_found', 404);
             }
@@ -142,6 +146,12 @@ final class ChatCommands
         if ($active) {
             throw new ContractException('forbidden', 403);
         } // Self-service can leave, never undo a revocation.
+        $current = $this->access->conversation($actor, $conversationId);
+        if ($current->type !== 'direct') {
+            app(SpaceCommands::class)->member($actor, 'conversation', $conversationId, 'leave.'.Str::ulid(), $actor->userId, 'remove');
+
+            return;
+        }
         DB::transaction(function () use ($actor, $conversationId, $active): void {
             $this->lockInstitution($actor);
             $this->authorization->authorize($actor, 'collaboration.use');

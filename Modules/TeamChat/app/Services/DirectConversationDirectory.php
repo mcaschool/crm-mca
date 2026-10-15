@@ -24,12 +24,13 @@ final class DirectConversationDirectory implements ConversationDirectory
         $row = $this->access->conversation($context, $ref->id);
 
         return new ConversationDescriptor($ref, $context->institutionId,
-            $this->access->memberActive($context->institutionId, $ref->id, $this->access->peerId($row, $context->userId)), $this->version($row, $context));
+            $this->access->canSend($row, $context->userId), $this->version($row, $context));
     }
 
     public function authorize(ActorContext $context, ConversationRef $ref, ConversationAction $action): void
     {
-        if ($ref->type !== ConversationType::Direct) {
+        $row = $this->access->conversation($context, $ref->id, $action !== ConversationAction::View);
+        if ($ref->type->value !== $row->type) {
             throw new ContractException('not_found', 404);
         }
         $this->access->conversation($context, $ref->id, $action !== ConversationAction::View);
@@ -40,18 +41,26 @@ final class DirectConversationDirectory implements ConversationDirectory
         $this->authorize($context, $ref, ConversationAction::InviteToCall);
         $row = $this->access->conversation($context, $ref->id);
         $peer = $this->access->peerId($row, $context->userId);
-        if ($selection !== [$peer]) {
+        if (($ref->type === ConversationType::Direct && $selection !== [$peer]) || ! array_is_list($selection) || $selection === [] || count($selection) > 99 || count(array_unique($selection)) !== count($selection)) {
             throw new ContractException('invalid', 422);
         }
 
-        return [$this->users->resolve($context, $peer)];
+        $result = [];
+        foreach ($selection as $userId) {
+            if (! is_int($userId) || $userId === $context->userId || ! $this->access->memberActive($context->institutionId, $ref->id, $userId)) {
+                throw new ContractException('not_found', 404);
+            }
+            $result[] = $this->users->resolve($context, $userId);
+        }
+
+        return $result;
     }
 
     public function membership(ActorContext $context, ConversationRef $ref, int $userId): MembershipSnapshot
     {
         $this->authorize($context, $ref, ConversationAction::View);
         $row = $this->access->conversation($context, $ref->id);
-        if (! in_array($userId, [(int) $row->first_user_id, (int) $row->second_user_id], true)) {
+        if ($row->type === 'direct' && ! in_array($userId, [(int) $row->first_user_id, (int) $row->second_user_id], true)) {
             throw new ContractException('not_found', 404);
         }
 
@@ -67,6 +76,6 @@ final class DirectConversationDirectory implements ConversationDirectory
     private function version(object $row, ActorContext $actor): string
     {
         // A snapshot identifier is never an authorization cache.
-        return hash('sha256', $row->access_version.':'.(int) $this->access->memberActive($actor->institutionId, $row->id, (int) $row->first_user_id).':'.(int) $this->access->memberActive($actor->institutionId, $row->id, (int) $row->second_user_id));
+        return hash('sha256', $row->access_version.':'.json_encode($this->access->members($row), JSON_THROW_ON_ERROR).':'.(int) $this->access->canSend($row, $actor->userId));
     }
 }

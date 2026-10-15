@@ -26,7 +26,8 @@ final class TeamChatServiceProvider extends ServiceProvider
         $this->loadViewsFrom(__DIR__.'/../../resources/views', 'teamchat');
         $this->loadTranslationsFrom(__DIR__.'/../../lang', 'teamchat');
         $policies = $this->app->make(EventPolicies::class);
-        foreach (['conversation.created', 'message.created', 'receipt.delivered', 'receipt.read', 'membership.changed'] as $type) {
+        foreach (['conversation.created', 'message.created', 'receipt.delivered', 'receipt.read', 'membership.changed',
+            'group.created', 'group.updated', 'group.members.changed', 'team.created', 'team.updated', 'team.members.changed', 'channel.created', 'channel.updated', 'channel.members.changed'] as $type) {
             $policies->register('teamchat.'.$type, $this->app->make(ChatEventPolicy::class));
         }
     }
