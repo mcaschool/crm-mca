@@ -65,11 +65,8 @@ class NewLeadNotifier extends Component
             return;
         }
 
-        // Badges del sidebar (Leads/Contactos): este poll ya corre en TODAS las
-        // páginas del panel, así que se aprovecha para refrescar los contadores en
-        // vivo (dos COUNT indexados, por usuario). El menú los oye vía Alpine.
-        $counts = app(\Modules\Crm\Services\SidebarBadges::class)->counts(auth()->user());
-        $this->dispatch('crm-badges-updated', leads: $counts['leads'], contacts: $counts['contacts']);
+        // Los indicadores del menú ya no se refrescan aquí: los mantiene el sincronizador único
+        // del panel (PanelBadges + partials/panel-badges-sync), sin consultas duplicadas.
 
         $lastId = (int) session(self::SEEN_KEY, 0);
 
