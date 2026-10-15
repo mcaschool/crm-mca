@@ -50,6 +50,12 @@ final class LiveKitMediaRooms implements MediaRoomService
         return new JoinCredentials($this->config->clientUrl, $token['token'], $grant->identity, $token['expires_at']);
     }
 
+    public function admitParticipant(MediaGrant $grant): void
+    {
+        // Si ya no está en la sala («participant does not exist») no hay nada que conceder.
+        $this->guard('admit_participant', fn () => $this->client->updatePermission($grant->room, $grant->identity, $this->tokens->permission($grant)), notFound: null);
+    }
+
     public function participants(string $room): array
     {
         $rows = $this->guard('list_participants', fn () => $this->client->listParticipants($room), notFound: []);
@@ -60,9 +66,12 @@ final class LiveKitMediaRooms implements MediaRoomService
             if ($identity === '' || in_array($state, ['DISCONNECTED', '3'], true)) {
                 continue;
             }
-            $joined = $row['joinedAt'] ?? $row['joined_at'] ?? null;
+            // El API real responde con los nombres del proto (snake_case); se aceptan ambos formatos.
+            $joined = $row['joined_at'] ?? $row['joinedAt'] ?? null;
+            $permission = is_array($row['permission'] ?? null) ? $row['permission'] : [];
             $out[] = new MediaParticipant($identity, (string) ($row['sid'] ?? ''), $state,
-                is_numeric($joined) && (int) $joined > 0 ? Carbon::createFromTimestamp((int) $joined) : null);
+                is_numeric($joined) && (int) $joined > 0 ? Carbon::createFromTimestamp((int) $joined) : null,
+                (bool) ($permission['can_subscribe'] ?? $permission['canSubscribe'] ?? false));
         }
 
         return $out;

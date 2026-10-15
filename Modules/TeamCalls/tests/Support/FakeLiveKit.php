@@ -19,8 +19,11 @@ use Throwable;
 
 /**
  * Servidor LiveKit SIMULADO para las pruebas (sin red): intercepta el API Twirp de salas con
- * Http::fake, exige tokens de servicio válidos con el permiso de cada operación (como LiveKit) y guarda
- * el estado (salas, participantes conectados, expulsiones). También firma webhooks como LiveKit.
+ * Http::fake, exige tokens de servicio válidos con el permiso de cada operación y guarda el estado
+ * (salas, participantes conectados, admitidos, expulsiones). También firma webhooks como LiveKit.
+ * Respuestas alineadas con LiveKit 1.13.10 REAL (fase 3B): nombres snake_case, ListParticipants de
+ * una sala inexistente = 200 vacío, permisos insuficientes = 401 «unauthenticated», firma inválida =
+ * 401 en texto plano, retirar/cerrar lo que no existe = 404 «not_found».
  * Nada de esto prueba audio ni video reales.
  */
 final class FakeLiveKit
@@ -42,6 +45,9 @@ final class FakeLiveKit
     /** @var list<string> «sala|identidad» desconectadas por el backend */
     public static array $removed = [];
 
+    /** @var array<string, true> «sala|identidad» con medios concedidos (UpdateParticipant) */
+    public static array $admitted = [];
+
     /** @var list<string> salas cerradas por el backend */
     public static array $deleted = [];
 
@@ -54,7 +60,7 @@ final class FakeLiveKit
     /** Configura LiveKit como servidor de medios y activa el servidor simulado. */
     public static function boot(array $over = []): void
     {
-        self::$rooms = self::$connected = [];
+        self::$rooms = self::$connected = self::$admitted = [];
         self::$removed = self::$deleted = self::$calls = [];
         self::$failure = null;
         config(['teamcalls.media.driver' => 'livekit', 'teamcalls.media.livekit' => array_merge([
@@ -71,6 +77,7 @@ final class FakeLiveKit
     /** Un cliente se conecta de verdad a la sala (lo que LiveKit haría con un token válido). */
     public static function connect(string $room, string $identity, string $sid): void
     {
+        self::$rooms[$room] ??= ['max' => 0]; // solo se puede estar en una sala que existe
         self::$connected[$room][$identity] = $sid;
     }
 
@@ -154,15 +161,15 @@ final class FakeLiveKit
         try {
             $claims = self::decode((string) preg_replace('/^Bearer\s+/', '', (string) $request->header('Authorization')[0]));
         } catch (Throwable) {
-            return Http::response(['code' => 'unauthenticated'], 401);
+            return Http::response('invalid authorization token: token signature is invalid: signature is invalid', 401);
         }
         $video = $claims['video'] ?? [];
         $body = $request->data();
         $room = (string) ($body['room'] ?? $body['name'] ?? '');
         $needs = ['CreateRoom' => 'roomCreate', 'DeleteRoom' => 'roomCreate', 'ListRooms' => 'roomList',
-            'ListParticipants' => 'roomAdmin', 'RemoveParticipant' => 'roomAdmin'][$method] ?? null;
+            'ListParticipants' => 'roomAdmin', 'RemoveParticipant' => 'roomAdmin', 'UpdateParticipant' => 'roomAdmin'][$method] ?? null;
         if ($needs === null || empty($video[$needs]) || ($needs === 'roomAdmin' && ($video['room'] ?? null) !== $room)) {
-            return Http::response(['code' => 'permission_denied'], 403);
+            return Http::response(['code' => 'unauthenticated', 'msg' => 'permissions denied'], 401);
         }
 
         switch ($method) {
@@ -173,25 +180,36 @@ final class FakeLiveKit
             case 'ListRooms':
                 return Http::response(['rooms' => array_map(fn ($n) => ['name' => $n, 'sid' => 'RM_x'], array_keys(self::$rooms))]);
             case 'ListParticipants':
-                if (! isset(self::$rooms[$room])) {
-                    return Http::response(['code' => 'not_found', 'msg' => 'room not found'], 404);
-                }
-                $list = [];
+                $list = []; // como LiveKit real: sala inexistente = lista vacía (200)
                 foreach (self::$connected[$room] ?? [] as $identity => $sid) {
-                    $list[] = ['sid' => $sid, 'identity' => $identity, 'state' => 'ACTIVE', 'joinedAt' => (string) (time() - 120)];
+                    $list[] = ['sid' => $sid, 'identity' => $identity, 'state' => 'ACTIVE', 'joined_at' => (string) (time() - 120),
+                        'permission' => ['can_subscribe' => isset(self::$admitted[$room.'|'.$identity]), 'hidden' => ! isset(self::$admitted[$room.'|'.$identity])]];
                 }
 
                 return Http::response(['participants' => $list]);
             case 'RemoveParticipant':
                 $identity = (string) ($body['identity'] ?? '');
                 if (! isset(self::$connected[$room][$identity])) {
-                    return Http::response(['code' => 'not_found', 'msg' => 'participant not found'], 404);
+                    return Http::response(['code' => 'not_found', 'msg' => 'participant does not exist'], 404);
                 }
                 unset(self::$connected[$room][$identity]);
                 self::$removed[] = $room.'|'.$identity;
 
                 return Http::response([]);
+            case 'UpdateParticipant':
+                $identity = (string) ($body['identity'] ?? '');
+                if (! isset(self::$connected[$room][$identity])) {
+                    return Http::response(['code' => 'not_found', 'msg' => 'participant does not exist'], 404);
+                }
+                if (! empty($body['permission']['can_subscribe'])) {
+                    self::$admitted[$room.'|'.$identity] = true;
+                }
+
+                return Http::response(['sid' => self::$connected[$room][$identity], 'identity' => $identity, 'permission' => $body['permission'] ?? []]);
             case 'DeleteRoom':
+                if (! isset(self::$rooms[$room])) {
+                    return Http::response(['code' => 'not_found', 'msg' => 'requested room does not exist'], 404);
+                }
                 unset(self::$rooms[$room], self::$connected[$room]);
                 self::$deleted[] = $room;
 

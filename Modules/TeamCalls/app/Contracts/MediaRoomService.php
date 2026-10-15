@@ -32,7 +32,14 @@ interface MediaRoomService
     /** Crea la sala si no existe (las salas solo las crea el backend). */
     public function prepareRoom(string $room, int $maxParticipants): void;
 
+    /**
+     * Credencial para ENTRAR a la sala. Si el servidor confirma conexiones, no concede medios por sí
+     * sola: hace falta admitParticipant() tras validar la conexión real.
+     */
     public function issueJoinCredentials(MediaGrant $grant): JoinCredentials;
+
+    /** Concede a una conexión ya validada los permisos de medios de $grant (idempotente). */
+    public function admitParticipant(MediaGrant $grant): void;
 
     /** @return list<MediaParticipant> participantes conectados realmente (vacío si la sala no existe) */
     public function participants(string $room): array;

@@ -14,5 +14,7 @@ final class MediaParticipant
         public readonly string $session,
         public readonly string $state,
         public readonly ?Carbon $joinedAt,
+        /** true si el backend ya le concedió medios (puede suscribirse) */
+        public readonly bool $admitted = false,
     ) {}
 }

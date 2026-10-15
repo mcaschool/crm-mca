@@ -1,0 +1,5 @@
+{
+    "source": "LiveKit 1.13.10 (servidor real, fase 3B)",
+    "content_type": "application/webhook+json",
+    "raw": "{\"event\":\"track_published\", \"room\":{\"sid\":\"RM_h4LTyD3qafjN\", \"name\":\"{{ROOM}}\"}, \"participant\":{\"sid\":\"{{SID}}\", \"identity\":\"{{IDENTITY}}\"}, \"track\":{\"sid\":\"TR_VCcfdahweudyyR\", \"type\":\"VIDEO\", \"name\":\"video\", \"width\":320, \"height\":240, \"source\":\"CAMERA\", \"layers\":[{\"width\":320, \"height\":240, \"bitrate\":140000, \"ssrc\":1459649227}], \"mimeType\":\"video/VP8\", \"mid\":\"7\", \"codecs\":[{\"mimeType\":\"video/VP8\", \"mid\":\"7\", \"cid\":\"c2838d5d-9d95-4697-a422-0354ccde5002\", \"layers\":[{\"width\":320, \"height\":240, \"bitrate\":140000, \"ssrc\":1459649227}], \"videoLayerMode\":\"ONE_SPATIAL_LAYER_PER_STREAM\"}], \"stream\":\"camera\", \"version\":{\"unixMicro\":\"1792092329229453\"}}, \"id\":\"EV_XhBahP5sjgy8\", \"createdAt\":\"1792092329\"}"
+}

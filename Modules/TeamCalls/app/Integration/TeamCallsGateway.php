@@ -46,4 +46,9 @@ final class TeamCallsGateway implements CallsGateway
     {
         return $this->calls->missed($user, $limit);
     }
+
+    public function revokeAccess(int $userId, string $reason = 'access_revoked'): int
+    {
+        return $this->calls->revokeAccess($userId, $reason);
+    }
 }

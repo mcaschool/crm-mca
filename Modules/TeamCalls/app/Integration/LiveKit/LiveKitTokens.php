@@ -14,9 +14,10 @@ use Throwable;
 /**
  * Tokens de LiveKit (JWT HS256 firmados con el secreto de la API, formato oficial de «access token»):
  *
- *  - participant(): credencial de UN dispositivo para UNA sala, con permisos mínimos decididos por el
- *    backend (solo unirse; publicar solo las fuentes permitidas; nunca crear, listar ni administrar
- *    salas). Caduca pronto; LiveKit no la trata como de un solo uso (ver revocación en CallService).
+ *  - participant(): credencial de UN dispositivo para UNA sala que SOLO permite entrar, oculto y sin
+ *    medios. LiveKit autohospedado no revoca credenciales (verificado con 1.13.10: ni RemoveParticipant
+ *    ni revoke_token_ts impiden volver), así que los permisos se conceden aparte, por conexión validada.
+ *  - permission(): permisos que el backend concede con UpdateParticipant (fuentes según el medio).
  *  - server(): token de servicio muy corto para que el backend llame al API de salas.
  *  - verifyWebhook(): validación OFICIAL de los webhooks: JWT del encabezado Authorization firmado con
  *    la misma API (iss = API key, firma, vigencia) y claim «sha256» = SHA-256 en base64 del cuerpo
@@ -31,13 +32,10 @@ final class LiveKitTokens
     {
         $now ??= Carbon::now();
         $expires = $now->copy()->addSeconds($grant->ttlSeconds);
-        $sources = array_values(array_filter([
-            $grant->canPublishAudio ? 'microphone' : null,
-            $grant->canPublishVideo ? 'camera' : null,
-            $grant->canShareScreen ? 'screen_share' : null,
-            $grant->canShareScreen ? 'screen_share_audio' : null,
-        ]));
 
+        // Credencial SIN permisos de medios y oculta: solo permite entrar a la sala. Los permisos los
+        // concede el backend (UpdateParticipant, ver permission()) cuando valida la conexión real. Así
+        // una credencial reutilizada o de alguien ya expulsado no recibe ni envía audio, video ni datos.
         $claims = [
             'iss' => $this->config->apiKey,
             'sub' => $grant->identity,
@@ -49,21 +47,47 @@ final class LiveKitTokens
             'video' => [
                 'room' => $grant->room,
                 'roomJoin' => true,
-                'canPublish' => $sources !== [],
-                'canPublishSources' => $sources,
-                'canSubscribe' => true,
-                'canPublishData' => true,
+                'canPublish' => false,
+                'canPublishSources' => [],
+                'canSubscribe' => false,
+                'canPublishData' => false,
                 'canUpdateOwnMetadata' => false,
                 'roomCreate' => false,
                 'roomList' => false,
                 'roomAdmin' => false,
                 'roomRecord' => false,
-                'hidden' => false,
+                'hidden' => true,
                 'recorder' => false,
             ],
         ];
 
         return ['token' => JWT::encode($claims, $this->config->secret(), 'HS256'), 'expires_at' => $expires];
+    }
+
+    /**
+     * Permisos que el backend CONCEDE a una conexión ya validada (ParticipantPermission del API de
+     * salas, nombres del proto). Las fuentes dependen del medio de la llamada.
+     *
+     * @return array<string, mixed>
+     */
+    public function permission(MediaGrant $grant): array
+    {
+        $sources = array_values(array_filter([
+            $grant->canPublishAudio ? 'MICROPHONE' : null,
+            $grant->canPublishVideo ? 'CAMERA' : null,
+            $grant->canShareScreen ? 'SCREEN_SHARE' : null,
+            $grant->canShareScreen ? 'SCREEN_SHARE_AUDIO' : null,
+        ]));
+
+        return [
+            'can_subscribe' => true,
+            'can_publish' => $sources !== [],
+            'can_publish_data' => true,
+            'can_publish_sources' => $sources,
+            'can_update_metadata' => false,
+            'hidden' => false,
+            'recorder' => false,
+        ];
     }
 
     /** @param array<string, mixed> $video permisos del API de salas (roomCreate, roomList, roomAdmin + room) */

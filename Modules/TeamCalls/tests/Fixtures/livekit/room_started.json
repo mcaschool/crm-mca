@@ -1,0 +1,5 @@
+{
+    "source": "LiveKit 1.13.10 (servidor real, fase 3B)",
+    "content_type": "application/webhook+json",
+    "raw": "{\"event\":\"room_started\", \"room\":{\"sid\":\"RM_h4LTyD3qafjN\", \"name\":\"{{ROOM}}\", \"emptyTimeout\":120, \"departureTimeout\":20, \"maxParticipants\":25, \"creationTime\":\"1792092319\", \"creationTimeMs\":\"1792092319085\", \"turnPassword\":\"REDACTED\", \"enabledCodecs\":[{\"mime\":\"audio/PCMU\"}, {\"mime\":\"audio/PCMA\"}, {\"mime\":\"audio/opus\"}, {\"mime\":\"audio/red\"}, {\"mime\":\"video/VP8\"}, {\"mime\":\"video/H264\"}, {\"mime\":\"video/VP9\"}, {\"mime\":\"video/AV1\"}, {\"mime\":\"video/H265\"}, {\"mime\":\"video/rtx\"}]}, \"id\":\"EV_bzAfgsjkNNZf\", \"createdAt\":\"1792092319\"}"
+}

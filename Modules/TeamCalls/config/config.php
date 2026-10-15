@@ -15,6 +15,10 @@ return [
     // Segundos máximos entre la primera aceptación y que haya dos personas conectadas a la sala.
     'connect_seconds' => (int) env('TEAMCALLS_CONNECT_SECONDS', 90),
 
+    // Segundos para reconectarse tras una desconexión confirmada por el servidor de medios antes de
+    // salir de la llamada (LiveKit notifica la salida de la sesión vieja antes que la entrada de la nueva).
+    'reconnect_grace' => (int) env('TEAMCALLS_RECONNECT_GRACE', 20),
+
     // Participantes máximos por llamada (incluida quien la inicia).
     'max_participants' => (int) env('TEAMCALLS_MAX_PARTICIPANTS', 25),
 

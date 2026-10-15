@@ -36,6 +36,8 @@ final class UnconfiguredMediaRooms implements MediaRoomService
         throw CallException::mediaUnavailable();
     }
 
+    public function admitParticipant(MediaGrant $grant): void {}
+
     public function participants(string $room): array
     {
         return [];

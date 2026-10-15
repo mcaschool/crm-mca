@@ -94,6 +94,14 @@ final class RecordingCollaboration implements CallEventPublisher, MediaRoomServi
         $this->prepared[$room] = $maxParticipants;
     }
 
+    /** @var list<string> «sala|identidad» a las que se concedieron medios */
+    public array $admitted = [];
+
+    public function admitParticipant(MediaGrant $grant): void
+    {
+        $this->admitted[] = $grant->room.'|'.$grant->identity;
+    }
+
     public function participants(string $room): array
     {
         return $this->live[$room] ?? [];

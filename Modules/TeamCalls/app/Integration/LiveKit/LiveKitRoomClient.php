@@ -58,6 +58,12 @@ final class LiveKitRoomClient
         $this->call('RemoveParticipant', ['room' => $room, 'identity' => $identity], ['roomAdmin' => true, 'room' => $room]);
     }
 
+    /** @param array<string, mixed> $permission ParticipantPermission (nombres del proto) */
+    public function updatePermission(string $room, string $identity, array $permission): void
+    {
+        $this->call('UpdateParticipant', ['room' => $room, 'identity' => $identity, 'permission' => $permission], ['roomAdmin' => true, 'room' => $room]);
+    }
+
     public function deleteRoom(string $room): void
     {
         $this->call('DeleteRoom', ['room' => $room], ['roomCreate' => true]);

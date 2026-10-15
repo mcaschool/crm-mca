@@ -70,23 +70,46 @@ it('credencial: firmada en el backend, para la sala de ESA llamada, una identida
         ->and($credentials->identity)->toBe('u'.$this->beto->id.'.b1')
         ->and($claims['iss'])->toBe(FakeLiveKit::KEY)->and($claims['sub'])->toBe('u'.$this->beto->id.'.b1')
         ->and($claims['exp'] - $claims['nbf'])->toBe(300)
-        ->and($claims['video'])->toMatchArray(['room' => $room, 'roomJoin' => true, 'canSubscribe' => true, 'canPublish' => true,
-            'roomCreate' => false, 'roomList' => false, 'roomAdmin' => false, 'roomRecord' => false, 'canUpdateOwnMetadata' => false, 'hidden' => false])
-        ->and($claims['video']['canPublishSources'])->toBe(['microphone', 'camera', 'screen_share', 'screen_share_audio'])
+        // Solo entrar, oculto y SIN medios: LiveKit autohospedado no revoca credenciales, así que los
+        // permisos se conceden aparte (UpdateParticipant) cuando el backend valida la conexión real.
+        ->and($claims['video'])->toMatchArray(['room' => $room, 'roomJoin' => true, 'canSubscribe' => false, 'canPublish' => false,
+            'canPublishData' => false, 'canPublishSources' => [], 'hidden' => true,
+            'roomCreate' => false, 'roomList' => false, 'roomAdmin' => false, 'roomRecord' => false, 'canUpdateOwnMetadata' => false])
         ->and(json_decode($claims['metadata'], true))->toBe(['user_id' => $this->beto->id, 'role' => 'member'])
         ->and($credentials->token)->not->toContain(FakeLiveKit::SECRET)
         // La sala la creó el backend antes de emitir la credencial, con el límite de participantes.
         ->and(FakeLiveKit::$rooms[$room]['max'])->toBe(25)
         ->and($room)->toStartWith('tc-')->and($room)->not->toContain((string) $call->id); // nombre opaco
 
-    // Llamada de voz: solo micrófono. Otra llamada: otra sala.
+    // Otra llamada: otra sala; el nombre no se parece al id de la llamada (no es un ULID contiguo).
     TC::service()->end($this->ana, $call->id);
     $audio = TC::call($this->ana, [$this->beto->id], 'lk-key-0002', CallMedia::Audio);
     TC::service()->accept($this->beto, $audio->id, 'b1');
     $audioClaims = FakeLiveKit::decode(TC::service()->credentials($this->beto, $audio->id, 'b1')->token);
-    expect($audioClaims['video']['canPublishSources'])->toBe(['microphone'])
-        ->and($audioClaims['video']['room'])->not->toBe($room);
+    expect($audioClaims['video']['room'])->not->toBe($room)
+        ->and($audioClaims['video']['room'])->toMatch('/^tc-[0-9a-f]{32}$/')
+        ->and(substr($audioClaims['video']['room'], 3, 10))->not->toBe(strtolower(substr((string) $audio->id, 0, 10)));
 });
+
+it('permisos concedidos al validar la conexión: según el medio, sin metadatos propios', function (CallMedia $media, array $sources) {
+    $call = TC::call($this->ana, [$this->beto->id], 'lk-key-perm', $media);
+    TC::service()->accept($this->beto, $call->id, 'b1');
+    $room = TC::fresh($call)->room_name;
+    TC::service()->credentials($this->beto, $call->id, 'b1');
+    FakeLiveKit::connect($room, 'u'.$this->beto->id.'.b1', 'PA_b');
+    TC::service()->applyMediaEvent($call->id, 'EV_1', 'joined', $this->beto->id, 'b1', 'PA_b');
+
+    $update = collect(\Illuminate\Support\Facades\Http::recorded())->map(fn ($pair) => $pair[0])
+        ->first(fn ($r) => str_ends_with($r->url(), '/UpdateParticipant'));
+    expect($update)->not->toBeNull()
+        ->and($update->data()['identity'])->toBe('u'.$this->beto->id.'.b1')
+        ->and($update->data()['permission'])->toMatchArray(['can_subscribe' => true, 'can_publish' => true, 'can_publish_data' => true,
+            'can_publish_sources' => $sources, 'hidden' => false, 'can_update_metadata' => false])
+        ->and(FakeLiveKit::$admitted)->toHaveKey($room.'|u'.$this->beto->id.'.b1');
+})->with([
+    'voz' => [CallMedia::Audio, ['MICROPHONE']],
+    'video' => [CallMedia::Video, ['MICROPHONE', 'CAMERA', 'SCREEN_SHARE', 'SCREEN_SHARE_AUDIO']],
+]);
 
 it('credenciales caducadas: LiveKit las rechazaría; la vigencia está acotada por configuración', function () {
     $call = TC::call($this->ana, [$this->beto->id]);

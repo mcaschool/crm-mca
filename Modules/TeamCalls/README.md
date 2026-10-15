@@ -113,29 +113,71 @@ API Twirp `livekit.RoomService` (JSON). Nada más.
 | Invitación aceptada | `accepted` | — | `connecting` |
 | Conectándose (`unirse`) | `joined` | `connecting` | `connecting` |
 | Conectado de verdad (webhook `participant_joined`) | `joined` | `connected` | `active` con 2 conectados |
-| Desconectado (webhook `participant_left` / `participant_connection_aborted`) | `left` | `disconnected` | sigue si quedan 2; si no, `ended` |
+| Desconectado (webhook `participant_left` / `participant_connection_aborted`) | `joined` durante el margen de reconexión; luego `left` | `disconnected` | sigue si quedan 2; si no, `ended` |
+| Conexión validada por el backend | `joined` | `connected` + permisos concedidos (`UpdateParticipant`) | — |
 | Llamada finalizada | `left` | `disconnected` | `ended` (no se reactiva) |
 
 Con LiveKit, aceptar o unirse **no** activan la llamada: solo dos conexiones confirmadas por LiveKit. Sin
 conexiones reales, la llamada pasa a `failed` (`connect_timeout`). Los dobles de las fases 1 y 2
 (`confirmsConnections() = false`) mantienen el comportamiento anterior.
 
-**Seguridad de salas y credenciales.**
-- La sala la decide el backend: nombre opaco `tc-<ulid>` (sin ids ni institución), una por llamada, creada
-  solo por el backend (`room.auto_create=false` en el servidor). El cliente no puede enviar sala ni
-  identidad (422).
-- Credencial = JWT HS256 con `roomJoin` a ESA sala, identidad `u{usuario}.{dispositivo}`, fuentes
-  permitidas según el medio (voz: solo micrófono), sin `roomCreate`/`roomList`/`roomAdmin`/`roomRecord`,
-  vigencia 60–3600 s (300 por defecto). Se emite solo tras comprobar institución activa, usuario activo y
-  con permiso, participación sin expulsión, estado de la llamada y dispositivo.
-- **No son de un solo uso.** Por eso la revocación se hace cumplir en tres sitios: (1) no se emiten
-  credenciales nuevas; (2) `RemoveParticipant` al expulsar; (3) si vuelve a entrar con una credencial
-  todavía vigente, su `participant_joined` se rechaza y se le desconecta otra vez (y el barrido lo repite).
-  Lo mismo para otro dispositivo de la misma persona, otra institución, no participantes, identidades
-  ajenas o una llamada terminada (su sala se cierra).
-- Webhooks: firma oficial (JWT en `Authorization`, `iss` = API key, vigencia, `sha256` del cuerpo
-  ORIGINAL), límite de tamaño y de frecuencia; duplicados por id; sesiones (`sid`) para descartar eventos
-  retrasados o desordenados.
+**Seguridad de salas y credenciales** (revisada en la fase 3B contra LiveKit real).
+- **La sala la decide el backend.**
+  - Nombre opaco `tc-<32 hex aleatorios>`: sin ids ni institución.
+  - Hasta la fase 3B era un ULID contiguo al id de la llamada; el servidor real lo dejó en evidencia.
+  - Una sala por llamada, creada solo por el backend (`room.auto_create=false`).
+  - El cliente no puede enviar sala ni identidad (422).
+- **La credencial solo permite ENTRAR.** Es un JWT HS256 con:
+  - `roomJoin` a ESA sala e identidad `u{usuario}.{dispositivo}`;
+  - `hidden` y sin `canSubscribe`, `canPublish` ni `canPublishData`;
+  - nunca `roomCreate`, `roomList`, `roomAdmin` ni `roomRecord`;
+  - vigencia de 60 a 3600 s (300 por defecto).
+
+  Solo se emite tras comprobar institución activa, usuario activo y con permiso, participación sin
+  expulsión, estado de la llamada y dispositivo.
+- **Permisos concedidos por el servidor.** Al llegar el `participant_joined` firmado, el motor valida esa
+  conexión: llamada viva, participante sin expulsión, mismo dispositivo, permiso vigente y sesión no
+  cerrada. Solo entonces concede los medios con `UpdateParticipant`, con las fuentes según el medio (voz:
+  solo micrófono).
+  - Una conexión no válida se desconecta **sin haber recibido ni enviado medios**.
+  - Verificado con LiveKit real: una credencial sin conceder no publica («insufficient permissions») ni
+    recibe pistas, y no aparece ante los demás.
+- **Revocación.** LiveKit autohospedado **no revoca credenciales**. Verificado con 1.13.10: tras
+  `RemoveParticipant`, con o sin `revoke_token_ts`, la misma credencial vuelve a entrar. Además, el
+  servidor entrega al cliente una credencial renovada de 10 min que incluye los permisos concedidos. Por
+  eso:
+  1. Expulsar (`revoke`) o retirar el acceso (`revokeAccess`, contrato para CollaborationCore) impide
+     credenciales nuevas y desconecta a la persona.
+  2. Si la llamada sigue con medios, se **rota la sala**: los demás pasan a una sala nueva y la vieja se
+     cierra. Con `auto_create=false`, toda credencial de la sala vieja, original o renovada, es rechazada
+     por LiveKit («requested room does not exist»; verificado).
+  3. Finalizar la llamada cierra su sala, con el mismo efecto.
+  4. Los demás reconectan pidiendo credenciales nuevas: su cliente ve `ROOM_DELETED` y la llamada sigue
+     viva en la API.
+- **Webhooks.**
+  - Firma oficial: JWT en `Authorization` sin `Bearer`, `iss` = API key, `exp` de 5 min, y `sha256` en
+    base64 estándar del cuerpo ORIGINAL.
+  - Límite de tamaño y de frecuencia.
+  - Duplicados descartados por `id`.
+  - Sesiones (`sid`) para descartar eventos retrasados o desordenados.
+- **Margen de reconexión** (`TEAMCALLS_RECONNECT_GRACE`, 20 s). Al reconectarse, LiveKit envía
+  `participant_left` de la sesión vieja ANTES de `participant_joined` de la nueva (verificado). Por eso una
+  desconexión del servidor de medios solo marca `media_state = disconnected`. Si la persona no vuelve en
+  el margen, sale de la llamada: lo aplica la siguiente consulta o el comando de cada minuto. Salir por la
+  API y expulsar siguen siendo inmediatos.
+- **Riesgos residuales** (documentados, no resueltos en TeamCalls):
+  1. **Credenciales al portador.** Quien copie la credencial vigente de una persona autorizada puede
+     usarla mientras dure: LiveKit expulsa a la sesión original (`DUPLICATE_IDENTITY`) y la copia es
+     admitida.
+     - Mitigación actual: vigencia corta, entrega solo por sesión autenticada y TLS.
+     - Solución: credenciales ligadas a un dispositivo verificado (registro de dispositivos de
+       CollaborationCore).
+  2. **Lo que ve una conexión sin admitir.** Mientras no está admitida, ve las identidades
+     (`u{id}.{dispositivo}`) y la lista de pistas de los demás, no su contenido. Se puede reducir con
+     identidades opacas si se considera necesario.
+  3. **Retirada de acceso.** Llega solo cuando CollaborationCore llame a `revokeAccess`. Hasta entonces,
+     una persona desactivada a mitad de llamada sigue dentro hasta que se reconecte, momento en que se le
+     rechaza.
 
 **Dispositivos.** Una identidad por persona y dispositivo; el mismo token sirve en los SDK de LiveKit para
 navegador, Android e iOS, así que PC↔PC, PC↔Android, PC↔iPhone, Android↔iPhone y video grupal comparten el
@@ -151,9 +193,59 @@ Webhook: `POST /api/teamcalls/media/livekit` (`api.teamcalls.media.livekit`).
 TLS en el dominio de clientes (`wss://`), puertos 7881/TCP y UDP de RTC abiertos, TURN/TLS en 443 para redes
 restrictivas, y el API (7880) accesible solo desde el servidor del CRM.
 
-**Límites de lo probado.** Todo lo anterior está probado contra un LiveKit SIMULADO (`tests/Support/FakeLiveKit`,
-que también exige tokens de servicio válidos). La compatibilidad de los claims y del formato de los
-webhooks con un servidor real, y el audio/video, quedan pendientes de una prueba con LiveKit operativo.
+**Límites de lo probado.** Ver la fase 3B: validado contra LiveKit real local; quedan pendientes las pruebas
+audiovisuales con dispositivos reales y redes distintas.
+
+## Validación con LiveKit real (fase 3B)
+LiveKit **1.13.10**, binario oficial con SHA-256 verificado, corriendo en local (solo `127.0.0.1`),
+contra un CRM aislado con BD propia. Los clientes WebRTC eran reales: `livekit-client` 2.22.3 en el
+navegador, con audio y video sintéticos. El procedimiento está en `tests/LiveKitDev/README.md`.
+
+| Verificado contra el servidor real | Resultado |
+|---|---|
+| Crear sala (Twirp), idempotente; listar salas y participantes | OK (respuestas en snake_case) |
+| Credencial: aceptada para sala creada; sala no creada → 404; firma/caducidad inválidas → 401 | OK |
+| Permisos: sin conceder no publica ni recibe; `UpdateParticipant` concede; voz/video según el medio | OK |
+| Videollamada 1:1 y grupal de 3 (video 320×240 recibido por cada cliente) | OK (sin cámara real) |
+| Webhooks reales: firma, `id`, `createdAt`, camelCase; alterar el cuerpo invalida la firma | OK |
+| Conexión → admitida → llamada activa solo con dos conexiones reales | OK |
+| Expulsión: desconexión inmediata (`PARTICIPANT_REMOVED`) | OK |
+| Reentrada con la credencial vigente tras expulsar (sin rotación) | **ENTRA**: LiveKit no revoca |
+| Reentrada con credencial original o renovada tras rotar o finalizar | Rechazada (sala inexistente) |
+| Reconexión completa / misma identidad | `left` (viejo) antes de `joined` (nuevo); con margen, la llamada sigue |
+| Eventos perdidos (CRM caído): el barrido recupera las conexiones reales | OK |
+| Desconexión real sin volver: tras el margen, sale y la llamada 1:1 termina | OK |
+
+**Incompatibilidades encontradas y corregidas:**
+1. **Revocación.** No existe en LiveKit autohospedado. Se resuelve con permisos concedidos por el servidor
+   y rotación de sala.
+2. **Orden de eventos al reconectarse.** Cortaba la llamada. Se resuelve con el margen de reconexión.
+3. **Nombre de sala casi idéntico al id de la llamada.** Se cambia a un nombre aleatorio.
+4. **El barrido no recuperaba conexiones cuyo evento se perdió.** Ahora las aplica y vuelve a conceder
+   permisos si la concesión falló.
+5. **Simulador alineado con el servidor real:**
+   - `ListParticipants` de una sala inexistente responde 200 vacío;
+   - permisos insuficientes responden 401 `unauthenticated`;
+   - una firma inválida responde 401 en texto plano;
+   - retirar o cerrar algo que no existe responde 404 `not_found`.
+
+**Pruebas:**
+- **Unitarias y simuladas:** `FakeLiveKit`.
+- **Formato real:** `LiveKitRealFormatTest`, con webhooks capturados del servidor (`tests/Fixtures/livekit`).
+- **Servidor real, opcionales:** `LiveKitRealServerTest`, grupo `livekit-real`.
+- **Pendientes:** audiovisual con cámara y micrófono reales, redes distintas (NAT/TURN), Android e iOS, y
+  calidad y latencia.
+
+**Advertencias de Composer** (6, todas preexistentes y también en `main`; no se actualizan en esta fase):
+
+| Paquete | Versión | Gravedad | Corregida en | Nota |
+|---|---|---|---|---|
+| league/commonmark | 2.10.0 | alta (DoS tablas GFM) | > 2.10.1 | transitiva de laravel/framework |
+| league/commonmark | 2.10.0 | media (DisallowedRawHtml) | > 2.10.1 | ídem; se usa en `Modules/Ai` |
+| livewire/livewire | 4.3.0 | media (XSS DOM) | 4.3.4 | `composer.json` fija `4.3` exacto: hay que cambiar la restricción |
+| laravel/framework | 13.25.0 | baja (XSS página de depuración) | 13.30.0 | solo con `APP_DEBUG` |
+| league/flysystem | 3.35.2 | baja (normalizador de rutas) | > 3.35.2 | transitiva |
+| symfony/http-foundation | 7.4.16 | sin calificar (ReDoS `Cache-Control`) | 7.4.19 | transitiva |
 
 ## Concurrencia
 `tests/Feature/CallRealConcurrencyTest.php` lanza procesos PHP independientes (cada uno con su propia
@@ -167,7 +259,7 @@ inicio serializa por persona (bloqueo de su fila en `users`) para que el «ocupa
 `call.declined`, `call.missed`, `call.participant.joined`, `call.participant.left`, `call.connected`,
 `call.ended` (con `data.status`: ended, declined, cancelled, missed, failed), `call.media.joined|left`
 (con `applied`/`rejected`), `call.media.room_finished`, `call.participant.connecting` (unirse con LiveKit) y
-`call.participant.revoked`.
+`call.participant.revoked` (con `reason`) y `call.media.room_rotated`.
 Nota para el contrato: la cancelación se publica como `call.ended` con `status: cancelled`.
 Eventos internos de Laravel equivalentes en `app/Events` (p. ej. `CallEnded`, `CallMissed`).
 

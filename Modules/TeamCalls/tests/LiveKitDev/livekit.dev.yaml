@@ -1,0 +1,22 @@
+# LiveKit EFIMERO de desarrollo para TeamCalls fase 3B: solo loopback, claves de prueba.
+port: 7880
+bind_addresses:
+  - 127.0.0.1
+rtc:
+  tcp_port: 0   # sin TCP de respaldo: solo UDP en loopback
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+keys:
+  APIteamcallsdev: CAMBIAR-POR-UN-SECRETO-ALEATORIO-DE-48-CARACTERES
+room:
+  auto_create: false
+  empty_timeout: 120
+  departure_timeout: 10
+webhook:
+  api_key: APIteamcallsdev
+  urls:
+    - http://127.0.0.1:8099/api/teamcalls/media/livekit
+    - http://127.0.0.1:8098/capture.php
+logging:
+  level: info

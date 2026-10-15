@@ -27,4 +27,10 @@ interface CallsGateway
 
     /** @return list<CallSummary> */
     public function missedFor(User $user, int $limit = 20): array;
+
+    /**
+     * CollaborationCore avisa de que una persona ya no puede colaborar (desactivada o sin permiso): se le
+     * retira de todas sus llamadas vivas de la institución activa (expulsión con rotación de sala).
+     */
+    public function revokeAccess(int $userId, string $reason = 'access_revoked'): int;
 }

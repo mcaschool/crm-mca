@@ -72,6 +72,8 @@ it('expulsar por la API: solo quien inició; sin credenciales nuevas; volver a i
     Http::post($this->carla, 'accept', $id)->assertOk();
     Http::post($this->beto, 'join', $id)->assertOk();
     lkFlowJoined($id, $this->beto, 'PA_b');
+    $oldRoom = FakeLiveKit::room($id);
+    $betoIdentity = FakeLiveKit::identity($this->beto, $id);
 
     Http::post($this->carla, 'revoke', $id, ['user_id' => $this->beto->id])->assertForbidden()->assertJsonPath('error.code', 'forbidden');
     Http::post($this->ana, 'revoke', $id, ['user_id' => $this->ana->id])->assertUnprocessable()->assertJsonPath('error.code', 'invalid');
@@ -81,7 +83,9 @@ it('expulsar por la API: solo quien inició; sin credenciales nuevas; volver a i
     $res = Http::post($this->ana, 'revoke', $id, ['user_id' => $this->beto->id])->assertOk()->assertJsonPath('meta.replayed', false);
     expect(collect($res->json('data.participants'))->firstWhere('user_id', $this->beto->id))->toMatchArray(['revoked' => true, 'state' => 'left']);
     Http::post($this->ana, 'revoke', $id, ['user_id' => $this->beto->id])->assertOk()->assertJsonPath('meta.replayed', true);
-    expect(FakeLiveKit::$removed)->toBe([FakeLiveKit::room($id).'|'.FakeLiveKit::identity($this->beto, $id)]);
+    // Desconectado de la sala y, como la llamada sigue (Ana y Carla), la sala rota: la vieja se cierra.
+    expect(FakeLiveKit::$removed)->toBe([$oldRoom.'|'.$betoIdentity])
+        ->and(FakeLiveKit::$deleted)->toBe([$oldRoom])->and(FakeLiveKit::room($id))->not->toBe($oldRoom);
 
     Http::post($this->beto, 'credentials', $id)->assertForbidden();
     Http::post($this->beto, 'join', $id)->assertForbidden();
@@ -139,11 +143,13 @@ it('barrido: cierra salas huérfanas, desconecta a quien sobra y da por desconec
 
     $this->artisan('teamcalls:media-sweep')->assertSuccessful();
 
-    // La huérfana se cierra; la de la llamada también, porque al faltar Beto la llamada 1:1 terminó.
-    expect(FakeLiveKit::$deleted)->toBe(['tc-huerfana', $room])
+    expect(FakeLiveKit::$deleted)->toBe(['tc-huerfana'])
         ->and(FakeLiveKit::$removed)->toBe([$room.'|u'.$this->carla->id.'.colado'])
-        ->and(lkMediaState($id, $this->beto->id))->toBe('disconnected')
-        ->and(TC::fresh(Call::query()->findOrFail($id))->status->value)->toBe('ended') // 1:1 y Beto ya no está
+        ->and(lkMediaState($id, $this->beto->id))->toBe('disconnected');
+    // Beto no vuelve en el margen de reconexión: sale; en 1:1 la llamada termina y su sala se cierra.
+    $this->travel(21)->seconds();
+    Http::get($this->ana, 'show', $id)->assertJsonPath('data.status', 'ended');
+    expect(FakeLiveKit::$deleted)->toBe(['tc-huerfana', $room])
         ->and(FakeLiveKit::$rooms)->toHaveKey('otra-aplicacion');
 });
 

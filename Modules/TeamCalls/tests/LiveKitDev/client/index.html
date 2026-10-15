@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TeamCalls LiveKit 3B</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 16px; background: #fff; color: #111; }
+  video { width: 240px; height: 180px; background: #222; margin: 4px; }
+  pre { background: #f4f4f4; padding: 8px; max-height: 320px; overflow: auto; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.22.3/dist/livekit-client.umd.js"></script>
+</head>
+<body>
+<h1 id="who">Cliente de prueba</h1>
+<p>Estado: <b id="state">sin conectar</b></p>
+<div id="videos"></div>
+<pre id="log"></pre>
+<script>
+// Cliente WebRTC REAL de prueba (sin cámara ni micrófono): publica video de un canvas y audio de un
+// oscilador. Lo maneja el agente con window.lk.* (connect, disconnect, publish, report).
+const who = new URLSearchParams(location.search).get('who') || 'x';
+document.getElementById('who').textContent = 'Cliente: ' + who;
+const logs = [];
+function log(m) { const l = new Date().toISOString().slice(11, 23) + ' ' + m; logs.push(l); document.getElementById('log').textContent = logs.join('\n'); }
+const L = window.LivekitClient;
+let room = null;
+let canvasTimer = null;
+
+function syntheticTracks() {
+  const c = document.createElement('canvas'); c.width = 320; c.height = 240;
+  const g = c.getContext('2d'); let f = 0;
+  canvasTimer = setInterval(() => { g.fillStyle = `hsl(${(f++ * 7) % 360},70%,50%)`; g.fillRect(0, 0, 320, 240); g.fillStyle = '#fff'; g.font = '28px sans-serif'; g.fillText(who + ' ' + f, 20, 120); }, 66);
+  const video = c.captureStream(15).getVideoTracks()[0];
+  const ctx = new AudioContext(); const osc = ctx.createOscillator(); const dst = ctx.createMediaStreamDestination();
+  osc.frequency.value = 440; osc.connect(dst); osc.start();
+  return { video, audio: dst.stream.getAudioTracks()[0] };
+}
+
+window.lk = {
+  logs, who,
+  async connect(file) {
+    const creds = await (await fetch('tokens/' + (file || who) + '.json', { cache: 'no-store' })).json();
+    room = new L.Room({ adaptiveStream: false, dynacast: false });
+    room.on(L.RoomEvent.ConnectionStateChanged, s => { document.getElementById('state').textContent = s; log('state ' + s); });
+    room.on(L.RoomEvent.Disconnected, r => log('disconnected reason=' + r));
+    room.on(L.RoomEvent.ParticipantConnected, p => log('participant+ ' + p.identity));
+    room.on(L.RoomEvent.ParticipantDisconnected, p => log('participant- ' + p.identity));
+    room.on(L.RoomEvent.TrackSubscribed, (t, pub, p) => {
+      log('subscribed ' + t.kind + ' from ' + p.identity);
+      if (t.kind === 'video') { const v = t.attach(); v.muted = true; v.id = 'v-' + p.identity; document.getElementById('videos').appendChild(v); }
+    });
+    try {
+      await room.connect(creds.url, creds.token, { autoSubscribe: true });
+      log('connected as ' + room.localParticipant.identity + ' room=' + room.name);
+      return { ok: true, identity: room.localParticipant.identity, room: room.name };
+    } catch (e) {
+      log('connect error ' + (e && e.message));
+      return { ok: false, error: String(e && e.message), reason: e && e.reason };
+    }
+  },
+  async publish() {
+    const t = syntheticTracks();
+    const out = {};
+    for (const [kind, track, source] of [['video', t.video, L.Track.Source.Camera], ['audio', t.audio, L.Track.Source.Microphone]]) {
+      try { await room.localParticipant.publishTrack(track, { source, name: kind }); out[kind] = 'ok'; }
+      catch (e) { out[kind] = 'error: ' + (e && e.message); }
+    }
+    try { await room.localParticipant.publishTrack(t.video.clone(), { source: L.Track.Source.ScreenShare, name: 'screen' }); out.screen = 'ok'; }
+    catch (e) { out.screen = 'error: ' + (e && e.message); }
+    log('publish ' + JSON.stringify(out));
+    return out;
+  },
+  room() { return room; },
+  async disconnect() { if (room) { await room.disconnect(); } clearInterval(canvasTimer); return true; },
+  report() {
+    const vids = [...document.querySelectorAll('video')].map(v => ({ id: v.id, w: v.videoWidth, h: v.videoHeight, t: v.currentTime }));
+    return {
+      state: room ? room.state : 'none',
+      identity: room ? room.localParticipant.identity : null,
+      remotes: room ? [...room.remoteParticipants.values()].map(p => ({ identity: p.identity, tracks: [...p.trackPublications.values()].map(x => x.kind + ':' + (x.isSubscribed ? 'sub' : 'nosub')) })) : [],
+      videos: vids,
+      permissions: room ? room.localParticipant.permissions : null,
+      logs: logs.slice(-15),
+    };
+  },
+};
+log('listo; livekit-client ' + (L && L.version));
+</script>
+</body>
+</html>
