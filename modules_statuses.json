@@ -1,6 +1,7 @@
 {
     "Core": true,
     "CollaborationCore": true,
+    "CollaborationRealtime": true,
     "Institutions": true,
     "Identity": true,
     "Integrations": true,
