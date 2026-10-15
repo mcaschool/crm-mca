@@ -20,6 +20,12 @@ class RouteServiceProvider extends ServiceProvider
 
     public function map(): void
     {
+        // Webhooks firmados del servidor de medios (stateless, bajo /api, sin CSRF ni sesión).
+        Route::middleware('api')
+            ->prefix('api')
+            ->name('api.')
+            ->group(module_path($this->name, '/routes/api.php'));
+
         $panel = Route::middleware([RespondWithCallsJson::class, 'web', 'auth', 'institution.user', 'setlocale', 'can:access-panel', \App\Http\Middleware\EnsureTwoFactorEnabled::class]);
         if ($domain = config('crm.panel_domain')) {
             $panel->domain($domain);

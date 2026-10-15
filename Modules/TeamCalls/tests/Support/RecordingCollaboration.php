@@ -13,6 +13,7 @@ use Modules\TeamCalls\Support\CallEnvelope;
 use Modules\TeamCalls\Support\CallSummary;
 use Modules\TeamCalls\Support\JoinCredentials;
 use Modules\TeamCalls\Support\MediaGrant;
+use Modules\TeamCalls\Support\MediaParticipant;
 
 /**
  * Dobles de prueba que REGISTRAN lo que TeamCalls pide a CollaborationCore y al servidor de medios:
@@ -69,9 +70,38 @@ final class RecordingCollaboration implements CallEventPublisher, MediaRoomServi
     /** Servidor de medios de prueba (sin red). false simula «sin infraestructura multimedia». */
     public bool $mediaAvailable = true;
 
+    /** false (fases 1 y 2): unirse cuenta como conectado. true: solo los eventos de medios conectan. */
+    public bool $confirms = false;
+
+    /** @var array<string, int> sala => máximo de participantes */
+    public array $prepared = [];
+
+    /** @var array<string, list<MediaParticipant>> participantes reales por sala (los fija la prueba) */
+    public array $live = [];
+
     public function available(): bool
     {
         return $this->mediaAvailable;
+    }
+
+    public function confirmsConnections(): bool
+    {
+        return $this->confirms;
+    }
+
+    public function prepareRoom(string $room, int $maxParticipants): void
+    {
+        $this->prepared[$room] = $maxParticipants;
+    }
+
+    public function participants(string $room): array
+    {
+        return $this->live[$room] ?? [];
+    }
+
+    public function rooms(): array
+    {
+        return array_keys($this->prepared);
     }
 
     public function issueJoinCredentials(MediaGrant $grant): JoinCredentials
@@ -88,6 +118,7 @@ final class RecordingCollaboration implements CallEventPublisher, MediaRoomServi
 
     public function closeRoom(string $room): void
     {
+        unset($this->prepared[$room], $this->live[$room]);
         $this->closed[] = $room;
     }
 

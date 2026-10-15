@@ -40,6 +40,9 @@ final class CallController
         'conversation' => 'prohibited',
         'conversation_id' => 'prohibited',
         'conversation_type' => 'prohibited',
+        'room' => 'prohibited', // la sala la decide el backend: es la de la llamada
+        'room_name' => 'prohibited',
+        'identity' => 'prohibited',
     ];
 
     public function __construct(
@@ -140,6 +143,20 @@ final class CallController
         ]);
 
         return $this->mutate($request, $call, fn (User $u) => $this->calls->invite($u, $call, array_map('intval', $input['user_ids'])));
+    }
+
+    /** Quien inicia expulsa a un participante (sin credenciales nuevas y desconectado de la sala). */
+    public function revoke(Request $request, string $call): JsonResponse
+    {
+        $input = $request->validate(self::UNTRUSTED + ['user_id' => ['required', 'integer', 'min:1']]);
+
+        return $this->mutate($request, $call, fn (User $u) => $this->calls->revoke($u, $call, (int) $input['user_id']));
+    }
+
+    /** Participantes REALES de la sala según el servidor de medios (sin dispositivos ni identidades). */
+    public function media(Request $request, string $call): JsonResponse
+    {
+        return $this->guard(fn () => CallResponse::data(['participants' => $this->calls->mediaParticipants($this->user($request), $call)]));
     }
 
     /** Credenciales de la sala para ESTE dispositivo. Nunca se guardan ni se cachean. */

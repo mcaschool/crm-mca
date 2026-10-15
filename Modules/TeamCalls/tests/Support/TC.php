@@ -77,6 +77,18 @@ final class TC
         self::$browser = $name;
     }
 
+    /** Código de error (CallException::$reason) de una operación, o «sin-error». */
+    public static function reason(callable $fn): string
+    {
+        try {
+            $fn();
+        } catch (\Modules\TeamCalls\Exceptions\CallException $e) {
+            return $e->reason;
+        }
+
+        return 'sin-error';
+    }
+
     public static function service(): CallService
     {
         return app(CallService::class);

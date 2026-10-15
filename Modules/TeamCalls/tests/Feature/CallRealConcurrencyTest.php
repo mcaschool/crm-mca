@@ -163,6 +163,28 @@ it('cancelar y contestar en el mismo instante: gana uno y el estado queda cohere
     }
 });
 
+it('conexiones reales confirmadas a la vez por el servidor de medios: una sola activación', function () {
+    ['inst' => $inst, 'users' => [$ana, $beto]] = tcSeed($this, 2);
+    $call = tcRun([['start', ['inst' => $inst, 'user' => $ana, 'to' => [$beto], 'key' => 'race-media-01']]], barrier: false)[0]['call'];
+    tcRun([['accept', ['inst' => $inst, 'user' => $beto, 'call' => $call, 'device' => 'dev-'.$beto]]], barrier: false);
+
+    // Cada webhook dos veces y a la vez (LiveKit puede reintentar mientras procesamos el primero).
+    $jobs = [];
+    foreach ([[$ana, 'PA_a'], [$beto, 'PA_b']] as [$user, $sid]) {
+        foreach ([1, 2] as $copy) {
+            $jobs[] = ['media', ['inst' => $inst, 'call' => $call, 'event' => 'EV_join_'.$sid, 'kind' => 'joined',
+                'user' => $user, 'device' => 'dev-'.$user, 'session' => $sid]];
+        }
+    }
+    $results = tcRun($jobs);
+
+    expect(tcReasons($results))->toBe(['ok' => 4])
+        ->and(tcProbe('collab_call_calls')->where('id', $call)->value('status'))->toBe('active')
+        ->and(tcProbe('collab_call_events')->where('call_id', $call)->where('type', 'call.connected')->count())->toBe(1)
+        ->and(tcProbe('collab_call_events')->where('call_id', $call)->where('type', 'call.media.joined')->count())->toBe(2)
+        ->and(tcProbe('collab_call_participants')->where('call_id', $call)->where('media_state', 'connected')->count())->toBe(2);
+});
+
 it('en una llamada grupal, contestar y rechazar a la vez no pierde ninguna respuesta', function () {
     ['inst' => $inst, 'users' => $u] = tcSeed($this, 5);
     $call = tcRun([['start', ['inst' => $inst, 'user' => $u[0], 'to' => [$u[1], $u[2], $u[3], $u[4]], 'key' => 'race-group-01']]], barrier: false)[0]['call'];

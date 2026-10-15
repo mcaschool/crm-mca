@@ -10,8 +10,9 @@ use Modules\TeamCalls\Support\JoinCredentials;
 use Modules\TeamCalls\Support\MediaGrant;
 
 /**
- * Sin servidor de medios configurado (LiveKit llegará con el VPS): pedir credenciales falla de forma
- * explícita y controlada. Retirar participantes o cerrar salas no hace nada (no hay salas reales).
+ * Sin servidor de medios configurado (LiveKit llegará con el VPS): preparar salas y pedir
+ * credenciales falla de forma explícita y controlada (503 «media_unavailable»). Retirar
+ * participantes o cerrar salas no hace nada (no hay salas reales).
  */
 final class UnconfiguredMediaRooms implements MediaRoomService
 {
@@ -20,9 +21,29 @@ final class UnconfiguredMediaRooms implements MediaRoomService
         return false;
     }
 
+    public function confirmsConnections(): bool
+    {
+        return true;
+    }
+
+    public function prepareRoom(string $room, int $maxParticipants): void
+    {
+        throw CallException::mediaUnavailable();
+    }
+
     public function issueJoinCredentials(MediaGrant $grant): JoinCredentials
     {
         throw CallException::mediaUnavailable();
+    }
+
+    public function participants(string $room): array
+    {
+        return [];
+    }
+
+    public function rooms(): array
+    {
+        return [];
     }
 
     public function removeParticipant(string $room, string $identity): void {}

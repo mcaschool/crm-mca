@@ -21,6 +21,7 @@ use Modules\TeamCalls\Domain\CallStateMachine;
 use Modules\TeamCalls\Enums\CallMedia;
 use Modules\TeamCalls\Enums\CallScope;
 use Modules\TeamCalls\Enums\CallStatus;
+use Modules\TeamCalls\Enums\MediaState;
 use Modules\TeamCalls\Enums\ParticipantRole;
 use Modules\TeamCalls\Enums\ParticipantState;
 use Modules\TeamCalls\Exceptions\CallException;
@@ -32,6 +33,8 @@ use Modules\TeamCalls\Support\CallTarget;
 use Modules\TeamCalls\Support\ConversationRef;
 use Modules\TeamCalls\Support\JoinCredentials;
 use Modules\TeamCalls\Support\MediaGrant;
+use Modules\TeamCalls\Support\MediaIdentity;
+use Modules\TeamCalls\Support\MediaParticipant;
 use Throwable;
 
 /**
@@ -110,7 +113,7 @@ final class CallService
                     'context_type' => $context?->type,
                     'context_id' => $context?->id,
                     'status' => CallStatus::Initiating,
-                    'room_name' => 'tc-'.Str::lower((string) Str::ulid()),
+                    'room_name' => Call::ROOM_PREFIX.Str::lower((string) Str::ulid()),
                     'idempotency_key' => $key,
                     'request_hash' => $hash,
                 ])->save();
@@ -170,8 +173,10 @@ final class CallService
                     $newIds[] = $user->id;
                 } elseif (in_array($p->state, [ParticipantState::Declined, ParticipantState::Missed, ParticipantState::Left], true)) {
                     // Volver a llamar a quien no contestó o salió: vuelve a sonar (idempotente si ya suena).
+                    // Volver a invitar a alguien expulsado es una decisión explícita: retira la expulsión.
                     $p->forceFill(['state' => ParticipantState::Ringing, 'invited_by' => $actor->id, 'invited_at' => now(),
-                        'ring_expires_at' => now()->addSeconds($this->ringSeconds()), 'responded_at' => null, 'device_id' => null])->save();
+                        'ring_expires_at' => now()->addSeconds($this->ringSeconds()), 'responded_at' => null, 'device_id' => null,
+                        'media_state' => null, 'media_session' => null, 'revoked_at' => null, 'revoked_by' => null])->save();
                     $newIds[] = $user->id;
                 }
             }
@@ -287,6 +292,9 @@ final class CallService
                 throw CallException::invalidTransition('join on '.$call->status->value);
             }
             $p = $call->participantFor($user->id) ?? $this->admitConversationMember($call, $user);
+            if ($p->revoked_at !== null) {
+                throw CallException::forbidden('The participant was removed from the call.');
+            }
 
             if ($p->state === ParticipantState::Joined) {
                 if ($p->device_id === $deviceId) {
@@ -301,8 +309,12 @@ final class CallService
                 throw CallException::forbidden('The invitation was withdrawn.');
             }
             $wasRinging = $p->state === ParticipantState::Ringing;
+            // Con un servidor de medios que confirma conexiones, unirse es «conectándose»: la conexión
+            // real (y con ella la llamada activa) solo llega con su evento firmado.
+            $confirms = $this->media->confirmsConnections();
             $this->moveParticipant($p, ParticipantState::Joined, ['joined_at' => now(), 'left_at' => null, 'device_id' => $deviceId,
-                'responded_at' => $p->responded_at ?? now()]);
+                'responded_at' => $p->responded_at ?? now()]
+                + ($confirms ? ['media_state' => MediaState::Connecting, 'media_session' => null] : []));
             if ($wasRinging) {
                 $this->recorder->record($call, 'call.accepted', $user->id, $user->id, ['device_id' => $deviceId]);
                 $this->recorder->notify($call, 'call.answered_elsewhere', $user->id, ['user_id' => $user->id], [$user->id], $deviceId);
@@ -310,7 +322,7 @@ final class CallService
                     $call->forceFill(['answered_at' => now()])->save();
                 }
             }
-            $this->recorder->record($call, 'call.participant.joined', $user->id, $user->id, ['device_id' => $deviceId]);
+            $this->recorder->record($call, $confirms ? 'call.participant.connecting' : 'call.participant.joined', $user->id, $user->id, ['device_id' => $deviceId]);
             $this->presence->setInCall($user->id, $call->id, 3600);
             $this->reconcile($call, $user->id);
 
@@ -391,70 +403,229 @@ final class CallService
 
     /**
      * Credenciales de la sala para el dispositivo con el que la persona está en la llamada. El backend
-     * decide los permisos; nada de esto se guarda.
+     * decide la sala (opaca, la de ESTA llamada), la identidad y los permisos; nada de esto se guarda.
+     * Las credenciales no son de un solo uso: la revocación se hace cumplir también en los eventos del
+     * servidor de medios (ver applyMediaEvent) y con teamcalls:media-sweep.
      */
     public function credentials(User $user, string $callId, string $deviceId): JoinCredentials
     {
         $this->assertActor($user);
         $deviceId = (string) $this->validDevice($deviceId, required: true);
-        $call = $this->locked($callId, fn (Call $call) => $call);
+        if (! $this->media->available()) {
+            throw CallException::mediaUnavailable();
+        }
+        $call = $this->locked($callId, function (Call $call) use ($user, $deviceId): Call {
+            $p = $this->participantOrFail($call, $user->id);
+            if ($p->revoked_at !== null) {
+                throw CallException::forbidden('The participant was removed from the call.');
+            }
+            if (! $call->status->isLive() || ! $p->state->isIn()) {
+                throw CallException::forbidden('Not in the call.');
+            }
+            if ($p->device_id !== null && $p->device_id !== $deviceId) {
+                throw CallException::answeredElsewhere();
+            }
+            if ($p->device_id === null) {
+                $p->forceFill(['device_id' => $deviceId])->save(); // la credencial fija el dispositivo
+            }
+
+            return $call;
+        });
         $p = $this->participantOrFail($call, $user->id);
-        if (! $call->status->isLive() || ! $p->state->isIn()) {
-            throw CallException::forbidden('Not in the call.');
-        }
-        if ($p->device_id !== null && $p->device_id !== $deviceId) {
-            throw CallException::answeredElsewhere();
-        }
+
+        // Fuera de la transacción: la sala la crea SOLO el backend (idempotente).
+        $this->media->prepareRoom($call->room_name, $this->maxParticipants());
 
         return $this->media->issueJoinCredentials(new MediaGrant(
             room: $call->room_name,
-            identity: 'u'.$user->id.'.'.$deviceId,
+            identity: MediaIdentity::for($user->id, $deviceId),
             userId: $user->id,
             deviceId: $deviceId,
             canPublishVideo: $call->media === CallMedia::Video,
             canPublishAudio: true,
-            canShareScreen: true,
+            canShareScreen: $call->media === CallMedia::Video,
             isHost: $p->role === ParticipantRole::Host,
-            ttlSeconds: max(60, (int) config('teamcalls.join_token_ttl', 300)),
+            ttlSeconds: max(60, min(3600, (int) config('teamcalls.join_token_ttl', 300))),
         ));
     }
 
     /**
-     * Evento EXTERNO del servidor de medios (webhook): conexión o desconexión confirmada de una
-     * identidad. Idempotente por $eventId: un evento repetido no se aplica dos veces.
+     * Quien inicia la llamada expulsa a un participante: deja de recibir credenciales, sale de la
+     * llamada y se le desconecta del servidor de medios. Si reutiliza una credencial todavía vigente,
+     * el evento de conexión se rechaza y se le vuelve a desconectar. Volver a invitarle lo readmite.
      */
-    public function applyMediaEvent(string $callId, string $eventId, string $kind, int $userId, string $deviceId): Call
+    public function revoke(User $actor, string $callId, int $userId): Call
     {
-        if (! in_array($kind, ['joined', 'left'], true) || preg_match('/^[A-Za-z0-9._:-]{1,100}$/', $eventId) !== 1) {
+        $this->assertActor($actor);
+
+        return $this->locked($callId, function (Call $call) use ($actor, $userId): Call {
+            $this->participantOrFail($call, $actor->id);
+            if ((int) $call->initiator_id !== (int) $actor->id) {
+                throw CallException::forbidden('Only the host can remove participants.');
+            }
+            if ($userId === (int) $actor->id) {
+                throw CallException::invalid('The host cannot remove themselves.');
+            }
+            $p = $this->participantOrFail($call, $userId);
+            if ($p->revoked_at !== null) {
+                return $call; // idempotente
+            }
+            if (! $call->status->isLive()) {
+                throw CallException::invalidTransition('revoke on '.$call->status->value);
+            }
+            $p->forceFill(['revoked_at' => now(), 'revoked_by' => $actor->id])->save();
+            if ($p->state->isIn()) {
+                $this->leaveParticipant($call, $p, $actor->id);
+            } elseif ($p->state === ParticipantState::Ringing) {
+                $this->moveParticipant($p, ParticipantState::Cancelled);
+                DB::afterCommit(fn () => $this->safely(fn () => $this->push->cancelIncomingCall([$userId], $call->id, 'revoked')));
+            }
+            $this->recorder->record($call, 'call.participant.revoked', $actor->id, $userId);
+
+            $members = $call->participants->where('role', ParticipantRole::Member);
+            if (in_array($call->status, [CallStatus::Initiating, CallStatus::Ringing], true)
+                && $members->every(fn (CallParticipant $m) => ! $m->state->isIn() && $m->state !== ParticipantState::Ringing)) {
+                $this->finish($call, CallStatus::Cancelled, 'cancelled_by_caller', $actor->id); // ya no queda a quién llamar
+            } else {
+                $this->reconcile($call, $actor->id);
+            }
+
+            return $call;
+        });
+    }
+
+    /**
+     * Evento EXTERNO del servidor de medios (webhook verificado): conexión o desconexión confirmada de
+     * una identidad. Idempotente por $eventId. $session (sid de la conexión) ordena los eventos:
+     *
+     *  - Conexión: solo cuenta para quien está en la llamada (aceptada o dentro), sin expulsión, con el
+     *    MISMO dispositivo de la llamada y con permiso vigente. Cualquier otra conexión (otra persona,
+     *    otra institución, otro dispositivo, alguien expulsado, una llamada terminada o una sesión que
+     *    ya se cerró) se rechaza y se DESCONECTA del servidor de medios: así una credencial todavía
+     *    vigente no sirve para volver.
+     *  - Desconexión: solo de la sesión vigente; la de una sesión anterior (llega tarde) se ignora.
+     *  - Nada de esto reactiva una llamada terminada.
+     */
+    public function applyMediaEvent(string $callId, string $eventId, string $kind, int $userId, string $deviceId, ?string $session = null): Call
+    {
+        if (! in_array($kind, ['joined', 'left'], true) || preg_match('/^[A-Za-z0-9._:-]{1,100}$/', $eventId) !== 1
+            || ($session !== null && preg_match('/^[A-Za-z0-9._:-]{1,64}$/', $session) !== 1)) {
             throw CallException::invalid('Invalid media event.');
         }
         $deviceId = (string) $this->validDevice($deviceId, required: true);
 
-        return $this->locked($callId, function (Call $call) use ($eventId, $kind, $userId, $deviceId): Call {
+        return $this->locked($callId, function (Call $call) use ($eventId, $kind, $userId, $deviceId, $session): Call {
             $key = 'media:'.$eventId;
             if (CallEvent::query()->where('call_id', $call->id)->where('dedupe_key', $key)->exists()) {
                 return $call; // repetido
             }
             $p = $call->participantFor($userId);
-            $applied = false;
-            if ($p !== null && $call->status->isLive()) {
-                if ($kind === 'joined' && CallStateMachine::canParticipant($p->state, ParticipantState::Joined)
-                    && ($p->device_id === null || $p->device_id === $deviceId)) {
-                    $this->moveParticipant($p, ParticipantState::Joined, ['joined_at' => now(), 'left_at' => null, 'device_id' => $deviceId,
-                        'responded_at' => $p->responded_at ?? now()]);
-                    $applied = true;
-                } elseif ($kind === 'left' && $p->state->isIn() && $p->device_id === $deviceId) {
-                    $this->leaveParticipant($call, $p, null);
-                    $applied = true;
-                }
+            $rejected = false;
+            if ($kind === 'joined') {
+                [$applied, $rejected] = $this->mediaJoined($call, $p, $userId, $deviceId, $session);
+            } else {
+                $applied = $this->mediaLeft($call, $p, $deviceId, $session);
             }
-            $this->recorder->record($call, 'call.media.'.$kind, null, $userId, ['device_id' => $deviceId, 'applied' => $applied], [], null, $key);
+            $this->recorder->record($call, 'call.media.'.$kind, null, $userId,
+                ['device_id' => $deviceId, 'session' => $session, 'applied' => $applied] + ($rejected ? ['rejected' => true] : []),
+                $applied ? null : [], null, $key);
+            if ($rejected) {
+                $this->disconnect($call, MediaIdentity::for($userId, $deviceId));
+            }
             if ($applied) {
                 $this->reconcile($call, null);
             }
 
             return $call;
         });
+    }
+
+    /** La sala se cerró en el servidor de medios: quien seguía conectado queda desconectado. */
+    public function applyRoomFinished(string $callId, string $eventId): Call
+    {
+        if (preg_match('/^[A-Za-z0-9._:-]{1,100}$/', $eventId) !== 1) {
+            throw CallException::invalid('Invalid media event.');
+        }
+
+        return $this->locked($callId, function (Call $call) use ($eventId): Call {
+            $key = 'media:'.$eventId;
+            if (CallEvent::query()->where('call_id', $call->id)->where('dedupe_key', $key)->exists() || ! $call->status->isLive()) {
+                return $call;
+            }
+            $gone = $call->participants->filter(fn (CallParticipant $p) => $p->state->isIn() && $p->media_state === MediaState::Connected);
+            foreach ($gone as $p) {
+                $this->leaveParticipant($call, $p, null, fromMediaServer: true);
+            }
+            $this->recorder->record($call, 'call.media.room_finished', null, null, ['participants' => $gone->count()], [], null, $key);
+            $this->reconcile($call, null);
+
+            return $call;
+        });
+    }
+
+    /**
+     * Participantes REALES de la sala según el servidor de medios, para quien está en la llamada. No
+     * revela dispositivos ni identidades ajenas: solo a qué participante corresponde cada conexión y si
+     * está autorizada.
+     *
+     * @return list<array{user_id: int|null, authorized: bool, connected_at: string|null}>
+     */
+    public function mediaParticipants(User $viewer, string $callId): array
+    {
+        $this->assertActor($viewer);
+        $call = $this->locked($callId, fn (Call $call) => $call);
+        $this->participantOrFail($call, $viewer->id);
+        if (! $call->status->isLive()) {
+            return [];
+        }
+
+        return array_map(function (MediaParticipant $m) use ($call): array {
+            $identity = MediaIdentity::parse($m->identity);
+            $p = $identity !== null ? $call->participantFor($identity->userId) : null;
+
+            return [
+                'user_id' => $p?->user_id,
+                'authorized' => $identity !== null && $this->mayBeInRoom($call, $p, $identity->userId, $identity->deviceId),
+                'connected_at' => $m->joinedAt?->toIso8601String(),
+            ];
+        }, $this->media->participants($call->room_name));
+    }
+
+    /**
+     * Contrasta la sala real con la base de datos (por si se perdió algún evento): desconecta a quien no
+     * debería estar y da por desconectado a quien la base de datos cree conectado pero ya no está.
+     * Una llamada terminada cierra su sala. Devuelve cuántas correcciones hizo.
+     */
+    public function reconcileMedia(string $callId): int
+    {
+        $call = $this->locked($callId, fn (Call $call) => $call);
+        if (! $call->status->isLive()) {
+            $this->safely(fn () => $this->media->closeRoom($call->room_name));
+
+            return 0;
+        }
+        $listedAt = now();
+        $real = $this->media->participants($call->room_name);
+        $fixes = 0;
+        $sessions = [];
+        foreach ($real as $m) {
+            $sessions[] = $m->session;
+            $identity = MediaIdentity::parse($m->identity);
+            if ($identity === null || ! $this->mayBeInRoom($call, $call->participantFor($identity->userId), $identity->userId, $identity->deviceId)) {
+                $this->safely(fn () => $this->media->removeParticipant($call->room_name, $m->identity));
+                $fixes++;
+            }
+        }
+        foreach ($call->participants as $p) {
+            // Margen: una conexión confirmada justo después de listar la sala no se da por perdida.
+            if ($p->media_state === MediaState::Connected && $p->media_session !== null && $p->device_id !== null
+                && ! in_array($p->media_session, $sessions, true) && $p->media_connected_at?->lte($listedAt->copy()->subSeconds(60))) {
+                $this->applyMediaEvent($call->id, 'sync.left.'.$p->media_session, 'left', $p->user_id, $p->device_id, $p->media_session);
+                $fixes++;
+            }
+        }
+
+        return $fixes;
     }
 
     // ─── Consultas ──────────────────────────────────────────────────────────────────────────────
@@ -587,7 +758,7 @@ final class CallService
         }
         if ($call->status === CallStatus::Connecting && $call->answered_at !== null
             && $call->answered_at->lte($now->copy()->subSeconds($this->connectSeconds()))
-            && $call->participants->where('state', ParticipantState::Joined)->count() < 2) {
+            && $this->connectedCount($call) < 2) {
             $this->finish($call, CallStatus::Failed, 'connect_timeout', null);
 
             return;
@@ -603,7 +774,7 @@ final class CallService
         }
         $in = $call->participants->filter(fn (CallParticipant $p) => $p->state->isIn());
         $membersIn = $in->filter(fn (CallParticipant $p) => $p->role === ParticipantRole::Member);
-        $joined = $call->participants->where('state', ParticipantState::Joined)->count();
+        $joined = $this->connectedCount($call);
         $ringing = $call->participants->where('state', ParticipantState::Ringing)->count();
 
         if (in_array($call->status, [CallStatus::Initiating, CallStatus::Ringing], true)) {
@@ -634,7 +805,7 @@ final class CallService
         $ringing = [];
         foreach ($call->participants as $p) {
             if ($p->state->isIn()) {
-                $this->moveParticipant($p, ParticipantState::Left, ['left_at' => now()]);
+                $this->moveParticipant($p, ParticipantState::Left, ['left_at' => now()] + $this->mediaGone($p));
             } elseif ($p->state === ParticipantState::Ringing) {
                 $this->moveParticipant($p, $status === CallStatus::Missed ? ParticipantState::Missed : ParticipantState::Cancelled);
                 $ringing[] = $p->user_id;
@@ -654,16 +825,113 @@ final class CallService
         });
     }
 
-    private function leaveParticipant(Call $call, CallParticipant $p, ?int $actorId): void
+    /** Sale de la llamada. Si lo confirma el propio servidor de medios, no hace falta desconectarlo. */
+    private function leaveParticipant(Call $call, CallParticipant $p, ?int $actorId, bool $fromMediaServer = false): void
     {
-        $identity = $p->device_id !== null ? 'u'.$p->user_id.'.'.$p->device_id : null;
-        $this->moveParticipant($p, ParticipantState::Left, ['left_at' => now()]);
+        $identity = $p->device_id !== null && ! $fromMediaServer ? MediaIdentity::for($p->user_id, $p->device_id) : null;
+        $this->moveParticipant($p, ParticipantState::Left, ['left_at' => now()] + $this->mediaGone($p));
         $this->recorder->record($call, 'call.participant.left', $actorId, $p->user_id);
         $this->presence->clearInCall($p->user_id, $call->id);
         if ($identity !== null) {
             $room = $call->room_name;
             DB::afterCommit(fn () => $this->safely(fn () => $this->media->removeParticipant($room, $identity)));
         }
+    }
+
+    /**
+     * Conexión confirmada por el servidor de medios.
+     *
+     * @return array{0: bool, 1: bool} [aplicada, rechazada (hay que desconectarla)]
+     */
+    private function mediaJoined(Call $call, ?CallParticipant $p, int $userId, string $deviceId, ?string $session): array
+    {
+        if (! $this->mayBeInRoom($call, $p, $userId, $deviceId) || $p === null
+            || ($session !== null && $this->sessionEnded($call, $session))) {
+            return [false, true];
+        }
+        if ($p->media_state === MediaState::Connected && $p->media_session === $session) {
+            return [false, false]; // la misma conexión notificada otra vez
+        }
+        $wasJoined = $p->state === ParticipantState::Joined;
+        $this->moveParticipant($p, ParticipantState::Joined, ['joined_at' => $p->joined_at ?? now(), 'left_at' => null,
+            'responded_at' => $p->responded_at ?? now()]);
+        $p->forceFill(['media_state' => MediaState::Connected, 'media_session' => $session, 'media_connected_at' => now(),
+            'media_disconnected_at' => null])->save();
+        if (! $wasJoined) {
+            $this->recorder->record($call, 'call.participant.joined', null, $userId, ['device_id' => $deviceId]);
+        }
+
+        return [true, false];
+    }
+
+    /** Desconexión confirmada: solo de la sesión vigente de quien sigue en la llamada con ese dispositivo. */
+    private function mediaLeft(Call $call, ?CallParticipant $p, string $deviceId, ?string $session): bool
+    {
+        if (! $call->status->isLive() || $p === null || ! $p->state->isIn() || $p->device_id !== $deviceId) {
+            return false;
+        }
+        if ($session !== null && $p->media_session !== null && $p->media_session !== $session) {
+            return false; // desconexión de una sesión anterior que llega tarde
+        }
+        $this->leaveParticipant($call, $p, null, fromMediaServer: true);
+
+        return true;
+    }
+
+    /**
+     * ¿Puede esta identidad estar en la sala? Llamada viva, participante sin expulsión, dentro de la
+     * llamada (aceptada o unida), con el MISMO dispositivo y con permiso vigente en su institución.
+     */
+    private function mayBeInRoom(Call $call, ?CallParticipant $p, int $userId, string $deviceId): bool
+    {
+        if (! $call->status->isLive() || $p === null || $p->revoked_at !== null || ! $p->state->isIn()
+            || $p->device_id === null || $p->device_id !== $deviceId) {
+            return false;
+        }
+        $user = User::query()->find($userId);
+
+        return $user !== null && (int) $user->institution_id === (int) $call->institution_id && $this->users->canUseCalls($user);
+    }
+
+    /** ¿Ya se cerró esta sesión de medios? (una conexión que llega después de su desconexión) */
+    private function sessionEnded(Call $call, string $session): bool
+    {
+        return CallEvent::query()->where('call_id', $call->id)->where('type', 'call.media.left')
+            ->where('data->session', $session)->exists();
+    }
+
+    /** Desconecta una identidad del servidor de medios tras confirmar (y cierra la sala si la llamada terminó). */
+    private function disconnect(Call $call, string $identity): void
+    {
+        $room = $call->room_name;
+        $ended = ! $call->status->isLive();
+        DB::afterCommit(function () use ($room, $identity, $ended): void {
+            $this->safely(fn () => $this->media->removeParticipant($room, $identity));
+            if ($ended) {
+                $this->safely(fn () => $this->media->closeRoom($room));
+            }
+        });
+    }
+
+    /**
+     * Personas realmente conectadas. Con un servidor de medios que confirma conexiones, solo cuentan las
+     * confirmadas por él; aceptar o pedir unirse no basta.
+     */
+    private function connectedCount(Call $call): int
+    {
+        $joined = $call->participants->where('state', ParticipantState::Joined);
+        if (! $this->media->confirmsConnections()) {
+            return $joined->count();
+        }
+
+        return $joined->filter(fn (CallParticipant $p) => $p->media_state === MediaState::Connected)->count();
+    }
+
+    /** @return array<string, mixed> estado multimedia al salir de la llamada */
+    private function mediaGone(CallParticipant $p): array
+    {
+        return $p->media_state !== null && $p->media_state !== MediaState::Disconnected
+            ? ['media_state' => MediaState::Disconnected, 'media_disconnected_at' => now()] : [];
     }
 
     /** @param list<int> $userIds */

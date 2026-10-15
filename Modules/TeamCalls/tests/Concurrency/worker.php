@@ -71,6 +71,14 @@ try {
         'accept' => ['ok' => true, 'call' => $service()->accept($actor($args), (string) $args['call'], (string) $args['device'])->id],
         'decline' => ['ok' => true, 'call' => $service()->decline($actor($args), (string) $args['call'])->id],
         'cancel' => ['ok' => true, 'call' => $service()->cancel($actor($args), (string) $args['call'])->id],
+        // Webhook ya verificado del servidor de medios (lo que haría MediaEventIngestor).
+        'media' => (function () use ($args, $service): array {
+            app(CurrentInstitution::class)->set((int) $args['inst']);
+            $service()->applyMediaEvent((string) $args['call'], (string) $args['event'], (string) $args['kind'],
+                (int) $args['user'], (string) $args['device'], (string) $args['session']);
+
+            return ['ok' => true];
+        })(),
         'cleanup' => (function () use ($args): array {
             $inst = (int) $args['inst'];
             foreach (['collab_call_events', 'collab_call_participants', 'collab_call_calls', 'users'] as $table) {

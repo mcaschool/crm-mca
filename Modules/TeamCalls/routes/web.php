@@ -14,6 +14,7 @@ Route::prefix('colaboracion/llamadas')->name('collab.calls.')->group(function ()
         Route::get('/', [CallController::class, 'index'])->name('index');
         Route::get('/perdidas', [CallController::class, 'missed'])->name('missed');
         Route::get('/{call}', [CallController::class, 'show'])->name('show');
+        Route::get('/{call}/medios', [CallController::class, 'media'])->name('media');
     });
 
     Route::post('/', [CallController::class, 'store'])->middleware('throttle:teamcalls-start')->name('store');
@@ -26,6 +27,7 @@ Route::prefix('colaboracion/llamadas')->name('collab.calls.')->group(function ()
         Route::post('/{call}/salir', [CallController::class, 'leave'])->name('leave');
         Route::post('/{call}/finalizar', [CallController::class, 'end'])->name('end');
         Route::post('/{call}/invitar', [CallController::class, 'invite'])->name('invite');
+        Route::post('/{call}/expulsar', [CallController::class, 'revoke'])->name('revoke');
         Route::post('/{call}/credenciales', [CallController::class, 'credentials'])->name('credentials');
     });
 });

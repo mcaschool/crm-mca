@@ -46,6 +46,12 @@ class CallPolicy
         return $this->cancel($user, $call);
     }
 
+    /** Expulsar participantes: solo quien inició la llamada, mientras sigue viva. */
+    public function revoke(User $user, Call $call): bool
+    {
+        return $this->cancel($user, $call) && $call->status->isLive();
+    }
+
     private function participates(User $user, Call $call): bool
     {
         return $this->users->canUseCalls($user)

@@ -42,6 +42,9 @@ class Call extends Model
     use BelongsToInstitution;
     use HasUlids;
 
+    /** Prefijo de las salas de TeamCalls en el servidor de medios (nombre opaco: prefijo + ULID). */
+    public const ROOM_PREFIX = 'tc-';
+
     protected $table = 'collab_call_calls';
 
     /** Nada asignable en masa: el servicio fija cada campo de forma explícita. */
