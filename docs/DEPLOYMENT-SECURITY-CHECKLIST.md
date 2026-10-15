@@ -157,6 +157,20 @@ Notas:
 - **Verificar primero en seco** desde SSH: `php artisan crm:purge-retention --dry-run`
   (muestra cuántos mensajes borraría, por institución, sin tocar nada).
 
+### Perfiles de Messenger/Instagram e indicadores del menú
+
+- `php artisan migrate` (migración `2026_10_23_100000_add_profile_tracking_to_social_conversations`:
+  nombre/apellidos por separado y seguimiento de la consulta del perfil).
+- La misma entrada `schedule:run` ejecuta cada hora `social:refresh-contact-profiles --limit=25`
+  (recuperación controlada de perfiles incompletos). Manual: `php artisan social:refresh-contact-profiles --limit=25`.
+- **Meta (fuera del código)**: la FOTO de los contactos de Messenger y su nombre por la User Profile
+  API exigen la función «Business Asset User Profile Access» con **acceso avanzado** en la app de
+  Meta (hoy rechazada). Sin ella, el CRM obtiene el NOMBRE por la Conversations API
+  (`pages_messaging` + `pages_manage_metadata`, ya aprobados) y la foto queda con el avatar de
+  respaldo. Al aprobarse, la recuperación programada completa las fotos sola.
+- Los indicadores del menú (Leads, Contactos, Bandeja social) se sincronizan desde el navegador
+  con `GET /panel/indicadores`: no requiere servicios ni procesos nuevos.
+
 ### Publicaciones programadas del Publicador
 
 No necesita nada nuevo en el servidor: la misma entrada `schedule:run` cada minuto (Opción A)
