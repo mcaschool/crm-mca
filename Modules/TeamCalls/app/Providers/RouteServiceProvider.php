@@ -6,6 +6,7 @@ namespace Modules\TeamCalls\Providers;
 
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Route;
+use Modules\TeamCalls\Http\Middleware\EnsureCallsUiEnabled;
 use Modules\TeamCalls\Http\Middleware\RespondWithCallsJson;
 
 /**
@@ -31,5 +32,16 @@ class RouteServiceProvider extends ServiceProvider
             $panel->domain($domain);
         }
         $panel->group(module_path($this->name, '/routes/web.php'));
+
+        // Interfaz web (fase 3C, SOLO desarrollo): lecturas JSON con el mismo formato que la API, y la
+        // página con la pila HTML del panel (auth redirige al login y el 2FA a «Mi perfil», como el resto).
+        $uiJson = Route::middleware([RespondWithCallsJson::class, 'web', 'auth', 'institution.user', 'setlocale', 'can:access-panel', \App\Http\Middleware\EnsureTwoFactorEnabled::class, EnsureCallsUiEnabled::class]);
+        $uiPage = Route::middleware(['web', 'auth', 'institution.user', 'setlocale', 'can:access-panel', \App\Http\Middleware\EnsureTwoFactorEnabled::class, EnsureCallsUiEnabled::class]);
+        if ($domain = config('crm.panel_domain')) {
+            $uiJson->domain($domain);
+            $uiPage->domain($domain);
+        }
+        $uiJson->group(module_path($this->name, '/routes/ui-api.php'));
+        $uiPage->group(module_path($this->name, '/routes/ui.php'));
     }
 }

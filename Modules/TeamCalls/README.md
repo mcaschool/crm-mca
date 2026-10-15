@@ -1,7 +1,8 @@
 # TeamCalls — motor de llamadas internas (MCA Colaboración)
 
 Fase 1: núcleo funcional. Fase 2: API web JSON segura sobre el motor. Fase 3A: adaptador LiveKit
-autohospedado (sin desplegar). Sin interfaz, WebSocket, push, VPS ni apps móviles todavía.
+autohospedado (sin desplegar). Fase 3B: validado con LiveKit real. Fase 3C: primera interfaz web (solo
+desarrollo). Sin WebSocket, push, VPS ni apps móviles todavía.
 
 ## Qué hace
 - Llamadas 1:1 y grupales de voz o video entre colaboradores de la misma institución, iniciadas hacia
@@ -246,6 +247,103 @@ navegador, con audio y video sintéticos. El procedimiento está en `tests/LiveK
 | laravel/framework | 13.25.0 | baja (XSS página de depuración) | 13.30.0 | solo con `APP_DEBUG` |
 | league/flysystem | 3.35.2 | baja (normalizador de rutas) | > 3.35.2 | transitiva |
 | symfony/http-foundation | 7.4.16 | sin calificar (ReDoS `Cache-Control`) | 7.4.19 | transitiva |
+
+## Interfaz web (fase 3C, solo desarrollo)
+Página `GET /colaboracion/teamcalls` (`collab.calls.ui`). Usa el layout del panel (`x-app-layout`,
+`x-ui.*` y tokens `--mca-*`) y no añade ninguna entrada al menú global. Existe solo con
+`TEAMCALLS_UI_ENABLED=true` **y** en los entornos `local` o `testing` (`EnsureCallsUiEnabled`); en
+cualquier otro caso responde 404. Así seguirá mientras falten los permisos definitivos de
+CollaborationCore.
+
+| Ruta | Nombre | Uso |
+|---|---|---|
+| `GET /colaboracion/teamcalls` | `collab.calls.ui` | página (pila HTML del panel: login, 2FA, institución) |
+| `GET /colaboracion/teamcalls/recursos/{asset}` | `collab.calls.ui.asset` | lista cerrada: `teamcalls-ui.js`, `teamcalls-ui.css`, `livekit-client.umd.js` (versionados por contenido) |
+| `GET /colaboracion/teamcalls/contactos` | `collab.calls.ui.contacts` | compañeros a los que se puede llamar (solo id y nombre; reglas de `canContact`) |
+| `GET /colaboracion/teamcalls/en-curso` | `collab.calls.ui.live` | llamadas vivas de quien consulta: **sondeo temporal** de entrantes |
+
+Todo lo demás pasa por la API existente: iniciar, aceptar, rechazar, unirse, credenciales, finalizar y
+consultar. El prefijo propio evita cualquier choque con `/colaboracion/llamadas/{call}`.
+
+**Componentes:**
+- `resources/views/app.blade.php` y `resources/assets/{js,css}/teamcalls-ui.*`: JS sin compilar, sin
+  tocar Vite ni `public/build`.
+- SDK oficial `livekit-client` 2.22.3 (UMD verificado; `resources/assets/vendor/livekit-client`), servido
+  por el módulo: sin CDN de terceros en el panel.
+- Textos en `lang/{es,en}/teamcalls.php` (claves `teamcalls.ui.*`).
+
+**Funciones:**
+- Llamada de voz y videollamada individuales.
+- Aviso de llamada entrante con aceptar o rechazar.
+- Micrófono y cámara.
+- Video local (en espejo) y remoto.
+- Participantes con su estado de llamada y su estado de medios.
+- Estados: llamando, conectando, esperando autorización, en llamada y reconectando.
+- Colgar o cancelar.
+- Historial reciente.
+- Selección de micrófono, cámara y altavoz (cuando el navegador lo permite).
+- Errores de permisos, dispositivo inexistente u ocupado, pista interrumpida, red, sesión y servidor de
+  medios.
+
+**Reglas de la fase 3B en el cliente:**
+- **Permisos.** Entra a la sala sin medios y publica solo tras el `ParticipantPermissionsChanged` que
+  confirma la concesión del backend.
+- **Desconexión** (sala eliminada por rotación, expulsión, red o servidor):
+  1. consulta la llamada;
+  2. pide credenciales NUEVAS;
+  3. entra a la sala actual con un `Room` nuevo, sin duplicar participantes;
+  4. si fue expulsado o la llamada terminó, lo muestra y libera todo.
+- **`DUPLICATE_IDENTITY`** (la llamada se abrió en otra pestaña): no reconecta, para no alternar entre
+  pestañas.
+- **Cortes breves.** Los recupera el SDK (`Reconnecting`/`Reconnected`). Al recargar la página en mitad de
+  la llamada, se vuelve a entrar dentro del margen de reconexión del motor.
+- **Al terminar.** Se paran y liberan todas las pistas y elementos multimedia.
+
+**Medios sintéticos** (`?sintetico=1`, solo con `TEAMCALLS_UI_SYNTHETIC_MEDIA=true`): audio y video
+generados para pruebas automatizadas sin cámara ni micrófono. Mismas reglas de permisos; desactiva
+`adaptiveStream` para medir el flujo real.
+
+### Validación con dos navegadores reales (LiveKit 1.13.10 local)
+Dos sesiones independientes: Ana en `127.0.0.1:8099` y Beto en `localhost:8099`. Login real con
+contraseña y 2FA TOTP, CSRF y BD aislada. Medios **sintéticos**: el navegador de pruebas no tiene
+permisos de cámara ni micrófono.
+
+| Prueba | Resultado |
+|---|---|
+| A inicia videollamada → B recibe el aviso | 2,3 s (sondeo 3 s) |
+| B acepta → ambos con credenciales autorizadas, conectados y en llamada | 7,4 s |
+| Audio y video en ambos sentidos | ~37 KB de audio y ~55 KB de video cada 3 s; fotogramas decodificados |
+| Micrófono y cámara: silenciar o apagar → el otro recibe 0 bytes e indicador; reactivar → vuelve | OK |
+| B recarga la página en mitad de la llamada | De vuelta en 7,7 s con credenciales nuevas; A sin duplicados |
+| Rotación de sala (expulsión de un tercero) | Ambos clientes reconectan solos a la sala nueva en 4–7 s; medios recuperados |
+| B cuelga | Llamada `ended`, historial actualizado en ambos, sala cerrada en LiveKit, pistas liberadas |
+| Rechazo | A ve «La llamada fue rechazada», historial «Rechazada» |
+| Sin respuesta (45 s) | A ve «Sin respuesta», historial «Perdida»; aceptar tarde → «La llamada ya no está disponible» |
+| Permisos de cámara y micrófono denegados | Mensaje combinado; la llamada sigue y recibe al otro |
+
+**Pendiente: prueba manual con cámara y micrófono físicos.** Y sin cubrir aún: cámara ocupada por otro
+programa, dispositivo desconectado durante la llamada y redes distintas. El código los maneja, pero no se
+han reproducido.
+
+**Lecciones del entorno local** (no afectan a producción con PHP-FPM):
+- `php -S` atiende de una en una: los webhooks van a otra instancia (puerto 8097) para no esperar al
+  sondeo de la interfaz.
+- Sin OPcache en CLI cada petición tardaba unos 2 s y la recarga superaba el margen de reconexión de 20 s.
+  Con `-d zend_extension=opcache -d opcache.enable_cli=1`, unos 0,3 s.
+
+### Para sustituir el sondeo por CollaborationRealtime
+En `teamcalls-ui.js`, el objeto `events` es la única fuente de llamadas entrantes y de cambios de la
+llamada en curso (`onIncoming(summary)`, `onUpdate(summary)`). CollaborationRealtime debe:
+1. Autenticar la suscripción con la sesión web (y después con Sanctum) al canal privado
+   `private-collab.user.{id}`.
+2. Entregar los `call.*` que ya publica `CallRecorder` (`call.ringing`, `call.accepted`,
+   `call.declined`, `call.missed`, `call.ended`, `call.participant.*`, `call.media.*`,
+   `call.media.room_rotated`) con el `CallEnvelope` v1.
+3. Sustituir `events.start()` por la suscripción: `call.ringing` → `onIncoming` (con el resumen de
+   `GET /colaboracion/llamadas/{call}`), el resto → `onUpdate`. El sondeo puede quedar como respaldo si
+   se pierde el canal.
+4. Entregar `call.answered_elsewhere` (solo tiempo real) a los demás dispositivos de la persona, para
+   cerrar su aviso de entrante.
 
 ## Concurrencia
 `tests/Feature/CallRealConcurrencyTest.php` lanza procesos PHP independientes (cada uno con su propia

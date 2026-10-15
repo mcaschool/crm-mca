@@ -16,7 +16,7 @@ room:
 webhook:
   api_key: APIteamcallsdev
   urls:
-    - http://127.0.0.1:8099/api/teamcalls/media/livekit
+    - http://127.0.0.1:8097/api/teamcalls/media/livekit
     - http://127.0.0.1:8098/capture.php
 logging:
   level: info

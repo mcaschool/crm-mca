@@ -53,3 +53,22 @@ Servidor del CRM, arrancado **desde `public/`** (si no, el enrutador de PHP no e
 `tests/Feature/LiveKit/LiveKitRealServerTest.php` (grupo `livekit-real`) se omite salvo que existan
 `TEAMCALLS_LIVEKIT_REAL_API_URL` (solo `127.0.0.1` o `localhost`), `TEAMCALLS_LIVEKIT_REAL_KEY` y
 `TEAMCALLS_LIVEKIT_REAL_SECRET`.
+
+## 5. Interfaz web con dos navegadores (fase 3C)
+1. **Variables adicionales del CRM aislado:**
+   - `TEAMCALLS_UI_ENABLED=true`;
+   - para pruebas sin cámara ni micrófono, además `TEAMCALLS_UI_SYNTHETIC_MEDIA=true` y abrir la página
+     con `?sintetico=1`.
+2. **Servidor rápido.** Arranca `php -S` con
+   `-d zend_extension=opcache -d opcache.enable_cli=1 -d opcache.revalidate_freq=0`. Sin OPcache, cada
+   petición tarda unos 2 s en Windows y la recarga en mitad de una llamada no cabe en el margen de
+   reconexión.
+3. **Webhooks aparte.** Arranca una **segunda** instancia idéntica en `127.0.0.1:8097` solo para los
+   webhooks y apunta `webhook.urls` a ella, para que no esperen detrás del sondeo de la interfaz.
+4. **Usuarios.** Dos usuarios de prueba en la BD aislada, con contraseña y 2FA TOTP confirmados (secreto
+   generado con `pragmarx/google2fa`). Las credenciales se guardan fuera del repositorio.
+5. **Dos sesiones independientes en el mismo navegador.** Cada usuario en un origen distinto:
+   `http://127.0.0.1:8099` y `http://localhost:8099`, porque las cookies van por host. Login real, 2FA y
+   `/colaboracion/teamcalls`.
+6. **Comprobación.** Desde la consola, `window.teamcallsUi.state()` da fase, estado, admisión y mosaico,
+   y `await window.teamcallsUi.stats()` da los bytes recibidos por pista.

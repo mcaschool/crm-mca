@@ -1,0 +1,72 @@
+/* TeamCalls · interfaz web de llamadas (fase 3C). Solo tokens del sistema de diseño MCA (--mca-*):
+   superficies suaves, insignias y nada de franjas laterales de acento. */
+.tc-page { max-width: 1280px; }
+/* El atributo hidden manda sobre los display de este archivo (controles, paneles, vacío). */
+.tc-page [hidden] { display: none !important; }
+.tc-notice { margin: 0 0 12px; padding: 8px 12px; border-radius: var(--mca-radius-sm, 8px); background: var(--mca-gold-soft); color: var(--mca-gold-ink); font-size: var(--mca-fs-sm, 13px); }
+.tc-alert { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--mca-radius-sm, 8px); background: var(--mca-danger-soft); color: var(--mca-danger); font-size: var(--mca-fs-sm, 13px); }
+.tc-alert[data-tone="info"] { background: var(--mca-info-soft); color: var(--mca-info); }
+.tc-alert-x { margin-left: auto; border: 0; background: transparent; color: inherit; font-size: 18px; cursor: pointer; line-height: 1; }
+.tc-grid { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .tc-grid { grid-template-columns: 1fr; } .tc-stage { order: -1; } }
+.tc-card { background: var(--mca-card, #fff); border: 1px solid var(--mca-card-border, var(--mca-line)); border-radius: var(--mca-r-card, 12px); box-shadow: var(--mca-shadow-card, none); padding: 14px; }
+.tc-side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+.tc-h2 { margin: 0 0 10px; font-size: var(--mca-fs-md, 15px); font-weight: 600; color: var(--mca-ink); }
+.tc-input { width: 100%; box-sizing: border-box; height: var(--mca-h-sm, 34px); padding: 0 10px; border: 1px solid var(--mca-line-strong, var(--mca-line)); border-radius: var(--mca-r-ctl, 8px); background: var(--mca-surface, #fff); color: var(--mca-text); font: inherit; font-size: var(--mca-fs-sm, 13px); }
+.tc-input:focus { outline: 2px solid var(--mca-focus); outline-offset: 1px; }
+.tc-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; max-height: 360px; overflow: auto; }
+.tc-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--mca-radius-sm, 8px); }
+.tc-item:hover { background: var(--mca-surface-hover); }
+.tc-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mca-text); font-size: var(--mca-fs-sm, 13px); }
+.tc-item-sub { display: block; color: var(--mca-text-3); font-size: var(--mca-fs-xs, 12px); }
+.tc-muted { color: var(--mca-text-3); font-size: var(--mca-fs-sm, 13px); }
+.tc-ico-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--mca-line); border-radius: 999px; background: var(--mca-surface); color: var(--mca-blue); cursor: pointer; }
+.tc-ico-btn:hover { background: var(--mca-blue-soft); }
+.tc-ico-btn:disabled { opacity: .45; cursor: not-allowed; }
+.tc-ico-btn svg, .tc-ctl svg { width: 16px; height: 16px; }
+.tc-avatar { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; border-radius: 999px; background: var(--mca-blue-soft); color: var(--mca-blue-deep, var(--mca-blue)); font-size: 12px; font-weight: 600; }
+.tc-stage { min-width: 0; min-height: 460px; display: flex; flex-direction: column; gap: 12px; }
+.tc-stage-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 28px; }
+.tc-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--mca-neutral-soft); color: var(--mca-neutral); font-size: var(--mca-fs-xs, 12px); font-weight: 600; }
+.tc-status[data-phase="calling"], .tc-status[data-phase="incoming"] { background: var(--mca-info-soft); color: var(--mca-info); }
+.tc-status[data-phase="connecting"], .tc-status[data-phase="reconnecting"] { background: var(--mca-gold-soft); color: var(--mca-gold-ink); }
+.tc-status[data-phase="in_call"] { background: var(--mca-success-soft, var(--mca-ok-soft)); color: var(--mca-success, var(--mca-ok)); }
+.tc-peer { color: var(--mca-ink); font-weight: 600; }
+.tc-synthetic { padding: 3px 10px; border-radius: 999px; background: var(--mca-teal-soft); color: var(--mca-teal); font-size: var(--mca-fs-xs, 12px); }
+.tc-empty { flex: 1; display: grid; place-items: center; align-content: center; gap: 8px; color: var(--mca-text-3); }
+.tc-empty-ic { width: 36px; height: 36px; color: var(--mca-text-dis, var(--mca-text-3)); }
+.tc-tiles { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; align-content: start; }
+.tc-tiles:empty { display: none; }
+.tc-tile { position: relative; aspect-ratio: 16 / 10; border-radius: var(--mca-r-card, 12px); overflow: hidden; background: var(--mca-nav-bg-1, #1f2937); display: grid; place-items: center; }
+.tc-tile video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+.tc-tile[data-local="1"] video { transform: scaleX(-1); }
+.tc-tile-ph { color: #fff; opacity: .85; font-size: 28px; font-weight: 600; }
+.tc-tile-name { position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 12px; }
+.tc-tile-badge { position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 11px; }
+.tc-controls { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.tc-ctl { display: inline-flex; align-items: center; gap: 6px; height: var(--mca-h-md, 38px); padding: 0 14px; border: 1px solid var(--mca-line-strong, var(--mca-line)); border-radius: 999px; background: var(--mca-surface); color: var(--mca-text); font: inherit; font-size: var(--mca-fs-sm, 13px); font-weight: 600; cursor: pointer; }
+.tc-ctl:hover { background: var(--mca-surface-hover); }
+.tc-ctl[aria-pressed="false"] { background: var(--mca-neutral-soft); color: var(--mca-neutral); }
+.tc-ctl:disabled { opacity: .45; cursor: not-allowed; }
+.tc-ctl--danger { background: var(--mca-danger); border-color: var(--mca-danger); color: #fff; }
+.tc-ctl--danger:hover { background: var(--mca-danger); filter: brightness(.95); }
+.tc-ctl--ok { background: var(--mca-success, var(--mca-ok)); border-color: var(--mca-success, var(--mca-ok)); color: #fff; }
+.tc-ctl--ok:hover { background: var(--mca-success, var(--mca-ok)); filter: brightness(.95); }
+.tc-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 640px) { .tc-bottom { grid-template-columns: 1fr; } }
+.tc-details { padding: 8px 10px; border-radius: var(--mca-radius-sm, 8px); background: var(--mca-surface-2, var(--mca-page-bg)); }
+.tc-details summary { cursor: pointer; color: var(--mca-ink-2, var(--mca-ink)); font-size: var(--mca-fs-sm, 13px); font-weight: 600; }
+.tc-field { display: grid; gap: 4px; margin-top: 8px; color: var(--mca-text-2); font-size: var(--mca-fs-xs, 12px); }
+.tc-chip { padding: 1px 8px; border-radius: 999px; background: var(--mca-neutral-soft); color: var(--mca-neutral); font-size: 11px; white-space: nowrap; }
+.tc-chip[data-tone="ok"] { background: var(--mca-success-soft, var(--mca-ok-soft)); color: var(--mca-success, var(--mca-ok)); }
+.tc-chip[data-tone="warn"] { background: var(--mca-gold-soft); color: var(--mca-gold-ink); }
+.tc-chip[data-tone="bad"] { background: var(--mca-danger-soft); color: var(--mca-danger); }
+.tc-modal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(15, 23, 42, .45); }
+.tc-modal[hidden] { display: none; }
+.tc-modal-card { width: min(380px, 100%); padding: 22px; border-radius: var(--mca-r-card, 12px); background: var(--mca-card, #fff); box-shadow: var(--mca-shadow-pop, 0 10px 30px rgba(0, 0, 0, .2)); text-align: center; }
+.tc-modal-card h2 { margin: 10px 0 4px; font-size: var(--mca-fs-lg, 17px); color: var(--mca-ink); }
+.tc-modal-acts { display: flex; justify-content: center; gap: 12px; margin-top: 16px; }
+.tc-ring { display: inline-grid; place-items: center; width: 56px; height: 56px; border-radius: 999px; background: var(--mca-success-soft, var(--mca-ok-soft)); color: var(--mca-success, var(--mca-ok)); animation: tc-pulse 1.4s ease-in-out infinite; }
+.tc-ring svg { width: 26px; height: 26px; }
+@keyframes tc-pulse { 50% { transform: scale(1.08); } }
+@media (prefers-reduced-motion: reduce) { .tc-ring { animation: none; } }

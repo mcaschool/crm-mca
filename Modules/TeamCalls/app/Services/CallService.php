@@ -685,6 +685,54 @@ final class CallService
             ->all();
     }
 
+    /**
+     * Llamadas VIVAS en las que la persona sigue implicada (suena, aceptada o dentro), con lo vencido ya
+     * aplicado. La consulta la interfaz web por sondeo hasta que CollaborationRealtime entregue eventos.
+     *
+     * @return list<CallSummary>
+     */
+    public function live(User $user): array
+    {
+        $this->assertActor($user);
+        $this->expireStaleFor($user);
+        $states = [ParticipantState::Ringing->value, ParticipantState::Accepted->value, ParticipantState::Joined->value];
+
+        return Call::query()
+            ->whereIn('status', array_map(fn (CallStatus $s) => $s->value, CallStatus::live()))
+            ->whereHas('participants', fn ($q) => $q->where('user_id', $user->id)->whereIn('state', $states)->whereNull('revoked_at'))
+            ->with('participants')
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get()
+            ->map(fn (Call $c) => CallSummary::from($c, $user->id))
+            ->all();
+    }
+
+    /**
+     * Personas a las que se puede llamar (mismas reglas que al iniciar: UserDirectory::canContact), solo
+     * de la institución de quien consulta y solo nombre e id. Lo sustituirá el directorio de CollaborationCore.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    public function contacts(User $viewer, ?string $search = null, int $limit = 200): array
+    {
+        $this->assertActor($viewer);
+        $search = $search !== null ? trim(mb_substr($search, 0, 80)) : '';
+
+        return User::query()
+            ->where('institution_id', $viewer->institution_id)
+            ->whereKeyNot($viewer->id)
+            ->where('status', 'active')
+            ->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.addcslashes($search, '%_\\').'%'))
+            ->orderBy('name')
+            ->limit(max(1, min(500, $limit)))
+            ->get()
+            ->filter(fn (User $u) => $this->users->canContact($viewer, $u))
+            ->map(fn (User $u) => ['id' => (int) $u->id, 'name' => (string) $u->name])
+            ->values()
+            ->all();
+    }
+
     /** Llamada viva más reciente de una conversación (para mostrar «unirse» en TeamChat). */
     public function activeForConversation(User $viewer, string $type, string $id): ?Call
     {

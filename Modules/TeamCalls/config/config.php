@@ -60,6 +60,19 @@ return [
         ],
     ],
 
+    /*
+    | Interfaz web de llamadas (fase 3C). SOLO en los entornos listados y con el interruptor activo,
+    | mientras falten los permisos definitivos de CollaborationCore. Fuera de eso, sus rutas dan 404.
+    */
+    'ui' => [
+        'enabled' => (bool) env('TEAMCALLS_UI_ENABLED', false),
+        'environments' => ['local', 'testing'],
+        // Sondeo temporal (hasta CollaborationRealtime): llamadas entrantes y estado de la llamada en curso.
+        'poll_ms' => (int) env('TEAMCALLS_UI_POLL_MS', 3000),
+        // Permite ?sintetico=1 (audio/video generados) para pruebas automatizadas sin cámara ni micrófono.
+        'synthetic_media' => (bool) env('TEAMCALLS_UI_SYNTHETIC_MEDIA', false),
+    ],
+
     // Límites de la API web por persona y minuto: iniciar llamadas, resto de operaciones y consultas.
     'rate_limits' => [
         'start' => (int) env('TEAMCALLS_RATE_START', 10),
