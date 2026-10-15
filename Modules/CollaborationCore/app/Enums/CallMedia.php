@@ -1,0 +1,11 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Modules\CollaborationCore\Enums;
+
+enum CallMedia: string
+{
+    case Audio = 'audio';
+    case Video = 'video';
+}

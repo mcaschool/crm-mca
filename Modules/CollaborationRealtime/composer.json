@@ -1,0 +1,13 @@
+{
+    "name": "mca/collaboration-realtime",
+    "description": "MCA collaboration contracts",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "Modules\\CollaborationRealtime\\": "app/"
+        }
+    },
+    "require": {
+        "php": "^8.3"
+    }
+}

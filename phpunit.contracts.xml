@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="tests/Contracts/bootstrap.php" colors="true" cacheResult="false" failOnWarning="true" failOnRisky="true">
+    <testsuites>
+        <testsuite name="Collaboration contracts">
+            <directory>tests/Contracts/Unit</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

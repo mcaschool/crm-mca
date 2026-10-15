@@ -1,0 +1,12 @@
+{
+    "name": "CollaborationCore",
+    "alias": "collaborationcore",
+    "description": "Shared collaboration contracts 1.0.0; no runtime implementation.",
+    "keywords": [
+        "collaboration",
+        "contracts"
+    ],
+    "priority": 0,
+    "providers": [],
+    "files": []
+}
