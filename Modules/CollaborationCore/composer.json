@@ -1,0 +1,13 @@
+{
+    "name": "mca/collaboration-core",
+    "description": "MCA collaboration contracts",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "Modules\\CollaborationCore\\": "app/"
+        }
+    },
+    "require": {
+        "php": "^8.3"
+    }
+}

@@ -1,0 +1,9 @@
+parameters:
+    level: 6
+    paths:
+        - Modules/CollaborationCore/app
+        - Modules/CollaborationRealtime/app
+    bootstrapFiles:
+        - tests/Contracts/bootstrap.php
+    tmpDir: .phpunit.cache/contracts-phpstan    # DTO constructors defensively validate PHP arrays; PHPDoc cannot enforce caller input at runtime.
+    treatPhpDocTypesAsCertain: false
