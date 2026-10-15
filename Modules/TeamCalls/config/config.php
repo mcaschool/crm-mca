@@ -67,8 +67,9 @@ return [
     'ui' => [
         'enabled' => (bool) env('TEAMCALLS_UI_ENABLED', false),
         'environments' => ['local', 'testing'],
-        // Sondeo temporal (hasta CollaborationRealtime): llamadas entrantes y estado de la llamada en curso.
-        'poll_ms' => (int) env('TEAMCALLS_UI_POLL_MS', 3000),
+        // Sondeo temporal (hasta CollaborationRealtime): cadencia base con la pestaña visible y sin llamada.
+        // El cliente la adapta (oculta 15 s, en llamada 6 s, retroceso ante fallos) y solo sondea una pestaña.
+        'poll_ms' => (int) env('TEAMCALLS_UI_POLL_MS', 4000),
         // Permite ?sintetico=1 (audio/video generados) para pruebas automatizadas sin cámara ni micrófono.
         'synthetic_media' => (bool) env('TEAMCALLS_UI_SYNTHETIC_MEDIA', false),
     ],

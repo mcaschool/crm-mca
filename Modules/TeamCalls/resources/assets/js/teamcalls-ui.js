@@ -11,8 +11,11 @@
  *       llamada, se piden credenciales NUEVAS y se entra a la sala actual (nunca se reutiliza un token);
  *     · las interrupciones cortas las recupera el SDK (Reconnecting/Reconnected) y el motor respeta su
  *       margen de reconexión: la página no cuelga por un corte de red.
- * - Llamadas entrantes: CallEvents (sondeo TEMPORAL de la API mientras la página está abierta). Se
- *   sustituirá por CollaborationRealtime sin tocar el resto: mismos eventos onIncoming/onUpdate.
+ * - Fase 3D: una sola pestaña de la sesión controla la llamada y una sola sondea (TabCoordinator); el
+ *   sondeo es TEMPORAL y adaptativo (pestaña oculta, llamada, fallos) y queda como respaldo cuando
+ *   CollaborationRealtime entregue eventos (window.teamcallsUi.useRealtime(adaptador), ver SignalHub en
+ *   teamcalls-core.js). Al perder la sesión se liberan cámara y micrófono. Ninguna credencial sale de
+ *   la conexión de LiveKit: ni almacenamiento del navegador ni mensajes entre pestañas.
  */
 (function () {
     'use strict';
@@ -50,6 +53,9 @@
         synthetic: null,       // pistas sintéticas (solo con ?sintetico=1 y la opción del servidor)
         sessionLost: false,
         tiles: new Map(),
+        elsewhere: null,       // llamada en curso de esta persona controlada por otra pestaña
+        booting: true,         // hasta procesar la primera lista: solo entonces se recupera sola tras recargar
+        handingOver: false,    // soltando la llamada porque otra pestaña la pidió
     };
 
     // ─── API de TeamCalls ───────────────────────────────────────────────────────────────────────
@@ -77,6 +83,7 @@
             const err = new Error((json && json.error && json.error.message) || res.statusText);
             err.code = (json && json.error && json.error.code) || 'http_' + res.status;
             err.status = res.status;
+            err.retryAfter = Number(res.headers.get('Retry-After')) || 0;
             if (['unauthenticated', 'two_factor_required', 'csrf_token_mismatch'].includes(err.code)) {
                 sessionLost();
             }
@@ -103,49 +110,208 @@
     function sessionLost() {
         if (state.sessionLost) return;
         state.sessionLost = true;
-        events.stop();
+        // Sesión cerrada o caducada: se deja de consultar, se cuelga localmente y se liberan cámara y
+        // micrófono (el servidor saca a la persona de la llamada al cerrar sesión o por el margen de reconexión).
+        poller.stop();
+        hub.disconnect();
+        hideIncoming();
+        if (state.call || state.room) {
+            disposeRoom(true).then(() => { state.call = null; tabs.releaseControl(); render(); });
+        }
         alertBox(t('err_session'));
     }
 
-    // ─── Fuente de eventos de llamadas (TEMPORAL: sondeo) ───────────────────────────────────────
-    // Contrato para CollaborationRealtime: onIncoming(summary) cuando a esta persona le suena una
-    // llamada; onUpdate(summary) cuando cambia la llamada en curso. Sustituir este objeto por uno que
-    // escuche los eventos call.* del canal privado del usuario, sin cambiar los manejadores.
-    const events = {
-        timer: null,
-        handlers: { incoming: () => {}, update: () => {} },
-        onIncoming(fn) { this.handlers.incoming = fn; },
-        onUpdate(fn) { this.handlers.update = fn; },
-        start() {
-            if (this.timer || state.sessionLost) return;
-            const tick = async () => {
-                this.timer = setTimeout(tick, cfg.pollMs);
-                try {
-                    if (state.call) {
-                        const s = (await api('GET', route('show', state.call.id))).data;
-                        this.handlers.update(s);
-                    } else {
-                        const calls = (await api('GET', cfg.routes.live)).data || [];
-                        calls.forEach((c) => this.handlers.incoming(c));
-                    }
-                } catch (e) {
-                    if (e.code === 'not_found' && state.call) this.handlers.update(null);
-                }
-            };
-            tick();
+    // ─── Señales de llamadas: pestañas, sondeo de respaldo y tiempo real (fase 3D) ───────────────
+    // Una sola pestaña de la sesión CONTROLA la llamada (Web Locks) y una sola SONDEA la lista de
+    // llamadas; las demás reciben sus resultados por BroadcastChannel (sin credenciales). Cuando exista
+    // CollaborationRealtime, sus eventos llegan por el SignalHub y el sondeo queda como respaldo lento.
+    const Core = window.TeamCallsCore;
+    const tabId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).slice(0, 18);
+    const tabs = new Core.TabCoordinator({
+        locks: (navigator.locks && navigator.locks.request) ? navigator.locks : null,
+        channel: ('BroadcastChannel' in window) ? new BroadcastChannel('teamcalls:' + cfg.me.id) : null,
+        tabId,
+        scope: String(cfg.me.id),
+    });
+    const coalescer = new Core.Coalescer();
+
+    const hub = new Core.SignalHub({
+        userId: cfg.me.id,
+        handlers: {
+            ringing: () => coalescer.run('live', refreshLive).catch(() => {}),
+            answeredElsewhere: (callId) => {
+                if (state.incoming && state.incoming.id === callId && !(state.call && state.call.id === callId)) hideIncoming();
+            },
+            refresh: (callId) => {
+                if (state.call && state.call.id === callId && tabs.controlling) coalescer.run('call', () => refreshCall(callId)).catch(() => {});
+                else coalescer.run('live', refreshLive).catch(() => {});
+            },
+            resync: () => poller.poke(),
+            status: () => render(),
         },
-        stop() { clearTimeout(this.timer); this.timer = null; },
-        // Consulta inmediata (p. ej. al volver a la pestaña: los navegadores ralentizan los temporizadores en segundo plano).
-        poke() { if (this.timer) { this.stop(); this.start(); } },
+    });
+
+    const poller = {
+        timer: null,
+        failures: 0,
+        retryAfterMs: 0,
+        leader: false,
+        stopped: false,
+        phase() {
+            if (state.incoming) return 'incoming';
+            if (state.call && tabs.controlling) return phase() === 'calling' ? 'calling' : 'in_call';
+            return 'idle';
+        },
+        schedule(ms) {
+            clearTimeout(this.timer);
+            if (this.stopped) return;
+            this.timer = setTimeout(() => this.tick(), ms);
+        },
+        async tick() {
+            if (this.stopped) return;
+            try {
+                // La pestaña que controla la llamada la relee; la que sondea, la lista de llamadas vivas.
+                if (state.call && tabs.controlling) await coalescer.run('call', () => refreshCall(state.call.id));
+                if (this.leader) await coalescer.run('live', refreshLive);
+                if (this.failures > 0 && $('tc-alert').dataset.kind === 'network') $('tc-alert').hidden = true;
+                this.failures = 0;
+                this.retryAfterMs = 0;
+            } catch (e) {
+                if (e.code === 'too_many_requests') this.retryAfterMs = (e.retryAfter || 30) * 1000;
+                else if (e.code === 'network' || (e.status || 0) >= 500) {
+                    this.failures++;
+                    if (this.failures >= 2) alertBox(t('err_server_retry'), 'info', false, 'network');
+                }
+            }
+            this.schedule(Core.pollDelay({
+                phase: this.phase(), hidden: document.hidden, failures: this.failures,
+                realtime: hub.realtime, retryAfterMs: this.retryAfterMs,
+            }, cfg.poll));
+        },
+        poke() { if (!this.stopped) this.schedule(0); },
+        stop() { this.stopped = true; clearTimeout(this.timer); },
     };
 
+    async function refreshCall(callId) {
+        let s;
+        try {
+            s = (await api('GET', route('show', callId))).data;
+        } catch (e) {
+            if (e.code === 'not_found' && state.call && state.call.id === callId) return onUpdate(null);
+            throw e;
+        }
+        if (state.call && state.call.id === callId) {
+            onUpdate(s);
+            tabs.send('call-update', { call: s });
+        }
+    }
+
+    async function refreshLive() {
+        const calls = (await api('GET', cfg.routes.live)).data || [];
+        tabs.send('snapshot', { calls });
+        await onSnapshot(calls);
+    }
+
+    /** Lista de llamadas vivas (propia o recibida de la pestaña que sondea). */
+    async function onSnapshot(calls) {
+        const booting = state.booting;
+        state.booting = false;
+        const ids = new Set(calls.map((c) => c.id));
+        if (state.incoming && (!ids.has(state.incoming.id) || (me(calls.find((c) => c.id === state.incoming.id)) || {}).state !== 'ringing')) {
+            hideIncoming(); // dejó de sonar: cancelada, perdida o contestada en otra pestaña o dispositivo
+        }
+        if (state.elsewhere && !ids.has(state.elsewhere.id)) hideElsewhere();
+        for (const c of calls) {
+            const mine = me(c);
+            if (!mine || (state.call && state.call.id === c.id)) continue;
+            if (mine.state === 'ringing') {
+                if (!state.call && !state.dismissed.has(c.id)) showIncoming(c);
+            } else if ((mine.state === 'joined' || mine.state === 'accepted') && !state.call) {
+                // Llamada en curso de esta persona sin pestaña que la controle aquí. Solo al CARGAR la página
+                // (recarga) se recupera sola, y solo si ninguna otra pestaña la controla; en cualquier otro caso
+                // se ofrece «Continuar aquí» (evita que dos pestañas se la quiten mutuamente).
+                if (booting && !(await tabs.controlledElsewhere()) && await tabs.acquireControl(false)) {
+                    state.call = c;
+                    state.wantCam = c.media === 'video';
+                    hideElsewhere();
+                    render();
+                    connectMedia().catch(() => recover());
+                } else {
+                    showElsewhere(c);
+                }
+            }
+        }
+    }
+
+    function onTabMessage(m) {
+        if (m.type === 'snapshot' && !poller.leader) onSnapshot(m.calls || []);
+        if (m.type === 'call-update' && m.call && !(state.call && state.call.id === m.call.id)) {
+            if (state.elsewhere && state.elsewhere.id === m.call.id) {
+                if (LIVE.includes(m.call.status)) showElsewhere(m.call); else hideElsewhere();
+            }
+        }
+        if (m.type === 'incoming-handled' && state.incoming && state.incoming.id === m.callId) {
+            if (m.outcome === 'declined') state.dismissed.add(m.callId);
+            hideIncoming();
+        }
+        if (m.type === 'takeover' && state.call && state.call.id === m.callId && tabs.controlling) {
+            // Otra pestaña de la sesión pide la llamada: se suelta sin colgar y se liberan cámara y micrófono.
+            const s = state.call;
+            state.handingOver = true;
+            disposeRoom(true).then(() => {
+                state.call = null;
+                state.handingOver = false;
+                tabs.releaseControl();
+                showElsewhere(s);
+                render();
+            });
+        }
+    }
+
+    function showElsewhere(summary) {
+        state.elsewhere = summary;
+        $('tc-elsewhere').hidden = false;
+        render();
+    }
+
+    function hideElsewhere() {
+        state.elsewhere = null;
+        $('tc-elsewhere').hidden = true;
+        render();
+    }
+
+    /** «Continuar aquí»: se avisa a la pestaña que la tiene, se toma el control y se entra con credenciales nuevas. */
+    async function takeOver() {
+        const s = state.elsewhere;
+        if (!s || state.call) return;
+        tabs.send('takeover', { callId: s.id });
+        await sleep(400); // margen para que la otra pestaña suelte la sala
+        if (!(await tabs.acquireControl(true))) return alertBox(t('err_other_tab'));
+        hideElsewhere();
+        state.call = s;
+        state.wantCam = s.media === 'video';
+        render();
+        try { await connectMedia(); } catch (e) { recover(); }
+        poller.poke();
+    }
+
+    async function hangUpElsewhere() {
+        const s = state.elsewhere;
+        if (!s) return;
+        try { await api('POST', route('end', s.id)); } catch (e) { /* ya terminada */ }
+        hideElsewhere();
+        poller.poke();
+        loadHistory();
+    }
+
     // ─── Presentación ───────────────────────────────────────────────────────────────────────────
-    function alertBox(message, tone, append) {
+    function alertBox(message, tone, append, kind) {
         const box = $('tc-alert');
         const text = $('tc-alert-text');
         // Varios avisos seguidos (p. ej. micrófono y cámara) se muestran juntos en lugar de pisarse.
         text.textContent = append && !box.hidden && text.textContent && !text.textContent.includes(message) ? text.textContent + ' ' + message : message;
         box.dataset.tone = tone || 'error';
+        box.dataset.kind = kind || '';
         box.hidden = false;
     }
 
@@ -518,7 +684,15 @@
             const R = LK.DisconnectReason || {};
             disposeRoom(false);
             if (reason === R.CLIENT_INITIATED) return;
-            if (reason === R.DUPLICATE_IDENTITY) return finish(null, 'end_elsewhere'); // otra pestaña tomó la llamada
+            if (reason === R.DUPLICATE_IDENTITY || state.handingOver) {
+                // La misma identidad entró desde otra pestaña o dispositivo (el servidor manda): no se reconecta
+                // para no quitársela de vuelta; se ofrece «Continuar aquí».
+                const s = state.call;
+                state.call = null;
+                tabs.releaseControl();
+                if (s) showElsewhere(s);
+                return render();
+            }
             recover(); // sala eliminada (rotación), expulsión, fallo de red o del servidor
         });
     }
@@ -570,6 +744,7 @@
     // ─── Flujo de la llamada ────────────────────────────────────────────────────────────────────
     async function startCall(userId, media) {
         if (state.call) return;
+        if (state.elsewhere || !(await tabs.acquireControl(false))) return alertBox(t('err_other_tab'));
         try {
             const key = (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random()).replace(/[^A-Za-z0-9._:-]/g, '');
             state.call = (await api('POST', cfg.routes.store, { user_id: Number(userId), media, idempotency_key: 'ui-' + key })).data;
@@ -581,21 +756,6 @@
         } catch (e) {
             showError(e);
             if (state.call) await finish(null, null);
-        }
-    }
-
-    function onIncoming(summary) {
-        const mine = me(summary);
-        if (!mine || state.call || state.dismissed.has(summary.id)) return;
-        if (mine.state === 'ringing') {
-            showIncoming(summary);
-        } else if (mine.state === 'joined' || mine.state === 'accepted') {
-            // La página se recargó en mitad de una llamada: se vuelve a entrar con credenciales nuevas, dentro
-            // del margen de reconexión del motor (el resumen del sondeo ya está al día: se conecta directamente).
-            state.call = summary;
-            state.wantCam = summary.media === 'video';
-            render();
-            connectMedia().catch(() => recover());
         }
     }
 
@@ -620,6 +780,8 @@
         const summary = state.incoming;
         if (!summary) return;
         hideIncoming();
+        if (!(await tabs.acquireControl(false))) return alertBox(t('err_other_tab'));
+        tabs.send('incoming-handled', { callId: summary.id, outcome: 'accepted' });
         try {
             state.call = (await api('POST', route('accept', summary.id))).data;
             state.wantMic = true;
@@ -637,6 +799,7 @@
         if (!summary) return;
         state.dismissed.add(summary.id);
         hideIncoming();
+        tabs.send('incoming-handled', { callId: summary.id, outcome: 'declined' });
         try { await api('POST', route('decline', summary.id)); } catch (e) { /* ya no sonaba */ }
         loadHistory();
     }
@@ -652,7 +815,13 @@
     }
 
     async function recover() {
-        if (state.recovering || !state.call) return;
+        if (state.recovering || !state.call || state.sessionLost) return;
+        if (!tabs.controlling && !(await tabs.acquireControl(false))) {
+            const s = state.call;
+            state.call = null;
+            if (s) showElsewhere(s);
+            return render();
+        }
         state.recovering = true;
         render();
         const deadline = Date.now() + cfg.reconnectGraceMs + 10000;
@@ -696,6 +865,8 @@
         const s = summary || state.call;
         state.call = null;
         state.recovering = false;
+        tabs.releaseControl();
+        if (s) tabs.send('released', { callId: s.id });
         let key = messageKey;
         if (key === undefined || (key === null && summary)) {
             key = s ? ({ declined: 'end_declined', missed: 'end_missed', cancelled: 'end_cancelled', ended: 'end_ended', failed: 'end_failed' }[s.status] || null) : null;
@@ -730,9 +901,18 @@
         if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
             navigator.mediaDevices.addEventListener('devicechange', () => refreshDevices(false));
         }
-        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') events.poke(); });
-        window.addEventListener('offline', () => { if (state.call) alertBox(t('err_network'), 'info'); });
-        window.addEventListener('online', () => { if (state.call && !state.room) recover(); });
+        $('tc-takeover').addEventListener('click', takeOver);
+        $('tc-elsewhere-hangup').addEventListener('click', hangUpElsewhere);
+        // Al volver a la pestaña se consulta enseguida (en segundo plano el sondeo se espacia).
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poller.poke(); });
+        window.addEventListener('offline', () => { if (state.call) alertBox(t('err_network'), 'info', false, 'network'); });
+        window.addEventListener('online', () => { poller.poke(); if (state.call && !state.room) recover(); });
+        // Al cerrar o recargar: cámara y micrófono se paran ya (LiveKit cierra la conexión, el motor espera el
+        // margen de reconexión y el bloqueo de control se libera solo).
+        window.addEventListener('pagehide', () => {
+            try { if (state.room) state.room.localParticipant.trackPublications.forEach((pub) => pub.track && pub.track.stop()); } catch (e) { /* ya paradas */ }
+            stopSynthetic();
+        });
 
         if (!LK) {
             alertBox(t('err_generic', { code: 'sdk' }));
@@ -746,13 +926,22 @@
         }
         renderContacts('');
         loadHistory();
-        events.onIncoming(onIncoming);
-        events.onUpdate(onUpdate);
-        events.start();
+        tabs.onMessage(onTabMessage);
+        // Solo una pestaña de la sesión sondea la lista de llamadas; si se cierra, la sustituye otra.
+        tabs.pollLeadership(() => { poller.leader = true; poller.poke(); });
+        poller.schedule(0);
+        // Al cargar (o recargar en mitad de una llamada) cada pestaña consulta UNA vez por su cuenta: no espera al
+        // próximo sondeo de la que sondea, que en segundo plano puede tardar más que el margen de reconexión.
+        coalescer.run('live', refreshLive).catch(() => {});
+        // Adaptador de CollaborationRealtime registrado antes de cargar la página (cuando exista).
+        if (window.TeamCallsRealtime && window.TeamCallsRealtime.adapter) hub.connect(window.TeamCallsRealtime.adapter);
         render();
 
         // Para las pruebas automatizadas y la depuración (solo lectura).
         window.teamcallsUi = {
+            // Punto de enganche para CollaborationRealtime: adapter.subscribe({ userId, onEvent, onStatus }).
+            useRealtime: (adapter) => hub.connect(adapter),
+            tabs: () => ({ tabId, controlling: tabs.controlling, pollLeader: poller.leader, realtime: hub.realtime, elsewhere: state.elsewhere && state.elsewhere.id, pollFailures: poller.failures, sessionLost: state.sessionLost }),
             // Bytes recibidos por pista remota (estadísticas WebRTC del SDK): prueba que los medios fluyen.
             stats: async () => {
                 const out = [];

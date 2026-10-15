@@ -2,7 +2,7 @@
 
 Fase 1: núcleo funcional. Fase 2: API web JSON segura sobre el motor. Fase 3A: adaptador LiveKit
 autohospedado (sin desplegar). Fase 3B: validado con LiveKit real. Fase 3C: primera interfaz web (solo
-desarrollo). Sin WebSocket, push, VPS ni apps móviles todavía.
+desarrollo). Fase 3D: estabilización (pestañas, sondeo, tiempo real, sesión). Sin WebSocket, push, VPS ni apps móviles todavía.
 
 ## Qué hace
 - Llamadas 1:1 y grupales de voz o video entre colaboradores de la misma institución, iniciadas hacia
@@ -344,6 +344,133 @@ llamada en curso (`onIncoming(summary)`, `onUpdate(summary)`). CollaborationReal
    se pierde el canal.
 4. Entregar `call.answered_elsewhere` (solo tiempo real) a los demás dispositivos de la persona, para
    cerrar su aviso de entrante.
+
+## Estabilización de la interfaz (fase 3D)
+
+### Pestañas de la misma sesión
+Todas las pestañas de una sesión comparten dispositivo (`WebDevice`) y, por tanto, identidad en LiveKit.
+`teamcalls-core.js` (`TabCoordinator`, con Web Locks y BroadcastChannel por usuario) impone:
+- **Un control.** Solo una pestaña controla la llamada (`teamcalls-call-control:{usuario}`). Las demás
+  muestran «Tienes una llamada en curso en otra pestaña» con **Continuar aquí** (toma explícita: avisa a la
+  que la tiene, que suelta la sala y libera cámara y micrófono) y **Colgar**.
+- **Un sondeo.** Solo una pestaña sondea la lista de llamadas (`teamcalls-poller:{usuario}`) y comparte el
+  resultado. Si se cierra, la sustituye otra.
+- **Aviso entrante.** Suena en todas; al aceptar o rechazar en una, las demás lo cierran.
+- **Recargar** la pestaña que controla: se recupera sola (solo al cargar y solo si nadie más la
+  controla). Cerrarla: otra pestaña puede recuperarla con «Continuar aquí» dentro del margen de
+  reconexión. Nunca hay recuperación automática cruzada, que provocaría que dos pestañas se la quitasen
+  mutuamente.
+- **El servidor sigue siendo la autoridad.** LiveKit expulsa la conexión anterior de la misma identidad
+  (`DUPLICATE_IDENTITY`) y la interfaz no reconecta en ese caso. Sin Web Locks, cada pestaña actúa y
+  decide el servidor.
+- **Sin credenciales fuera de la conexión.** Ni almacenamiento del navegador ni mensajes entre pestañas:
+  `sanitize()` deja solo ids y estados.
+
+### Contrato con CollaborationRealtime
+La interfaz consume eventos con `window.teamcallsUi.useRealtime(adapter)` o
+`window.TeamCallsRealtime = { adapter }`, cargado antes. El adaptador debe ofrecer
+`adapter.subscribe({ userId, onEvent(envelope), onStatus('connected'|'disconnected') }) → unsubscribe`.
+
+| Evento (nombre REAL de TeamCalls) | Qué hace la interfaz |
+|---|---|
+| `call.ringing` (`data.user_id` = destinatario) | relee la lista y muestra el aviso |
+| `call.answered_elsewhere` | cierra el aviso en este dispositivo (solo tiempo real, no se guarda) |
+| `call.accepted`, `call.declined`, `call.missed`, `call.ended`, `call.connected` | relee la llamada |
+| `call.participant.connecting / joined / left / revoked` | relee la llamada |
+| `call.media.joined / left / room_finished / room_rotated` | relee la llamada (reconexión y rotación) |
+
+**Principios del consumo:**
+- Los eventos solo disparan relecturas de la API, que es la fuente de verdad.
+- Los ids repetidos se ignoran (`EventDeduper`) y las relecturas se agrupan (`Coalescer`).
+- Al conectar o perder el canal se resincroniza desde la API.
+- Con el canal conectado, el sondeo pasa a respaldo cada 30 s.
+
+**Diferencias a resolver en el contrato común:**
+1. **Cancelar.** No existe `call.cancelled`: la cancelación llega como `call.ended` con
+   `data.status = cancelled`; los rechazos o pérdidas que cierran la llamada, igual.
+2. **Perdidas.** `call.missed` es por persona (`data.user_id`), además del `call.ended` final.
+3. **`call.answered_elsewhere`.** Necesita la exclusión por dispositivo (`CallEnvelope::exceptDeviceId`),
+   que el `toArray()` público no incluye: el publicador debe respetar `recipients` y `exceptDeviceId`
+   como metadatos de enrutado.
+4. **Reconexión.** No hay un «call.reconnecting»: la señal es `call.media.left` (aplicado) y, si no vuelve
+   en el margen, `call.participant.left`. La rotación es `call.media.room_rotated`.
+5. **Eventos propios de TeamCalls** que el contrato debe admitir: `call.started`, `call.connected`,
+   `call.participant.connecting`, `call.participant.revoked` y `call.media.*`.
+6. **Sobre.** `CallEnvelope` v1: `{id, type, v, occurred_at, institution_id, actor_id, data.call_id…}`. El
+   `id` (ULID) es la clave de deduplicación. Canal: `private-collab.user.{id}`.
+
+### Sondeo temporal: coste y estrategia
+Medido con `CallsPollingCostTest` (solo consultas de TeamCalls; sesión y usuario son infraestructura
+global):
+
+| Petición | Antes | Después |
+|---|---|---|
+| `en-curso` sin llamadas | 2 consultas (una de vencidos con subconsultas) | 1–2, sin consulta global de vencidos |
+| `en-curso` con llamada | 3 consultas | ≤ 3, sin bloqueos |
+| Ver la llamada (sondeo en llamada) | **transacción con 2 `FOR UPDATE`** en cada sondeo | lectura sin bloqueo; bloquea solo si hay algo vencido |
+
+Lo vencido (invitación sin respuesta, conexión que no llega, margen de reconexión, llamada sin medios)
+se sigue aplicando igual, ahora solo cuando hace falta, y el comando de cada minuto no cambia.
+
+**Cliente (`pollDelay`):**
+
+| Situación | Cadencia |
+|---|---|
+| Sin llamada | 4 s (15 s con la pestaña oculta) |
+| Aviso entrante / llamando | 3 s |
+| En llamada | 6 s (10 s oculta); los eventos de LiveKit fuerzan relecturas |
+| Con tiempo real conectado | 30 s, solo como respaldo |
+| Errores de red o 5xx | retroceso exponencial hasta 60 s, con aviso a partir de 2 fallos |
+| 429 | respeta `Retry-After` |
+| Sesión perdida (401, 2FA o CSRF) | deja de sondear |
+
+Con varias pestañas sondea una sola. Al volver a una pestaña oculta se consulta enseguida.
+
+### Seguridad (revisión de la fase)
+- **CSRF y sesión.** CSRF en todas las escrituras (token de la meta). 401/419/2FA → la interfaz deja de
+  consultar, cuelga localmente y **libera cámara y micrófono**.
+- **Cierre de sesión.** `LeaveCallsOnLogout` (evento `Logout` del framework) saca a la persona de sus
+  llamadas **en el dispositivo de esa sesión**; los demás dispositivos no se tocan. Sin sesión ya no se
+  obtienen credenciales.
+- **Credenciales.** Solo viven en la conexión de LiveKit: nada en `localStorage`, `sessionStorage`,
+  IndexedDB, cookies ni mensajes entre pestañas (prueba estática + `sanitize`).
+- **Institución y autorización.** Aislamiento institucional y autorización en todos los endpoints sin
+  cambios: los aplica el motor.
+- **Interfaz restringida.** Sigue limitada a `local`/`testing` con el interruptor.
+
+### MCA One y permiso provisional
+- **Parcial reutilizable.** La interfaz es `teamcalls::partials.calls`: autocontenida (estilos, SDK,
+  núcleo y lógica del módulo), sin layout ni componentes del CRM. La página del CRM solo la envuelve.
+- **Permiso.** El acceso a llamadas se decide en un único puerto, `UserDirectory`
+  (`canUseCalls` / `canContact`). El adaptador provisional (`PanelUserDirectory`) exige usuario activo y
+  `canWorkCrm()`: es **más restrictivo**, no un sustituto de `collab.use`, y no se ha ampliado.
+- **Qué falta para MCA One:**
+  1. **`UserDirectory` de CollaborationCore**, con la identidad y la autorización institucionales
+     compartidas (gate `collab.use`), en lugar de los roles comerciales del CRM.
+  2. **Pila de autenticación del API.** Hoy usa la del panel (sesión, `can:access-panel`, 2FA). Para
+     otras aplicaciones hará falta un grupo de rutas con la autenticación común de MCA One (y Sanctum en
+     móvil), sin depender del panel del CRM.
+  3. **Registro de dispositivos de CollaborationCore**, en lugar de `WebDevice` (uno por sesión).
+
+### Pruebas de la fase
+- **Núcleo JS:** `tests/js/core.test.cjs` con `node --test`, lanzado desde Pest (`CallsUiStabilityTest`):
+  dos pestañas, toma de control, relevo del sondeo, eventos repetidos, cadencia, mensajes sin
+  credenciales y tiempo real.
+- **Pest:**
+  - coste del sondeo y ausencia de bloqueos;
+  - cierre de sesión (este dispositivo sí, otros no) y credenciales tras cerrar sesión;
+  - JS sin almacenamiento del navegador;
+  - parcial sin el CRM;
+  - interfaz deshabilitada fuera de entornos autorizados.
+- **Navegador real con LiveKit 1.13.10 local y medios sintéticos:**
+  - dos pestañas de la misma sesión (aviso en ambas, una sola conexión, toma explícita en 2 s con
+    liberación de medios en la otra);
+  - recarga de la pestaña que controla (4,4 s, sin quitársela a la otra);
+  - cierre de la que controla (recuperada en 3,3 s);
+  - eventos repetidos (4 eventos → 2 relecturas);
+  - errores de red (retroceso hasta 24 s, aviso y recuperación en 2 s sin cortar la llamada);
+  - cierre de sesión (el servidor la saca de la llamada y la pestaña libera medios en 1 s).
+- **Pendiente: con cámara y micrófono físicos y con redes externas.**
 
 ## Concurrencia
 `tests/Feature/CallRealConcurrencyTest.php` lanza procesos PHP independientes (cada uno con su propia

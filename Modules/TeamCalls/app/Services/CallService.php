@@ -362,6 +362,29 @@ final class CallService
         });
     }
 
+    /**
+     * Sale de todas sus llamadas vivas en las que está con ESE dispositivo (p. ej. al cerrar la sesión web
+     * que lo identificaba). Devuelve de cuántas salió.
+     */
+    public function leaveDevice(User $user, string $deviceId): int
+    {
+        $ids = CallParticipant::query()->where('user_id', $user->id)->where('device_id', $deviceId)
+            ->whereIn('state', [ParticipantState::Accepted->value, ParticipantState::Joined->value])
+            ->whereHas('call', fn ($q) => $q->whereIn('status', array_map(fn (CallStatus $s) => $s->value, CallStatus::live())))
+            ->limit(20)->pluck('call_id');
+        $n = 0;
+        foreach ($ids as $callId) {
+            try {
+                $this->leave($user, (string) $callId, $deviceId);
+                $n++;
+            } catch (CallException) {
+                // ya no está o no tiene acceso: nada que hacer
+            }
+        }
+
+        return $n;
+    }
+
     /** Anfitrión: termina la llamada para todos. El resto de participantes, simplemente sale. */
     public function end(User $user, string $callId): Call
     {
@@ -644,10 +667,14 @@ final class CallService
 
     // ─── Consultas ──────────────────────────────────────────────────────────────────────────────
 
+    /**
+     * Lectura de una llamada. Sin bloquear filas salvo que haya algo vencido que aplicar (el sondeo de la
+     * interfaz no debe competir con los webhooks ni con las operaciones).
+     */
     public function find(User $viewer, string $callId): CallSummary
     {
         $this->assertActor($viewer);
-        $call = $this->locked($callId, fn (Call $call) => $call);
+        $call = $this->readable($callId);
         $this->participantOrFail($call, $viewer->id);
 
         return CallSummary::from($call, $viewer->id);
@@ -694,9 +721,9 @@ final class CallService
     public function live(User $user): array
     {
         $this->assertActor($user);
-        $this->expireStaleFor($user);
         $states = [ParticipantState::Ringing->value, ParticipantState::Accepted->value, ParticipantState::Joined->value];
 
+        // Sin la consulta global de vencidos: solo se bloquea (y se aplica lo vencido) en la llamada que lo necesite.
         return Call::query()
             ->whereIn('status', array_map(fn (CallStatus $s) => $s->value, CallStatus::live()))
             ->whereHas('participants', fn ($q) => $q->where('user_id', $user->id)->whereIn('state', $states)->whereNull('revoked_at'))
@@ -704,7 +731,14 @@ final class CallService
             ->orderByDesc('created_at')
             ->limit(10)
             ->get()
+            ->map(fn (Call $c) => $this->needsSettle($c) ? $this->locked((string) $c->id, fn (Call $locked) => $locked) : $c)
+            ->filter(function (Call $c) use ($user, $states): bool {
+                $p = $c->participantFor($user->id);
+
+                return $c->status->isLive() && $p !== null && $p->revoked_at === null && in_array($p->state->value, $states, true);
+            })
             ->map(fn (Call $c) => CallSummary::from($c, $user->id))
+            ->values()
             ->all();
     }
 
@@ -801,6 +835,42 @@ final class CallService
     }
 
     /** Lo vencido: invitaciones sin contestar → perdidas; conexión que no llega → fallida. */
+    /** La llamada para leer: sin bloqueo si no hay nada vencido; con bloqueo y aplicado si lo hay. */
+    private function readable(string $callId): Call
+    {
+        if (preg_match('/^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/', $callId) !== 1) {
+            throw CallException::notFound();
+        }
+        $call = Call::query()->with('participants')->find($callId) ?? throw CallException::notFound();
+
+        return $this->needsSettle($call) ? $this->locked($callId, fn (Call $locked) => $locked) : $call;
+    }
+
+    /** ¿Hay algo vencido que settle() aplicaría? (mismas condiciones, sin escribir nada) */
+    private function needsSettle(Call $call): bool
+    {
+        if (! $call->status->isLive()) {
+            return false;
+        }
+        $now = now();
+        $grace = $now->copy()->subSeconds($this->reconnectGrace());
+        foreach ($call->participants as $p) {
+            if ($p->state === ParticipantState::Ringing && $p->ring_expires_at !== null && $p->ring_expires_at->lte($now)) {
+                return true;
+            }
+            if ($p->state === ParticipantState::Joined && $p->media_state === MediaState::Disconnected
+                && $p->media_disconnected_at?->lte($grace) && $this->media->confirmsConnections()) {
+                return true;
+            }
+        }
+        if ($call->status === CallStatus::Connecting && $call->answered_at !== null
+            && $call->answered_at->lte($now->copy()->subSeconds($this->connectSeconds())) && $this->connectedCount($call) < 2) {
+            return true;
+        }
+
+        return $this->mediaLost($call, $now);
+    }
+
     private function settle(Call $call): void
     {
         if (! $call->status->isLive()) {

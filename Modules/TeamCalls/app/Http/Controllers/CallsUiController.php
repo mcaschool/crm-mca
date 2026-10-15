@@ -22,6 +22,7 @@ final class CallsUiController
 {
     /** Recursos estáticos permitidos (lista cerrada: nada de rutas arbitrarias). */
     private const ASSETS = [
+        'teamcalls-core.js' => 'js/teamcalls-core.js',
         'teamcalls-ui.js' => 'js/teamcalls-ui.js',
         'teamcalls-ui.css' => 'css/teamcalls-ui.css',
         'livekit-client.umd.js' => 'vendor/livekit-client/livekit-client-2.22.3.umd.js',
@@ -38,7 +39,8 @@ final class CallsUiController
             'assets' => $this->assetUrls(),
             'config' => [
                 'me' => ['id' => (int) $user->id, 'name' => (string) $user->name],
-                'pollMs' => max(1000, min(15000, (int) config('teamcalls.ui.poll_ms', 3000))),
+                // Sondeo temporal: cadencia base sin llamada y con la pestaña visible (el núcleo adapta el resto).
+                'poll' => ['idle' => max(2000, min(30000, (int) config('teamcalls.ui.poll_ms', 4000)))],
                 'reconnectGraceMs' => max(5, (int) config('teamcalls.reconnect_grace', 20)) * 1000,
                 'synthetic' => $synthetic,
                 'routes' => [

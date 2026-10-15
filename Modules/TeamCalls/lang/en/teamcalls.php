@@ -20,6 +20,9 @@ return [
         'microphone' => 'Microphone',
         'camera' => 'Camera',
         'speaker' => 'Speaker',
+        'elsewhere' => 'You have a call in progress in another tab or window of this browser.',
+        'take_over' => 'Continue here',
+        'hangup' => 'Hang up',
         'loading' => 'Loading…',
         'js' => [
             'status_idle' => 'No call',
@@ -89,6 +92,8 @@ return [
             'err_busy' => 'You are already in another call.',
             'err_answered_elsewhere' => 'The call is already open in another tab or device.',
             'err_call_gone' => 'The call is no longer available (it ended or stopped ringing).',
+            'err_other_tab' => 'There is already a call open in another tab of this browser.',
+            'err_server_retry' => 'No connection to the server. Retrying…',
             'err_forbidden' => 'You are not allowed to do this.',
             'err_session' => 'Your session expired. Please sign in again.',
             'err_insecure' => 'The browser does not allow the camera or microphone on this page (HTTPS is required).',

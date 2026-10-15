@@ -20,6 +20,9 @@ return [
         'microphone' => 'Micrófono',
         'camera' => 'Cámara',
         'speaker' => 'Altavoz',
+        'elsewhere' => 'Tienes una llamada en curso en otra pestaña o ventana de este navegador.',
+        'take_over' => 'Continuar aquí',
+        'hangup' => 'Colgar',
         'loading' => 'Cargando…',
         'js' => [
             'status_idle' => 'Sin llamada',
@@ -89,6 +92,8 @@ return [
             'err_busy' => 'Ya estás en otra llamada.',
             'err_answered_elsewhere' => 'La llamada ya está abierta en otra pestaña o dispositivo.',
             'err_call_gone' => 'La llamada ya no está disponible (terminó o dejó de sonar).',
+            'err_other_tab' => 'Ya hay una llamada abierta en otra pestaña de este navegador.',
+            'err_server_retry' => 'Sin conexión con el servidor. Reintentando…',
             'err_forbidden' => 'No tienes permiso para esta acción.',
             'err_session' => 'Tu sesión expiró. Vuelve a iniciar sesión.',
             'err_insecure' => 'El navegador no permite usar cámara ni micrófono en esta página (hace falta HTTPS).',

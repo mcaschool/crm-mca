@@ -2,7 +2,7 @@
    superficies suaves, insignias y nada de franjas laterales de acento. */
 .tc-page { max-width: 1280px; }
 /* El atributo hidden manda sobre los display de este archivo (controles, paneles, vacío). */
-.tc-page [hidden] { display: none !important; }
+.tc-page [hidden], .tc-root [hidden] { display: none !important; }
 .tc-notice { margin: 0 0 12px; padding: 8px 12px; border-radius: var(--mca-radius-sm, 8px); background: var(--mca-gold-soft); color: var(--mca-gold-ink); font-size: var(--mca-fs-sm, 13px); }
 .tc-alert { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--mca-radius-sm, 8px); background: var(--mca-danger-soft); color: var(--mca-danger); font-size: var(--mca-fs-sm, 13px); }
 .tc-alert[data-tone="info"] { background: var(--mca-info-soft); color: var(--mca-info); }
@@ -33,6 +33,8 @@
 .tc-status[data-phase="in_call"] { background: var(--mca-success-soft, var(--mca-ok-soft)); color: var(--mca-success, var(--mca-ok)); }
 .tc-peer { color: var(--mca-ink); font-weight: 600; }
 .tc-synthetic { padding: 3px 10px; border-radius: 999px; background: var(--mca-teal-soft); color: var(--mca-teal); font-size: var(--mca-fs-xs, 12px); }
+.tc-elsewhere { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: var(--mca-radius-sm, 8px); background: var(--mca-info-soft); color: var(--mca-info); font-size: var(--mca-fs-sm, 13px); }
+.tc-elsewhere-acts { display: inline-flex; gap: 8px; }
 .tc-empty { flex: 1; display: grid; place-items: center; align-content: center; gap: 8px; color: var(--mca-text-3); }
 .tc-empty-ic { width: 36px; height: 36px; color: var(--mca-text-dis, var(--mca-text-3)); }
 .tc-tiles { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; align-content: start; }

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\TeamCalls\Providers;
 
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Modules\TeamCalls\Console\ExpireStaleCallsCommand;
@@ -29,6 +31,7 @@ use Modules\TeamCalls\Integration\Provisional\NoopPushNotifier;
 use Modules\TeamCalls\Integration\Provisional\PanelUserDirectory;
 use Modules\TeamCalls\Integration\Provisional\UnconfiguredMediaRooms;
 use Modules\TeamCalls\Integration\TeamCallsGateway;
+use Modules\TeamCalls\Listeners\LeaveCallsOnLogout;
 use Modules\TeamCalls\Models\Call;
 use Modules\TeamCalls\Policies\CallPolicy;
 use Nwidart\Modules\Support\ModuleServiceProvider;
@@ -83,6 +86,9 @@ class TeamCallsServiceProvider extends ModuleServiceProvider
         parent::boot();
 
         Gate::policy(Call::class, CallPolicy::class);
+
+        // Cerrar sesión saca a la persona de sus llamadas en ese dispositivo (no queda en la sala sin sesión).
+        Event::listen(Logout::class, LeaveCallsOnLogout::class);
 
         // Límites de la API web, por persona (o IP si aún no hay sesión).
         foreach (['start', 'write', 'read'] as $kind) {
