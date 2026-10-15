@@ -1,0 +1,72 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Modules\TeamChat\Integration;
+
+use Modules\CollaborationCore\Data\ActorContext;
+use Modules\CollaborationCore\Exceptions\ContractException;
+use Modules\CollaborationRealtime\Data\EventEnvelope;
+use Modules\CollaborationRealtime\Integration\EventPolicy;
+use Modules\TeamChat\Services\ChatAccess;
+
+final class ChatEventPolicy implements EventPolicy
+{
+    public function __construct(private ChatAccess $access) {}
+
+    public function validate(EventEnvelope $event): void
+    {
+        $fields = match ($event->type) {
+            'teamchat.conversation.created' => ['conversation_id'],
+            'teamchat.message.created' => ['conversation_id', 'message_id', 'sequence'],
+            'teamchat.receipt.delivered', 'teamchat.receipt.read' => ['conversation_id', 'message_ids', 'user_id'],
+            'teamchat.membership.changed' => ['conversation_id', 'user_id', 'active'],
+            default => throw new \InvalidArgumentException('Unknown TeamChat event'),
+        };
+        $keys = array_keys($event->data);
+        sort($keys);
+        sort($fields);
+        if ($event->version !== 1 || $event->aggregateType !== 'teamchat_conversation' || $keys !== $fields || ($event->data['conversation_id'] ?? null) !== $event->aggregateId) {
+            throw new \InvalidArgumentException('Invalid TeamChat payload');
+        }
+        if (array_key_exists('message_id', $event->data) && (! is_string($event->data['message_id']) || ! \Illuminate\Support\Str::isUlid($event->data['message_id']))) {
+            throw new \InvalidArgumentException('Invalid message id');
+        }
+        if (array_key_exists('sequence', $event->data) && (! is_int($event->data['sequence']) || $event->data['sequence'] < 1)) {
+            throw new \InvalidArgumentException('Invalid sequence');
+        }
+        if (array_key_exists('message_ids', $event->data)) {
+            $ids = $event->data['message_ids'];
+            if (! is_array($ids) || ! array_is_list($ids) || count($ids) < 1 || count($ids) > 50 || count(array_unique($ids)) !== count($ids)) {
+                throw new \InvalidArgumentException('Invalid receipt ids');
+            }
+            foreach ($ids as $id) {
+                if (! is_string($id) || ! \Illuminate\Support\Str::isUlid($id)) {
+                    throw new \InvalidArgumentException('Invalid receipt id');
+                }
+            }
+        }
+        if (array_key_exists('user_id', $event->data) && (! is_int($event->data['user_id']) || $event->data['user_id'] < 1)) {
+            throw new \InvalidArgumentException('Invalid user id');
+        }
+        if (array_key_exists('active', $event->data) && ! is_bool($event->data['active'])) {
+            throw new \InvalidArgumentException('Invalid active flag');
+        }
+    }
+
+    public function allows(ActorContext $actor, EventEnvelope $event): bool
+    {
+        try {
+            $this->access->conversation($actor, $event->aggregateId);
+
+            return true;
+        } catch (ContractException) {
+            return false;
+        }
+    }
+
+    public function ephemeral(): bool
+    {
+        return false;
+    }
+}

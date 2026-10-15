@@ -2,6 +2,7 @@
     "Core": true,
     "CollaborationCore": true,
     "CollaborationRealtime": true,
+    "TeamChat": true,
     "Institutions": true,
     "Identity": true,
     "Integrations": true,

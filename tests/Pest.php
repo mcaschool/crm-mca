@@ -31,6 +31,7 @@ pest()->extend(TestCase::class)
         __DIR__.'/../Modules/Core/tests',
         __DIR__.'/../Modules/CollaborationCore/tests/Feature',
         __DIR__.'/../Modules/CollaborationRealtime/tests/Feature',
+        __DIR__.'/../Modules/TeamChat/tests/Feature',
         __DIR__.'/../Modules/Crm/tests',
         __DIR__.'/../Modules/Identity/tests',
         __DIR__.'/../Modules/Institutions/tests',

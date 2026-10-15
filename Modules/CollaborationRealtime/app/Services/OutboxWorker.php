@@ -35,7 +35,7 @@ final class OutboxWorker
                 'lease_until' => now()->addMinutes(2), 'attempts' => min(8, (int) $row->attempts + 1)]);
 
             return $row;
-        });
+        }, 3); // Retry SQL deadlocks before any network publication.
         if (! $row) {
             return false;
         }

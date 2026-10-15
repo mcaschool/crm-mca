@@ -32,6 +32,7 @@
             "App\\": "app/",
             "Modules\\CollaborationCore\\": "Modules/CollaborationCore/app/",
             "Modules\\CollaborationRealtime\\": "Modules/CollaborationRealtime/app/",
+            "Modules\\TeamChat\\": "Modules/TeamChat/app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
         }

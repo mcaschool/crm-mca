@@ -34,6 +34,13 @@
     <div class="mca-brand-gap"></div>
 
     <nav class="mca-nav">
+        @can('collaboration.use')
+        <div class="mca-nav-group">
+            <a href="{{ route('teamchat.index') }}" class="mca-nav-item {{ request()->routeIs('teamchat.*') ? 'on' : '' }}">
+                <x-ui.icon name="message-circle" /> {{ __('teamchat::chat.title') }}
+            </a>
+        </div>
+        @endcan
         @if ($u->canWorkCrm())
         <div class="mca-nav-group">
             <div class="mca-nav-label">{{ __('CAPTACIÓN') }}</div>
