@@ -36,4 +36,5 @@ pest()->extend(TestCase::class)
         __DIR__.'/../Modules/Mcp/tests',
         __DIR__.'/../Modules/Notifications/tests',
         __DIR__.'/../Modules/Social/tests',
+        __DIR__.'/../Modules/TeamCalls/tests',
     );

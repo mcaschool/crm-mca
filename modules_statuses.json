@@ -10,5 +10,6 @@
     "Notifications": true,
     "Audit": true,
     "Social": true,
-    "Mcp": true
+    "Mcp": true,
+    "TeamCalls": true
 }

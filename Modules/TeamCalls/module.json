@@ -1,0 +1,11 @@
+{
+    "name": "TeamCalls",
+    "alias": "teamcalls",
+    "description": "MCA Colaboración · motor de llamadas internas de voz y video (TeamCalls).",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\TeamCalls\\Providers\\TeamCallsServiceProvider"
+    ],
+    "files": []
+}

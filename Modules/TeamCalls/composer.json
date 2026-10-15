@@ -1,0 +1,16 @@
+{
+    "name": "mca/teamcalls",
+    "description": "MCA Colaboración · TeamCalls",
+    "autoload": {
+        "psr-4": {
+            "Modules\\TeamCalls\\": "app/",
+            "Modules\\TeamCalls\\Database\\Factories\\": "database/factories/",
+            "Modules\\TeamCalls\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\TeamCalls\\Tests\\": "tests/"
+        }
+    }
+}
