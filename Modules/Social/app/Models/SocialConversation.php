@@ -23,6 +23,12 @@ use Modules\Social\Database\Factories\SocialConversationFactory;
  * @property string|null $contact_name
  * @property string|null $contact_external_id
  * @property string|null $contact_avatar_url
+ * @property string|null $contact_first_name
+ * @property string|null $contact_last_name
+ * @property string|null $profile_status complete | partial | unavailable | error | null (sin consultar)
+ * @property \Illuminate\Support\Carbon|null $profile_checked_at
+ * @property int $profile_attempts
+ * @property string|null $profile_error código y subcódigo de Meta (sin tokens)
  * @property string $status
  * @property int|null $assigned_to
  * @property int $unread_count
@@ -146,6 +152,8 @@ class SocialConversation extends Model
             'advisor_off_hours_notified_at' => 'datetime',
             'automation_changed_at' => 'datetime',
             'advisor_lease_until' => 'datetime',
+            'profile_checked_at' => 'datetime',
+            'profile_attempts' => 'integer',
         ];
     }
 

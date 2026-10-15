@@ -12,6 +12,7 @@ use Modules\Social\Console\MetaLeadCheckCommand;
 use Modules\Social\Console\MetaLeadsPollCommand;
 use Modules\Social\Console\PublishScheduledPostsCommand;
 use Modules\Social\Console\ReconcileDeliveriesCommand;
+use Modules\Social\Console\RefreshContactProfilesCommand;
 use Modules\Social\Livewire\AdvisorChannels;
 use Modules\Social\Livewire\Channels;
 use Modules\Social\Livewire\Inbox;
@@ -47,6 +48,7 @@ class SocialServiceProvider extends ModuleServiceProvider
         MetaConnectionsCheckCommand::class,
         ReconcileDeliveriesCommand::class,
         PublishScheduledPostsCommand::class,
+        RefreshContactProfilesCommand::class,
     ];
 
     public function boot(): void

@@ -67,7 +67,7 @@ it('Messenger: resuelve nombre y foto del contacto al ingerir el primer mensaje'
     expect($conv->contact_avatar_url)->toBe('https://cdn.fb/pic.jpg');
 
     Http::assertSent(fn ($r) => str_contains($r->url(), 'https://graph.facebook.com/v26.0/PSID_1')
-        && $r['fields'] === 'name,profile_pic'
+        && $r['fields'] === 'first_name,last_name,name,profile_pic'
         && $r->hasHeader('Authorization', 'Bearer PAGE_TOKEN'));
 });
 
