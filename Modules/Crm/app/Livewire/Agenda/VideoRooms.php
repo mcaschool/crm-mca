@@ -13,14 +13,17 @@ use Modules\Crm\Models\Activity;
 use Modules\Crm\Models\MeetingProfile;
 use Modules\Crm\Policies\ActivityPolicy;
 use Modules\Crm\Services\Agenda\AgendaDirectory;
+use Modules\Crm\Services\Video\VideoCapacity;
 use Modules\Crm\Services\Video\VideoConnections;
 use Modules\Crm\Services\Video\VideoRoomService;
 
 /**
- * «Salas institucionales» dentro de Calendario › Perfil de reuniones. El asesor ve su enlace
+ * «Salas institucionales» dentro de Calendario › Perfil de reuniones. El usuario ve su enlace
  * permanente, el estado de la sala y si puede dirigirla, y la abre; la administración además la
  * genera, revisa, regenera, asigna al perfil y aplica a actividades futuras sin enlace.
- * Nunca muestra credenciales ni enlaces de anfitrión.
+ * En el perfil PROPIO, «Mi sala de Zoom» ofrece iniciarla como anfitrión: un formulario POST al
+ * controlador ZoomHostStartController, que pide el enlace de inicio a Zoom en ese momento y
+ * redirige. Este componente nunca recibe, muestra ni guarda credenciales ni enlaces de anfitrión.
  */
 class VideoRooms extends Component
 {
@@ -47,7 +50,7 @@ class VideoRooms extends Component
         $this->generateRoom($this->ownerId, $provider, $regenerate);
     }
 
-    public function render(VideoConnections $connections, VideoRoomService $rooms): View
+    public function render(VideoConnections $connections, VideoRoomService $rooms, VideoCapacity $capacity): View
     {
         $this->guard();
         $profile = MeetingProfile::forUser($this->ownerId);
@@ -65,9 +68,17 @@ class VideoRooms extends Component
             ];
         }
 
+        $actor = auth()->user();
+        $isOwn = $actor !== null && $actor->id === $this->ownerId;
+
         return view('crm::livewire.agenda.video-rooms', [
             'blocks' => $blocks,
-            'isAdmin' => auth()->user()?->canManageIntegrations() === true,
+            'isAdmin' => $actor?->canManageIntegrations() === true,
+            // «Mi sala de Zoom» con el botón de inicio: solo en el perfil propio.
+            'isOwn' => $isOwn,
+            'hostStartEnabled' => $isOwn && $rooms->hostStartEnabledFor($actor, $connections->get(VideoConnections::ZOOM)),
+            'startError' => $isOwn ? session('zoom_start_error') : null,
+            'zoomLimit' => $capacity->limit(),
         ]);
     }
 
@@ -77,7 +88,7 @@ class VideoRooms extends Component
         abort_unless($actor !== null && $actor->can('create', Activity::class), 403);
         if ($this->ownerId !== $actor->id) {
             abort_unless((new ActivityPolicy)->manageOthers($actor), 403);
-            abort_unless(app(AgendaDirectory::class)->assignableUsers()->contains('id', $this->ownerId), 404);
+            abort_unless(app(AgendaDirectory::class)->roomUsers()->contains('id', $this->ownerId), 404);
         }
     }
 }

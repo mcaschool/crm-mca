@@ -10,7 +10,7 @@
                 default => ['neutral', __('Desconectada')],
             };
         };
-        // Estado de la sala de un asesor → [texto, tono]
+        // Estado de la sala de un usuario → [texto, tono]
         $roomLabel = fn ($r) => match ($r?->status) {
             null => [__('Sin sala'), 'neutral'],
             'active' => [__('Activa'), 'success'],
@@ -20,18 +20,19 @@
         $hostLabel = fn ($r) => match ($r?->host_status) {
             'assigned' => __('Coanfitrión asignado'),
             'failed' => __('Sin coanfitrión'),
-            'advisor_host' => __('El asesor es anfitrión'),
-            'not_host', 'institutional_host' => __('El asesor no es anfitrión'),
+            'advisor_host' => __('Anfitrión: el propio usuario (con licencia)'),
+            'institutional_host' => __('Anfitrión técnico: cuenta institucional'),
+            'not_host' => __('Anfitrión no reconocido'),
             default => '—',
         };
     @endphp
 
-    <x-ui.page-header :title="__('Videoconferencias')" :subtitle="__('Una cuenta institucional de Google Meet y una de Zoom. Los asesores nunca conectan cuentas propias: usan las salas que la administración les asigna.')" :back="route('integrations.index')" :back-label="__('Volver a integraciones')" />
+    <x-ui.page-header :title="__('Videoconferencias')" :subtitle="__('Una cuenta institucional de Google Meet y una de Zoom. Los usuarios nunca conectan cuentas propias: usan las salas que la administración les asigna.')" :back="route('integrations.index')" :back-label="__('Volver a integraciones')" />
 
     @if (session('video_status'))
         <div class="ui-alert ui-tone--success" role="status"><x-ui.icon name="check" /> {{ session('video_status') }}</div>
     @endif
-    @if ($videoNotice !== '')
+    @if ($videoNotice !== '' && $videoTarget === '')
         <div @class(['ui-alert', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="{{ $videoNoticeError ? 'alert' : 'status' }}">
             <x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> {{ $videoNotice }}
         </div>
@@ -165,14 +166,73 @@
             </form>
         </div>
 
-        {{-- Salas por asesor --}}
+        {{-- Seguridad de las reuniones de Zoom e inicio como anfitrión desde el CRM --}}
+        @if ($zoom?->status === 'active')
+            @php($zoomRooms = $rooms->filter(fn ($r) => $r->provider === 'zoom' && $r->status === 'active'))
+            @php($nSecure = $zoomRooms->filter(fn ($r) => $r->secure === true)->count())
+            @php($nInsecure = $zoomRooms->filter(fn ($r) => $r->secure === false)->count())
+            @php($nUnknown = $zoomRooms->filter(fn ($r) => $r->secure === null)->count())
+            <div class="ui-grid ui-grid--2">
+                <section class="ui-card ui-entity" aria-labelledby="vc-zsec-title" wire:key="vc-zsec">
+                    <div class="ui-card-h"><x-ui.icon name="lock" class="ui-card-ic" /><h2 id="vc-zsec-title">{{ __('Seguridad de las reuniones de Zoom') }}</h2></div>
+                    <div class="ui-card-p ui-grow ui-stack">
+                        <p class="ui-help">{{ __('Todas las salas usan la modalidad segura: sala de espera activa, sin «unirse antes que el anfitrión», con contraseña y entrada silenciada. Los invitados nunca entran sin que el anfitrión los admita.') }}</p>
+                        <dl class="ui-meta">
+                            <dt>{{ __('Protegidas') }}</dt><dd>{{ $nSecure }}</dd>
+                            <dt>{{ __('Sin proteger') }}</dt><dd>@if ($nInsecure > 0)<span class="ui-text-danger">{{ $nInsecure }}</span>@else 0 @endif</dd>
+                            <dt>{{ __('Sin verificar') }}</dt><dd>{{ $nUnknown }}</dd>
+                        </dl>
+                        @if ($nInsecure > 0 || $nUnknown > 0)
+                            <div class="ui-callout ui-callout--sm ui-tone--warning"><x-ui.icon name="alert-triangle" /> <span>{{ __('Solo las salas protegidas se pueden iniciar desde el CRM. Aplica la configuración segura: no cambia los enlaces ni los anfitriones.') }}</span></div>
+                        @endif
+                        @if ($videoNotice !== '' && $videoTarget === 'zoom-security')
+                            <div @class(['ui-callout', 'ui-callout--sm', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="{{ $videoNoticeError ? 'alert' : 'status' }}" data-testid="vc-security-notice"><x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> <span>{{ $videoNotice }}</span></div>
+                        @endif
+                    </div>
+                    <div class="ui-card-f ui-card-f--end">
+                        <x-ui.button size="sm" variant="primary" icon="lock" wire:click="secureZoomRooms" wire:loading.attr="disabled" wire:target="secureZoomRooms"
+                            wire:confirm="{{ __('¿Aplicar la configuración segura a todas las salas de Zoom activas? Se mantienen sus enlaces y anfitriones.') }}">{{ __('Aplicar configuración segura') }}</x-ui.button>
+                    </div>
+                </section>
+
+                <form class="ui-card ui-entity" aria-labelledby="vc-zstart-title" wire:key="vc-zstart" wire:submit="saveHostStart" novalidate>
+                    <div class="ui-card-h"><x-ui.icon name="video" class="ui-card-ic" /><h2 id="vc-zstart-title">{{ __('Iniciar reuniones desde el CRM') }}</h2>
+                        <span class="sp"></span><x-ui.badge :tone="$savedHostStart === 'off' ? 'neutral' : ($savedHostStart === 'pilot' ? 'warning' : 'success')" dot>{{ match ($savedHostStart) { 'all' => __('Todos'), 'pilot' => __('Prueba piloto'), default => __('Desactivado') } }}</x-ui.badge>
+                    </div>
+                    <div class="ui-card-p ui-grow ui-stack">
+                        <p class="ui-help">{{ __('Cada usuario inicia SU reunión como anfitrión con el botón de su perfil, sin credenciales de Zoom. Quienes no tienen licencia individual lo hacen con la identidad técnica institucional y comparten su capacidad. La administración no puede iniciar reuniones ajenas.') }}</p>
+                        <div class="ui-nets" role="radiogroup" aria-label="{{ __('Habilitación') }}">
+                            <label class="ui-net"><input type="radio" wire:model.live="hostStartMode" value="off"><span class="ui-net-text"><b>{{ __('Desactivado') }}</b><small>{{ __('Hasta completar la prueba piloto.') }}</small></span></label>
+                            <label class="ui-net"><input type="radio" wire:model.live="hostStartMode" value="pilot"><span class="ui-net-text"><b>{{ __('Prueba piloto') }}</b><small>{{ __('Solo un usuario.') }}</small></span></label>
+                            <label class="ui-net"><input type="radio" wire:model.live="hostStartMode" value="all"><span class="ui-net-text"><b>{{ __('Todos') }}</b><small>{{ __('Cada usuario con sala protegida.') }}</small></span></label>
+                        </div>
+                        @if ($hostStartMode === 'pilot')
+                            <x-ui.field :label="__('Usuario de la prueba piloto')" for="vc-pilot" :error="$errors->first('hostStartPilot')">
+                                <select id="vc-pilot" wire:model="hostStartPilot" @class(['ui-select', 'is-invalid' => $errors->has('hostStartPilot')])>
+                                    <option value="">{{ __('Elige un usuario') }}</option>
+                                    @foreach ($pilotCandidates as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+                                </select>
+                            </x-ui.field>
+                        @endif
+                        @if ($videoNotice !== '' && $videoTarget === 'zoom-start')
+                            <div @class(['ui-callout', 'ui-callout--sm', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="{{ $videoNoticeError ? 'alert' : 'status' }}"><x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> <span>{{ $videoNotice }}</span></div>
+                        @endif
+                    </div>
+                    <div class="ui-card-f ui-card-f--end">
+                        <x-ui.button type="submit" size="sm" variant="primary" icon="check" wire:loading.attr="disabled" wire:target="saveHostStart">{{ __('Guardar') }}</x-ui.button>
+                    </div>
+                </form>
+            </div>
+        @endif
+
+        {{-- Salas por usuario --}}
         <section class="ui-card" aria-labelledby="vc-rooms-title">
-            <div class="ui-card-h"><x-ui.icon name="users" class="ui-card-ic" /><h2 id="vc-rooms-title">{{ __('Salas permanentes por asesor') }}</h2></div>
-            <p class="ui-card-intro">{{ __('Las actividades nuevas copian la sala del perfil. Las ya creadas conservan su enlace; solo las futuras sin enlace pueden recibirla con «Aplicar a actividades sin enlace».') }}</p>
+            <div class="ui-card-h"><x-ui.icon name="users" class="ui-card-ic" /><h2 id="vc-rooms-title">{{ __('Salas permanentes por usuario') }}</h2></div>
+            <p class="ui-card-intro">{{ __('Todos los usuarios activos con acceso al Calendario pueden tener su propia sala. Las actividades nuevas copian la sala del perfil; las ya creadas conservan su enlace y solo las futuras sin enlace pueden recibirla con «Aplicar a actividades sin enlace».') }}</p>
             <div class="mca-table-scroll">
                 <table class="ui-table ui-table--stack-cells ui-table--flat">
                     <thead>
-                        <tr><th>{{ __('Asesor') }}</th><th>Google Meet</th><th>Zoom</th></tr>
+                        <tr><th>{{ __('Usuario') }}</th><th>Google Meet</th><th>Zoom</th></tr>
                     </thead>
                     <tbody>
                         @forelse ($advisors as $advisor)
@@ -180,7 +240,10 @@
                                 <td class="rt-primary">
                                     <div class="ui-person-text">
                                         <span class="ui-cell-title">{{ $advisor->name }}</span>
-                                        <a href="{{ route('crm.agenda.profile', ['user' => $advisor->id]) }}" class="ui-link">{{ __('Perfil de reuniones') }}</a>
+                                        <span class="ui-cell-sub">{{ __($advisor->role?->label() ?? '') }}</span>
+                                        @if (in_array($advisor->id, $withAgenda, true))
+                                            <a href="{{ route('crm.agenda.profile', ['user' => $advisor->id]) }}" class="ui-link">{{ __('Perfil de reuniones') }}</a>
+                                        @endif
                                     </div>
                                 </td>
                                 @foreach (['google_meet' => $google, 'zoom' => $zoom] as $provider => $conn)
@@ -192,10 +255,16 @@
                                                 <x-ui.badge :tone="$rTone" :dot="$rTone === 'success'">{{ $rText }}</x-ui.badge>
                                                 @if ($room)
                                                     <span class="t-2">{{ $hostLabel($room) }}</span>
+                                                    @if ($provider === 'zoom' && $room->status === 'active')
+                                                        <x-ui.badge :tone="$room->secure === true ? 'success' : ($room->secure === false ? 'danger' : 'neutral')">{{ $room->secure === true ? __('Protegida') : ($room->secure === false ? __('Sin proteger') : __('Sin verificar')) }}</x-ui.badge>
+                                                    @endif
                                                 @endif
                                             </span>
                                             @if ($room && $room->last_checked_at)
                                                 <span class="ui-cell-sub">{{ __('Revisada') }} {{ $room->last_checked_at->diffForHumans() }}</span>
+                                            @endif
+                                            @if ($room && $room->status !== 'active' && $room->last_error)
+                                                <span class="ui-cell-sub ui-text-danger">{{ $room->last_error }}</span>
                                             @endif
                                             @if ($conn?->status === 'active')
                                                 <div class="ui-actions-row">
@@ -207,6 +276,11 @@
                                                     @endif
                                                 </div>
                                             @endif
+                                            @if ($videoNotice !== '' && $videoTarget === $advisor->id.'|'.$provider)
+                                                <div @class(['ui-callout', 'ui-callout--sm', $videoNoticeError ? 'ui-tone--danger' : 'ui-tone--success']) role="{{ $videoNoticeError ? 'alert' : 'status' }}" data-testid="vc-row-notice">
+                                                    <x-ui.icon :name="$videoNoticeError ? 'alert-triangle' : 'check'" /> <span>{{ $videoNotice }}</span>
+                                                </div>
+                                            @endif
                                         </div>
                                     </td>
                                 @endforeach
@@ -216,7 +290,7 @@
                                 <td colspan="3" class="rt-empty">
                                     <div class="ui-empty">
                                         <div class="ui-empty-ic"><x-ui.icon name="users" /></div>
-                                        <b>{{ __('No hay asesores activos.') }}</b>
+                                        <b>{{ __('No hay usuarios activos con acceso al Calendario.') }}</b>
                                     </div>
                                 </td>
                             </tr>

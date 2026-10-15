@@ -56,6 +56,9 @@ final class AuditPresenter
         'video_room.generated' => ['label' => 'Sala de videoconferencia generada', 'group' => 'neutral'],
         'video_room.regenerated' => ['label' => 'Sala de videoconferencia regenerada', 'group' => 'neutral'],
         'video_room.applied' => ['label' => 'Salas de videoconferencia aplicadas', 'group' => 'neutral'],
+        'video_room.secured' => ['label' => 'Configuración segura aplicada a las salas de Zoom', 'group' => 'info'],
+        'video_room.host_start_mode_changed' => ['label' => 'Inicio de reuniones desde el CRM configurado', 'group' => 'warn'],
+        'video_room.host_started' => ['label' => 'Reunión de Zoom iniciada como anfitrión', 'group' => 'neutral'],
         // Retencion / mantenimiento
         'retention.purged' => ['label' => 'Purga por retención', 'group' => 'neutral'],
         // Catalogo de programas (alta manual desde el Centro de Conocimiento)

@@ -151,6 +151,9 @@ $panel->group(function () {
     Route::get('/crm/agenda/create', AgendaForm::class)->name('crm.agenda.create');
     Route::get('/crm/agenda/availability', AgendaAvailability::class)->name('crm.agenda.availability');
     Route::get('/crm/agenda/profile', AgendaProfile::class)->name('crm.agenda.profile');
+    // Iniciar SU reunión de Zoom como anfitrión (sin id: siempre la sala de quien lo pide).
+    Route::post('/crm/agenda/zoom/iniciar', \Modules\Crm\Http\Controllers\ZoomHostStartController::class)
+        ->middleware('throttle:10,1')->name('crm.video.zoom.start');
     Route::get('/crm/agenda/{activity}', AgendaShow::class)->whereNumber('activity')->name('crm.agenda.show');
     Route::get('/crm/agenda/{activity}/edit', AgendaForm::class)->whereNumber('activity')->name('crm.agenda.edit');
     Route::get('/crm/plantillas-calendario', \Modules\Crm\Livewire\Agenda\CalendarTemplatesManage::class)->name('crm.calendar-templates');

@@ -15,12 +15,15 @@ use Modules\Crm\Services\Video\GoogleMeetClient;
 use Modules\Crm\Services\Video\VideoCapacity;
 use Modules\Crm\Services\Video\VideoConnections;
 use Modules\Crm\Services\Video\VideoProviderException;
+use Modules\Crm\Services\Video\VideoRoomService;
 use Modules\Crm\Services\Video\ZoomClient;
 use Modules\Integrations\Models\Integration;
 
 /**
  * Configuración › Integraciones › Videoconferencias: la conexión institucional de Google Meet y
- * la de Zoom, sus pruebas, la capacidad efectiva de Zoom y las salas asignadas a cada asesor.
+ * la de Zoom, sus pruebas, la capacidad efectiva de Zoom, la configuración segura de las reuniones,
+ * la habilitación del inicio como anfitrión desde el CRM (piloto o general) y las salas de cada
+ * usuario con acceso al Calendario.
  * Solo administración (IntegrationPolicy). Los secretos se escriben, nunca se vuelven a mostrar.
  */
 #[Layout('layouts.app')]
@@ -44,6 +47,12 @@ class Connections extends Component
 
     public int $zoomConcurrency = 1;
 
+    /** Inicio como anfitrión desde el CRM: off | pilot | all. */
+    public string $hostStartMode = 'off';
+
+    /** Usuario de la prueba piloto (modo pilot). */
+    public ?int $hostStartPilot = null;
+
     public function mount(VideoConnections $connections, VideoCapacity $capacity): void
     {
         $this->authorize('viewAny', Integration::class);
@@ -55,6 +64,8 @@ class Connections extends Component
         $this->zoomClientId = (string) $zoom?->secret('client_id', '');
         $this->zoomHostEmail = (string) $zoom?->secret('host_email', '');
         $this->zoomConcurrency = $capacity->limit();
+        $this->hostStartMode = app(VideoRoomService::class)->hostStartMode($zoom);
+        $this->hostStartPilot = app(VideoRoomService::class)->hostStartPilotUserId($zoom);
     }
 
     public function saveGoogle(VideoConnections $connections, AuditService $audit): void
@@ -149,6 +160,47 @@ class Connections extends Component
         }
     }
 
+    /** Aplica la configuración segura a las salas de Zoom existentes (sin regenerar enlaces). */
+    public function secureZoomRooms(VideoConnections $connections, VideoRoomService $rooms): void
+    {
+        $this->existing($connections, VideoConnections::ZOOM);
+        $this->videoTarget = 'zoom-security';
+        try {
+            $r = $rooms->secureExistingRooms(auth()->user());
+        } catch (VideoProviderException $e) {
+            $this->videoNotice = $e->userMessage();
+            $this->videoNoticeError = true;
+
+            return;
+        }
+        $problems = collect($r['insecure'] + $r['failed'])->map(fn ($m, $name) => $name.' ('.$m.')');
+        $this->videoNotice = __('Salas protegidas: :n.', ['n' => $r['secured']])
+            .($problems->isNotEmpty() ? ' '.__('Sin proteger: :list', ['list' => $problems->implode('; ')]) : '');
+        $this->videoNoticeError = $problems->isNotEmpty();
+    }
+
+    /** Habilita el inicio como anfitrión desde el CRM: desactivado, solo piloto o para todos. */
+    public function saveHostStart(VideoConnections $connections, VideoRoomService $rooms): void
+    {
+        $this->existing($connections, VideoConnections::ZOOM);
+        $this->resetErrorBag();
+        $this->videoTarget = 'zoom-start';
+        try {
+            $rooms->setHostStart($this->hostStartMode, $this->hostStartPilot, auth()->user());
+        } catch (VideoProviderException $e) {
+            $this->videoNotice = $e->userMessage();
+            $this->videoNoticeError = true;
+
+            return;
+        }
+        $this->videoNotice = match ($this->hostStartMode) {
+            'all' => __('Inicio como anfitrión habilitado para todos los usuarios con sala protegida.'),
+            'pilot' => __('Inicio como anfitrión habilitado solo para el usuario de la prueba piloto.'),
+            default => __('Inicio como anfitrión desactivado.'),
+        };
+        $this->videoNoticeError = false;
+    }
+
     public function disconnectZoom(VideoConnections $connections, ZoomClient $zoom, AuditService $audit): void
     {
         $integration = $this->existing($connections, VideoConnections::ZOOM);
@@ -161,7 +213,8 @@ class Connections extends Component
     {
         $google = $connections->get(VideoConnections::GOOGLE);
         $zoom = $connections->get(VideoConnections::ZOOM);
-        $advisors = app(AgendaDirectory::class)->assignableUsers();
+        $directory = app(AgendaDirectory::class);
+        $advisors = $directory->roomUsers();
         $rooms = VideoRoom::query()->whereIn('user_id', $advisors->pluck('id'))->where('status', '!=', 'replaced')
             ->orderByDesc('id')->get()->unique(fn (VideoRoom $r) => $r->user_id.'|'.$r->provider)
             ->keyBy(fn (VideoRoom $r) => $r->user_id.'|'.$r->provider);
@@ -172,6 +225,9 @@ class Connections extends Component
             'googleMasked' => $google?->maskedConfig() ?? [],
             'zoomMasked' => $zoom?->maskedConfig() ?? [],
             'advisors' => $advisors,
+            'withAgenda' => $directory->assignableUsers()->pluck('id')->all(),
+            'savedHostStart' => app(VideoRoomService::class)->hostStartMode($zoom),
+            'pilotCandidates' => $directory->assignableUsers(),
             'rooms' => $rooms,
             'zoomLimit' => $capacity->limit(),
             'zoomMax' => max(1, (int) config('crm.video.zoom.max_concurrency', 2)),
@@ -190,6 +246,7 @@ class Connections extends Component
 
     private function notify(string $message, bool $error = false): void
     {
+        $this->videoTarget = '';
         $this->videoNotice = $message;
         $this->videoNoticeError = $error;
     }
