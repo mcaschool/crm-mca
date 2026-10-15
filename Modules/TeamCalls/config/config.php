@@ -28,7 +28,8 @@ return [
     /*
     | Servidor de medios. driver «none» (por defecto): sin salas reales, unirse y credenciales dan 503.
     | driver «livekit»: LiveKit AUTOHOSPEDADO (VPS propio, nunca el hosting compartido). Si falta algún
-    | dato, o en producción las URL no son https/wss, se comporta como «none» (falla cerrado).
+    | dato, o las URL no son https/wss (salvo allow_insecure_dev_urls en local/testing), se comporta
+    | como «none» (falla cerrado).
     | En el servidor LiveKit: room.auto_create = false (solo el backend crea salas) y webhook hacia
     | /api/teamcalls/media/livekit con la misma API key.
     */
@@ -57,7 +58,20 @@ return [
             'departure_timeout' => (int) env('TEAMCALLS_LIVEKIT_DEPARTURE_TIMEOUT', 20),
             // Tolerancia de reloj al validar la firma de los webhooks (segundos).
             'webhook_leeway' => (int) env('TEAMCALLS_LIVEKIT_WEBHOOK_LEEWAY', 30),
+
+            // Excepción SOLO de desarrollo: admite http/ws (LiveKit local sin TLS). Se ignora fuera de los
+            // entornos local y testing. Las credenciales del contrato común siguen exigiendo https/wss.
+            'allow_insecure_dev_urls' => (bool) env('TEAMCALLS_LIVEKIT_ALLOW_INSECURE_DEV_URLS', false),
         ],
+    ],
+
+    /*
+    | Autorización de personas (fase 4A). «provisional» (por defecto): panel activo con acceso al CRM, hasta
+    | que CollaborationCore esté integrado. «collaboration»: permiso definitivo collaboration.use; mientras
+    | Core no defina esa habilidad deniega a todo el mundo (falla cerrado). No amplía rutas ni permisos.
+    */
+    'authorization' => [
+        'driver' => env('TEAMCALLS_AUTHORIZATION_DRIVER', 'provisional'),
     ],
 
     /*

@@ -30,6 +30,7 @@ variables de entorno **del proceso**, no del `.env`:
 - `TEAMCALLS_MEDIA_DRIVER=livekit`
 - `TEAMCALLS_LIVEKIT_API_URL=http://127.0.0.1:7880`
 - `TEAMCALLS_LIVEKIT_CLIENT_URL=ws://127.0.0.1:7880`
+- `TEAMCALLS_LIVEKIT_ALLOW_INSECURE_DEV_URLS=true` (excepción explícita de desarrollo: sin ella, http/ws se rechazan)
 - `TEAMCALLS_LIVEKIT_API_KEY=APIteamcallsdev`
 - `TEAMCALLS_LIVEKIT_API_SECRET=<el mismo secreto>`
 

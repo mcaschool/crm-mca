@@ -17,6 +17,9 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * @property int $institution_id
  * @property string $call_id
  * @property string $type
+ * @property int|null $sequence versión del agregado (null en marcas internas)
+ * @property string|null $correlation_id
+ * @property string|null $causation_id
  * @property int|null $actor_id
  * @property int|null $subject_id
  * @property array<string,mixed>|null $data

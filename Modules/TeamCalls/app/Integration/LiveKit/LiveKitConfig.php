@@ -6,7 +6,8 @@ namespace Modules\TeamCalls\Integration\LiveKit;
 
 /**
  * Configuración de LiveKit autohospedado (config teamcalls.media.livekit). Falla CERRADO: si falta un
- * dato, el secreto es débil o en producción las URL no son seguras, isComplete() es false y TeamCalls
+ * dato, el secreto es débil o las URL no son https/wss (salvo la excepción explícita de desarrollo,
+ * solo en local/testing), isComplete() es false y TeamCalls
  * se comporta como si no hubiera servidor de medios (503). El secreto nunca se muestra (__debugInfo).
  */
 final class LiveKitConfig
@@ -44,8 +45,19 @@ final class LiveKitConfig
             emptyTimeout: max(10, min(3600, (int) ($c['empty_timeout'] ?? 120))),
             departureTimeout: max(0, min(600, (int) ($c['departure_timeout'] ?? 20))),
             webhookLeeway: max(0, min(300, (int) ($c['webhook_leeway'] ?? 30))),
-            requireSecureUrls: app()->environment('production'),
+            requireSecureUrls: ! self::insecureDevAllowed($c),
         );
+    }
+
+    /**
+     * https/wss SIEMPRE, salvo la excepción explícita de desarrollo: entorno local o testing Y
+     * allow_insecure_dev_urls activado (p. ej. un LiveKit de desarrollo en ws://127.0.0.1).
+     *
+     * @param  array<mixed>  $c
+     */
+    private static function insecureDevAllowed(array $c): bool
+    {
+        return app()->environment(['local', 'testing']) && ($c['allow_insecure_dev_urls'] ?? false) === true;
     }
 
     public function isComplete(): bool

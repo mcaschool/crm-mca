@@ -30,6 +30,7 @@ beforeEach(function () {
         'api_url' => $url, 'client_url' => str_replace('http', 'ws', $url),
         'api_key' => getenv('TEAMCALLS_LIVEKIT_REAL_KEY'), 'api_secret' => getenv('TEAMCALLS_LIVEKIT_REAL_SECRET'),
         'timeout' => 3, 'connect_timeout' => 2, 'retries' => 1, 'retry_sleep_ms' => 100,
+        'allow_insecure_dev_urls' => true, // LiveKit local sin TLS: excepción explícita de desarrollo
     ]]);
     app()->forgetInstance(MediaRoomService::class);
     $this->media = app(MediaRoomService::class);

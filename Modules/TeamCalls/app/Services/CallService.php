@@ -143,15 +143,33 @@ final class CallService
      * Invita a más personas a una llamada viva. Solo quien está en la llamada puede invitar y solo a
      * personas autorizadas (miembros de la conversación de origen o contactos válidos).
      *
+     * $commandKey (contrato común): repetir el MISMO comando no vuelve a hacer sonar a nadie, ni siquiera
+     * a quien rechazó después; la misma clave con otros invitados es un conflicto.
+     *
      * @param  array<int|string>  $userIds
      */
-    public function invite(User $actor, string $callId, array $userIds): Call
+    public function invite(User $actor, string $callId, array $userIds, ?string $commandKey = null): Call
     {
         $this->assertActor($actor);
         $ids = CallTarget::users($userIds)->userIds;
+        if ($commandKey !== null) {
+            $this->validKey($commandKey);
+        }
 
-        return $this->locked($callId, function (Call $call) use ($actor, $ids): Call {
+        return $this->locked($callId, function (Call $call) use ($actor, $ids, $commandKey): Call {
             $me = $this->participantOrFail($call, $actor->id);
+            $marker = $commandKey !== null ? 'cmd:invite:'.substr(hash('sha256', $actor->id.'|'.$commandKey), 0, 48) : null;
+            $fingerprint = hash('sha256', implode(',', $ids));
+            if ($marker !== null) {
+                $done = CallEvent::query()->where('call_id', $call->id)->where('dedupe_key', $marker)->first();
+                if ($done !== null) {
+                    if (! hash_equals((string) ($done->data['ids'] ?? ''), $fingerprint)) {
+                        throw CallException::idempotencyConflict();
+                    }
+
+                    return $call; // el mismo comando ya se aplicó
+                }
+            }
             if (! $call->status->isLive()) {
                 throw CallException::invalidTransition('invite on '.$call->status->value);
             }
@@ -180,7 +198,7 @@ final class CallService
                 }
             }
             if ($newIds === []) {
-                return $call;
+                return $this->rememberCommand($call, $actor, $marker, $fingerprint);
             }
             if ($call->scope === CallScope::Direct) {
                 $call->forceFill(['scope' => CallScope::Group])->save();
@@ -188,8 +206,17 @@ final class CallService
             $call->load('participants');
             $this->ring($call, $actor->id, $newIds);
 
-            return $call;
+            return $this->rememberCommand($call, $actor, $marker, $fingerprint);
         });
+    }
+
+    private function rememberCommand(Call $call, User $actor, ?string $marker, string $fingerprint): Call
+    {
+        if ($marker !== null) {
+            $this->recorder->remember($call, 'call.command.invite', $actor->id, $marker, ['ids' => $fingerprint]);
+        }
+
+        return $call;
     }
 
     // ─── Respuesta de cada persona ──────────────────────────────────────────────────────────────
@@ -395,18 +422,39 @@ final class CallService
             return $this->leave($user, $callId);
         }
 
+        return $this->locked($callId, fn (Call $call): Call => $this->endForEveryone($call, $user));
+    }
+
+    /**
+     * Finalizar PARA TODOS (contrato común): solo quien inició la llamada; cualquier otra persona recibe
+     * «forbidden» y NO se convierte silenciosamente en salir. Repetir sobre una llamada terminada es idempotente.
+     */
+    public function terminate(User $user, string $callId): Call
+    {
+        $this->assertActor($user);
+
         return $this->locked($callId, function (Call $call) use ($user): Call {
-            if (! $call->status->isLive()) {
-                return $call; // idempotente
-            }
-            if (in_array($call->status, [CallStatus::Initiating, CallStatus::Ringing], true)) {
-                $this->finish($call, CallStatus::Cancelled, 'cancelled_by_caller', $user->id);
-            } else {
-                $this->finish($call, CallStatus::Ended, 'ended_by_host', $user->id);
+            $this->participantOrFail($call, $user->id);
+            if ((int) $call->initiator_id !== (int) $user->id) {
+                throw CallException::forbidden('Only the host can end the call for everyone.');
             }
 
-            return $call;
+            return $this->endForEveryone($call, $user);
         });
+    }
+
+    private function endForEveryone(Call $call, User $user): Call
+    {
+        if (! $call->status->isLive()) {
+            return $call; // idempotente
+        }
+        if (in_array($call->status, [CallStatus::Initiating, CallStatus::Ringing], true)) {
+            $this->finish($call, CallStatus::Cancelled, 'cancelled_by_caller', $user->id);
+        } else {
+            $this->finish($call, CallStatus::Ended, 'ended_by_host', $user->id);
+        }
+
+        return $call;
     }
 
     /** Fallo del sistema o de conexión (lo usará la integración de medios). */
@@ -710,6 +758,95 @@ final class CallService
             ->get()
             ->map(fn (Call $c) => CallSummary::from($c, $user->id))
             ->all();
+    }
+
+    /**
+     * Historial paginado por cursor (contrato común): orden estable (más recientes primero, desempate por id).
+     * $after = clave de la última fila de la página anterior; la devuelve como siguiente cursor si hay más.
+     *
+     * @param  array{created_at: string, id: string}|null  $after
+     * @return array{0: list<CallSummary>, 1: array{created_at: string, id: string}|null}
+     */
+    public function historyPage(User $user, bool $missedOnly, ?array $after, int $limit): array
+    {
+        $this->assertActor($user);
+        $this->expireStaleFor($user);
+        $limit = max(1, min(100, $limit));
+        $query = Call::query()
+            ->whereHas('participants', function ($q) use ($user, $missedOnly): void {
+                $q->where('user_id', $user->id);
+                if ($missedOnly) {
+                    $q->where('state', ParticipantState::Missed->value);
+                }
+            })
+            ->with('participants')
+            ->orderByDesc('created_at')->orderByDesc('id');
+        if ($after !== null) {
+            $query->where(fn ($w) => $w->where('created_at', '<', $after['created_at'])
+                ->orWhere(fn ($x) => $x->where('created_at', $after['created_at'])->where('id', '<', $after['id'])));
+        }
+        $rows = $query->limit($limit + 1)->get();
+        $more = $rows->count() > $limit;
+        $rows = $rows->take($limit)->values();
+        $last = $rows->last();
+        $next = $more && $last instanceof Call ? ['created_at' => $last->created_at->format('Y-m-d H:i:s'), 'id' => (string) $last->id] : null;
+
+        return [$rows->map(fn (Call $c) => CallSummary::from($c, $user->id))->all(), $next];
+    }
+
+    /**
+     * Revocación de un DISPOSITIVO (contrato con CollaborationCore): sale de sus llamadas vivas con ese
+     * dispositivo, se le desconecta y, si la llamada sigue con medios, se rota la sala (su credencial deja
+     * de servir). La persona puede volver desde otro dispositivo válido. Devuelve cuántas llamadas tocó.
+     */
+    public function revokeDevice(int $userId, string $deviceId): int
+    {
+        $ids = CallParticipant::query()->where('user_id', $userId)->where('device_id', $deviceId)
+            ->whereIn('state', [ParticipantState::Accepted->value, ParticipantState::Joined->value])
+            ->whereHas('call', fn ($q) => $q->whereIn('status', array_map(fn (CallStatus $s) => $s->value, CallStatus::live())))
+            ->limit(50)->pluck('call_id');
+        $n = 0;
+        foreach ($ids as $callId) {
+            $this->locked((string) $callId, function (Call $call) use ($userId, $deviceId, &$n): void {
+                $p = $call->participantFor($userId);
+                if ($p === null || ! $call->status->isLive() || ! $p->state->isIn() || $p->device_id !== $deviceId) {
+                    return;
+                }
+                $this->leaveParticipant($call, $p, null);
+                $this->recorder->record($call, 'call.participant.revoked', null, $userId, ['reason' => 'device_revoked']);
+                $this->reconcile($call, null);
+                if ($call->status->isLive() && $this->media->confirmsConnections()) {
+                    $this->rotateRoom($call, null, 'device_revoked');
+                }
+                $n++;
+            });
+        }
+
+        return $n;
+    }
+
+    /**
+     * Pérdida de la membresía de una conversación (contrato con TeamChat/CollaborationCore): la persona es
+     * expulsada de las llamadas vivas de ESA conversación (con rotación de sala si siguen con medios).
+     */
+    public function revokeMembership(ConversationRef $ref, int $userId): int
+    {
+        $ids = Call::query()->where('context_type', $ref->type)->where('context_id', $ref->id)
+            ->whereIn('status', array_map(fn (CallStatus $s) => $s->value, CallStatus::live()))
+            ->whereHas('participants', fn ($q) => $q->where('user_id', $userId)->whereNull('revoked_at'))
+            ->limit(50)->pluck('id');
+        $n = 0;
+        foreach ($ids as $id) {
+            $this->locked((string) $id, function (Call $call) use ($userId, &$n): void {
+                $p = $call->participantFor($userId);
+                if ($p !== null && $p->revoked_at === null && $call->status->isLive()) {
+                    $this->expel($call, $p, null, 'membership_revoked');
+                    $n++;
+                }
+            });
+        }
+
+        return $n;
     }
 
     /**
@@ -1236,10 +1373,23 @@ final class CallService
             if ($this->conversations->institutionOf($ref) !== (int) $initiator->institution_id || ! $this->conversations->canStartCall($initiator, $ref)) {
                 throw CallException::forbidden('Not allowed to call from this conversation.');
             }
-            $ids = array_values(array_diff($this->conversations->memberIds($ref), [$initiator->id]));
-            $invitees = $this->loadUsers($ids)->filter(fn (User $u) => $this->users->canContact($initiator, $u))->values();
-            if ($invitees->isEmpty()) {
-                throw CallException::invalid('Nobody in the conversation can receive the call.');
+            if ($target->selection !== []) {
+                // Contrato común: invitados ELEGIDOS, todos o ninguno (miembros vigentes y contactables).
+                $ids = array_values(array_diff($target->selection, [$initiator->id]));
+                if ($ids === []) {
+                    throw CallException::invalid('You cannot call yourself.');
+                }
+                $invitees = $this->loadUsers($ids);
+                if ($invitees->count() !== count($ids)
+                    || $invitees->contains(fn (User $u) => ! $this->conversations->isMember($u->id, $ref) || ! $this->users->canContact($initiator, $u))) {
+                    throw CallException::forbidden('Some of the people cannot be invited.');
+                }
+            } else {
+                $ids = array_values(array_diff($this->conversations->memberIds($ref), [$initiator->id]));
+                $invitees = $this->loadUsers($ids)->filter(fn (User $u) => $this->users->canContact($initiator, $u))->values();
+                if ($invitees->isEmpty()) {
+                    throw CallException::invalid('Nobody in the conversation can receive the call.');
+                }
             }
         } else {
             $ref = null;

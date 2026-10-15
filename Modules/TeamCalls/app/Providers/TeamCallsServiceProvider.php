@@ -11,6 +11,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Modules\CollaborationCore\Contracts\CallsGateway as SharedCallsGatewayContract;
+use Modules\CollaborationCore\Contracts\ConversationDirectory;
+use Modules\CollaborationCore\Contracts\PresenceService;
+use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\TeamCalls\Console\ExpireStaleCallsCommand;
 use Modules\TeamCalls\Console\SweepMediaRoomsCommand;
 use Modules\TeamCalls\Contracts\CallEventPublisher;
@@ -20,6 +24,11 @@ use Modules\TeamCalls\Contracts\MediaRoomService;
 use Modules\TeamCalls\Contracts\Presence;
 use Modules\TeamCalls\Contracts\PushNotifier;
 use Modules\TeamCalls\Contracts\UserDirectory;
+use Modules\TeamCalls\Integration\Collaboration\CollaborationPresence;
+use Modules\TeamCalls\Integration\Collaboration\CollaborationUserDirectory;
+use Modules\TeamCalls\Integration\Collaboration\ConversationDirectoryAccess;
+use Modules\TeamCalls\Integration\Collaboration\OperationContext;
+use Modules\TeamCalls\Integration\Collaboration\SharedCallsGateway;
 use Modules\TeamCalls\Integration\LiveKit\LiveKitConfig;
 use Modules\TeamCalls\Integration\LiveKit\LiveKitMediaRooms;
 use Modules\TeamCalls\Integration\LiveKit\LiveKitRoomClient;
@@ -63,9 +72,21 @@ class TeamCallsServiceProvider extends ModuleServiceProvider
     {
         parent::register();
 
-        $this->app->bindIf(ConversationAccess::class, DenyAllConversationAccess::class);
-        $this->app->bindIf(UserDirectory::class, PanelUserDirectory::class);
-        $this->app->bindIf(Presence::class, NoopPresence::class);
+        // Correlación y actor de la operación en curso (contrato común): uno por petición o trabajo.
+        $this->app->scopedIf(OperationContext::class);
+
+        // Con los contratos de CollaborationCore enlazados (directorio de conversaciones, presencia), sus
+        // adaptadores; sin ellos, los provisionales de siempre (conversaciones denegadas, presencia nula).
+        $this->app->bindIf(ConversationAccess::class, fn ($app): ConversationAccess => $app->bound(ConversationDirectory::class)
+            ? new ConversationDirectoryAccess($app->make(ConversationDirectory::class), $app->make(OperationContext::class))
+            : new DenyAllConversationAccess);
+        // Permiso definitivo (collaboration.use) solo si se elige expresamente; por defecto, el provisional.
+        $this->app->bindIf(UserDirectory::class, fn ($app): UserDirectory => config('teamcalls.authorization.driver') === 'collaboration'
+            ? new CollaborationUserDirectory
+            : new PanelUserDirectory);
+        $this->app->bindIf(Presence::class, fn ($app): Presence => $app->bound(PresenceService::class)
+            ? new CollaborationPresence($app->make(PresenceService::class), $app->make(CurrentInstitution::class))
+            : new NoopPresence);
         $this->app->bindIf(CallEventPublisher::class, NoopCallEventPublisher::class);
         $this->app->bindIf(PushNotifier::class, NoopPushNotifier::class);
         // LiveKit autohospedado solo si está elegido Y completo (falla cerrado: sin él, 503 media_unavailable).
@@ -79,6 +100,8 @@ class TeamCallsServiceProvider extends ModuleServiceProvider
             return new LiveKitMediaRooms($config, new LiveKitRoomClient($config, $tokens), $tokens);
         });
         $this->app->bindIf(CallsGateway::class, TeamCallsGateway::class);
+        // Puerta del contrato común (MCA Colaboración 1.0). Falla cerrado mientras Core no esté integrado.
+        $this->app->bindIf(SharedCallsGatewayContract::class, SharedCallsGateway::class);
     }
 
     public function boot(): void

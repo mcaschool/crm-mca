@@ -443,10 +443,10 @@ Con varias pestañas sondea una sola. Al volver a una pestaña oculta se consult
   núcleo y lógica del módulo), sin layout ni componentes del CRM. La página del CRM solo la envuelve.
 - **Permiso.** El acceso a llamadas se decide en un único puerto, `UserDirectory`
   (`canUseCalls` / `canContact`). El adaptador provisional (`PanelUserDirectory`) exige usuario activo y
-  `canWorkCrm()`: es **más restrictivo**, no un sustituto de `collab.use`, y no se ha ampliado.
+  `canWorkCrm()`: es **más restrictivo**, no un sustituto de `collaboration.use`, y no se ha ampliado.
 - **Qué falta para MCA One:**
   1. **`UserDirectory` de CollaborationCore**, con la identidad y la autorización institucionales
-     compartidas (gate `collab.use`), en lugar de los roles comerciales del CRM.
+     compartidas (gate `collaboration.use`), en lugar de los roles comerciales del CRM.
   2. **Pila de autenticación del API.** Hoy usa la del panel (sesión, `can:access-panel`, 2FA). Para
      otras aplicaciones hará falta un grupo de rutas con la autenticación común de MCA One (y Sanctum en
      móvil), sin depender del panel del CRM.
@@ -471,6 +471,101 @@ Con varias pestañas sondea una sola. Al volver a una pestaña oculta se consult
   - errores de red (retroceso hasta 24 s, aviso y recuperación en 2 s sin cortar la llamada);
   - cierre de sesión (el servidor la saca de la llamada y la pestaña libera medios en 1 s).
 - **Pendiente: con cámara y micrófono físicos y con redes externas.**
+
+## Contratos comunes de MCA Colaboración 1.0 (fase 4A)
+La rama incorpora por merge `codex/collaboration-contracts` (solo interfaces, datos y suites de contrato;
+ningún servicio de Core ni de Realtime). TeamCalls los **implementa o adapta**; **Core y Realtime NO
+están integrados**: sus implementaciones reales no existen en esta rama, y todo lo que depende de ellas
+falla cerrado o sigue con el adaptador provisional.
+
+### `CallsGateway` común → `Integration/Collaboration/SharedCallsGateway`
+Enlazado como `Modules\CollaborationCore\Contracts\CallsGateway`. Usa el `CallService` existente (mismos
+bloqueos, transiciones, idempotencia y aislamiento).
+
+| Contrato | TeamCalls |
+|---|---|
+| `start` | `CallService::start`; grupos/canales con **invitados elegidos** (`CallTarget::conversation(ref, selection)`), validados todos o ninguno (miembro vigente + contactable) |
+| `invite` | `invite(..., commandKey)`: repetir el mismo comando no vuelve a sonar (ni a quien rechazó); misma clave con otros invitados → `idempotency_conflict` |
+| `accept` / `decline` / `cancel` / `join` / `leave` | mismos métodos; el dispositivo sale del `ActorContext` |
+| `end` | `terminate()`: **solo el anfitrión** finaliza para todos; cualquier otra persona → `forbidden` (nunca equivale a salir) |
+| `credentials` | credenciales del dispositivo del actor; si la URL no es `https`/`wss` → `media_unavailable` |
+| `find` / `activeFor` | resúmenes del contrato, sin sala, claves, estado de medios ni dispositivos (`deviceId = null`) |
+| `recentFor` / `missedFor` | `historyPage()` por clave (`created_at`, `id`), cursor **opaco firmado** (HMAC con persona, institución y listado); manipulado o ajeno → `invalid` |
+
+Errores: `CallException` → `ContractException` con el mismo código (la tabla código→HTTP del contrato
+coincide); `InvalidArgumentException` → `invalid` (422).
+
+### `ActorContext` → `ActorResolver`
+- La identidad, la institución, la sesión y el dispositivo vienen del `ActorContext`, que construye Core desde la
+  sesión autenticada del servidor. No se acepta ningún id del cliente.
+- Se revalida con `DeviceRegistry::assertSessionBinding`. Además: la persona existe y pertenece a esa
+  institución; si tiene 2FA, la sesión debe ser `Mfa`; y `CollaborationAccess::authorize(collaboration.use)`.
+- **Sin `DeviceRegistry` o sin `CollaborationAccess` enlazados → `unauthenticated`.** Hoy, por tanto, la puerta
+  común no admite a nadie fuera de las pruebas.
+- Las reglas propias siguen en `CallService`: `UserDirectory`, institución activa y CSRF/2FA de la API web.
+- Cada operación corre en la institución del actor (`CurrentInstitution::runFor`). La correlación es la del
+  comando y la causalidad, el `requestId` (`OperationContext`, uno por petición).
+
+### Eventos `call.*` (compatibles con CollaborationRealtime)
+- **Versión del agregado.** `collab_call_calls.event_sequence` es el contador por llamada. Cada hecho
+  (y cada aviso efímero) toma la versión siguiente con la fila de la llamada bloqueada, así que el orden
+  por agregado no tiene carreras.
+- **Traza.** `collab_call_events` guarda `sequence`, `correlation_id` y `causation_id` (único `call_id + sequence`).
+  Las marcas internas de comandos (`call.command.invite`) no ocupan versión ni se publican.
+- **Con `TransactionalEventRecorder` enlazado** (el outbox de Realtime):
+  - `CallRecorder` anota `EventEnvelope` + `DeliveryAudience` en **la misma transacción** del cambio. Si no
+    hay transacción, lanza una excepción.
+  - No publica por ningún otro camino, así que no hay duplicados ni pérdidas.
+  - No hay un outbox propio.
+- **Sin outbox (hoy):** el puerto propio tras confirmar (`NoopCallEventPublisher`); la interfaz sigue sondeando.
+- **Datos públicos** (`CallEventEnvelopes::PUBLIC_DATA`): `call_id`, `user_id`, `media`, `scope`, `status`,
+  `reason`, `applied`, `rejected` y `participants`. Ni dispositivos ni sesiones de medios.
+- **Audiencia:** participantes; el timbre solo a quien suena, con `expiresAt` = fin de la invitación;
+  `call.answered_elsewhere` (efímero) excluye el dispositivo que contestó.
+- **Cancelación:** `call.ended` con `data.status = cancelled` (el sobre común rechaza `call.cancelled`).
+- **`CallEventAccess`:** regla de autorización lista (tipo de TeamCalls, misma institución, participante no
+  expulsado). **No está registrada**: el contrato 1.0 aún no publica la interfaz de políticas de eventos.
+
+### Adaptadores preparados (inactivos sin Core)
+| Adaptador | Se activa cuando |
+|---|---|
+| `ConversationDirectoryAccess` (`ConversationAccess` sobre `ConversationDirectory`) | Core enlaza `ConversationDirectory`. Pregunta en nombre del actor de la operación; **sin actor (API web interna, tareas) deniega todo**. No lista miembros: exige selección |
+| `CollaborationPresence` (`Presence` → `PresenceService::setInCall/clearInCall`) | Core enlaza `PresenceService`; se aplica tras confirmar |
+| `CollaborationUserDirectory` (gate `collaboration.use`, sin exigir CRM) | `TEAMCALLS_AUTHORIZATION_DRIVER=collaboration`; mientras Core no defina el gate, **deniega a todos**. Por defecto sigue el provisional |
+| `CallAccessRevocations` | Core/TeamChat lo invoquen (ver abajo) |
+
+**Permiso definitivo.** El permiso es `collaboration.use`. No se ha abierto ninguna ruta ni se ha ampliado
+ningún permiso: la API web y la interfaz siguen con la pila del panel y `PanelUserDirectory`.
+
+### Revocación: puntos de integración
+| Origen (Core / TeamChat) | Entrada en TeamCalls | Efecto |
+|---|---|---|
+| Usuario revocado | `CallAccessRevocations::userRevoked` → `revokeAccess` | sale de todas sus llamadas vivas, se le retiran los medios y se rota la sala |
+| Pérdida de `collaboration.use` | `collaborationAccessLost` → `revokeAccess` | igual que el anterior, motivo `access_revoked` |
+| Dispositivo revocado | `deviceRevoked` → `revokeDevice` | sale con **ese** dispositivo (`call.participant.revoked`, `device_revoked`); rota la sala si hay medios confirmados; puede volver desde otro dispositivo válido |
+| Baja de la conversación | `membershipRemoved` → `revokeMembership` | expulsión de las llamadas vivas de esa conversación |
+| Expulsión de participante | `expel()` interno (ya existente) | `revoked_at` + retirada de la sala |
+| Rotación de sala LiveKit | `rotateRoom()` (fase 3B) | las credenciales anteriores dejan de servir |
+
+Además, la puerta común revalida dispositivo y sesión en cada llamada (`assertSessionBinding`). Siguen
+vigentes los mecanismos actuales: logout (`LeaveCallsOnLogout`), webhooks y barrido de medios.
+
+### Credenciales `https`/`wss` y desarrollo
+- `LiveKitConfig` exige `https`/`wss` **en todo entorno**. Antes solo lo hacía en producción, así que el
+  cambio endurece la configuración.
+- **Excepción solo de desarrollo:** `TEAMCALLS_LIVEKIT_ALLOW_INSECURE_DEV_URLS=true`, que solo surte efecto
+  en `local`/`testing`.
+- Aun con la excepción, la puerta común **no** devuelve credenciales `ws://`: responde `media_unavailable`.
+
+### Pruebas de la fase
+- `tests/Feature/Contracts/SharedCallsGatewayConformanceTest.php`: **la suite oficial**
+  `CallsGatewayContract` contra el adaptador real, con un doble de las interfaces oficiales de Core
+  (`FakeCollaborationCore`).
+- `SharedGatewayTest`: fallo cerrado, identidad, ciclo, `end`, `invite`, cursores, selección, credenciales y errores.
+- `CallEventsContractTest`: outbox transaccional (con doble `FakeOutbox`), reversión, versión contigua,
+  correlación, audiencia, datos públicos y autorización de eventos.
+- `CollaborationAdaptersTest`: enlaces, `collaboration.use`, directorio, revocaciones, presencia y la
+  excepción de desarrollo de LiveKit.
 
 ## Concurrencia
 `tests/Feature/CallRealConcurrencyTest.php` lanza procesos PHP independientes (cada uno con su propia

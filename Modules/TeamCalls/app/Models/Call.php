@@ -34,6 +34,7 @@ use Modules\TeamCalls\Enums\CallStatus;
  * @property Carbon|null $connected_at
  * @property Carbon|null $ended_at
  * @property string|null $end_reason
+ * @property int $event_sequence versión secuencial del agregado (contrato de eventos de MCA Colaboración)
  * @property Carbon $created_at
  * @property Carbon $updated_at
  */
@@ -60,6 +61,7 @@ class Call extends Model
             'answered_at' => 'datetime',
             'connected_at' => 'datetime',
             'ended_at' => 'datetime',
+            'event_sequence' => 'integer',
         ];
     }
 
