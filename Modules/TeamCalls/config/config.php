@@ -20,4 +20,11 @@ return [
 
     // Vigencia de las credenciales de acceso a la sala de medios (no se asumen de un solo uso).
     'join_token_ttl' => (int) env('TEAMCALLS_JOIN_TOKEN_TTL', 300),
+
+    // Límites de la API web por persona y minuto: iniciar llamadas, resto de operaciones y consultas.
+    'rate_limits' => [
+        'start' => (int) env('TEAMCALLS_RATE_START', 10),
+        'write' => (int) env('TEAMCALLS_RATE_WRITE', 60),
+        'read' => (int) env('TEAMCALLS_RATE_READ', 120),
+    ],
 ];

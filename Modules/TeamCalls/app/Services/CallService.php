@@ -88,6 +88,18 @@ final class CallService
 
         try {
             return DB::transaction(function () use ($initiator, $media, $key, $hash, $deviceId, $scope, $context, $invitees): Call {
+                // Serializa los inicios de una misma persona y repite las comprobaciones con lecturas
+                // bloqueantes: dos inicios simultáneos con claves distintas no pueden pasar ambos el
+                // «ocupado», y dos con la misma clave devuelven la misma llamada.
+                User::query()->whereKey($initiator->id)->lockForUpdate()->first();
+                $existing = $this->byIdempotency($initiator, $key, lock: true);
+                if ($existing !== null) {
+                    return $this->sameRequest($existing, $hash);
+                }
+                if ($this->isBusy($initiator->id, lock: true)) {
+                    throw CallException::busy();
+                }
+
                 $now = now();
                 $call = new Call;
                 $call->forceFill([
@@ -265,6 +277,10 @@ final class CallService
     {
         $this->assertActor($user);
         $deviceId = (string) $this->validDevice($deviceId, required: true);
+        // Sin servidor de medios nadie se conecta: la llamada nunca figura como activa sin sala real.
+        if (! $this->media->available()) {
+            throw CallException::mediaUnavailable();
+        }
 
         return $this->locked($callId, function (Call $call) use ($user, $deviceId): Call {
             if (! $call->status->isLive()) {
@@ -782,17 +798,20 @@ final class CallService
     }
 
     /** ¿Está ya en otra llamada viva (contestada o conectada, o como quien la inició)? */
-    private function isBusy(int $userId): bool
+    private function isBusy(int $userId, bool $lock = false): bool
     {
-        return CallParticipant::query()->where('user_id', $userId)
+        $query = CallParticipant::query()->where('user_id', $userId)
             ->whereIn('state', [ParticipantState::Accepted->value, ParticipantState::Joined->value])
-            ->whereHas('call', fn ($q) => $q->whereIn('status', array_map(fn (CallStatus $s) => $s->value, CallStatus::live())))
-            ->exists();
+            ->whereHas('call', fn ($q) => $q->whereIn('status', array_map(fn (CallStatus $s) => $s->value, CallStatus::live())));
+
+        return $lock ? $query->sharedLock()->first(['id']) !== null : $query->exists();
     }
 
-    private function byIdempotency(User $initiator, string $key): ?Call
+    private function byIdempotency(User $initiator, string $key, bool $lock = false): ?Call
     {
-        return Call::query()->where('initiator_id', $initiator->id)->where('idempotency_key', $key)->first();
+        $query = Call::query()->where('initiator_id', $initiator->id)->where('idempotency_key', $key);
+
+        return ($lock ? $query->lockForUpdate() : $query)->first();
     }
 
     private function sameRequest(Call $existing, string $hash): Call

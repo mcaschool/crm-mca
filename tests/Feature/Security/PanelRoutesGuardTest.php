@@ -22,8 +22,12 @@ it('ninguna ruta del panel es accesible sin autenticación (barrido completo)', 
         // invitado es redirigido aunque el parámetro no exista: se sustituye por "1".
         $uri = preg_replace('/\{[^}]+\}/', '1', $route->uri());
 
-        test()->get('/'.ltrim((string) $uri, '/'))
-            ->assertRedirect('/login');
+        $response = test()->get('/'.ltrim((string) $uri, '/'));
+        // Las API JSON del panel (p. ej. TeamCalls) responden 401 en vez de redirigir: tampoco son accesibles.
+        if ($response->getStatusCode() === 401) {
+            return;
+        }
+        $response->assertRedirect('/login');
     });
 });
 

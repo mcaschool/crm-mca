@@ -66,6 +66,14 @@ final class RecordingCollaboration implements CallEventPublisher, MediaRoomServi
         unset($this->inCall[$userId.'|'.$callId]);
     }
 
+    /** Servidor de medios de prueba (sin red). false simula «sin infraestructura multimedia». */
+    public bool $mediaAvailable = true;
+
+    public function available(): bool
+    {
+        return $this->mediaAvailable;
+    }
+
     public function issueJoinCredentials(MediaGrant $grant): JoinCredentials
     {
         $this->grants[] = $grant;

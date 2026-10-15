@@ -27,6 +27,8 @@ final class TC
     /** Enlaza los dobles en el contenedor (sustituyen a los adaptadores provisionales). */
     public static function fakes(): void
     {
+        self::$browsers = [];
+        self::$browser = null;
         self::$rec = new RecordingCollaboration;
         self::$conversations = new FakeConversationAccess;
         foreach ([CallEventPublisher::class, MediaRoomService::class, Presence::class, PushNotifier::class] as $port) {
@@ -50,6 +52,29 @@ final class TC
         return User::factory()->create(array_merge([
             'institution_id' => $institution->id, 'role' => 'admissions', 'department' => 'Admisiones', 'status' => 'active',
         ], $over));
+    }
+
+    /** Atributos de un usuario SIN segundo factor (la fábrica los crea con el 2FA activado). */
+    public const NO_2FA = ['two_factor_secret' => null, 'two_factor_recovery_codes' => null, 'two_factor_confirmed_at' => null];
+
+    /** @var array<string, array<string,mixed>> sesiones guardadas por navegador */
+    private static array $browsers = [];
+
+    private static ?string $browser = null;
+
+    /**
+     * Cambia de navegador (= de sesión y, por tanto, de dispositivo para la API web). Cada nombre
+     * conserva su propia sesión: volver a «beto-pc» recupera el mismo dispositivo.
+     */
+    public static function browser(string $name): void
+    {
+        $store = app('session')->driver();
+        if (self::$browser !== null) {
+            self::$browsers[self::$browser] = $store->all();
+        }
+        $store->flush();
+        $store->replace(self::$browsers[$name] ?? []);
+        self::$browser = $name;
     }
 
     public static function service(): CallService

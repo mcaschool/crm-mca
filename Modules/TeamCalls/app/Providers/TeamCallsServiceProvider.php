@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Modules\TeamCalls\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Modules\TeamCalls\Console\ExpireStaleCallsCommand;
 use Modules\TeamCalls\Contracts\CallEventPublisher;
 use Modules\TeamCalls\Contracts\CallsGateway;
@@ -26,7 +29,7 @@ use Modules\TeamCalls\Policies\CallPolicy;
 use Nwidart\Modules\Support\ModuleServiceProvider;
 
 /**
- * TeamCalls (MCA Colaboración). Sin rutas ni interfaz en esta fase: solo el motor de llamadas.
+ * TeamCalls (MCA Colaboración): motor de llamadas y su API web JSON (sin interfaz todavía).
  *
  * Los puertos hacia CollaborationCore se enlazan con bindIf a adaptadores PROVISIONALES: cuando
  * CollaborationCore/TeamChat registren sus implementaciones, sustituyen a estas sin tocar TeamCalls.
@@ -36,6 +39,11 @@ class TeamCallsServiceProvider extends ModuleServiceProvider
     protected string $name = 'TeamCalls';
 
     protected string $nameLower = 'teamcalls';
+
+    /** @var string[] */
+    protected array $providers = [
+        RouteServiceProvider::class,
+    ];
 
     /** @var string[] */
     protected array $commands = [
@@ -60,6 +68,12 @@ class TeamCallsServiceProvider extends ModuleServiceProvider
         parent::boot();
 
         Gate::policy(Call::class, CallPolicy::class);
+
+        // Límites de la API web, por persona (o IP si aún no hay sesión).
+        foreach (['start', 'write', 'read'] as $kind) {
+            RateLimiter::for("teamcalls-{$kind}", fn (Request $request) => Limit::perMinute(max(1, (int) config("teamcalls.rate_limits.{$kind}", 60)))
+                ->by("teamcalls-{$kind}:".($request->user()?->getAuthIdentifier() ?? $request->ip())));
+        }
     }
 
     /** Invitaciones vencidas y conexiones que no llegan, cada minuto (mismo cron de schedule:run). */

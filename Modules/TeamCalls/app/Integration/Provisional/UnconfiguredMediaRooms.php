@@ -15,6 +15,11 @@ use Modules\TeamCalls\Support\MediaGrant;
  */
 final class UnconfiguredMediaRooms implements MediaRoomService
 {
+    public function available(): bool
+    {
+        return false;
+    }
+
     public function issueJoinCredentials(MediaGrant $grant): JoinCredentials
     {
         throw CallException::mediaUnavailable();

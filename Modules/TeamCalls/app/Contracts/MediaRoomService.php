@@ -14,6 +14,9 @@ use Modules\TeamCalls\Support\MediaGrant;
  */
 interface MediaRoomService
 {
+    /** ¿Hay servidor de medios operativo? Sin él nadie se conecta a la sala ni la llamada pasa a activa. */
+    public function available(): bool;
+
     public function issueJoinCredentials(MediaGrant $grant): JoinCredentials;
 
     public function removeParticipant(string $room, string $identity): void;
