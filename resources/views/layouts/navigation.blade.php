@@ -14,6 +14,9 @@
     $__ctx = app(\Modules\Core\Tenancy\CurrentInstitution::class);
     $brandInstitution = $__ctx->has() ? \Modules\Institutions\Models\Institution::find($__ctx->id()) : null;
     $brandLogo = $brandInstitution?->logoUrl();
+    // Indicadores del menú: un único cálculo (PanelBadges) para el primer pintado; después los
+    // mantiene al día el sincronizador compartido (partials/panel-badges-sync) desde cualquier pantalla.
+    $panelBadges = app(\App\Support\PanelBadges::class)->for($u);
 @endphp
 <aside class="mca-sidebar" :class="{ open: sidebarOpen }">
     <div class="mca-brand">
@@ -38,9 +41,8 @@
             </a>
             @can('viewAny', \Modules\Crm\Models\Lead::class)
                 {{-- Badges de "nuevos" por usuario (mismo patrón visual y de eventos que el
-                     badge de la Bandeja social). Un solo servicio calcula ambos contadores;
-                     el NewLeadNotifier de la topbar los refresca en vivo cada ~10s. --}}
-                @php($crmBadges = app(\Modules\Crm\Services\SidebarBadges::class)->counts(auth()->user()))
+                     badge de la Bandeja social): PanelBadges + sincronizador del panel. --}}
+                @php($crmBadges = ['leads' => $panelBadges['leads'] ?? 0, 'contacts' => $panelBadges['contacts'] ?? 0])
                 <a href="{{ route('crm.leads.index') }}" class="mca-nav-item {{ request()->routeIs('crm.leads.*') ? 'on' : '' }}"
                    x-data="{ n: {{ $crmBadges['leads'] }} }" x-on:crm-badges-updated.window="n = $event.detail.leads ?? n">
                     <x-ui.icon name="users" /> {{ __('Leads') }}
@@ -73,11 +75,8 @@
             <div class="mca-nav-group">
                 <div class="mca-nav-label">{{ __('SOCIAL MEDIA') }}</div>
                 @if (auth()->user()?->canWorkCrm())
-                    {{-- Solo se consulta si hay institución en contexto (algunas vistas que usan
-                         este layout, como el perfil, se sirven fuera del grupo de panel). --}}
-                    @php($socialUnread = app(\Modules\Core\Tenancy\CurrentInstitution::class)->has()
-                        ? (int) \Modules\Social\Models\SocialConversation::query()->sum('unread_count')
-                        : 0)
+                    {{-- PanelBadges ya devuelve 0/ausente fuera del grupo de panel (sin institución). --}}
+                    @php($socialUnread = $panelBadges['social'] ?? 0)
                     <a href="{{ route('social.inbox') }}" class="mca-nav-item {{ request()->routeIs('social.inbox') ? 'on' : '' }}"
                        x-data="{ n: {{ $socialUnread }} }" x-on:social-unread-updated.window="n = $event.detail.total">
                         <x-ui.icon name="inbox" /> {{ __('Bandeja social') }}

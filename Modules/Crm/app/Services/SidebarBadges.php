@@ -44,13 +44,17 @@ final class SidebarBadges
             return $counts; // fuera del panel (p. ej. Mi perfil): sin queries
         }
 
+        // Las marcas del usuario en UNA consulta (no una por módulo).
+        $reads = CrmModuleRead::query()->where('user_id', $user->id)->whereIn('module', array_keys(self::MODULES))
+            ->get(['module', 'last_seen_at'])->keyBy('module');
+
         foreach (self::MODULES as $module => $model) {
             if (! $user->can('viewAny', $model)) {
                 continue; // sin permiso: ni consulta ni información del contador
             }
 
             $counts[$module] = (int) $model::query()
-                ->where('created_at', '>', $this->lastSeenAt($user, $module))
+                ->where('created_at', '>', $reads->get($module)->last_seen_at ?? $this->baseline($user, $module))
                 ->count();
         }
 
@@ -70,25 +74,14 @@ final class SidebarBadges
         );
     }
 
-    private function lastSeenAt(User $user, string $module): CarbonInterface
+    private function baseline(User $user, string $module): CarbonInterface
     {
-        $read = CrmModuleRead::query()
-            ->where('user_id', $user->id)
-            ->where('module', $module)
-            ->first();
-        if ($read !== null) {
-            return $read->last_seen_at;
-        }
-
         // Línea base perezosa (una sola vez por usuario/módulo): lo ya existente
         // queda "visto"; desde aquí solo cuentan las altas nuevas.
-        $now = now();
-        CrmModuleRead::query()->create([
-            'user_id' => $user->id,
-            'module' => $module,
-            'last_seen_at' => $now,
-        ]);
-
-        return $now;
+        // createOrFirst: dos peticiones simultáneas (varias pestañas) no chocan con el índice único.
+        return CrmModuleRead::query()->createOrFirst(
+            ['user_id' => $user->id, 'module' => $module],
+            ['last_seen_at' => now()],
+        )->last_seen_at;
     }
 }

@@ -100,6 +100,11 @@ $panel->group(function () {
     // Dashboard / inicio: pantalla de entrada adaptada por persona (Livewire).
     Route::get('/dashboard', \Modules\Crm\Livewire\Dashboard::class)->name('dashboard');
 
+    // Indicadores del menú lateral (solo números, por permisos e institución): los consulta el
+    // sincronizador compartido del panel desde cualquier pantalla.
+    Route::get('/panel/indicadores', \App\Http\Controllers\PanelBadgesController::class)
+        ->middleware('throttle:60,1')->name('panel.badges');
+
     // Mi perfil: datos en solo lectura + cambio de la propia contrasena (Livewire).
     Route::get('/mi-perfil', \Modules\Identity\Livewire\Profile\MiPerfil::class)->name('profile.me');
     // Perfil Breeze (se conserva la ruta por compatibilidad; ya no esta en el menu).

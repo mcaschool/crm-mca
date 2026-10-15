@@ -159,15 +159,16 @@ it('sin permiso viewAny el contador de ese módulo no se calcula ni deja rastro'
     expect(CrmModuleRead::query()->where('user_id', $user->id)->count())->toBe(0);
 });
 
-it('el notifier de la topbar refresca los contadores en vivo (evento a todo el panel)', function () {
+it('los contadores en vivo salen del sincronizador único del panel (no del notifier de la topbar)', function () {
     [, $user] = sbCtx();
     sbBadges()->counts($user);
     $this->travel(1)->minutes();
     Lead::factory()->count(3)->create();
 
+    expect(app(\App\Support\PanelBadges::class)->for($user)['leads'])->toBe(3);
     Livewire::actingAs($user)->test(\Modules\Crm\Livewire\NewLeadNotifier::class)
         ->call('check')
-        ->assertDispatched('crm-badges-updated', leads: 3);
+        ->assertNotDispatched('crm-badges-updated'); // sin consultas duplicadas
 });
 
 // --- Marca de visto POR INSTITUCIÓN (clave única institution_id + user_id + module) ------

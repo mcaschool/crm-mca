@@ -25,14 +25,14 @@ use Throwable;
  *  - Upsert de conversación por (social_channel_id, external_conversation_id).
  *  - Inserción idempotente del mensaje por (social_conversation_id, external_message_id).
  *  - Todo dentro de una transacción; bloqueo de la conversación para serializar reintentos.
- *  - Tras confirmar (fuera de la transacción), resolución best-effort del nombre/foto del
- *    contacto vía Graph API la PRIMERA vez que llega un entrante sin nombre (Messenger/IG).
+ *  - Tras confirmar (fuera de la transacción), resolución best-effort del nombre y/o la foto
+ *    que falten del contacto vía Graph API (Messenger/IG), con espera entre consultas.
  */
 final class SocialIngestService
 {
     public function __construct(
         private readonly CurrentInstitution $context,
-        private readonly ContactProfileResolver $profiles,
+        private readonly ContactProfileUpdater $profiles,
     ) {}
 
     public function ingest(NormalizedMessage $m): IngestResult
@@ -59,8 +59,8 @@ final class SocialIngestService
         ));
 
         // Resolución de perfil FUERA de la transacción (no hace HTTP con la fila bloqueada) y
-        // best-effort: si falla, el mensaje ya quedó ingerido. Solo en el PRIMER entrante de un
-        // contacto sin nombre (Messenger/IG); tras el primer éxito no vuelve a llamar.
+        // best-effort: si falla, el mensaje ya quedó ingerido. Solo si al contacto le falta el nombre
+        // o la foto y toca consultar (un perfil completo nunca vuelve a llamar a Meta).
         if ($result->status === 'created' && $result->conversationId !== null && $m->direction === 'inbound') {
             $this->resolveContactProfile($channel, $m->provider, $result->conversationId);
         }
@@ -196,38 +196,27 @@ final class SocialIngestService
     }
 
     /**
-     * Rellena nombre/foto del contacto la primera vez (contact_name vacío) para Messenger/IG.
-     * Nunca lanza: cualquier fallo de Graph se ignora (el resolver ya devuelve nulls).
+     * Completa nombre y/o foto del contacto (Messenger/IG) cuando falte alguno y toque consultar
+     * (ContactProfileUpdater: espera entre consultas, nunca pisa datos válidos con null).
+     * Nunca lanza: cualquier fallo de Graph o del guardado se ignora.
      */
     private function resolveContactProfile(SocialChannel $channel, string $provider, int $conversationId): void
     {
-        if (! in_array($provider, ['messenger', 'instagram'], true)) {
+        if (! in_array($provider, ContactProfileUpdater::PROVIDERS, true)) {
             return;
         }
 
-        // Best-effort de verdad: cualquier fallo aquí (Graph, o el propio save) se ignora. El
-        // mensaje YA quedó ingerido antes de llegar a este punto; resolver el perfil nunca debe
-        // tumbar el webhook.
+        // Best-effort de verdad: el mensaje YA quedó ingerido antes de llegar a este punto;
+        // resolver el perfil nunca debe tumbar el webhook.
         try {
-            $this->context->runFor($channel->institution_id, function () use ($channel, $provider, $conversationId): void {
+            $this->context->runFor($channel->institution_id, function () use ($channel, $conversationId): void {
                 $conversation = SocialConversation::query()->find($conversationId);
-                if ($conversation === null
-                    || ((string) ($conversation->contact_name ?? '')) !== ''
-                    || ((string) ($conversation->contact_external_id ?? '')) === '') {
-                    return; // ya tiene nombre, o no hay id de contacto que resolver
+                if ($conversation !== null) {
+                    $this->profiles->refresh($conversation, $channel);
                 }
-
-                $profile = $this->profiles->resolve($channel, $provider, (string) $conversation->contact_external_id);
-                if ($profile['name'] === null && $profile['avatar'] === null) {
-                    return;
-                }
-
-                $conversation->contact_name = $profile['name'] ?? $conversation->contact_name;
-                $conversation->contact_avatar_url = $profile['avatar'] ?? $conversation->contact_avatar_url;
-                $conversation->save();
             });
         } catch (Throwable $e) {
-            Log::info('social.contact.resolve: no se pudo guardar el perfil', ['provider' => $provider, 'error' => $e->getMessage()]);
+            Log::info('social.contact.resolve: no se pudo guardar el perfil', ['provider' => $provider, 'error' => class_basename($e)]);
         }
     }
 

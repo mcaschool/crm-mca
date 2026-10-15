@@ -56,6 +56,13 @@ Schedule::command('social:publish-scheduled')
     ->withoutOverlapping(15)
     ->runInBackground();
 
+// Perfiles de Messenger/Instagram incompletos (nombre o foto): recuperación controlada de las
+// conversaciones antiguas, como mucho 25 consultas a Meta por hora y con espera entre intentos.
+Schedule::command('social:refresh-contact-profiles --limit=25')
+    ->hourly()
+    ->withoutOverlapping(30)
+    ->runInBackground();
+
 // Estado de la conexión con Meta de cada empresa (caducidad/revocación), para avisar en el panel.
 Schedule::command('social:meta-connections-check')
     ->dailyAt('04:10')

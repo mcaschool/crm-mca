@@ -120,6 +120,10 @@
             </div>
         </div>
 
+        {{-- Indicadores del menú al día desde cualquier pantalla (un solo sincronizador). --}}
+        @auth
+            @include('partials.panel-badges-sync')
+        @endauth
         @livewireScripts
     </body>
 </html>
