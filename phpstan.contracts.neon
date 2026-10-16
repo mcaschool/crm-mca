@@ -1,8 +1,17 @@
 parameters:
     level: 6
     paths:
-        - Modules/CollaborationCore/app
-        - Modules/CollaborationRealtime/app
+        - Modules/CollaborationCore/app/Contracts
+        - Modules/CollaborationCore/app/Data
+        - Modules/CollaborationCore/app/Enums
+        - Modules/CollaborationCore/app/Exceptions
+        - Modules/CollaborationCore/app/Events
+        - Modules/CollaborationCore/app/Support/Guard.php
+        - Modules/CollaborationCore/app/Integration/CallPresenceAuthorizer.php
+        - Modules/CollaborationCore/app/Integration/CallPresenceCleanupAuthorizer.php
+        - Modules/CollaborationRealtime/app/Contracts
+        - Modules/CollaborationRealtime/app/Data
+        - Modules/CollaborationRealtime/app/Integration
     bootstrapFiles:
         - tests/Contracts/bootstrap.php
     tmpDir: .phpunit.cache/contracts-phpstan    # DTO constructors defensively validate PHP arrays; PHPDoc cannot enforce caller input at runtime.

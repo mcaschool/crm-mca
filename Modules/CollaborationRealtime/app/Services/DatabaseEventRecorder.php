@@ -42,7 +42,7 @@ final class DatabaseEventRecorder implements TransactionalEventRecorder
         $expiry = $audience->expiresAt?->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s.u');
         $hash = hash('sha256', $payload.$metadata.($expiry ?? '').(int) $policy->ephemeral());
 
-        return $this->execution->run($context, function () use ($context, $event, $audience, $users, $metadata, $payload, $expiry, $hash, $policy): string {
+        $operation = function () use ($context, $event, $audience, $users, $metadata, $payload, $expiry, $hash, $policy): string {
             // One tenant sequence lock held through the OUTER business commit. No auto-increment gaps/cursor races.
             DB::table('collab_streams')->insertOrIgnore(['institution_id' => $context->institutionId, 'position' => 0, 'floor' => 0]);
             $stream = DB::table('collab_streams')->where('institution_id', $context->institutionId)->lockForUpdate()->firstOrFail();
@@ -71,6 +71,18 @@ final class DatabaseEventRecorder implements TransactionalEventRecorder
             DB::table('collab_streams')->where('institution_id', $context->institutionId)->update(['position' => $position]);
 
             return $event->id;
-        });
+        };
+        // Only the strict, internal security policy can record a transition that disables its tenant.
+        // Such events have no client audience and are consumed by the trusted outbox adapter.
+        if ($policy instanceof RevocationPolicy) {
+            if ($users !== [] || $audience->exceptDeviceId !== null || $audience->expiresAt !== null ||
+                ! DB::table('institutions')->where('id', $context->institutionId)->exists()) {
+                throw new ContractException('invalid', 422);
+            }
+
+            return $this->current->runFor($context->institutionId, $operation);
+        }
+
+        return $this->execution->run($context, $operation);
     }
 }

@@ -19,6 +19,8 @@ interface ConversationDirectory
 
     /**
      * Server validates every selected recipient, all or nothing.
+     * Direct + [] resolves the authorized peer on the server; [peer] remains compatible.
+     * Groups/channels require an explicit nonempty selection. Snapshots never replace action authorization.
      *
      * @param  list<int>  $selection
      * @return list<UserDescriptor>

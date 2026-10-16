@@ -57,7 +57,14 @@ final class OutboxWorker
 
                 return true;
             }
-            $this->publisher->publish($this->codec->decode($event));
+            $delivery = $this->codec->decode($event);
+            if (in_array($delivery->event->type, RevocationPolicy::TYPES, true)) {
+                app(RevocationDelivery::class)->deliver($delivery->event);
+                $query->update(['status' => 'published', 'accepted_at' => now(), 'claim' => null, 'lease_until' => null, 'failure_code' => null]);
+
+                return true;
+            }
+            $this->publisher->publish($delivery);
             $accepted = DB::table('collab_transport_receipts')->where('event_id', $event->id)->exists();
             $query->update(['status' => $accepted ? 'published' : 'suppressed', 'accepted_at' => $accepted ? now() : null, 'claim' => null, 'lease_until' => null, 'failure_code' => null]);
         } catch (\Throwable $error) {

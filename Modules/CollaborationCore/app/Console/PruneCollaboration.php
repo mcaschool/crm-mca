@@ -15,6 +15,7 @@ final class PruneCollaboration extends TenantAwareCommand
 
     protected function handleForInstitution(int $institutionId): int
     {
+        app(\Modules\CollaborationCore\Services\Revocation::class)->reconcile($institutionId);
         foreach (['collab_presence_devices', 'collab_presence_calls'] as $table) {
             DB::table($table)->where('institution_id', $institutionId)->where('expires_at', '<=', now())->delete();
         }

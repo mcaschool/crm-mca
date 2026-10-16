@@ -59,6 +59,7 @@ final class ApplicationAccess
             throw new ContractException('forbidden', 403);
         }
         DB::transaction(function () use ($actor, $target, $application, $allowed): void {
+            DB::table('institutions')->where('id', $actor->institution_id)->lockForUpdate()->firstOrFail();
             $users = User::query()->whereIn('id', [$actor->id, $target->id])->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $actor = $users->get($actor->id);
             $locked = $users->get($target->id);
@@ -69,12 +70,12 @@ final class ApplicationAccess
                 throw new ContractException('not_found', 404);
             }
             $target = $locked;
+            $wasAllowed = $this->allows($target, 'collaboration');
             DB::table('collab_application_access')->updateOrInsert(
                 ['institution_id' => $target->institution_id, 'user_id' => $target->id, 'application' => $application],
                 ['allowed' => $allowed, 'created_at' => now(), 'updated_at' => now()]);
-            if ($application === 'collaboration' && ! $allowed) {
-                DB::table('collab_devices')->where('institution_id', $target->institution_id)->where('user_id', $target->id)->update(['revoked_at' => now()]);
-                app(Revocation::class)->user($target);
+            if ($application === 'collaboration' && ! $allowed && $wasAllowed) {
+                app(Revocation::class)->access((int) $target->institution_id, (int) $target->id, 'application_revoked');
             }
             \Modules\Audit\Models\AuditLog::create(['institution_id' => $target->institution_id, 'user_id' => $actor->id, 'action' => 'application.access_changed', 'auditable_type' => User::class, 'auditable_id' => $target->id, 'changes' => ['application' => $application, 'allowed' => $allowed]]);
         });

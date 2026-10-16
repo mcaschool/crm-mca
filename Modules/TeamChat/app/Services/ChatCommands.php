@@ -164,6 +164,7 @@ final class ChatCommands
                 return;
             }
             DB::table('collab_chat_participants')->where('id', $member->id)->update(['active' => $active, 'updated_at' => now()]);
+            app(\Modules\CollaborationCore\Contracts\RevocationRecorder::class)->record(new \Modules\CollaborationCore\Events\ConversationMembershipRevoked($actor->institutionId, $actor->userId, 'direct', $conversationId, 'left'));
             DB::table('collab_chat_conversations')->where('id', $conversationId)->increment('access_version');
             $this->events->record($actor, $conversation, 'teamchat.membership.changed', ['user_id' => $actor->userId, 'active' => $active]);
         }, 3);

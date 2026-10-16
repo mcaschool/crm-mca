@@ -68,7 +68,21 @@ final class InstitutionPresence implements PresenceService
 
     public function clearInCall(InstitutionContext $context, int $userId, string $callId): void
     {
-        $this->updateCall($context, $userId, $callId, null);
+        Guard::token($callId);
+        $current = app(\Modules\Core\Tenancy\CurrentInstitution::class);
+        if ($current->has() && $current->id() !== $context->institutionId) {
+            throw new ContractException('forbidden', 403);
+        }
+        $current->runFor($context->institutionId, fn () => DB::transaction(function () use ($context, $userId, $callId): void {
+            DB::table('institutions')->where('id', $context->institutionId)->lockForUpdate()->firstOrFail();
+            if ($this->calls instanceof \Modules\CollaborationCore\Integration\CallPresenceCleanupAuthorizer) {
+                $this->calls->authorizeCleanup($context, $userId, $callId);
+            } else {
+                // Legacy adapters keep their existing strict check; historical cleanup requires the new port.
+                $this->calls->authorize($context, $userId, $callId);
+            }
+            $this->store->call($context->institutionId, $userId, $callId, null);
+        }, 3));
     }
 
     private function updateCall(InstitutionContext $context, int $userId, string $callId, ?int $ttlSeconds): void

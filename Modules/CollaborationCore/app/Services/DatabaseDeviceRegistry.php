@@ -74,15 +74,14 @@ final class DatabaseDeviceRegistry implements DeviceRegistry
     {
         $this->assertSessionBinding($context);
         DB::transaction(function () use ($context, $deviceId): void {
+            DB::table('institutions')->where('id', $context->institutionId)->lockForUpdate()->firstOrFail();
             User::query()->whereKey($context->userId)->lockForUpdate()->firstOrFail();
             $this->assertSessionBinding($context);
             $row = DB::table('collab_devices')->where('id', $deviceId)->where('institution_id', $context->institutionId)->where('user_id', $context->userId)->lockForUpdate()->first();
             if (! $row) {
                 throw new ContractException('not_found', 404);
             }
-            DB::table('collab_devices')->where('id', $row->id)->update(['revoked_at' => now(), 'updated_at' => now()]);
-            DB::table('collab_presence_devices')->where('device_id', $row->id)->delete();
-            app(Revocation::class)->session($context->userId, $row->session_hash);
+            app(Revocation::class)->session($context->userId, $row->session_hash, 'device_revoked');
         });
     }
 

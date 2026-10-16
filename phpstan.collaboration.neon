@@ -5,6 +5,7 @@ parameters:
     paths:
         - Modules/CollaborationCore/app
         - app/Models/User.php
+        - Modules/Institutions/app/Models/Institution.php
         - database/factories/UserFactory.php
         - database/seeders/DatabaseSeeder.php
         - app/Http/Controllers/Auth

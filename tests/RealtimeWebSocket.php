@@ -168,7 +168,9 @@ try {
         wsCheck($e->errorCode === 'device_revoked', 'active subscription cannot bypass revocation');
     }
     DB::transaction(fn () => app(TransactionalEventRecorder::class)->append(new InstitutionContext($i->id), realtimeEvent($a, 'ws-revoked', 3), new DeliveryAudience($i->id, [$u->id])));
-    app(OutboxWorker::class)->runOne($i->id);
+    // Revocation now adds an internal durable event; drain eligible work rather than assuming one row.
+    for ($attempt = 0; $attempt < 10 && app(OutboxWorker::class)->runOne($i->id); $attempt++) {
+    }
     wsCheck(DB::table('collab_outbox')->where('event_id', 'ws-revoked')->value('status') === 'suppressed', 'revoked connected device excluded from subsequent publication');
     $originRejected = false;
     try {

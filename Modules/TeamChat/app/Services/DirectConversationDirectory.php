@@ -41,6 +41,18 @@ final class DirectConversationDirectory implements ConversationDirectory
         $this->authorize($context, $ref, ConversationAction::InviteToCall);
         $row = $this->access->conversation($context, $ref->id);
         $peer = $this->access->peerId($row, $context->userId);
+        if ($ref->type === ConversationType::Direct) {
+            $pair = [(int) $row->first_user_id, (int) $row->second_user_id];
+            $members = $this->access->members($row);
+            sort($pair);
+            sort($members);
+            if ($pair[0] < 1 || $pair[0] === $pair[1] || $members !== $pair || ! in_array($context->userId, $pair, true)) {
+                throw new ContractException('not_found', 404);
+            }
+            if ($selection === []) {
+                $selection = [$peer];
+            }
+        }
         if (($ref->type === ConversationType::Direct && $selection !== [$peer]) || ! array_is_list($selection) || $selection === [] || count($selection) > 99 || count(array_unique($selection)) !== count($selection)) {
             throw new ContractException('invalid', 422);
         }

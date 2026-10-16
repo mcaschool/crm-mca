@@ -47,7 +47,7 @@ use Modules\Institutions\Models\Institution;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, \Modules\CollaborationCore\Integration\AtomicCollaborationRevocation, Notifiable;
 
     /**
      * Departamentos del equipo (lista fija). "Contabilidad y Finanzas" es el equipo

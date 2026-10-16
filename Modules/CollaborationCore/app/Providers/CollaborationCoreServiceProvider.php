@@ -42,21 +42,15 @@ final class CollaborationCoreServiceProvider extends ServiceProvider
         Gate::define('collaboration.use', fn (User $user) => app(Services\ApplicationAccess::class)->allows($user, 'collaboration'));
         User::updated(function (User $user): void {
             app(Services\PanelAccessSnapshot::class)->forget();
-            if ($user->wasChanged(['status', 'institution_id', 'password', 'two_factor_secret', 'two_factor_confirmed_at'])) {
-                app(Services\Revocation::class)->user($user);
-            }
+
         });
         \Modules\Institutions\Models\Institution::updated(function ($institution): void {
             app(Services\PanelAccessSnapshot::class)->forget();
-            if ($institution->wasChanged(['status', 'collaboration_enabled'])) {
-                foreach (User::query()->where('institution_id', $institution->id)->cursor() as $user) {
-                    app(Services\Revocation::class)->user($user);
-                }
-            }
+
         });
         Event::listen(Logout::class, function (Logout $event): void {
             if ($event->user instanceof User && request()->hasSession()) {
-                app(Services\Revocation::class)->session((int) $event->user->id, hash('sha256', request()->session()->getId()));
+                app(Services\Revocation::class)->session((int) $event->user->id, hash('sha256', request()->session()->getId()), 'logout');
             }
         });
         app(\Illuminate\Contracts\Debug\ExceptionHandler::class)->renderable(function (\Throwable $e, \Illuminate\Http\Request $request) {

@@ -1,7 +1,7 @@
 {
     "name": "CollaborationRealtime",
     "alias": "collaborationrealtime",
-    "description": "Institutional transactional outbox, secure sync and Reverb transport",
+    "description": "Shared contracts 1.1.0: institutional outbox, secure sync, internal revocation delivery and Reverb transport",
     "keywords": [
         "collaboration",
         "realtime"

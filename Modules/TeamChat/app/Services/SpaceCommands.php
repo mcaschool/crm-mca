@@ -152,6 +152,18 @@ final class SpaceCommands
                     $this->audit($actor, $scope, $id, $actor->userId, 'admin', true, $tick);
                 }
                 $newRole = $operation === 'transfer' ? 'owner' : ($operation === 'role' ? $role : $target->role);
+                if ($operation === 'remove') {
+                    $revocations = app(\Modules\CollaborationCore\Contracts\RevocationRecorder::class);
+                    $reason = $userId === $actor->userId ? 'left' : 'removed';
+                    $revocations->record(new \Modules\CollaborationCore\Events\ConversationMembershipRevoked($actor->institutionId, $userId, $scope === 'team' ? 'team' : $row->type, $id, $reason));
+                    if ($scope === 'team') {
+                        foreach (DB::table('collab_chat_conversations')->where('institution_id', $actor->institutionId)->where('team_id', $id)->get() as $channel) {
+                            if ($this->access->membershipRow($channel, $userId) !== null) {
+                                $revocations->record(new \Modules\CollaborationCore\Events\ConversationMembershipRevoked($actor->institutionId, $userId, 'channel', $channel->id, 'team_removed'));
+                            }
+                        }
+                    }
+                }
                 (clone $roster)->where('user_id', $userId)->update(['role' => $newRole, 'active' => $operation !== 'remove', 'updated_at' => now()]);
                 $this->audit($actor, $scope, $id, $userId, $newRole, $operation !== 'remove', $tick);
                 if ($scope === 'team' && $operation === 'remove') {
