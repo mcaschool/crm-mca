@@ -39,7 +39,7 @@ function widgetBinding($test, array $session, string $app = 'crm', string $origi
 {
     return $test->sessions->authenticate($session['token'], $session['instance_id'], $app, $origin);
 }
-function widgetHeaders(array $session, string $app = 'crm', string $origin = 'http://localhost:33320'): array
+function collaborationWidgetHeaders(array $session, string $app = 'crm', string $origin = 'http://localhost:33320'): array
 {
     return ['Authorization' => 'MCAWidget '.$session['token'], 'X-Widget-Instance' => $session['instance_id'], 'X-Widget-App' => $app, 'X-Widget-Origin' => $origin, 'Origin' => 'http://localhost', 'Accept' => 'application/json'];
 }
@@ -94,12 +94,12 @@ it('rejects another institution and authentication without MFA', function () {
 });
 it('allows delegated API requests without cookies but denies privileged routes and forged origins', function () {
     $s = widgetSession($this);
-    $this->withHeaders(widgetHeaders($s))->getJson('/api/v1/collaboration/me')->assertOk();
-    $this->withHeaders(widgetHeaders($s))->postJson('/api/v1/collaboration/widget/heartbeat', ['visible' => true, 'focused' => true, 'interacted' => true])->assertOk();
-    $this->withHeaders(widgetHeaders($s))->getJson('/api/v1/collaboration/widget/content')->assertOk()->assertSee('teamchat');
-    $this->withHeaders(widgetHeaders($s))->putJson('/api/v1/collaboration/widget/preferences', ['resource_id' => '', 'visual' => true, 'sound' => true, 'muted' => false])->assertOk()->assertJsonPath('data.sound', true);
-    $this->withHeaders(widgetHeaders($s))->putJson('/api/v1/collaboration/identity-administrators/'.$this->user->id, ['enabled' => true])->assertForbidden();
-    $h = widgetHeaders($s);
+    $this->withHeaders(collaborationWidgetHeaders($s))->getJson('/api/v1/collaboration/me')->assertOk();
+    $this->withHeaders(collaborationWidgetHeaders($s))->postJson('/api/v1/collaboration/widget/heartbeat', ['visible' => true, 'focused' => true, 'interacted' => true])->assertOk();
+    $this->withHeaders(collaborationWidgetHeaders($s))->getJson('/api/v1/collaboration/widget/content')->assertOk()->assertSee('teamchat');
+    $this->withHeaders(collaborationWidgetHeaders($s))->putJson('/api/v1/collaboration/widget/preferences', ['resource_id' => '', 'visual' => true, 'sound' => true, 'muted' => false])->assertOk()->assertJsonPath('data.sound', true);
+    $this->withHeaders(collaborationWidgetHeaders($s))->putJson('/api/v1/collaboration/identity-administrators/'.$this->user->id, ['enabled' => true])->assertForbidden();
+    $h = collaborationWidgetHeaders($s);
     $h['Origin'] = 'https://evil.invalid';
     $this->withHeaders($h)->getJson('/api/v1/collaboration/me')->assertForbidden();
 });
@@ -171,8 +171,8 @@ it('counts group history only within current membership periods', function () {
 it('rejects expired source sessions changed institutions and missing media capability', function () {
     $s = widgetSession($this);
     DB::table('collab_widget_apps')->where('id', 'crm')->update(['capabilities' => json_encode(['chat'])]);
-    $this->withHeaders(widgetHeaders($s))->postJson('/api/v1/collaboration/uploads/'.(string) Illuminate\Support\Str::ulid().'/content', [])->assertForbidden();
-    $this->withHeaders(widgetHeaders($s))->postJson('/api/v1/collaboration/widget/ack', [])->assertForbidden();
+    $this->withHeaders(collaborationWidgetHeaders($s))->postJson('/api/v1/collaboration/uploads/'.(string) Illuminate\Support\Str::ulid().'/content', [])->assertForbidden();
+    $this->withHeaders(collaborationWidgetHeaders($s))->postJson('/api/v1/collaboration/widget/ack', [])->assertForbidden();
     DB::table('collab_devices')->where('id', $this->actor->deviceId)->update(['expires_at' => now()->subSecond()]);
     expect(fn () => widgetBinding($this, $s))->toThrow(ContractException::class);
     DB::table('collab_devices')->where('id', $this->actor->deviceId)->update(['expires_at' => now()->addHour()]);
@@ -187,8 +187,8 @@ it('does not reveal another users conversation through widget preferences or mes
     $users = User::factory()->count(2)->create(['institution_id' => $this->tenant->id, 'role' => 'member']);
     $owner = realtimeActor($users[0]);
     $c = app(ChatCommands::class)->direct($owner, $users[1]->id);
-    $this->withHeaders(widgetHeaders($s))->getJson('/api/v1/collaboration/conversations/'.$c.'/messages')->assertNotFound();
-    $this->withHeaders(widgetHeaders($s))->putJson('/api/v1/collaboration/widget/preferences', ['resource_id' => $c, 'visual' => true, 'sound' => false, 'muted' => true])->assertNotFound();
+    $this->withHeaders(collaborationWidgetHeaders($s))->getJson('/api/v1/collaboration/conversations/'.$c.'/messages')->assertNotFound();
+    $this->withHeaders(collaborationWidgetHeaders($s))->putJson('/api/v1/collaboration/widget/preferences', ['resource_id' => $c, 'visual' => true, 'sound' => false, 'muted' => true])->assertNotFound();
 });
 it('counts standard and private channel history only during effective admission', function () {
     $owner = realtimeActor(User::factory()->create(['institution_id' => $this->tenant->id, 'role' => 'member']));
@@ -210,9 +210,9 @@ it('counts standard and private channel history only during effective admission'
 });
 it('preserves other preferences and snooze when another instance changes one field', function () {
     $s = widgetSession($this);
-    $this->withHeaders(widgetHeaders($s))->putJson('/api/v1/collaboration/widget/preferences', ['sound' => true, 'snooze_minutes' => 60])->assertOk()->assertJsonPath('data.muted', true);
+    $this->withHeaders(collaborationWidgetHeaders($s))->putJson('/api/v1/collaboration/widget/preferences', ['sound' => true, 'snooze_minutes' => 60])->assertOk()->assertJsonPath('data.muted', true);
     $until = app(WidgetPreferences::class)->get($this->actor)['muted_until'];
-    $this->withHeaders(widgetHeaders($s))->putJson('/api/v1/collaboration/widget/preferences', ['visual' => false])->assertOk()->assertJsonPath('data.sound', true)->assertJsonPath('data.muted', true);
+    $this->withHeaders(collaborationWidgetHeaders($s))->putJson('/api/v1/collaboration/widget/preferences', ['visual' => false])->assertOk()->assertJsonPath('data.sound', true)->assertJsonPath('data.muted', true);
     expect(app(WidgetPreferences::class)->get($this->actor)['muted_until'])->toBe($until);
-    $this->withHeaders(widgetHeaders($s))->putJson('/api/v1/collaboration/widget/preferences', ['snooze_minutes' => 0])->assertOk()->assertJsonPath('data.muted', false)->assertJsonPath('data.visual', false)->assertJsonPath('data.sound', true);
+    $this->withHeaders(collaborationWidgetHeaders($s))->putJson('/api/v1/collaboration/widget/preferences', ['snooze_minutes' => 0])->assertOk()->assertJsonPath('data.muted', false)->assertJsonPath('data.visual', false)->assertJsonPath('data.sound', true);
 });
