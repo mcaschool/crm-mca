@@ -39,6 +39,8 @@
         screen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M12 7v6M9 10l3-3 3 3"/></svg>',
         people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>',
         expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>',
+        grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+        speaker: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="14" height="18" rx="2"/><rect x="18" y="3" width="4" height="5" rx="1"/><rect x="18" y="10" width="4" height="5" rx="1"/><rect x="18" y="17" width="4" height="4" rx="1"/></svg>',
         shrink: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>',
     };
 
@@ -65,7 +67,14 @@
         inviting: new Set(),   // selección del panel «Añadir personas»
         removing: null,        // participante pendiente de confirmar «Retirar»
         departures: new Map(), // identidad → temporizador: distingue «salió» de una reconexión corta
+        // Fase 4G (solo en esta vista: nada se comparte con los demás).
+        pinned: null,          // ficha fijada por quien mira
+        view: 'auto',          // auto | grid | speaker (auto: orador con 3 o más personas)
+        speaking: [],          // claves de quienes hablan, de más a menos fuerte (sin la propia)
+        featured: { key: null, reason: null },
+        meterTimer: null,
     };
+    const speakerTracker = new window.TeamCallsCore.SpeakerTracker({ hold: 1500, minGap: 5000 });
 
     // ─── API de TeamCalls ───────────────────────────────────────────────────────────────────────
     function route(name, callId) {
@@ -367,6 +376,7 @@
         $('tc-controls').hidden = !inCall;
         $('tc-bottom').hidden = !inCall;
         $('tc-fullscreen').hidden = !inCall || !document.fullscreenEnabled;
+        $('tc-view').hidden = !inCall;
         const others = inCall ? (state.call.participants || []).filter((x) => Number(x.user_id) !== Number(cfg.me.id) && !x.revoked && x.state !== 'declined' && x.state !== 'missed') : [];
         $('tc-peer').textContent = others.map((x) => nameOf(x.user_id)).join(', ');
         renderControls();
@@ -610,6 +620,8 @@
     // pantalla compartida, «p:<usuario>» invitación que todavía suena; «local» es quien mira.
     const MIC_OFF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 2 20 20M18.9 13.1A7 7 0 0 0 19 11v-1M5 10v1a7 7 0 0 0 11.4 5.4M15 9.3V5a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 5.1 2.1M12 18v4"/></svg>';
     const CAM_OFF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 16v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.7 0H14a2 2 0 0 1 2 2v3.3l1 1L22 7v10"/><path d="m2 2 20 20"/></svg>';
+    const PIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 10.8V4h6v6.8l3 3.2H6z"/></svg>';
+    const SIGNAL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="15" width="4" height="6" rx="1"/><rect x="10" y="10" width="4" height="11" rx="1"/><rect x="17" y="4" width="4" height="17" rx="1"/></svg>';
 
     function tileFor(key, opts) {
         let tile = state.tiles.get(key);
@@ -621,11 +633,17 @@
             el.dataset.kind = kind;
             el.dataset.local = opts.local ? '1' : '0';
             el.innerHTML = '<span class="tc-tile-ph"><span class="tc-tile-av"></span></span>'
-                + '<span class="tc-tile-bar"><span class="tc-tile-name"></span><span class="tc-tile-icons">'
+                + (kind === 'pending' ? '' : '<button type="button" class="tc-pin" aria-pressed="false">' + PIN_ICON + '</button>')
+                + '<span class="tc-tile-bar">'
+                + (kind === 'camera' ? '<span class="tc-lvl" aria-hidden="true"><i></i><i></i><i></i></span>' : '')
+                + '<span class="tc-tile-name"></span><span class="tc-tile-icons">'
+                + (kind === 'camera' ? '<span class="tc-q" role="img" hidden>' + SIGNAL_ICON + '</span>' : '')
                 + '<span class="tc-ic" data-ic="mic" hidden>' + MIC_OFF_ICON + '</span><span class="tc-ic" data-ic="cam" hidden>' + CAM_OFF_ICON + '</span>'
                 + '</span></span><span class="tc-tile-badge" hidden></span>';
             el.querySelector('[data-ic="mic"]').title = t('mic_is_off');
             el.querySelector('[data-ic="cam"]').title = t('cam_is_off');
+            const pin = el.querySelector('.tc-pin');
+            if (pin) pin.addEventListener('click', (e) => { e.stopPropagation(); togglePin(key); });
             ($(kind === 'screen' ? 'tc-focus' : 'tc-tiles')).appendChild(el);
             tile = { el, video: null };
             state.tiles.set(key, tile); // una sola por clave: reconectar no duplica
@@ -735,17 +753,106 @@
         });
     }
 
-    /** Distribución adaptable: rejilla según el número de personas o pantalla principal con tira lateral. */
+    /** ¿Vista de orador? Automática con 3 o más personas, salvo que quien mira elija otra. */
+    function speakerView() {
+        const cams = [...state.tiles.keys()].filter((k) => k.startsWith('c:')).length;
+        return state.view === 'speaker' || (state.view === 'auto' && cams >= 3);
+    }
+
+    /** Orador destacado con histéresis (SpeakerTracker): sin cambios bruscos ni constantes. */
+    function currentSpeaker() {
+        if (!speakerView()) return null;
+        const cams = [...state.tiles.keys()].filter((k) => k.startsWith('c:'));
+        const remotes = cams.filter((k) => k !== 'c:local');
+        return speakerTracker.update(state.speaking, remotes.length ? remotes : cams, Date.now());
+    }
+
+    /**
+     * Distribución adaptable (fases 4F y 4G). Área principal: la ficha FIJADA por quien mira (temporal),
+     * si no la pantalla compartida y, si no, el orador en la vista de orador; el resto en la tira. Sin
+     * nada destacado, rejilla según el número de personas. Solo se mueven las fichas que cambian de sitio.
+     */
     function layout() {
         const room = $('tc-room');
         if (!room) return;
-        const tiles = $('tc-tiles').children.length;
-        const screens = $('tc-focus').children.length;
-        const l = Core.layoutFor({ tiles, screens, width: room.clientWidth || window.innerWidth });
+        if (state.pinned && !state.tiles.has(state.pinned)) state.pinned = null;
+        const screens = [...state.tiles.keys()].filter((k) => k.startsWith('s:'));
+        const f = Core.featuredFor({ pinned: state.pinned, screen: screens[screens.length - 1] || null, speakerView: speakerView(), speaker: currentSpeaker() });
+        state.featured = f;
+        const focus = $('tc-focus');
+        const strip = $('tc-tiles');
+        state.tiles.forEach((tile, key) => {
+            const target = key === f.key ? focus : strip;
+            if (tile.el.parentNode !== target) target.appendChild(tile.el);
+            tile.el.dataset.featured = key === f.key ? '1' : '0';
+            const pin = tile.el.querySelector('.tc-pin');
+            if (pin) {
+                // En la pantalla compartida, el botón devuelve la pantalla al área principal.
+                const pinned = key === state.pinned;
+                const label = key.startsWith('s:') ? t('view_large') : t(pinned ? 'unpin' : 'pin');
+                pin.setAttribute('aria-pressed', String(pinned));
+                pin.setAttribute('aria-label', label);
+                pin.title = label;
+                pin.hidden = key.startsWith('s:') && f.key === key;
+            }
+        });
+        const tiles = strip.children.length;
+        const l = Core.layoutFor({ tiles, screens: f.key ? 1 : 0, width: room.clientWidth || window.innerWidth });
         room.dataset.mode = l.mode;
         room.dataset.strip = l.strip || '';
+        room.dataset.reason = f.reason || '';
         room.style.setProperty('--tc-cols', String(l.columns));
         room.dataset.count = String(tiles);
+        $('tc-back-screen').hidden = !(f.reason === 'pinned' && screens.length);
+        const view = $('tc-view');
+        const sv = speakerView();
+        view.innerHTML = sv ? ICON.grid : ICON.speaker;
+        view.title = t(sv ? 'view_grid' : 'view_speaker');
+        view.setAttribute('aria-label', view.title);
+    }
+
+    function togglePin(key) {
+        state.pinned = key.startsWith('s:') || state.pinned === key ? null : key;
+        layout();
+    }
+
+    /** Solo vuelve a distribuir si cambia el orador destacado (lo comprueba el pulso de los medidores). */
+    function maybeRelayout() {
+        const f = state.featured;
+        if (f.reason === 'pinned' || f.reason === 'screen') return;
+        if ((speakerView() ? currentSpeaker() : null) !== f.key) layout();
+    }
+
+    // ─── Nivel de audio y calidad de conexión (información real del SDK de LiveKit) ─────────────
+    function participantFor(key) {
+        const room = state.room;
+        if (!room) return null;
+        if (key === 'c:local') return room.localParticipant;
+        return room.getParticipantByIdentity ? room.getParticipantByIdentity(key.slice(2)) : room.remoteParticipants.get(key.slice(2));
+    }
+
+    function tickMeters() {
+        if (!state.room) return;
+        state.tiles.forEach((tile, key) => {
+            if (!key.startsWith('c:')) return;
+            const p = participantFor(key);
+            if (!p) return;
+            const muted = key === 'c:local' && state.synthetic ? isSyntheticMuted('audio') : !p.isMicrophoneEnabled;
+            const bars = String(Core.levelBars(p.audioLevel, muted));
+            if (tile.el.dataset.level !== bars) tile.el.dataset.level = bars;
+            if (key === 'c:local' && $('tc-mic').dataset.level !== bars) $('tc-mic').dataset.level = bars;
+        });
+        maybeRelayout();
+    }
+
+    function setQuality(key, quality) {
+        const tile = state.tiles.get(key);
+        const q = tile && tile.el.querySelector('.tc-q');
+        if (!q) return;
+        const cls = Core.qualityClass(quality);
+        q.dataset.q = cls;
+        q.hidden = !cls;
+        if (cls) { q.title = t('q_' + cls); q.setAttribute('aria-label', q.title); }
     }
 
     /** Confirma la salida de quien se desconectó de la sala (aviso salvo que ya se avisó la expulsión). */
@@ -976,12 +1083,17 @@
         const S = LK.Track.Source;
         const isScreen = (pub) => pub && (pub.source === S.ScreenShare || pub.source === S.ScreenShareAudio);
         const isLocal = (participant) => participant === room.localParticipant;
-        const remoteTile = (participant) => tileFor(camKey(participant), { label: participantLabel(participant) });
+        const remoteTile = (participant) => {
+            const tile = tileFor(camKey(participant), { label: participantLabel(participant) });
+            setQuality(camKey(participant), participant.connectionQuality);
+            return tile;
+        };
 
         room.on(E.TrackSubscribed, (track, pub, participant) => {
             if (!mine()) return;
             if (track.kind === 'video' && pub.source === S.ScreenShare) {
                 // Pantalla compartida: contenido principal; la cámara de quien presenta sigue en el mosaico.
+                state.pinned = null; // una pantalla nueva vuelve a ser el contenido principal
                 attachVideo(screenKey(participant), track, { label: t('screen_of', { name: participantLabel(participant) }), avatar: participantLabel(participant), kind: 'screen' });
                 toast(t('toast_presenting', { name: participantLabel(participant) }));
             } else if (track.kind === 'video') {
@@ -1032,20 +1144,28 @@
             if (state.call && tabs.controlling) coalescer.run('call', () => refreshCall(state.call.id)).catch(() => {});
         });
         room.on(E.ConnectionQualityChanged, (quality, participant) => {
-            if (!mine() || isLocal(participant)) return;
+            if (!mine()) return;
+            setQuality(camKey(participant, isLocal(participant)), quality);
+            if (isLocal(participant)) return;
             const lost = quality === (LK.ConnectionQuality && LK.ConnectionQuality.Lost);
             const key = camKey(participant);
             const had = state.tiles.get(key) && !state.tiles.get(key).el.querySelector('.tc-tile-badge').hidden;
             setBadge(key, lost ? t('reconnecting_badge') : '');
             if (lost && !had) toast(t('toast_reconnecting', { name: participantLabel(participant) }));
         });
-        room.on(E.ActiveSpeakersChanged, (speakers) => { if (mine()) setSpeaking(speakers); });
+        room.on(E.ActiveSpeakersChanged, (speakers) => {
+            if (!mine()) return;
+            setSpeaking(speakers);
+            state.speaking = (speakers || []).filter((p) => !isLocal(p)).map((p) => camKey(p)); // de más a menos fuerte
+            maybeRelayout();
+        });
         [E.TrackMuted, E.TrackUnmuted, E.TrackPublished, E.TrackUnpublished].forEach((ev) => room.on(ev, (pub, participant) => {
             if (mine()) { refreshParticipant(participant, isLocal(participant)); renderControls(); }
         }));
         room.on(E.LocalTrackPublished, (pub) => {
             if (!mine()) return;
             if (pub.track && pub.source === S.ScreenShare) {
+                state.pinned = null;
                 attachVideo(screenKey(null, true), pub.track, { label: t('screen_mine'), avatar: cfg.me.name, kind: 'screen', local: true });
             } else if (pub.track && pub.kind === 'video') {
                 attachVideo(camKey(null, true), pub.track, { label: t('you'), avatar: cfg.me.name, local: true });
@@ -1119,7 +1239,11 @@
                 refreshParticipant(p, false);
             });
             refreshParticipant(room.localParticipant, true);
+            setQuality(camKey(null, true), room.localParticipant.connectionQuality);
             syncPending();
+            // Indicadores de audio y orador: un pulso ligero con los niveles que ya calcula LiveKit.
+            clearInterval(state.meterTimer);
+            state.meterTimer = setInterval(tickMeters, 250);
             // Por si los permisos llegaron antes de escuchar el evento.
             const p = room.localParticipant.permissions;
             if (p && p.canPublish && p.canSubscribe && !state.admitted) {
@@ -1136,6 +1260,10 @@
         const room = state.room;
         state.room = null;
         state.admitted = false;
+        clearInterval(state.meterTimer);
+        state.meterTimer = null;
+        state.speaking = [];
+        if (intentional !== false) state.pinned = null; // fijar es de esta llamada; una reconexión lo conserva
         stopSynthetic();
         if (state.syntheticScreen) { clearInterval(state.syntheticScreen.timer); state.syntheticScreen.track.stop(); state.syntheticScreen = null; }
         clearTiles();
@@ -1411,6 +1539,8 @@
         $('tc-cam').addEventListener('click', () => toggle('video'));
         $('tc-hangup').addEventListener('click', hangUp);
         $('tc-screen').addEventListener('click', toggleScreen);
+        $('tc-view').addEventListener('click', () => { state.view = speakerView() ? 'grid' : 'speaker'; layout(); });
+        $('tc-back-screen').addEventListener('click', () => { state.pinned = null; layout(); });
         $('tc-people-btn').addEventListener('click', () => {
             const people = $('tc-people');
             people.open = !people.open;
@@ -1517,6 +1647,11 @@
                 flags: [...state.tiles.entries()].map(([k, tile]) => k + ':' + ['mic', 'cam'].filter((i) => !tile.el.querySelector('[data-ic="' + i + '"]').hidden).join('+')
                     + (tile.el.querySelector('.tc-tile-badge').hidden ? '' : ':' + tile.el.querySelector('.tc-tile-badge').textContent)),
                 toasts: toastLog.slice(),
+                // Fase 4G: área principal, fijado, vista, niveles de audio (0–3) y calidad por ficha.
+                featured: state.featured, pinned: state.pinned, view: state.view, speakerView: speakerView(),
+                levels: Object.fromEntries([...state.tiles.entries()].filter(([k]) => k.startsWith('c:')).map(([k, tile]) => [k, tile.el.dataset.level || '0'])),
+                quality: Object.fromEntries([...state.tiles.entries()].filter(([k]) => k.startsWith('c:')).map(([k, tile]) => [k, (tile.el.querySelector('.tc-q') || {}).dataset ? tile.el.querySelector('.tc-q').dataset.q || '' : ''])),
+                micLevel: $('tc-mic').dataset.level || '0',
                 mic: state.room ? state.room.localParticipant.isMicrophoneEnabled : null, cam: state.room ? state.room.localParticipant.isCameraEnabled : null,
                 alert: $('tc-alert').hidden ? null : $('tc-alert-text').textContent,
                 remotes: state.room ? [...state.room.remoteParticipants.values()].map((p) => ({

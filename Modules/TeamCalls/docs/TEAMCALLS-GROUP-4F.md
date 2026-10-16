@@ -59,3 +59,29 @@ modificaron TeamChat ni el widget universal.
   micrófono físicos.
 - Audio de la pestaña o del sistema al compartir: depende del navegador y no está verificado.
 - Fijar a un participante, cuadrícula con más de 25 personas y paginación: fuera de esta fase.
+
+## Fase 4G — Controles avanzados (rama `integration/collaboration-4g`)
+Todo es local a quien mira: nada se comparte con los demás.
+
+- **Prioridad del área principal:**
+  1. la ficha fijada por quien mira;
+  2. la pantalla compartida;
+  3. el orador activo, en la vista de orador;
+  4. sin ninguno de los anteriores, mosaico.
+- **Fijar:** botón en cada ficha, visible al pasar el cursor o siempre en pantallas táctiles. Fijar durante una pantalla
+  compartida es temporal: la pantalla pasa a la tira, se muestra «Volver a la pantalla compartida» y una pantalla nueva
+  vuelve a ser la principal.
+- **Orador activo:**
+  - Vista automática con tres o más personas, que se puede cambiar entre mosaico y orador desde la cabecera.
+  - `SpeakerTracker` evita los saltos: el nuevo orador tiene que hablar de forma sostenida 1,5 s y no hay más de un
+    cambio cada 5 s.
+- **Nivel de audio:** `participant.audioLevel` de LiveKit, en 0–3 barras con forma de onda junto al nombre y un halo en
+  el botón del micrófono.
+- **Calidad de conexión:** `ConnectionQuality` del SDK, mostrada como buena (excellent o good), inestable (poor) o sin
+  conexión (lost). Si es desconocida, no se muestra indicador.
+- **Pruebas:**
+  - `tests/js/group.test.cjs`: histéresis, barras, calidad y prioridad del área principal;
+  - `CallsGroupUiTest`;
+  - verificación con LiveKit real en escritorio y móvil.
+- **Sin verificar con LiveKit real:** el estado «sin conexión» solo se comprobó en la lógica, porque no se simuló una
+  pérdida de red.

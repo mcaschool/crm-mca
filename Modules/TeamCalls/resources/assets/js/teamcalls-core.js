@@ -265,7 +265,8 @@
         const tiles = Math.max(0, opts.tiles | 0);
         const width = opts.width || 1024;
         if (opts.screens > 0) {
-            return { mode: 'focus', columns: 1, strip: width < 760 ? 'bottom' : 'side' };
+            // Algo destacado (pantalla, fijado u orador); sin nadie más, sin tira.
+            return { mode: 'focus', columns: 1, strip: tiles === 0 ? null : (width < 760 ? 'bottom' : 'side') };
         }
         let columns = tiles <= 1 ? 1 : tiles <= 4 ? 2 : tiles <= 9 ? 3 : 4;
         // Nunca columnas de menos de ~220 px: en móviles se apilan.
@@ -307,5 +308,74 @@
         return list.some((s) => s === SOURCES[name] || String(s).toUpperCase() === name);
     }
 
-    return { EventDeduper, Coalescer, POLL, pollDelay, sanitize, sanitizeSummary, TabCoordinator, SignalHub, REFRESH_TYPES, layoutFor, participantChanges, sourceAllowed };
+    // ─── Controles avanzados (fase 4G) ─────────────────────────────────────────────────────────
+    /**
+     * Orador destacado SIN saltos: quien habla tiene que mantenerse como orador principal `hold` ms
+     * para sustituir al actual, y nunca se cambia antes de `minGap` ms desde el último cambio. Si el
+     * destacado deja de estar disponible (salió), se cambia enseguida.
+     */
+    class SpeakerTracker {
+        constructor(opts) {
+            this.hold = (opts && opts.hold) || 1500;
+            this.minGap = (opts && opts.minGap) || 5000;
+            this.current = null;
+            this.candidate = null;
+            this.since = 0;
+            this.changedAt = -Infinity;
+        }
+
+        /**
+         * @param {string[]} speaking claves de quienes hablan, de más a menos fuerte (sin la propia)
+         * @param {string[]} available claves que se pueden destacar, en orden estable
+         * @returns {string|null}
+         */
+        update(speaking, available, now) {
+            const can = new Set(available);
+            if (this.current && !can.has(this.current)) this.current = null;
+            const top = (speaking || []).find((k) => can.has(k)) || null;
+            if (!this.current) {
+                this.current = top || available[0] || null;
+                this.changedAt = now;
+                this.candidate = null;
+                return this.current;
+            }
+            if (!top || top === this.current) { this.candidate = null; return this.current; }
+            if (this.candidate !== top) { this.candidate = top; this.since = now; }
+            if (now - this.since >= this.hold && now - this.changedAt >= this.minGap) {
+                this.current = top;
+                this.changedAt = now;
+                this.candidate = null;
+            }
+            return this.current;
+        }
+    }
+
+    /** Barras del indicador de audio (0–3) a partir del nivel de LiveKit (0–1); silenciado = 0. */
+    function levelBars(level, muted) {
+        if (muted || !(level > 0)) return 0;
+        return level > 0.2 ? 3 : level > 0.08 ? 2 : level > 0.02 ? 1 : 0;
+    }
+
+    /** Calidad de conexión del SDK → buena | inestable | desconectada; desconocida = sin indicador. */
+    function qualityClass(q) {
+        const v = String(q || '').toLowerCase();
+        if (v === 'excellent' || v === 'good') return 'good';
+        if (v === 'poor') return 'unstable';
+        if (v === 'lost') return 'lost';
+        return '';
+    }
+
+    /**
+     * Qué ocupa el área principal. La pantalla compartida manda, salvo que la persona fije a alguien
+     * (temporalmente); sin pantalla ni fijado, la vista «orador» destaca a quien habla.
+     */
+    function featuredFor(opts) {
+        if (opts.pinned) return { key: opts.pinned, reason: 'pinned' };
+        if (opts.screen) return { key: opts.screen, reason: 'screen' };
+        if (opts.speakerView && opts.speaker) return { key: opts.speaker, reason: 'speaker' };
+        return { key: null, reason: null };
+    }
+
+    return { EventDeduper, Coalescer, POLL, pollDelay, sanitize, sanitizeSummary, TabCoordinator, SignalHub, REFRESH_TYPES, layoutFor, participantChanges, sourceAllowed,
+        SpeakerTracker, levelBars, qualityClass, featuredFor };
 });

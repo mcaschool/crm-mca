@@ -27,6 +27,7 @@ return [
         'invite' => 'Añadir personas',
         'invite_send' => 'Invitar',
         'cancel' => 'Cancelar',
+        'back_to_screen' => 'Volver a la pantalla compartida',
         'js' => [
             'status_idle' => 'Sin llamada',
             'status_calling' => 'Llamando…',
@@ -146,6 +147,15 @@ return [
             'err_screen' => 'No se pudo compartir la pantalla.',
             'err_screen_unsupported' => 'Este navegador no permite compartir la pantalla.',
             'err_too_many_participants' => 'La llamada ya tiene el máximo de participantes.',
+            // Controles avanzados (fase 4G).
+            'pin' => 'Fijar en grande',
+            'unpin' => 'Dejar de fijar',
+            'view_large' => 'Ver la pantalla en grande',
+            'view_grid' => 'Vista de mosaico',
+            'view_speaker' => 'Vista de orador',
+            'q_good' => 'Conexión buena',
+            'q_unstable' => 'Conexión inestable',
+            'q_lost' => 'Sin conexión',
         ],
     ],
 ];

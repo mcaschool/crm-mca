@@ -93,6 +93,46 @@
     .tc-controls .tc-ctl { padding: 0 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .tc-tile[data-kind="pending"] .tc-tile-av, .tc-toast { animation: none; } }
+
+/* ─── Controles avanzados (fase 4G): fijar, vista, nivel de audio y calidad de conexión ─── */
+.tc-head-acts { margin-left: auto; display: inline-flex; gap: 6px; }
+.tc-room[data-mode="focus"][data-strip=""] { grid-template-columns: minmax(0, 1fr); }
+.tc-focus { position: relative; }
+.tc-back-screen { position: absolute; z-index: 3; top: 10px; left: 50%; transform: translateX(-50%); height: 30px; padding: 0 14px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .94); color: var(--mca-blue-deep, #13253d); font: inherit; font-size: var(--mca-fs-xs, 12px); font-weight: 600; cursor: pointer; box-shadow: var(--mca-shadow-pop, 0 6px 18px rgba(0, 0, 0, .2)); white-space: nowrap; }
+.tc-back-screen:focus-visible, .tc-pin:focus-visible { outline: 2px solid var(--mca-gold, #c9a84c); outline-offset: 2px; }
+.tc-pin { position: absolute; z-index: 2; top: 8px; left: 8px; display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 999px; background: rgba(0, 0, 0, .55); color: #fff; cursor: pointer; opacity: 0; transition: opacity .15s ease; }
+.tc-pin svg { width: 15px; height: 15px; }
+.tc-tile:hover .tc-pin, .tc-pin:focus-visible, .tc-pin[aria-pressed="true"] { opacity: 1; }
+.tc-pin[aria-pressed="true"] { background: var(--mca-gold, #c9a84c); color: var(--mca-blue-deep, #13253d); }
+@media (hover: none) { .tc-pin { opacity: .9; } } /* pantallas táctiles: siempre visible */
+/* Nivel de audio: tres barras discretas junto al nombre (nivel de LiveKit). */
+/* Forma de onda centrada (distinta del icono de cobertura de la calidad de conexión). */
+.tc-lvl { display: inline-flex; align-items: center; gap: 2px; flex: none; height: 22px; box-sizing: border-box; padding: 5px 6px; border-radius: 999px; background: rgba(0, 0, 0, .55); }
+.tc-lvl i { width: 3px; border-radius: 2px; background: rgba(255, 255, 255, .35); transition: background .12s ease, height .12s ease; }
+.tc-lvl i:nth-child(1), .tc-lvl i:nth-child(3) { height: 5px; } .tc-lvl i:nth-child(2) { height: 8px; }
+.tc-tile[data-level="2"] .tc-lvl i:nth-child(2) { height: 10px; }
+.tc-tile[data-level="3"] .tc-lvl i:nth-child(1), .tc-tile[data-level="3"] .tc-lvl i:nth-child(3) { height: 8px; }
+.tc-tile[data-level="3"] .tc-lvl i:nth-child(2) { height: 12px; }
+.tc-tile[data-level="1"] .tc-lvl i:nth-child(1),
+.tc-tile[data-level="2"] .tc-lvl i:nth-child(-n+2),
+.tc-tile[data-level="3"] .tc-lvl i { background: var(--mca-ok, #1f9d6b); }
+/* El botón del micrófono también refleja la actividad, con un halo suave. */
+#tc-mic[data-level="1"] { box-shadow: 0 0 0 2px var(--mca-ok-soft, #e5f4ee); }
+#tc-mic[data-level="2"] { box-shadow: 0 0 0 3px var(--mca-ok-soft, #e5f4ee); }
+#tc-mic[data-level="3"] { box-shadow: 0 0 0 4px var(--mca-ok-soft, #e5f4ee); }
+/* Calidad de conexión (SDK): buena, inestable o sin conexión. */
+.tc-q { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; background: rgba(0, 0, 0, .55); }
+.tc-q svg { width: 13px; height: 13px; fill: rgba(255, 255, 255, .3); }
+.tc-q[data-q="good"] rect { fill: var(--mca-ok, #1f9d6b); }
+.tc-q[data-q="unstable"] rect:nth-child(-n+2) { fill: var(--mca-gold, #c9a84c); }
+.tc-q[data-q="lost"] { background: var(--mca-danger, #b42318); }
+.tc-q[data-q="lost"] rect { fill: rgba(255, 255, 255, .45); }
+.tc-focus .tc-tile[data-kind="camera"] { background: rgba(255, 255, 255, .06); }
+@media (max-width: 640px) {
+    .tc-back-screen { top: 6px; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; }
+    .tc-room[data-strip="bottom"] .tc-tiles .tc-lvl, .tc-room[data-strip="bottom"] .tc-tiles .tc-q { display: none; } /* tira estrecha: solo nombre */
+}
+@media (prefers-reduced-motion: reduce) { .tc-pin, .tc-lvl i { transition: none; } }
 .tc-ctl { display: inline-flex; align-items: center; gap: 6px; height: var(--mca-h-md, 38px); padding: 0 14px; border: 1px solid var(--mca-line-strong, var(--mca-line)); border-radius: 999px; background: var(--mca-surface); color: var(--mca-text); font: inherit; font-size: var(--mca-fs-sm, 13px); font-weight: 600; cursor: pointer; }
 .tc-ctl:hover { background: var(--mca-surface-hover); }
 .tc-ctl[aria-pressed="false"] { background: var(--mca-neutral-soft); color: var(--mca-neutral); }

@@ -31,7 +31,10 @@
                 <span class="tc-status" id="tc-status" data-phase="idle"></span>
                 <span class="tc-peer" id="tc-peer"></span>
                 <span class="tc-synthetic" id="tc-synthetic" hidden></span>
-                <button type="button" class="tc-ico-btn tc-head-btn" id="tc-fullscreen" hidden></button>
+                <span class="tc-head-acts">
+                    <button type="button" class="tc-ico-btn" id="tc-view" hidden></button>
+                    <button type="button" class="tc-ico-btn" id="tc-fullscreen" hidden></button>
+                </span>
             </div>
             <div class="tc-toasts" id="tc-toasts" role="status" aria-live="polite"></div>
             <div class="tc-elsewhere" id="tc-elsewhere" role="status" hidden>
@@ -47,7 +50,10 @@
             </div>
             {{-- Sala (fase 4F): pantalla compartida como contenido principal y mosaico adaptable de participantes. --}}
             <div class="tc-room" id="tc-room" data-mode="grid" hidden>
-                <div class="tc-focus" id="tc-focus"></div>
+                <div class="tc-focus" id="tc-focus">
+                    {{-- Fase 4G: con alguien fijado sobre una pantalla compartida, volver a la pantalla. --}}
+                    <button type="button" class="tc-back-screen" id="tc-back-screen" hidden>{{ __('teamcalls.ui.back_to_screen') }}</button>
+                </div>
                 <div class="tc-tiles" id="tc-tiles"></div>
             </div>
             <div class="tc-controls" id="tc-controls" hidden>

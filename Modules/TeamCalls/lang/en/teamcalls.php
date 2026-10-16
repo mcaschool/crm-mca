@@ -27,6 +27,7 @@ return [
         'invite' => 'Add people',
         'invite_send' => 'Invite',
         'cancel' => 'Cancel',
+        'back_to_screen' => 'Back to the shared screen',
         'js' => [
             'status_idle' => 'No call',
             'status_calling' => 'Calling…',
@@ -146,6 +147,15 @@ return [
             'err_screen' => 'Could not share the screen.',
             'err_screen_unsupported' => 'This browser cannot share the screen.',
             'err_too_many_participants' => 'The call already has the maximum number of participants.',
+            // Advanced controls (phase 4G).
+            'pin' => 'Pin large',
+            'unpin' => 'Unpin',
+            'view_large' => 'Show the screen large',
+            'view_grid' => 'Grid view',
+            'view_speaker' => 'Speaker view',
+            'q_good' => 'Good connection',
+            'q_unstable' => 'Unstable connection',
+            'q_lost' => 'Disconnected',
         ],
     ],
 ];

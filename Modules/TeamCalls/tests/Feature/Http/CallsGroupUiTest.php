@@ -28,7 +28,9 @@ it('la página publica invitar y retirar con la API existente, y la sala con pan
     expect($config['routes']['invite'])->toBe(route('collab.calls.invite', ['call' => '__CALL__']))
         ->and($config['routes']['revoke'])->toBe(route('collab.calls.revoke', ['call' => '__CALL__']))
         ->and($config['i18n'])->toHaveKeys(['screen_start', 'screen_stop', 'screen_ended', 'toast_joined', 'toast_left', 'toast_reconnecting', 'remove_confirm', 'mic_is_off', 'cam_is_off']);
-    foreach (['id="tc-room"', 'id="tc-focus"', 'id="tc-tiles"', 'id="tc-screen"', 'id="tc-people-btn"', 'id="tc-invite-panel"', 'id="tc-toasts"', 'id="tc-fullscreen"'] as $el) {
+    expect($config['i18n'])->toHaveKeys(['pin', 'unpin', 'view_grid', 'view_speaker', 'q_good', 'q_unstable', 'q_lost']); // fase 4G
+    foreach (['id="tc-room"', 'id="tc-focus"', 'id="tc-tiles"', 'id="tc-screen"', 'id="tc-people-btn"', 'id="tc-invite-panel"', 'id="tc-toasts"', 'id="tc-fullscreen"',
+        'id="tc-view"', 'id="tc-back-screen"'] as $el) {
         expect($html)->toContain($el);
     }
     // Compartir pantalla arranca oculto: solo aparece cuando LiveKit confirma el permiso de esa fuente.
