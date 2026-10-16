@@ -23,6 +23,7 @@ final class CallsUiController
     /** Recursos estáticos permitidos (lista cerrada: nada de rutas arbitrarias). */
     private const ASSETS = [
         'teamcalls-core.js' => 'js/teamcalls-core.js',
+        'teamcalls-realtime.js' => 'js/teamcalls-realtime.js',
         'teamcalls-ui.js' => 'js/teamcalls-ui.js',
         'teamcalls-ui.css' => 'css/teamcalls-ui.css',
         'livekit-client.umd.js' => 'vendor/livekit-client/livekit-client-2.22.3.umd.js',
@@ -58,6 +59,16 @@ final class CallsUiController
                     'leave' => route('collab.calls.leave', ['call' => '__CALL__']),
                     'end' => route('collab.calls.end', ['call' => '__CALL__']),
                     'credentials' => route('collab.calls.credentials', ['call' => '__CALL__']),
+                ],
+                // CollaborationRealtime: API común y dirección PÚBLICA de Reverb (la clave de la app no es secreta).
+                'realtime' => [
+                    'api' => url('/api/v1/collaboration'),
+                    'socket' => [
+                        'key' => (string) config('broadcasting.connections.reverb.key', ''),
+                        'host' => (string) config('teamcalls.realtime.host'),
+                        'port' => (int) config('teamcalls.realtime.port'),
+                        'scheme' => (string) config('teamcalls.realtime.scheme'),
+                    ],
                 ],
                 'i18n' => (array) trans('teamcalls.ui.js'),
             ],

@@ -295,10 +295,16 @@
         poller.poke();
     }
 
+    /** Colgar: quien inició la llamada la finaliza para todos; el resto solo sale (decisión funcional). */
+    function hangUpRoute(summary) {
+        return Number(summary.initiator_id) === Number(cfg.me.id) ? 'end' : 'leave';
+    }
+
     async function hangUpElsewhere() {
         const s = state.elsewhere;
         if (!s) return;
-        try { await api('POST', route('end', s.id)); } catch (e) { /* ya terminada */ }
+        const action = hangUpRoute(s);
+        try { await api('POST', route(action, s.id), action === 'leave' ? { all_devices: true } : undefined); } catch (e) { /* ya terminada */ }
         hideElsewhere();
         poller.poke();
         loadHistory();
@@ -856,7 +862,7 @@
         const call = state.call;
         if (!call) return;
         await disposeRoom(true);
-        try { await api('POST', route('end', call.id)); } catch (e) { /* ya terminada */ }
+        try { await api('POST', route(hangUpRoute(call), call.id)); } catch (e) { /* ya terminada */ }
         finish(null, 'end_ended');
     }
 
@@ -933,8 +939,12 @@
         // Al cargar (o recargar en mitad de una llamada) cada pestaña consulta UNA vez por su cuenta: no espera al
         // próximo sondeo de la que sondea, que en segundo plano puede tardar más que el margen de reconexión.
         coalescer.run('live', refreshLive).catch(() => {});
-        // Adaptador de CollaborationRealtime registrado antes de cargar la página (cuando exista).
-        if (window.TeamCallsRealtime && window.TeamCallsRealtime.adapter) hub.connect(window.TeamCallsRealtime.adapter);
+        // CollaborationRealtime: un adaptador registrado antes de cargar la página o, si el servidor publica la
+        // dirección de Reverb, el cliente del sistema común (teamcalls-realtime.js). Sin él, solo sondeo.
+        const rt = (window.TeamCallsRealtime && window.TeamCallsRealtime.adapter)
+            || (cfg.realtime && cfg.realtime.socket && cfg.realtime.socket.key && window.TeamCallsRealtimeAdapter
+                ? window.TeamCallsRealtimeAdapter.createAdapter({ api: cfg.realtime.api, csrf, socket: cfg.realtime.socket }) : null);
+        if (rt) hub.connect(rt);
         render();
 
         // Para las pruebas automatizadas y la depuración (solo lectura).

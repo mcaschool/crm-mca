@@ -20,7 +20,8 @@ use Modules\TeamCalls\Support\ConversationRef;
  *
  * Cada consulta se hace en nombre del ACTOR de la operación en curso (OperationContext, fijado por
  * SharedCallsGateway). Sin actor —API web interna, tareas programadas— todo se deniega: fallo cerrado.
- * No hay listado de miembros: el contrato exige invitados elegidos y validados uno a uno.
+ * No hay listado de miembros de grupos ni canales: el contrato exige invitados elegidos y validados uno a
+ * uno; en las directas TeamChat resuelve al otro miembro.
  */
 final class ConversationDirectoryAccess implements ConversationAccess
 {
@@ -52,9 +53,19 @@ final class ConversationDirectoryAccess implements ConversationAccess
         return $this->ask(fn (ActorContext $actor): bool => $this->directory->membership($actor, $this->shared($ref), $userId)->active, false);
     }
 
+    /**
+     * Solo en conversaciones DIRECTAS: TeamChat resuelve al otro miembro (eligibleInvitees con selección
+     * vacía; contrato 1.1). En grupos y canales no hay lista implícita: la selección es explícita.
+     */
     public function memberIds(ConversationRef $ref): array
     {
-        return [];
+        if ($ref->type !== 'direct') {
+            return [];
+        }
+
+        return $this->ask(fn (ActorContext $actor): array => array_map(
+            fn ($u) => $u->id, $this->directory->eligibleInvitees($actor, $this->shared($ref), [])
+        ), []);
     }
 
     private function shared(ConversationRef $ref): SharedRef

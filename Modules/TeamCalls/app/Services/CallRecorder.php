@@ -52,6 +52,9 @@ final class CallRecorder
         'call.ended' => CallEnded::class,
     ];
 
+    /** Vigencia (s) de los avisos efímeros de tiempo real, p. ej. call.answered_elsewhere. */
+    public const EPHEMERAL_TTL = 60;
+
     public function __construct(
         private readonly CallEventPublisher $publisher,
         private readonly OperationContext $operation,
@@ -102,7 +105,9 @@ final class CallRecorder
     public function notify(Call $call, string $type, ?int $actorId, array $data, array $recipients, ?string $exceptDeviceId = null): void
     {
         $sequence = $this->nextSequence($call);
-        $this->deliver($call, (string) Str::ulid(), $type, $sequence, $actorId, $data, $recipients, $exceptDeviceId, now(), null);
+        // Efímero: caduca pronto (CollaborationRealtime exige como máximo 5 min); el estado persistido reconcilia.
+        $this->deliver($call, (string) Str::ulid(), $type, $sequence, $actorId, $data, $recipients, $exceptDeviceId, now(),
+            now()->addSeconds(self::EPHEMERAL_TTL)->toDateTimeImmutable());
     }
 
     /**

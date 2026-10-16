@@ -6,6 +6,7 @@ namespace Modules\TeamCalls\Tests\Support;
 
 use App\Models\User;
 use Illuminate\Testing\TestResponse;
+use Modules\CollaborationCore\Services\MfaSessionProof;
 
 /**
  * Peticiones a la API web de llamadas desde las pruebas, como lo haría el navegador de cada persona:
@@ -13,11 +14,19 @@ use Illuminate\Testing\TestResponse;
  */
 final class Http
 {
+    /**
+     * Sesión de ESE navegador (cookie de sesión propia → un dispositivo de CollaborationCore por navegador)
+     * con la prueba de segundo factor que deja el login con TOTP.
+     */
     public static function as(User $user, ?string $browser = null): mixed
     {
-        TC::browser($browser ?? 'u'.$user->id);
+        $name = $browser ?? 'u'.$user->id;
+        TC::browser($name);
+        $store = app('session')->driver();
+        $store->put('auth.mfa_user_id', (int) $user->id);
+        $store->put('auth.mfa_fingerprint', MfaSessionProof::fingerprint($user));
 
-        return test()->actingAs($user);
+        return test()->withCredentials()->withCookie((string) config('session.cookie'), TC::sessionId($name))->actingAs($user);
     }
 
     /** @return TestResponse<\Symfony\Component\HttpFoundation\Response> */

@@ -80,4 +80,5 @@
 <script type="application/json" id="tc-config">@json($config)</script>
 <script src="{{ $assets['livekit-client.umd.js'] }}"></script>
 <script src="{{ $assets['teamcalls-core.js'] }}"></script>
+@isset($assets['teamcalls-realtime.js'])<script src="{{ $assets['teamcalls-realtime.js'] }}"></script>@endisset
 <script src="{{ $assets['teamcalls-ui.js'] }}"></script>

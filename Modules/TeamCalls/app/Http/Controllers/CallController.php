@@ -10,8 +10,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\TeamCalls\Enums\CallMedia;
 use Modules\TeamCalls\Exceptions\CallException;
+use Modules\TeamCalls\Http\ActorDevice;
 use Modules\TeamCalls\Http\CallResponse;
-use Modules\TeamCalls\Http\WebDevice;
 use Modules\TeamCalls\Models\Call;
 use Modules\TeamCalls\Models\CallEvent;
 use Modules\TeamCalls\Services\CallService;
@@ -24,9 +24,11 @@ use Modules\TeamCalls\Support\CallTarget;
  * idempotencia los decide el motor en cada operación; aquí solo se valida la forma de la petición
  * y se traduce el resultado a CallResponse.
  *
- *  - Quién actúa sale SIEMPRE de la sesión; el dispositivo, de WebDevice (nunca del cliente).
- *  - Solo llamadas individuales hacia una persona; las llamadas desde conversaciones siguen
- *    deshabilitadas hasta que exista ConversationDirectory (los campos de conversación se rechazan).
+ *  - Quién actúa sale SIEMPRE de la sesión; el dispositivo, del registro de CollaborationCore para esa
+ *    sesión (ActorDevice), nunca del cliente.
+ *  - Finalizar para todos es solo del anfitrión; el resto sale con «leave» (decisión funcional aprobada).
+ *  - Solo llamadas individuales hacia una persona (los campos de conversación se rechazan): las llamadas
+ *    desde conversaciones de TeamChat van por la API definitiva (/api/v1/collaboration/calls).
  *  - Las credenciales de la sala solo las emite el MediaRoomService enlazado; con el adaptador
  *    provisional la respuesta es 503 «media_unavailable».
  */
@@ -47,7 +49,7 @@ final class CallController
 
     public function __construct(
         private readonly CallService $calls,
-        private readonly WebDevice $devices,
+        private readonly ActorDevice $devices,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -122,16 +124,18 @@ final class CallController
 
     public function leave(Request $request, string $call): JsonResponse
     {
-        $request->validate(self::UNTRUSTED);
+        // all_devices: salir de la llamada aunque esté en OTRO dispositivo propio (colgar «en otro dispositivo»).
+        $input = $request->validate(self::UNTRUSTED + ['all_devices' => ['sometimes', 'boolean']]);
+        $device = (bool) ($input['all_devices'] ?? false) ? null : $this->devices->id($request);
 
-        return $this->mutate($request, $call, fn (User $u) => $this->calls->leave($u, $call, $this->devices->id($request)));
+        return $this->mutate($request, $call, fn (User $u) => $this->calls->leave($u, $call, $device));
     }
 
     public function end(Request $request, string $call): JsonResponse
     {
         $request->validate(self::UNTRUSTED);
 
-        return $this->mutate($request, $call, fn (User $u) => $this->calls->end($u, $call));
+        return $this->mutate($request, $call, fn (User $u) => $this->calls->terminate($u, $call));
     }
 
     public function invite(Request $request, string $call): JsonResponse

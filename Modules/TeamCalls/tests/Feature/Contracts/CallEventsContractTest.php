@@ -9,8 +9,8 @@ use Modules\CollaborationCore\Data\CommandMetadata;
 use Modules\CollaborationCore\Enums\CallMedia;
 use Modules\CollaborationRealtime\Data\EventEnvelope;
 use Modules\TeamCalls\Enums\CallMedia as InternalMedia;
-use Modules\TeamCalls\Integration\Collaboration\CallEventAccess;
 use Modules\TeamCalls\Integration\Collaboration\CallEventEnvelopes;
+use Modules\TeamCalls\Integration\Collaboration\CallEventPolicy;
 use Modules\TeamCalls\Models\Call;
 use Modules\TeamCalls\Models\CallEvent;
 use Modules\TeamCalls\Support\CallTarget as InternalTarget;
@@ -64,7 +64,7 @@ it('con outbox: cada hecho va al outbox DENTRO de la transacción, con versión 
         ->and($ringing['audience']->expiresAt)->not->toBeNull();
     $elsewhere = collect($outbox->appended)->first(fn (array $a) => $a['event']->type === 'call.answered_elsewhere');
     expect($elsewhere['audience']->userIds)->toBe([$this->beto->id])->and($elsewhere['audience']->exceptDeviceId)->toBe('dev-beto-1')
-        ->and(app(CallEventAccess::class)->ephemeral($elsewhere['event']))->toBeTrue();
+        ->and(CallEventEnvelopes::TYPES[$elsewhere['event']->type])->toBeTrue();
 
     // La traza propia guarda la misma versión y correlación (las efímeras no se persisten).
     $rows = CallEvent::query()->where('call_id', $s->id)->whereNotNull('sequence')->orderBy('sequence')->get();
@@ -85,7 +85,8 @@ it('con outbox: si la transacción se revierte, no queda ni el cambio ni el even
         ->and($outbox->appended)->toBe([]);
 });
 
-it('sin outbox (hoy): el puerto propio tras confirmar, con la misma versión contigua; los datos internos no salen', function () {
+it('sin outbox (instalación sin CollaborationRealtime): el puerto propio tras confirmar, con la misma versión contigua; los datos internos no salen', function () {
+    app()->offsetUnset(\Modules\CollaborationRealtime\Contracts\TransactionalEventRecorder::class);
     $call = TC::call($this->ana, [$this->beto->id], 'legacy-key-01');
     TC::service()->accept($this->beto, $call->id, 'b1');
     TC::service()->join($this->beto, $call->id, 'b1');
@@ -116,18 +117,20 @@ it('autorización de eventos call.*: solo participantes no expulsados, misma ins
     $outbox = FakeOutbox::bind();
     $s = $this->gw->start($this->a, CallTarget::users([$this->beto->id]), CallMedia::Video, new CommandMetadata('start-key-ev3', 'corr-0003'));
     $event = $outbox->events($s->id)[0];
-    $policy = app(CallEventAccess::class);
+    $policy = new CallEventPolicy(false);
 
     $other = TC::institution();
     $stranger = TC::user($other);
-    expect($policy->supports($event))->toBeTrue()
+    $policy->validate($event); // esquema cerrado del tipo: no lanza
+    expect($policy->ephemeral())->toBeFalse()
         ->and($policy->allows($this->b, $event))->toBeTrue()
         ->and($policy->allows(FakeCollaborationCore::actor($this->carla, 'dev-carla-1'), $event))->toBeFalse()
         ->and($policy->allows(FakeCollaborationCore::actor($stranger, 'dev-x-1'), $event))->toBeFalse();
 
     $foreign = new EventEnvelope('01JX0000000000000000000000', 'chat.message.created', 1, $this->inst->id, 'conversation', 'c1', 1, null,
         new DateTimeImmutable, 'corr-x', null, []);
-    expect($policy->supports($foreign))->toBeFalse()->and($policy->allows($this->a, $foreign))->toBeFalse();
+    expect(fn () => $policy->validate($foreign))->toThrow(InvalidArgumentException::class)
+        ->and($policy->allows($this->a, $foreign))->toBeFalse();
 
     app(\Modules\Core\Tenancy\CurrentInstitution::class)->set($this->inst->id);
     TC::service()->revokeAccess($this->beto->id);

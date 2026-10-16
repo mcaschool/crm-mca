@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace Modules\TeamCalls\Providers;
 
-use Illuminate\Auth\Events\Logout;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Modules\CollaborationCore\Contracts\CallsGateway as SharedCallsGatewayContract;
 use Modules\CollaborationCore\Contracts\ConversationDirectory;
 use Modules\CollaborationCore\Contracts\PresenceService;
+use Modules\CollaborationCore\Integration\CallPresenceAuthorizer;
+use Modules\CollaborationRealtime\Integration\RevocationConsumer;
+use Modules\CollaborationRealtime\Services\EventPolicies;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\TeamCalls\Console\ExpireStaleCallsCommand;
 use Modules\TeamCalls\Console\SweepMediaRoomsCommand;
@@ -24,11 +25,15 @@ use Modules\TeamCalls\Contracts\MediaRoomService;
 use Modules\TeamCalls\Contracts\Presence;
 use Modules\TeamCalls\Contracts\PushNotifier;
 use Modules\TeamCalls\Contracts\UserDirectory;
+use Modules\TeamCalls\Integration\Collaboration\CallEventEnvelopes;
+use Modules\TeamCalls\Integration\Collaboration\CallEventPolicy;
 use Modules\TeamCalls\Integration\Collaboration\CollaborationPresence;
 use Modules\TeamCalls\Integration\Collaboration\CollaborationUserDirectory;
 use Modules\TeamCalls\Integration\Collaboration\ConversationDirectoryAccess;
 use Modules\TeamCalls\Integration\Collaboration\OperationContext;
 use Modules\TeamCalls\Integration\Collaboration\SharedCallsGateway;
+use Modules\TeamCalls\Integration\Collaboration\TeamCallsPresenceAuthorizer;
+use Modules\TeamCalls\Integration\Collaboration\TeamCallsRevocationConsumer;
 use Modules\TeamCalls\Integration\LiveKit\LiveKitConfig;
 use Modules\TeamCalls\Integration\LiveKit\LiveKitMediaRooms;
 use Modules\TeamCalls\Integration\LiveKit\LiveKitRoomClient;
@@ -40,7 +45,6 @@ use Modules\TeamCalls\Integration\Provisional\NoopPushNotifier;
 use Modules\TeamCalls\Integration\Provisional\PanelUserDirectory;
 use Modules\TeamCalls\Integration\Provisional\UnconfiguredMediaRooms;
 use Modules\TeamCalls\Integration\TeamCallsGateway;
-use Modules\TeamCalls\Listeners\LeaveCallsOnLogout;
 use Modules\TeamCalls\Models\Call;
 use Modules\TeamCalls\Policies\CallPolicy;
 use Nwidart\Modules\Support\ModuleServiceProvider;
@@ -100,8 +104,10 @@ class TeamCallsServiceProvider extends ModuleServiceProvider
             return new LiveKitMediaRooms($config, new LiveKitRoomClient($config, $tokens), $tokens);
         });
         $this->app->bindIf(CallsGateway::class, TeamCallsGateway::class);
-        // Puerta del contrato común (MCA Colaboración 1.0). Falla cerrado mientras Core no esté integrado.
+        // Puerta del contrato común (MCA Colaboración 1.1), con el contexto autenticado de Core.
         $this->app->bindIf(SharedCallsGatewayContract::class, SharedCallsGateway::class);
+        // Consumidor de las revocaciones durables (outbox de CollaborationRealtime → TeamCalls).
+        $this->app->bindIf(RevocationConsumer::class, TeamCallsRevocationConsumer::class);
     }
 
     public function boot(): void
@@ -110,8 +116,17 @@ class TeamCallsServiceProvider extends ModuleServiceProvider
 
         Gate::policy(Call::class, CallPolicy::class);
 
-        // Cerrar sesión saca a la persona de sus llamadas en ese dispositivo (no queda en la sala sin sesión).
-        Event::listen(Logout::class, LeaveCallsOnLogout::class);
+        // Señal «en llamada» de CollaborationCore: TeamCalls autoriza la participación activa (set) y la
+        // asociación histórica (cleanup). Se enlaza en boot, como pide Core (su provisional deniega todo).
+        $this->app->bind(CallPresenceAuthorizer::class, TeamCallsPresenceAuthorizer::class);
+
+        // Políticas de CollaborationRealtime para cada tipo call.* (esquema cerrado + autorización actual).
+        if ($this->app->bound(EventPolicies::class)) {
+            $policies = $this->app->make(EventPolicies::class);
+            foreach (CallEventEnvelopes::TYPES as $type => $ephemeral) {
+                $policies->register($type, new CallEventPolicy($ephemeral));
+            }
+        }
 
         // Límites de la API web, por persona (o IP si aún no hay sesión).
         foreach (['start', 'write', 'read'] as $kind) {

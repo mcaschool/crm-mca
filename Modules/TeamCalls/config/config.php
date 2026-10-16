@@ -66,12 +66,22 @@ return [
     ],
 
     /*
-    | Autorización de personas (fase 4A). «provisional» (por defecto): panel activo con acceso al CRM, hasta
-    | que CollaborationCore esté integrado. «collaboration»: permiso definitivo collaboration.use; mientras
-    | Core no defina esa habilidad deniega a todo el mundo (falla cerrado). No amplía rutas ni permisos.
+    | Autorización de personas (fase 4B). «collaboration» (por defecto): permiso definitivo collaboration.use
+    | de CollaborationCore, que no exige ni concede acceso al CRM. «provisional»: el criterio anterior (panel
+    | activo con acceso al CRM), solo como vuelta atrás mientras se valida la integración.
     */
     'authorization' => [
-        'driver' => env('TEAMCALLS_AUTHORIZATION_DRIVER', 'provisional'),
+        'driver' => env('TEAMCALLS_AUTHORIZATION_DRIVER', 'collaboration'),
+    ],
+
+    /*
+    | Tiempo real de la interfaz (CollaborationRealtime): dirección PÚBLICA de Reverb para el navegador (puede
+    | diferir de la interna del publicador). Sin clave de Reverb, la interfaz sigue solo con el sondeo.
+    */
+    'realtime' => [
+        'host' => env('TEAMCALLS_REVERB_HOST', env('REVERB_HOST', '127.0.0.1')),
+        'port' => (int) env('TEAMCALLS_REVERB_PORT', env('REVERB_PORT', 443)),
+        'scheme' => env('TEAMCALLS_REVERB_SCHEME', env('REVERB_SCHEME', 'https')),
     ],
 
     /*

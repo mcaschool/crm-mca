@@ -25,13 +25,14 @@ it('núcleo JS: dos pestañas, eventos repetidos, cadencia del sondeo, mensajes 
     if (! $node->successful()) {
         $this->markTestSkipped('Node no está disponible para las pruebas del núcleo JS.');
     }
-    $run = Process::path(base_path())->timeout(120)->run(['node', '--test', '--test-reporter=tap', module_path('TeamCalls', 'tests/js/core.test.cjs')]);
+    $run = Process::path(base_path())->timeout(120)->run(['node', '--test', '--test-reporter=tap', module_path('TeamCalls', 'tests/js/core.test.cjs'),
+        module_path('TeamCalls', 'tests/js/realtime.test.cjs')]);
     expect($run->exitCode())->toBe(0, $run->output().$run->errorOutput())
         ->and($run->output())->toContain('# fail 0');
 });
 
 it('el JS de la interfaz no guarda nada en el navegador (ni credenciales ni estado de llamadas)', function () {
-    foreach (['teamcalls-core.js', 'teamcalls-ui.js'] as $file) {
+    foreach (['teamcalls-core.js', 'teamcalls-ui.js', 'teamcalls-realtime.js'] as $file) {
         $js = (string) file_get_contents(module_path('TeamCalls', 'resources/assets/js/'.$file));
         expect($js)->not->toContain('localStorage')->not->toContain('sessionStorage')
             ->not->toContain('indexedDB')->not->toContain('document.cookie')->not->toMatch('/console\.(log|info|debug)\(/');
@@ -44,7 +45,9 @@ it('cerrar sesión saca a la persona de su llamada en ESE dispositivo y ya no pu
     Http::post($this->beto, 'join', $id)->assertOk();
     $device = CallParticipant::query()->where('call_id', $id)->where('user_id', $this->beto->id)->value('device_id');
 
+    // CollaborationCore revoca el dispositivo de esa sesión (revocación durable) y TeamCalls la consume.
     Http::as($this->beto)->post(route('logout'))->assertRedirect();
+    expect(\Modules\TeamCalls\Tests\Support\RealCollaboration::deliver($this->inst->id))->toBeGreaterThanOrEqual(1);
 
     $p = CallParticipant::query()->where('call_id', $id)->where('user_id', $this->beto->id)->sole();
     expect($p->state->value)->toBe('left')
@@ -60,6 +63,7 @@ it('cerrar sesión en un dispositivo no saca a la persona de la llamada que atie
 
     Http::as($this->beto)->get(route('collab.calls.ui'))->assertOk(); // la sesión web obtiene su propio dispositivo
     Http::as($this->beto)->post(route('logout'))->assertRedirect();
+    \Modules\TeamCalls\Tests\Support\RealCollaboration::deliver($this->inst->id); // solo ese dispositivo
 
     expect(CallParticipant::query()->where('call_id', $call->id)->where('user_id', $this->beto->id)->value('state')->value)->toBe('accepted');
 });

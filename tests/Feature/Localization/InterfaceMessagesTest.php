@@ -39,6 +39,13 @@ it('todas las claves __() del código y de las vistas tienen traducción inglesa
                 if ($key === '' || array_key_exists($key, $en) || preg_match('~^[a-z_]+\.[a-z0-9_.]*$~', $key)) {
                     continue;
                 }
+                // Claves de módulo (teamchat::chat.title): deben existir en el idioma inglés del módulo. Un prefijo
+                // terminado en «.» es una clave dinámica (__('modulo::archivo.'.$x)) y no se puede resolver aquí.
+                if (preg_match('~^[a-z_]+::[a-z_]+\.[a-z0-9_.]*$~', $key)) {
+                    if (str_ends_with($key, '.') || \Illuminate\Support\Facades\Lang::has($key, 'en', false)) {
+                        continue;
+                    }
+                }
                 $missing[$key] = str_replace(base_path().DIRECTORY_SEPARATOR, '', $file->getPathname());
             }
         }

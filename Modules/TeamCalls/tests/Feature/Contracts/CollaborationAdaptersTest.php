@@ -90,24 +90,42 @@ beforeEach(function () {
     [$this->ana, $this->beto, $this->carla, $this->dani] = [TC::user($this->inst), TC::user($this->inst), TC::user($this->inst), TC::user($this->inst)];
 });
 
-it('enlaces: sin contratos de Core siguen los provisionales; con ellos, los adaptadores (y collaboration.use solo si se elige)', function () {
-    expect(app(ConversationAccess::class))->toBeInstanceOf(DenyAllConversationAccess::class)
-        ->and(app(Presence::class))->toBeInstanceOf(NoopPresence::class)
-        ->and(app(UserDirectory::class))->toBeInstanceOf(PanelUserDirectory::class)
-        ->and(app(CallsGateway::class))->toBeInstanceOf(\Modules\TeamCalls\Integration\Collaboration\SharedCallsGateway::class)
-        ->and(app(OperationContext::class))->toBe(app(OperationContext::class));
-
-    app()->instance(ConversationDirectory::class, fakeDirectory($this->inst->id, []));
-    app()->instance(PresenceService::class, Mockery::mock(PresenceService::class));
-    config(['teamcalls.authorization.driver' => 'collaboration']);
+it('enlaces (fase 4B): con CollaborationCore/Realtime/TeamChat presentes, los adaptadores definitivos; sin ellos, los provisionales', function () {
     expect(app(ConversationAccess::class))->toBeInstanceOf(ConversationDirectoryAccess::class)
         ->and(app(Presence::class))->toBeInstanceOf(CollaborationPresence::class)
-        ->and(app(UserDirectory::class))->toBeInstanceOf(CollaborationUserDirectory::class);
+        ->and(app(UserDirectory::class))->toBeInstanceOf(CollaborationUserDirectory::class)
+        ->and(app(CallsGateway::class))->toBeInstanceOf(\Modules\TeamCalls\Integration\Collaboration\SharedCallsGateway::class)
+        ->and(app(\Modules\CollaborationCore\Integration\CallPresenceAuthorizer::class))->toBeInstanceOf(\Modules\TeamCalls\Integration\Collaboration\TeamCallsPresenceAuthorizer::class)
+        ->and(app(\Modules\CollaborationRealtime\Integration\RevocationConsumer::class))->toBeInstanceOf(\Modules\TeamCalls\Integration\Collaboration\TeamCallsRevocationConsumer::class)
+        ->and(app(OperationContext::class))->toBe(app(OperationContext::class));
+    foreach (array_keys(\Modules\TeamCalls\Integration\Collaboration\CallEventEnvelopes::TYPES) as $type) {
+        expect(app(\Modules\CollaborationRealtime\Services\EventPolicies::class)->get($type))->toBeInstanceOf(\Modules\TeamCalls\Integration\Collaboration\CallEventPolicy::class);
+    }
+
+    // Vuelta atrás explícita al criterio provisional y, sin los contratos enlazados, los adaptadores de siempre.
+    config(['teamcalls.authorization.driver' => 'provisional']);
+    app()->offsetUnset(ConversationDirectory::class);
+    app()->offsetUnset(PresenceService::class);
+    expect(app(UserDirectory::class))->toBeInstanceOf(PanelUserDirectory::class)
+        ->and(app(ConversationAccess::class))->toBeInstanceOf(DenyAllConversationAccess::class)
+        ->and(app(Presence::class))->toBeInstanceOf(NoopPresence::class);
 });
 
-it('collaboration.use: falla cerrado mientras Core no defina la habilidad; después, solo quien la tiene', function () {
+it('collaboration.use: el gate real de Core decide (solo Colaboración sin CRM sí; retirada, no); sin gate, falla cerrado', function () {
     $dir = new CollaborationUserDirectory;
+    $solo = TC::user($this->inst, ['role' => 'member', 'department' => null]);
+    expect($dir->canUseCalls($solo))->toBeTrue()->and($solo->canWorkCrm())->toBeFalse();
+    $admin = TC::user($this->inst, ['role' => 'admin']);
+    app(\Modules\CollaborationCore\Services\ApplicationAccess::class)->set($admin, $this->dani, 'collaboration', false);
+    expect($dir->canUseCalls($this->dani->fresh()))->toBeFalse();
+
+    // Sin la habilidad definida (Core ausente) nadie usa llamadas.
+    $gate = app(\Illuminate\Contracts\Auth\Access\Gate::class);
+    $abilities = (new ReflectionProperty($gate, 'abilities'));
+    $saved = $abilities->getValue($gate);
+    $abilities->setValue($gate, array_diff_key($saved, ['collaboration.use' => true]));
     expect($dir->canUseCalls($this->ana))->toBeFalse();
+    $abilities->setValue($gate, $saved);
 
     Gate::define('collaboration.use', fn ($user) => in_array($user->id, [$this->ana->id, $this->beto->id], true));
     expect($dir->canUseCalls($this->ana))->toBeTrue()

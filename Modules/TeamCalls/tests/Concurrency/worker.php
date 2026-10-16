@@ -35,6 +35,8 @@ if (! app()->environment('testing') || ! str_ends_with($database, '_test')) {
     fwrite(STDERR, "refused: not a test environment/database\n");
     exit(2);
 }
+// Motor aislado como en TC::fakes(): los call.* (dispositivos ficticios) a un outbox de prueba; el resto, al real.
+\Modules\TeamCalls\Tests\Support\FakeOutbox::bind();
 
 $late = false;
 if (isset($args['at'])) {

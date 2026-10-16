@@ -47,7 +47,8 @@ function tcRun(array $jobs, bool $barrier = true): array
         'QUEUE_CONNECTION' => 'sync', 'MAIL_MAILER' => 'array', 'BROADCAST_CONNECTION' => 'null',
     ]);
     // Margen para que TODOS los procesos terminen de arrancar antes de la barrera.
-    $at = microtime(true) + 4 + count($jobs) * 0.6;
+    // Margen de arranque de cada proceso (la aplicación integrada carga Core, Realtime y TeamChat).
+    $at = microtime(true) + 8 + count($jobs) * 1.0;
 
     $procs = [];
     foreach ($jobs as $i => [$op, $args]) {

@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Modules\TeamCalls\Services;
 
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -217,6 +219,45 @@ final class CallService
         }
 
         return $call;
+    }
+
+    /**
+     * Comando del contrato común con clave de idempotencia (accept, decline, cancel, join, leave, end).
+     * Alcance: institución + actor + operación + llamada; huella calculada en el servidor (operación,
+     * llamada y $request, p. ej. el dispositivo). En la misma transacción bloqueada que el efecto:
+     *  - primera vez: ejecuta $run y deja una marca interna (no publicada, sin versión);
+     *  - misma clave y misma huella: revalida la autorización y devuelve el estado actual SIN repetir el
+     *    efecto (un `join` repetido tras salir no vuelve a unir);
+     *  - misma clave y otra huella: idempotency_conflict.
+     * Un comando que falla no deja marca: repetirlo vuelve a intentarlo.
+     *
+     * @param  callable(): Call  $run
+     */
+    public function command(User $actor, string $operation, string $callId, string $key, string $request, callable $run): Call
+    {
+        $this->assertActor($actor);
+        $this->validKey($key);
+        if (preg_match('/^[a-z]{3,12}$/', $operation) !== 1) {
+            throw CallException::invalid('Invalid command.');
+        }
+
+        return $this->locked($callId, function (Call $call) use ($actor, $operation, $key, $request, $run): Call {
+            $marker = 'cmd:'.$operation.':'.substr(hash('sha256', $actor->id.'|'.$operation.'|'.$key), 0, 48);
+            $fingerprint = hash('sha256', $operation.'|'.$call->id.'|'.$request);
+            $done = CallEvent::query()->where('call_id', $call->id)->where('dedupe_key', $marker)->first();
+            if ($done !== null) {
+                $this->participantOrFail($call, $actor->id);
+                if (! hash_equals((string) ($done->data['fp'] ?? ''), $fingerprint)) {
+                    throw CallException::idempotencyConflict();
+                }
+
+                return $call;
+            }
+            $result = $run();
+            $this->recorder->remember($call, 'call.command.'.$operation, $actor->id, $marker, ['fp' => $fingerprint]);
+
+            return $result;
+        });
     }
 
     // ─── Respuesta de cada persona ──────────────────────────────────────────────────────────────
@@ -548,17 +589,21 @@ final class CallService
      * CollaborationCore: usuario desactivado o permiso de colaboración retirado). Mismo efecto que una
      * expulsión, sin actor. Devuelve en cuántas llamadas estaba.
      */
-    public function revokeAccess(int $userId, string $reason = 'access_revoked'): int
+    public function revokeAccess(int $userId, string $reason = 'access_revoked', ?CarbonInterface $admittedBefore = null): int
     {
         $reason = preg_match('/^[a-z_]{1,32}$/', $reason) === 1 ? $reason : 'access_revoked';
         $ids = Call::query()->whereIn('status', array_map(fn (CallStatus $s) => $s->value, CallStatus::live()))
             ->whereHas('participants', fn ($q) => $q->where('user_id', $userId)->whereNull('revoked_at'))
             ->limit(100)->pluck('id');
+        // Revocación retrasada: si la persona ya NO puede usar llamadas, fuera de todas; si recuperó el
+        // acceso, solo las admisiones anteriores a la revocación (las posteriores ya se autorizaron de nuevo).
+        $user = User::query()->find($userId);
+        $since = $user instanceof User && $this->users->canUseCalls($user) ? $admittedBefore : null;
         $n = 0;
         foreach ($ids as $id) {
-            $this->locked((string) $id, function (Call $call) use ($userId, $reason, &$n): void {
+            $this->locked((string) $id, function (Call $call) use ($userId, $reason, $since, &$n): void {
                 $p = $call->participantFor($userId);
-                if ($p !== null && $p->revoked_at === null && $call->status->isLive()) {
+                if ($p !== null && $p->revoked_at === null && $call->status->isLive() && $this->admittedBy($p, $since)) {
                     $this->expel($call, $p, null, $reason);
                     $n++;
                 }
@@ -829,7 +874,7 @@ final class CallService
      * Pérdida de la membresía de una conversación (contrato con TeamChat/CollaborationCore): la persona es
      * expulsada de las llamadas vivas de ESA conversación (con rotación de sala si siguen con medios).
      */
-    public function revokeMembership(ConversationRef $ref, int $userId): int
+    public function revokeMembership(ConversationRef $ref, int $userId, ?CarbonInterface $admittedBefore = null): int
     {
         $ids = Call::query()->where('context_type', $ref->type)->where('context_id', $ref->id)
             ->whereIn('status', array_map(fn (CallStatus $s) => $s->value, CallStatus::live()))
@@ -837,9 +882,9 @@ final class CallService
             ->limit(50)->pluck('id');
         $n = 0;
         foreach ($ids as $id) {
-            $this->locked((string) $id, function (Call $call) use ($userId, &$n): void {
+            $this->locked((string) $id, function (Call $call) use ($userId, $admittedBefore, &$n): void {
                 $p = $call->participantFor($userId);
-                if ($p !== null && $p->revoked_at === null && $call->status->isLive()) {
+                if ($p !== null && $p->revoked_at === null && $call->status->isLive() && $this->admittedBy($p, $admittedBefore)) {
                     $this->expel($call, $p, null, 'membership_revoked');
                     $n++;
                 }
@@ -847,6 +892,20 @@ final class CallService
         }
 
         return $n;
+    }
+
+    /**
+     * ¿La admisión vigente del participante (invitación, respuesta o entrada más reciente) es anterior o
+     * igual a la revocación? Sin fecha de corte: siempre. Mismo segundo: se considera anterior (prudente).
+     */
+    private function admittedBy(CallParticipant $p, ?CarbonInterface $before): bool
+    {
+        if ($before === null) {
+            return true;
+        }
+        $last = max(0, ...array_map(fn (?Carbon $t) => $t?->getTimestamp() ?? 0, [$p->invited_at, $p->responded_at, $p->joined_at]));
+
+        return $last <= $before->getTimestamp();
     }
 
     /**

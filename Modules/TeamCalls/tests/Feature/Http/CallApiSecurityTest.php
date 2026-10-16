@@ -6,7 +6,6 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\TeamCalls\Contracts\ConversationAccess;
 use Modules\TeamCalls\Contracts\UserDirectory;
-use Modules\TeamCalls\Integration\Provisional\DenyAllConversationAccess;
 use Modules\TeamCalls\Models\Call;
 use Modules\TeamCalls\Models\CallEvent;
 use Modules\TeamCalls\Models\CallParticipant;
@@ -58,10 +57,10 @@ it('sin 2FA activado: 403 two_factor_required en todas las rutas', function (str
         ->assertForbidden()->assertJsonPath('error.code', 'two_factor_required');
 })->with('rutas');
 
-it('la excepción temporal de 2FA del panel se respeta igual que en el resto del panel', function () {
+it('la excepción temporal de 2FA del panel del CRM NO abre Colaboración: CollaborationCore exige MFA', function () {
     $exento = TC::user($this->inst, TC::NO_2FA);
     config(['auth.two_factor.exempt_emails' => [mb_strtolower($exento->email)]]);
-    Http::get($exento, 'index')->assertOk();
+    Http::get($exento, 'index')->assertForbidden()->assertJsonPath('error.code', 'two_factor_required');
 });
 
 it('usuarios inactivos o sin acceso a las llamadas no operan', function () {
@@ -71,9 +70,12 @@ it('usuarios inactivos o sin acceso a las llamadas no operan', function () {
     Http::post($this->beto->fresh(), 'accept', $id)->assertForbidden()->assertJsonPath('error.code', 'forbidden');
     Http::get($this->beto->fresh(), 'show', $id)->assertForbidden();
 
-    $sinRol = TC::user($this->inst);
-    $sinRol->forceFill(['role' => null]); // sin rol del CRM (solo en memoria)
-    Http::get($sinRol, 'index')->assertForbidden()->assertJsonPath('error.code', 'forbidden');
+    // Sin rol del CRM pero con collaboration.use: SÍ usa llamadas; sin collaboration.use, no.
+    $sinRol = TC::user($this->inst, ['role' => 'member', 'department' => null]);
+    Http::get($sinRol, 'index')->assertOk();
+    $admin = TC::user($this->inst, ['role' => 'admin']);
+    app(\Modules\CollaborationCore\Services\ApplicationAccess::class)->set($admin, $sinRol, 'collaboration', false);
+    Http::get($sinRol->fresh(), 'index')->assertForbidden()->assertJsonPath('error.code', 'forbidden');
     Http::start($this->carla, $this->beto->id, 'http-key-0009')->assertForbidden(); // Beto ya no puede recibir llamadas
     expect(CallParticipant::query()->where('call_id', $id)->where('user_id', $this->beto->id)->value('state')->value)->toBe('ringing');
 });
@@ -97,18 +99,22 @@ it('otra institución: sus llamadas no existen para ella y no puede llamar fuera
         ->and(TC::states(Call::query()->findOrFail($id)))->toBe([$this->ana->id => 'accepted', $this->beto->id => 'ringing']);
 });
 
-it('institución activa distinta de la del usuario (modo multi-institución): prohibido', function () {
+it('institución activa distinta (modo multi-institución): Colaboración opera SIEMPRE en la institución propia del usuario', function () {
     config(['crm.multi_institution' => true]);
     $other = TC::institution();
     $super = TC::user($this->inst, ['is_super_admin' => true]);
+    $stranger = TC::user($other);
     app(CurrentInstitution::class)->set($this->inst->id);
 
-    Http::as($super)->withSession(['active_institution_id' => $other->id])->getJson(route('collab.calls.index'))
-        ->assertForbidden()->assertJsonPath('error.code', 'forbidden');
+    // CollaborationCore ignora la institución elegida en la sesión: el actor es de SU institución.
     Http::as($super)->withSession(['active_institution_id' => $other->id])
-        ->postJson(route('collab.calls.store'), ['user_id' => $this->ana->id, 'media' => 'audio', 'idempotency_key' => 'http-key-s001'])
-        ->assertForbidden();
-    expect(Call::query()->count())->toBe(0);
+        ->postJson(route('collab.calls.store'), ['user_id' => $stranger->id, 'media' => 'audio', 'idempotency_key' => 'http-key-s001'])
+        ->assertForbidden(); // no puede llamar a alguien de otra institución
+    Http::as($super)->withSession(['active_institution_id' => $other->id])
+        ->postJson(route('collab.calls.store'), ['user_id' => $this->ana->id, 'media' => 'audio', 'idempotency_key' => 'http-key-s002'])
+        ->assertCreated();
+    app(CurrentInstitution::class)->runGlobally(fn () => expect(Call::query()->where('institution_id', $other->id)->count())->toBe(0)
+        ->and(Call::query()->where('institution_id', $this->inst->id)->count())->toBe(1));
 });
 
 it('manipulación: el cliente no impone dispositivo, institución, quién llama ni conversación', function (string $field, mixed $value) {
@@ -142,9 +148,9 @@ it('manipulación de participantes y dispositivos en una llamada existente', fun
     expect(CallEvent::query()->where('call_id', $id)->where('type', 'call.participant.left')->count())->toBe(0);
 });
 
-it('llamadas desde conversaciones: siguen deshabilitadas con el adaptador provisional', function () {
+it('llamadas desde conversaciones: solo por la API definitiva (ConversationDirectory de TeamChat); la heredada las rechaza', function () {
     app()->forgetInstance(ConversationAccess::class);
-    expect(app(ConversationAccess::class))->toBeInstanceOf(DenyAllConversationAccess::class);
+    expect(app(ConversationAccess::class))->toBeInstanceOf(\Modules\TeamCalls\Integration\Collaboration\ConversationDirectoryAccess::class);
     Http::as($this->ana)->postJson(route('collab.calls.store'), ['conversation' => ['type' => 'group', 'id' => '01JTEAMCHATGROUP000000001'],
         'media' => 'audio', 'idempotency_key' => 'http-key-c001'])->assertUnprocessable();
     expect(Call::query()->count())->toBe(0);
@@ -198,7 +204,8 @@ it('CSRF: el panel rechaza escrituras sin token (419) y acepta las que lo traen'
     Http::as($this->ana)->withHeader('Sec-Fetch-Site', 'cross-site')->postJson(route('collab.calls.store'), $body)->assertStatus(419);
     expect(Call::query()->count())->toBe(0);
 
-    Http::as($this->ana)->withSession(['_token' => 'token-de-prueba-csrf'])->withHeader('X-CSRF-TOKEN', 'token-de-prueba-csrf')
+    // Navegador nuevo: su sesión empieza con este token (la cookie de sesión es real).
+    Http::as($this->ana, 'ana-csrf')->withSession(['_token' => 'token-de-prueba-csrf'])->withHeader('X-CSRF-TOKEN', 'token-de-prueba-csrf')
         ->postJson(route('collab.calls.store'), $body)->assertCreated();
     Http::get($this->ana, 'index')->assertOk(); // las lecturas no lo necesitan
 });

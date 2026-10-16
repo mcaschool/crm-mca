@@ -68,7 +68,8 @@ it('contestar fija el dispositivo de la sesión; repetir es idempotente y otro d
 
     $p = CallParticipant::query()->where('call_id', $id)->where('user_id', $this->beto->id)->sole();
     expect($p->state->value)->toBe('accepted')
-        ->and($p->device_id)->toMatch('/^web\.[a-z0-9]{24}$/') // lo decide el servidor, no el cliente
+        // lo decide el servidor: el dispositivo que CollaborationCore registró para la sesión «beto-movil»
+        ->and($p->device_id)->toBe(\Illuminate\Support\Facades\DB::table('collab_devices')->where('session_hash', hash('sha256', TC::sessionId('beto-movil')))->value('id'))
         ->and(CallEvent::query()->where('call_id', $id)->where('type', 'call.accepted')->count())->toBe(1);
 });
 
@@ -126,7 +127,9 @@ it('con servidor de medios (doble de pruebas): unirse, invitar, salir y finaliza
     Http::post($this->carla, 'join', $id)->assertOk()->assertJsonPath('data.viewer_state', 'joined');
 
     // «Finalizar» de quien no es anfitrión es salir; la llamada sigue para los demás.
-    Http::post($this->beto, 'end', $id)->assertOk()->assertJsonPath('data.status', 'active')->assertJsonPath('data.viewer_state', 'left');
+    // Solo el anfitrión finaliza para todos; un participante recibe forbidden y SALE con leave.
+    Http::post($this->beto, 'end', $id)->assertForbidden()->assertJsonPath('error.code', 'forbidden');
+    Http::post($this->beto, 'leave', $id)->assertOk()->assertJsonPath('data.status', 'active')->assertJsonPath('data.viewer_state', 'left');
     Http::post($this->beto, 'leave', $id)->assertOk()->assertJsonPath('meta.replayed', true);
 
     Http::post($this->ana, 'end', $id)->assertOk()->assertJsonPath('data.status', 'ended')->assertJsonPath('data.end_reason', 'ended_by_host');

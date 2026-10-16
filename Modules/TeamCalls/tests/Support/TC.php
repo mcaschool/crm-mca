@@ -24,12 +24,21 @@ final class TC
 
     public static FakeConversationAccess $conversations;
 
-    /** Enlaza los dobles en el contenedor (sustituyen a los adaptadores provisionales). */
+    public static FakeOutbox $outbox;
+
+    /**
+     * Enlaza los dobles en el contenedor para probar el MOTOR de llamadas de forma aislada (dispositivos
+     * ficticios, sin outbox real). La integración con los servicios reales de CollaborationCore/Realtime/
+     * TeamChat se prueba aparte (tests/Feature/Integration4B, RealCollaboration).
+     */
     public static function fakes(): void
     {
         self::$browsers = [];
+        self::$sessions = [];
         self::$browser = null;
+        // Los call.* del motor (dispositivos ficticios) a un outbox de prueba; el resto, al recorder real.
         self::$rec = new RecordingCollaboration;
+        self::$outbox = FakeOutbox::bind(self::$rec);
         self::$conversations = new FakeConversationAccess;
         foreach ([CallEventPublisher::class, MediaRoomService::class, Presence::class, PushNotifier::class] as $port) {
             app()->instance($port, self::$rec);
@@ -61,6 +70,15 @@ final class TC
     private static array $browsers = [];
 
     private static ?string $browser = null;
+
+    /** @var array<string, string> identificador de sesión por navegador (cookie de sesión) */
+    private static array $sessions = [];
+
+    /** Identificador de sesión estable de un navegador: CollaborationCore registra un dispositivo por sesión. */
+    public static function sessionId(string $name): string
+    {
+        return self::$sessions[$name] ??= \Illuminate\Support\Str::random(40);
+    }
 
     /**
      * Cambia de navegador (= de sesión y, por tanto, de dispositivo para la API web). Cada nombre

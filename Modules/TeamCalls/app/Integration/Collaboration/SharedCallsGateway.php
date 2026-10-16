@@ -67,36 +67,48 @@ final class SharedCallsGateway implements CallsGateway
 
     public function accept(ActorContext $context, string $callId, CommandMetadata $command): CallSummary
     {
-        return $this->run($context, $command, fn (User $user) => $this->summary(
-            $this->calls->accept($user, $callId, $context->deviceId), $user));
+        return $this->lifecycle($context, 'accept', $callId, $command, $context->deviceId,
+            fn (User $user) => $this->calls->accept($user, $callId, $context->deviceId));
     }
 
     public function decline(ActorContext $context, string $callId, CommandMetadata $command): CallSummary
     {
-        return $this->run($context, $command, fn (User $user) => $this->summary($this->calls->decline($user, $callId), $user));
+        return $this->lifecycle($context, 'decline', $callId, $command, '', fn (User $user) => $this->calls->decline($user, $callId));
     }
 
     public function cancel(ActorContext $context, string $callId, CommandMetadata $command): CallSummary
     {
-        return $this->run($context, $command, fn (User $user) => $this->summary($this->calls->cancel($user, $callId), $user));
+        return $this->lifecycle($context, 'cancel', $callId, $command, '', fn (User $user) => $this->calls->cancel($user, $callId));
     }
 
     public function join(ActorContext $context, string $callId, CommandMetadata $command): CallSummary
     {
-        return $this->run($context, $command, fn (User $user) => $this->summary(
-            $this->calls->join($user, $callId, $context->deviceId), $user));
+        return $this->lifecycle($context, 'join', $callId, $command, $context->deviceId,
+            fn (User $user) => $this->calls->join($user, $callId, $context->deviceId));
     }
 
     public function leave(ActorContext $context, string $callId, CommandMetadata $command): CallSummary
     {
-        return $this->run($context, $command, fn (User $user) => $this->summary(
-            $this->calls->leave($user, $callId, $context->deviceId), $user));
+        return $this->lifecycle($context, 'leave', $callId, $command, $context->deviceId,
+            fn (User $user) => $this->calls->leave($user, $callId, $context->deviceId));
     }
 
     /** Para todos: solo el anfitrión; cualquier otra persona recibe «forbidden» (nunca equivale a salir). */
     public function end(ActorContext $context, string $callId, CommandMetadata $command): CallSummary
     {
-        return $this->run($context, $command, fn (User $user) => $this->summary($this->calls->terminate($user, $callId), $user));
+        return $this->lifecycle($context, 'end', $callId, $command, '', fn (User $user) => $this->calls->terminate($user, $callId));
+    }
+
+    /**
+     * Comando del ciclo de vida con la idempotencia del contrato (CallService::command): la misma clave
+     * repite el efecto una sola vez; con otra petición (p. ej. otro dispositivo), idempotency_conflict.
+     *
+     * @param  callable(User): Call  $effect
+     */
+    private function lifecycle(ActorContext $context, string $operation, string $callId, CommandMetadata $command, string $request, callable $effect): CallSummary
+    {
+        return $this->run($context, $command, fn (User $user) => $this->summary(
+            $this->calls->command($user, $operation, $callId, $command->idempotencyKey, $request, fn () => $effect($user)), $user));
     }
 
     public function credentials(ActorContext $context, string $callId): JoinCredentials

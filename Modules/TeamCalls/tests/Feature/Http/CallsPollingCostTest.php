@@ -31,7 +31,8 @@ function tcMeasure(callable $request): array
 
     return [
         'queries' => count($sql),
-        'locks' => count(array_filter($sql, fn ($s) => stripos($s, 'for update') !== false || stripos($s, 'lock in share mode') !== false)),
+        // Bloqueos de TeamCalls (el registro/validación del dispositivo por petición es de CollaborationCore).
+        'locks' => count(array_filter($tc, fn ($s) => stripos($s, 'for update') !== false || stripos($s, 'lock in share mode') !== false)),
         'teamcalls' => count($tc),
     ];
 }
