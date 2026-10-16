@@ -254,5 +254,58 @@
         }
     }
 
-    return { EventDeduper, Coalescer, POLL, pollDelay, sanitize, sanitizeSummary, TabCoordinator, SignalHub, REFRESH_TYPES };
+    // ─── Llamadas grupales y pantalla compartida (fase 4F) ─────────────────────────────────────
+    /**
+     * Distribución del mosaico según cuántos videos hay y el ancho disponible. Con una pantalla
+     * compartida, la pantalla es el contenido principal y los participantes pasan a una tira lateral
+     * (o inferior en pantallas estrechas), siempre visibles.
+     * @returns {{mode: 'grid'|'focus', columns: number, strip: 'side'|'bottom'|null}}
+     */
+    function layoutFor(opts) {
+        const tiles = Math.max(0, opts.tiles | 0);
+        const width = opts.width || 1024;
+        if (opts.screens > 0) {
+            return { mode: 'focus', columns: 1, strip: width < 760 ? 'bottom' : 'side' };
+        }
+        let columns = tiles <= 1 ? 1 : tiles <= 4 ? 2 : tiles <= 9 ? 3 : 4;
+        // Nunca columnas de menos de ~220 px: en móviles se apilan.
+        columns = Math.max(1, Math.min(columns, Math.floor(width / 220) || 1));
+        return { mode: 'grid', columns, strip: null };
+    }
+
+    /**
+     * Cambios de estado de los participantes entre dos resúmenes de la API (para avisos breves):
+     * rechazó, no contestó, salió, fue retirado, aceptó. Los de quien mira no se avisan.
+     * @returns {Array<{userId: number, kind: string}>}
+     */
+    function participantChanges(prev, next, me) {
+        const before = new Map(((prev && prev.participants) || []).map((p) => [Number(p.user_id), p]));
+        const out = [];
+        for (const p of (next && next.participants) || []) {
+            const id = Number(p.user_id);
+            if (id === Number(me)) continue;
+            const old = before.get(id);
+            if (p.revoked && !(old && old.revoked)) { out.push({ userId: id, kind: 'removed' }); continue; }
+            if (!old) { if (p.state === 'ringing') out.push({ userId: id, kind: 'invited' }); continue; }
+            if (old.state === p.state) continue;
+            if (p.state === 'declined') out.push({ userId: id, kind: 'declined' });
+            else if (p.state === 'missed') out.push({ userId: id, kind: 'missed' });
+            else if (p.state === 'ringing') out.push({ userId: id, kind: 'invited' });
+        }
+        return out;
+    }
+
+    /**
+     * ¿LiveKit permite publicar esa fuente? (permisos que concede el backend: TrackSource del proto,
+     * numérico o por nombre). Sin permiso de publicar, nada; lista vacía con permiso = todas (LiveKit).
+     */
+    const SOURCES = { CAMERA: 1, MICROPHONE: 2, SCREEN_SHARE: 3, SCREEN_SHARE_AUDIO: 4 };
+    function sourceAllowed(perms, name) {
+        if (!perms || !perms.canPublish) return false;
+        const list = perms.canPublishSources || [];
+        if (!list.length) return true;
+        return list.some((s) => s === SOURCES[name] || String(s).toUpperCase() === name);
+    }
+
+    return { EventDeduper, Coalescer, POLL, pollDelay, sanitize, sanitizeSummary, TabCoordinator, SignalHub, REFRESH_TYPES, layoutFor, participantChanges, sourceAllowed };
 });

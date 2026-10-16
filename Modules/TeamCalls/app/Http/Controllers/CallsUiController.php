@@ -60,6 +60,9 @@ final class CallsUiController
                     'leave' => route('collab.calls.leave', ['call' => '__CALL__']),
                     'end' => route('collab.calls.end', ['call' => '__CALL__']),
                     'credentials' => route('collab.calls.credentials', ['call' => '__CALL__']),
+                    // Llamadas grupales (fase 4F): invitar desde la llamada y expulsar (solo quien la inicia).
+                    'invite' => route('collab.calls.invite', ['call' => '__CALL__']),
+                    'revoke' => route('collab.calls.revoke', ['call' => '__CALL__']),
                     // API definitiva (CallsGateway): llamadas desde conversaciones privadas, grupos y canales.
                     'conversation_store' => route('collaboration.calls.store'),
                 ],

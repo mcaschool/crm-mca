@@ -36,6 +36,10 @@
         mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg>',
         micOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 2 20 20M18.9 13.1A7 7 0 0 0 19 11v-1M5 10v1a7 7 0 0 0 11.4 5.4M15 9.3V5a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 5.1 2.1M12 18v4"/></svg>',
         hangup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 4.2 2 2 0 0 1 5.1 2h3a2 2 0 0 1 2 1.7"/><path d="m22 2-20 20"/></svg>',
+        screen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M12 7v6M9 10l3-3 3 3"/></svg>',
+        people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>',
+        expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>',
+        shrink: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>',
     };
 
     // ─── Estado ────────────────────────────────────────────────────────────────────────────────
@@ -56,6 +60,11 @@
         elsewhere: null,       // llamada en curso de esta persona controlada por otra pestaña
         booting: true,         // hasta procesar la primera lista: solo entonces se recupera sola tras recargar
         handingOver: false,    // soltando la llamada porque otra pestaña la pidió
+        syntheticScreen: null, // pantalla sintética (solo pruebas automatizadas, ?sintetico=1)
+        screenStopping: false, // la persona detuvo la pantalla desde la interfaz (no avisar como «terminada»)
+        inviting: new Set(),   // selección del panel «Añadir personas»
+        removing: null,        // participante pendiente de confirmar «Retirar»
+        departures: new Map(), // identidad → temporizador: distingue «salió» de una reconexión corta
     };
 
     // ─── API de TeamCalls ───────────────────────────────────────────────────────────────────────
@@ -98,6 +107,7 @@
             forbidden: 'err_forbidden', unauthenticated: 'err_session', two_factor_required: 'err_session',
             csrf_token_mismatch: 'err_session', network: 'err_server', too_many_requests: 'err_server',
             invalid_transition: 'err_call_gone', not_found: 'err_call_gone', invalid: 'err_launch_invalid',
+            too_many_participants: 'err_too_many_participants',
         };
         return map[e && e.code] || null;
     }
@@ -351,13 +361,18 @@
         status.dataset.phase = p === 'waiting_media' ? 'connecting' : p;
         status.textContent = t('status_' + p);
         const inCall = Boolean(state.call);
+        $('tc-root').dataset.incall = inCall ? '1' : '0'; // en llamada, la sala ocupa todo el ancho
         $('tc-empty').hidden = inCall;
+        $('tc-room').hidden = !inCall;
         $('tc-controls').hidden = !inCall;
         $('tc-bottom').hidden = !inCall;
-        const others = inCall ? (state.call.participants || []).filter((x) => Number(x.user_id) !== Number(cfg.me.id)) : [];
+        $('tc-fullscreen').hidden = !inCall || !document.fullscreenEnabled;
+        const others = inCall ? (state.call.participants || []).filter((x) => Number(x.user_id) !== Number(cfg.me.id) && !x.revoked && x.state !== 'declined' && x.state !== 'missed') : [];
         $('tc-peer').textContent = others.map((x) => nameOf(x.user_id)).join(', ');
         renderControls();
         renderParticipants();
+        syncPending();
+        layout();
         document.querySelectorAll('[data-call-btn]').forEach((b) => { b.disabled = inCall; });
         document.title = p === 'incoming' ? '📞 ' + t('status_incoming') : baseTitle;
     }
@@ -379,11 +394,48 @@
         cam.disabled = !canUse;
         const ringingOut = state.call && phase() === 'calling';
         $('tc-hangup').innerHTML = ICON.hangup + '<span>' + t(ringingOut ? 'cancel_call' : 'hangup') + '</span>';
+        // Compartir pantalla: solo en videollamadas y si LiveKit confirmó ese permiso (lo concede el backend).
+        const screen = $('tc-screen');
+        const sharing = isSharingScreen();
+        screen.hidden = !(video && canUse && lp && Core.sourceAllowed(lp.permissions, 'SCREEN_SHARE'));
+        screen.innerHTML = ICON.screen + '<span>' + t(sharing ? 'screen_stop' : 'screen_start') + '</span>';
+        screen.setAttribute('aria-pressed', String(sharing));
+        screen.dataset.active = sharing ? '1' : '0';
+        const people = $('tc-people-btn');
+        const count = activeParticipants().length;
+        people.innerHTML = ICON.people + '<span>' + t('people') + '</span><span class="tc-count">' + count + '</span>';
+        people.setAttribute('aria-expanded', String($('tc-people').open));
+        const fs = Boolean(document.fullscreenElement);
+        $('tc-fullscreen').innerHTML = fs ? ICON.shrink : ICON.expand;
+        $('tc-fullscreen').title = t(fs ? 'fullscreen_exit' : 'fullscreen');
+        $('tc-fullscreen').setAttribute('aria-label', $('tc-fullscreen').title);
+        // En móviles los controles muestran solo el icono: el nombre accesible no depende del texto visible.
+        document.querySelectorAll('#tc-controls .tc-ctl').forEach((b) => {
+            const label = b.querySelector('span');
+            if (label) { b.setAttribute('aria-label', label.textContent); b.title = label.textContent; }
+        });
     }
 
+    /** Participantes que siguen en la llamada (suenan, aceptaron o están dentro), sin retirados. */
+    function activeParticipants() {
+        return ((state.call && state.call.participants) || []).filter((p) => !p.revoked && ['ringing', 'accepted', 'joined'].includes(p.state));
+    }
+
+    function isHost() {
+        return Boolean(state.call) && Number(state.call.initiator_id) === Number(cfg.me.id);
+    }
+
+    let peopleSignature = '';
     function renderParticipants() {
+        const live = state.call && LIVE.includes(state.call.status);
+        // Solo se reconstruye si algo cambió: así los botones («Retirar») no se sustituyen bajo el cursor.
+        const signature = JSON.stringify([live, isHost(), state.removing, ((state.call && state.call.participants) || [])
+            .map((p) => [p.user_id, p.state, p.role, p.revoked, p.media_state, nameOf(p.user_id)])]);
+        if (signature === peopleSignature) return;
+        peopleSignature = signature;
         const list = $('tc-participants');
         list.innerHTML = '';
+        $('tc-people-count').textContent = state.call ? String(activeParticipants().length) : '';
         ((state.call && state.call.participants) || []).forEach((p) => {
             const li = document.createElement('li');
             li.className = 'tc-item';
@@ -394,8 +446,106 @@
             li.children[1].textContent = nameOf(p.user_id) + (p.role === 'host' ? ' · ' + t('host') : '');
             li.children[2].textContent = t(stateKey) + (p.media_state ? ' · ' + t('m_' + p.media_state) : '');
             if (tone) li.children[2].dataset.tone = tone;
+            // Retirar: solo quien inicia la llamada (el servidor lo vuelve a comprobar), con confirmación.
+            if (live && isHost() && Number(p.user_id) !== Number(cfg.me.id) && !p.revoked) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'tc-ctl tc-ctl--sm tc-ctl--ghost-danger';
+                const confirming = state.removing === Number(p.user_id);
+                b.textContent = t(confirming ? 'remove_confirm' : 'remove');
+                b.dataset.confirm = confirming ? '1' : '0';
+                b.addEventListener('click', () => removeParticipant(Number(p.user_id)));
+                li.appendChild(b);
+            }
             list.appendChild(li);
         });
+        const me0 = me(state.call);
+        $('tc-invite-open').hidden = !(live && me0 && ['accepted', 'joined'].includes(me0.state));
+        if ($('tc-invite-open').hidden) $('tc-invite-panel').hidden = true;
+    }
+
+    // ─── Añadir personas y retirar (API existente; el servidor autoriza) ─────────────────────────
+    function inviteCandidates(filter) {
+        const q = (filter || '').trim().toLowerCase();
+        const busy = new Set(activeParticipants().map((p) => Number(p.user_id)));
+        busy.add(Number(cfg.me.id));
+        return [...state.contacts.entries()].filter(([id, name]) => !busy.has(id) && (!q || name.toLowerCase().includes(q)));
+    }
+
+    function renderInvite() {
+        const list = $('tc-invite-list');
+        const rows = inviteCandidates($('tc-invite-search').value);
+        list.innerHTML = '';
+        if (!rows.length) {
+            list.innerHTML = '<li class="tc-muted"></li>';
+            list.firstChild.textContent = t('invite_none');
+        }
+        rows.forEach(([id, name]) => {
+            const li = document.createElement('li');
+            li.className = 'tc-item';
+            li.innerHTML = '<label class="tc-check"><input type="checkbox"><span class="tc-avatar"></span><span class="tc-item-name"></span></label>';
+            const box = li.querySelector('input');
+            box.setAttribute('aria-label', name);
+            box.checked = state.inviting.has(id);
+            box.addEventListener('change', () => { if (box.checked) state.inviting.add(id); else state.inviting.delete(id); $('tc-invite-send').disabled = !state.inviting.size; });
+            li.querySelector('.tc-avatar').textContent = initials(name);
+            li.querySelector('.tc-item-name').textContent = name;
+            list.appendChild(li);
+        });
+        $('tc-invite-send').disabled = !state.inviting.size;
+    }
+
+    function toggleInvite(open) {
+        $('tc-invite-panel').hidden = !open;
+        state.inviting.clear();
+        if (open) { $('tc-invite-search').value = ''; renderInvite(); $('tc-invite-search').focus(); }
+    }
+
+    async function sendInvite() {
+        const call = state.call;
+        if (!call || !state.inviting.size) return;
+        $('tc-invite-send').disabled = true;
+        try {
+            const s = (await api('POST', route('invite', call.id), { user_ids: [...state.inviting] })).data;
+            toggleInvite(false);
+            toast(t('invite_sent'));
+            onUpdate(s);
+        } catch (e) {
+            showError(e);
+            $('tc-invite-send').disabled = false;
+        }
+    }
+
+    async function removeParticipant(userId) {
+        const call = state.call;
+        if (!call) return;
+        if (state.removing !== userId) {
+            state.removing = userId; // primer clic: pide confirmación
+            renderParticipants();
+            setTimeout(() => { if (state.removing === userId) { state.removing = null; renderParticipants(); } }, 4000);
+            return;
+        }
+        state.removing = null;
+        try {
+            onUpdate((await api('POST', route('revoke', call.id), { user_id: userId })).data);
+        } catch (e) {
+            showError(e);
+            renderParticipants();
+        }
+    }
+
+    // ─── Avisos breves (entradas, salidas, reconexiones, invitaciones) ───────────────────────────
+    const toastLog = [];
+    function toast(message) {
+        const box = $('tc-toasts');
+        const el = document.createElement('div');
+        el.className = 'tc-toast';
+        el.textContent = message;
+        box.appendChild(el);
+        toastLog.push(message); // solo para la depuración (teamcallsUi.state): los avisos duran unos segundos
+        if (toastLog.length > 20) toastLog.shift();
+        while (box.children.length > 3) box.firstChild.remove();
+        setTimeout(() => el.remove(), 4500);
     }
 
     function renderContacts(filter) {
@@ -456,36 +606,60 @@
     }
 
     // ─── Mosaico de video ───────────────────────────────────────────────────────────────────────
-    function tileFor(key, label, local) {
+    // Claves (fase 4F): «c:<identidad>» cámara o avatar de cada persona conectada, «s:<identidad>» su
+    // pantalla compartida, «p:<usuario>» invitación que todavía suena; «local» es quien mira.
+    const MIC_OFF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 2 20 20M18.9 13.1A7 7 0 0 0 19 11v-1M5 10v1a7 7 0 0 0 11.4 5.4M15 9.3V5a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 5.1 2.1M12 18v4"/></svg>';
+    const CAM_OFF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 16v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.7 0H14a2 2 0 0 1 2 2v3.3l1 1L22 7v10"/><path d="m2 2 20 20"/></svg>';
+
+    function tileFor(key, opts) {
         let tile = state.tiles.get(key);
         if (!tile) {
+            const kind = opts.kind || 'camera';
             const el = document.createElement('div');
             el.className = 'tc-tile';
-            el.dataset.local = local ? '1' : '0';
-            el.innerHTML = '<span class="tc-tile-ph"></span><span class="tc-tile-name"></span><span class="tc-tile-badge" hidden></span>';
-            el.children[0].textContent = initials(label);
-            el.children[1].textContent = label;
-            $('tc-tiles').appendChild(el);
+            el.dataset.key = key;
+            el.dataset.kind = kind;
+            el.dataset.local = opts.local ? '1' : '0';
+            el.innerHTML = '<span class="tc-tile-ph"><span class="tc-tile-av"></span></span>'
+                + '<span class="tc-tile-bar"><span class="tc-tile-name"></span><span class="tc-tile-icons">'
+                + '<span class="tc-ic" data-ic="mic" hidden>' + MIC_OFF_ICON + '</span><span class="tc-ic" data-ic="cam" hidden>' + CAM_OFF_ICON + '</span>'
+                + '</span></span><span class="tc-tile-badge" hidden></span>';
+            el.querySelector('[data-ic="mic"]').title = t('mic_is_off');
+            el.querySelector('[data-ic="cam"]').title = t('cam_is_off');
+            ($(kind === 'screen' ? 'tc-focus' : 'tc-tiles')).appendChild(el);
             tile = { el, video: null };
-            state.tiles.set(key, tile); // una sola por participante: reconectar no duplica
+            state.tiles.set(key, tile); // una sola por clave: reconectar no duplica
+        }
+        if (opts.label) {
+            tile.el.querySelector('.tc-tile-av').textContent = initials(opts.avatar || opts.label);
+            tile.el.querySelector('.tc-tile-name').textContent = opts.label;
         }
         return tile;
     }
 
-    function participantLabel(participant) {
-        const m = /^u(\d+)\./.exec(participant.identity || '');
-        return m ? nameOf(m[1]) : t('unknown_user', { id: '?' });
+    function userIdOf(participant) {
+        const m = /^u(\d+)\./.exec((participant && participant.identity) || '');
+        return m ? Number(m[1]) : null;
     }
 
-    function attachVideo(key, track, label, local) {
-        const tile = tileFor(key, label, local);
+    function participantLabel(participant) {
+        const id = userIdOf(participant);
+        return id ? nameOf(id) : t('unknown_user', { id: '?' });
+    }
+
+    function camKey(participant, local) { return local ? 'c:local' : 'c:' + participant.identity; }
+    function screenKey(participant, local) { return local ? 's:local' : 's:' + participant.identity; }
+
+    function attachVideo(key, track, opts) {
+        const tile = tileFor(key, opts);
         if (tile.video) tile.video.remove();
         const v = track.attach();
         v.muted = true;
         v.playsInline = true;
         tile.el.insertBefore(v, tile.el.firstChild);
-        tile.el.children[1].hidden = true; // placeholder de iniciales
+        tile.el.querySelector('.tc-tile-ph').hidden = true; // placeholder de iniciales
         tile.video = v;
+        layout();
     }
 
     function detachVideo(key, track) {
@@ -502,12 +676,91 @@
         const tile = state.tiles.get(key);
         if (tile) tile.el.remove();
         state.tiles.delete(key);
+        layout();
     }
 
     function clearTiles() {
         state.tiles.forEach((tile) => tile.el.remove());
         state.tiles.clear();
+        state.departures.forEach((away) => clearTimeout(away.timer));
+        state.departures.clear();
         document.querySelectorAll('audio[data-tc-audio]').forEach((a) => a.remove());
+        layout();
+    }
+
+    /** Micrófono silenciado, cámara apagada y reconexión según LiveKit (local o remoto). */
+    function refreshParticipant(participant, local) {
+        const tile = state.tiles.get(camKey(participant, local));
+        if (!tile || !participant) return;
+        const micOff = state.synthetic && local ? isSyntheticMuted('audio') : !participant.isMicrophoneEnabled;
+        const video = state.call && state.call.media === 'video';
+        const camOn = state.synthetic && local ? !isSyntheticMuted('video') : participant.isCameraEnabled;
+        tile.el.querySelector('[data-ic="mic"]').hidden = !micOff;
+        tile.el.querySelector('[data-ic="cam"]').hidden = !(video && !camOn);
+        const key = camKey(participant, local);
+        if (!camOn && tile.video) {
+            detachVideo(key); // cámara apagada: avatar en lugar de la última imagen congelada
+        } else if (camOn && !tile.video && participant.getTrackPublication) {
+            const pub = participant.getTrackPublication(LK.Track.Source.Camera);
+            if (pub && pub.track && !pub.isMuted && (local || pub.isSubscribed)) attachVideo(key, pub.track, { local });
+        }
+    }
+
+    function setBadge(key, text) {
+        const tile = state.tiles.get(key);
+        if (!tile) return;
+        const b = tile.el.querySelector('.tc-tile-badge');
+        b.textContent = text || '';
+        b.hidden = !text;
+    }
+
+    /** Invitaciones que todavía suenan: una ficha «Sonando…» hasta que la persona entra o deja de sonar. */
+    function syncPending() {
+        const ringing = new Set();
+        if (state.call && state.room) {
+            const connected = new Set([...state.room.remoteParticipants.values()].map(userIdOf));
+            for (const p of state.call.participants || []) {
+                const id = Number(p.user_id);
+                if (id !== Number(cfg.me.id) && !p.revoked && p.state === 'ringing' && !connected.has(id)) ringing.add(id);
+            }
+        }
+        for (const key of [...state.tiles.keys()]) {
+            if (key.startsWith('p:') && !ringing.has(Number(key.slice(2)))) removeTile(key);
+        }
+        ringing.forEach((id) => {
+            const key = 'p:' + id;
+            if (state.tiles.has(key)) return;
+            tileFor(key, { label: nameOf(id), kind: 'pending' });
+            setBadge(key, t('ringing_badge'));
+        });
+    }
+
+    /** Distribución adaptable: rejilla según el número de personas o pantalla principal con tira lateral. */
+    function layout() {
+        const room = $('tc-room');
+        if (!room) return;
+        const tiles = $('tc-tiles').children.length;
+        const screens = $('tc-focus').children.length;
+        const l = Core.layoutFor({ tiles, screens, width: room.clientWidth || window.innerWidth });
+        room.dataset.mode = l.mode;
+        room.dataset.strip = l.strip || '';
+        room.style.setProperty('--tc-cols', String(l.columns));
+        room.dataset.count = String(tiles);
+    }
+
+    /** Confirma la salida de quien se desconectó de la sala (aviso salvo que ya se avisó la expulsión). */
+    function departed(uid, announce) {
+        const away = state.departures.get(uid);
+        if (!away) return;
+        clearTimeout(away.timer);
+        state.departures.delete(uid);
+        removeTile(away.key);
+        if (announce) toast(t('toast_left', { name: away.name }));
+    }
+
+    function setSpeaking(speakers) {
+        const keys = new Set((speakers || []).map((p) => camKey(p, state.room && p === state.room.localParticipant)));
+        state.tiles.forEach((tile, key) => { tile.el.dataset.speaking = keys.has(key) ? '1' : '0'; });
     }
 
     // ─── Medios (SDK oficial de LiveKit) ────────────────────────────────────────────────────────
@@ -559,7 +812,7 @@
             } else {
                 state.wantCam = !room.localParticipant.isCameraEnabled;
                 await room.localParticipant.setCameraEnabled(state.wantCam);
-                if (!state.wantCam) detachVideo('local');
+                if (!state.wantCam) detachVideo(camKey(null, true));
             }
         } catch (e) {
             mediaError(kind === 'audio' ? 'mic' : 'cam', e);
@@ -593,6 +846,83 @@
             pubs.video = await room.localParticipant.publishTrack(canvas.captureStream(15).getVideoTracks()[0], { source: LK.Track.Source.Camera, name: 'camera' });
         }
         state.synthetic = { timer, ctx, osc, pubs };
+    }
+
+    // ─── Compartir pantalla (fase 4F): SDK de LiveKit y diálogo nativo del navegador ─────────────
+    function isSharingScreen() {
+        if (state.syntheticScreen) return true;
+        const lp = state.room && state.room.localParticipant;
+        return Boolean(lp && lp.isScreenShareEnabled);
+    }
+
+    async function toggleScreen() {
+        const room = state.room;
+        if (!room || !state.admitted) return;
+        const lp = room.localParticipant;
+        // El backend solo concede la fuente de pantalla en videollamadas; LiveKit rechaza cualquier otra.
+        if (!isSharingScreen() && !Core.sourceAllowed(lp.permissions, 'SCREEN_SHARE')) return alertBox(t('err_forbidden'));
+        try {
+            if (isSharingScreen()) {
+                state.screenStopping = true;
+                if (state.syntheticScreen) await stopSyntheticScreen(room);
+                else await lp.setScreenShareEnabled(false);
+            } else if (cfg.synthetic) {
+                await publishSyntheticScreen(room);
+            } else {
+                if (!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)) return alertBox(t('err_screen_unsupported'));
+                // Diálogo nativo: la persona elige pantalla, ventana o pestaña (sin incluir esta misma pestaña).
+                await lp.setScreenShareEnabled(true, { audio: true, selfBrowserSurface: 'exclude', surfaceSwitching: 'include', systemAudio: 'include' });
+            }
+        } catch (e) {
+            state.screenStopping = false;
+            // Cancelar el diálogo del navegador no es un error.
+            if (!(e && (e.name === 'NotAllowedError' || e.name === 'AbortError'))) alertBox(t('err_screen'));
+        }
+        render();
+    }
+
+    /** La transmisión terminó desde el navegador (botón «Dejar de compartir» o ventana cerrada). */
+    function screenEnded() {
+        const room = state.room;
+        // LiveKit puede despublicar antes que este aviso: se vuelve a pintar al terminar en cualquier orden.
+        const done = state.syntheticScreen ? stopSyntheticScreen(room) : (room ? room.localParticipant.setScreenShareEnabled(false) : Promise.resolve());
+        done.catch(() => {}).finally(render);
+    }
+
+    // Pantalla GENERADA (pruebas automatizadas: el diálogo nativo no se puede automatizar). Se publica con la
+    // fuente ScreenShare, así que LiveKit aplica exactamente los mismos permisos que a una pantalla real.
+    async function publishSyntheticScreen(room) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 360;
+        const g = canvas.getContext('2d');
+        let f = 0;
+        const timer = setInterval(() => {
+            g.fillStyle = '#0f2747';
+            g.fillRect(0, 0, 640, 360);
+            g.fillStyle = '#c9a84c';
+            g.fillRect(40 + (f++ * 4) % 520, 140, 80, 80);
+            g.fillStyle = '#fff';
+            g.font = '28px sans-serif';
+            g.fillText('Pantalla · ' + cfg.me.name, 40, 80);
+        }, 100);
+        const track = canvas.captureStream(10).getVideoTracks()[0];
+        try {
+            const pub = await room.localParticipant.publishTrack(track, { source: LK.Track.Source.ScreenShare, name: 'screen' });
+            state.syntheticScreen = { timer, track, pub };
+        } catch (e) {
+            clearInterval(timer);
+            track.stop();
+            throw e;
+        }
+    }
+
+    async function stopSyntheticScreen(room) {
+        const s = state.syntheticScreen;
+        if (!s) return;
+        state.syntheticScreen = null;
+        clearInterval(s.timer);
+        try { if (room && s.pub && s.pub.track) await room.localParticipant.unpublishTrack(s.pub.track); } finally { s.track.stop(); }
     }
 
     function isSyntheticMuted(kind) {
@@ -643,42 +973,104 @@
         };
         room.localParticipant.on(LK.ParticipantEvent.ParticipantPermissionsChanged, onPermissions);
         room.on(E.ParticipantPermissionsChanged, onPermissions);
+        const S = LK.Track.Source;
+        const isScreen = (pub) => pub && (pub.source === S.ScreenShare || pub.source === S.ScreenShareAudio);
+        const isLocal = (participant) => participant === room.localParticipant;
+        const remoteTile = (participant) => tileFor(camKey(participant), { label: participantLabel(participant) });
+
         room.on(E.TrackSubscribed, (track, pub, participant) => {
             if (!mine()) return;
-            if (track.kind === 'video') {
-                attachVideo(participant.identity, track, participantLabel(participant), false);
+            if (track.kind === 'video' && pub.source === S.ScreenShare) {
+                // Pantalla compartida: contenido principal; la cámara de quien presenta sigue en el mosaico.
+                attachVideo(screenKey(participant), track, { label: t('screen_of', { name: participantLabel(participant) }), avatar: participantLabel(participant), kind: 'screen' });
+                toast(t('toast_presenting', { name: participantLabel(participant) }));
+            } else if (track.kind === 'video') {
+                remoteTile(participant);
+                attachVideo(camKey(participant), track, {});
             } else if (track.kind === 'audio') {
                 const a = track.attach();
                 a.dataset.tcAudio = participant.identity;
                 document.body.appendChild(a);
             }
+            refreshParticipant(participant, false);
         });
         room.on(E.TrackUnsubscribed, (track, pub, participant) => {
-            if (track.kind === 'video') detachVideo(participant.identity, track);
+            if (track.kind === 'video' && pub.source === S.ScreenShare) { track.detach(); removeTile(screenKey(participant)); }
+            else if (track.kind === 'video') detachVideo(camKey(participant), track);
             else track.detach().forEach((el) => el.remove());
+            refreshParticipant(participant, false);
         });
-        room.on(E.ParticipantConnected, (participant) => { if (mine()) tileFor(participant.identity, participantLabel(participant), false); });
-        room.on(E.ParticipantDisconnected, (participant) => removeTile(participant.identity));
-        room.on(E.TrackMuted, (pub, participant) => {
-            const tile = state.tiles.get(participant === room.localParticipant ? 'local' : participant.identity);
-            if (tile && pub.kind === 'audio') { const b = tile.el.querySelector('.tc-tile-badge'); b.textContent = t('muted'); b.hidden = false; }
+        room.on(E.ParticipantConnected, (participant) => {
+            if (!mine()) return;
+            const name = participantLabel(participant);
+            const away = state.departures.get(userIdOf(participant));
+            if (away) { // volvió dentro del margen de reconexión: no era una salida
+                clearTimeout(away.timer);
+                state.departures.delete(userIdOf(participant));
+                if (away.key !== camKey(participant)) removeTile(away.key); // reconectó desde otro dispositivo
+                setBadge(camKey(participant), '');
+                toast(t('toast_reconnected', { name }));
+            } else {
+                toast(t('toast_joined', { name }));
+            }
+            remoteTile(participant);
+            refreshParticipant(participant, false);
+            syncPending();
         });
-        room.on(E.TrackUnmuted, (pub, participant) => {
-            const tile = state.tiles.get(participant === room.localParticipant ? 'local' : participant.identity);
-            if (tile && pub.kind === 'audio') tile.el.querySelector('.tc-tile-badge').hidden = true;
+        room.on(E.ParticipantDisconnected, (participant) => {
+            removeTile(screenKey(participant));
+            if (!mine()) { removeTile(camKey(participant)); return; }
+            // Salida o corte: el servidor da un margen de reconexión. Mientras tanto la ficha queda con
+            // «Reconectando…»; la salida se confirma cuando la API la registra o al vencer el margen.
+            const uid = userIdOf(participant);
+            const key = camKey(participant);
+            detachVideo(key);
+            setBadge(key, t('reconnecting_badge'));
+            const prev = state.departures.get(uid);
+            if (prev) clearTimeout(prev.timer);
+            state.departures.set(uid, { key, name: participantLabel(participant), timer: setTimeout(() => departed(uid, true), cfg.reconnectGraceMs + 5000) });
+            if (state.call && tabs.controlling) coalescer.run('call', () => refreshCall(state.call.id)).catch(() => {});
         });
+        room.on(E.ConnectionQualityChanged, (quality, participant) => {
+            if (!mine() || isLocal(participant)) return;
+            const lost = quality === (LK.ConnectionQuality && LK.ConnectionQuality.Lost);
+            const key = camKey(participant);
+            const had = state.tiles.get(key) && !state.tiles.get(key).el.querySelector('.tc-tile-badge').hidden;
+            setBadge(key, lost ? t('reconnecting_badge') : '');
+            if (lost && !had) toast(t('toast_reconnecting', { name: participantLabel(participant) }));
+        });
+        room.on(E.ActiveSpeakersChanged, (speakers) => { if (mine()) setSpeaking(speakers); });
+        [E.TrackMuted, E.TrackUnmuted, E.TrackPublished, E.TrackUnpublished].forEach((ev) => room.on(ev, (pub, participant) => {
+            if (mine()) { refreshParticipant(participant, isLocal(participant)); renderControls(); }
+        }));
         room.on(E.LocalTrackPublished, (pub) => {
             if (!mine()) return;
-            if (pub.track && pub.kind === 'video' && pub.source !== LK.Track.Source.ScreenShare) attachVideo('local', pub.track, t('you'), true);
+            if (pub.track && pub.source === S.ScreenShare) {
+                attachVideo(screenKey(null, true), pub.track, { label: t('screen_mine'), avatar: cfg.me.name, kind: 'screen', local: true });
+            } else if (pub.track && pub.kind === 'video') {
+                attachVideo(camKey(null, true), pub.track, { label: t('you'), avatar: cfg.me.name, local: true });
+            }
             if (pub.track) {
                 pub.track.on(LK.TrackEvent.Ended, () => {
+                    if (isScreen(pub)) return screenEnded(); // «Dejar de compartir» del navegador
                     alertBox(t('err_track_ended', { device: t(pub.kind === 'video' ? 'dev_camera' : 'dev_microphone') }));
                     render();
                 });
             }
+            refreshParticipant(room.localParticipant, true);
             render();
         });
-        room.on(E.LocalTrackUnpublished, (pub) => { if (pub.kind === 'video') detachVideo('local'); render(); });
+        room.on(E.LocalTrackUnpublished, (pub) => {
+            if (pub.source === S.ScreenShare) {
+                removeTile(screenKey(null, true));
+                if (!state.screenStopping && mine()) toast(t('screen_ended'));
+                state.screenStopping = false;
+            } else if (pub.kind === 'video') {
+                detachVideo(camKey(null, true));
+            }
+            refreshParticipant(room.localParticipant, true);
+            render();
+        });
         room.on(E.MediaDevicesError, (e) => mediaError(/video/i.test(String(e && e.message)) ? 'cam' : 'mic', e));
         room.on(E.AudioPlaybackStatusChanged, () => {
             if (!room.canPlaybackAudio) document.addEventListener('click', () => room.startAudio(), { once: true });
@@ -720,7 +1112,14 @@
             wireRoom(room);
             await room.connect(cred.server_url, cred.token, { autoSubscribe: true });
             if (state.room !== room) return;
-            if (state.call && state.call.media === 'video' && !cfg.synthetic) tileFor('local', t('you'), true);
+            // Ficha propia (avatar en voz) y las de quienes ya estaban en la sala (sin evento de entrada).
+            tileFor(camKey(null, true), { label: t('you'), avatar: cfg.me.name, local: true });
+            room.remoteParticipants.forEach((p) => {
+                tileFor(camKey(p), { label: participantLabel(p) });
+                refreshParticipant(p, false);
+            });
+            refreshParticipant(room.localParticipant, true);
+            syncPending();
             // Por si los permisos llegaron antes de escuchar el evento.
             const p = room.localParticipant.permissions;
             if (p && p.canPublish && p.canSubscribe && !state.admitted) {
@@ -738,6 +1137,7 @@
         state.room = null;
         state.admitted = false;
         stopSynthetic();
+        if (state.syntheticScreen) { clearInterval(state.syntheticScreen.timer); state.syntheticScreen.track.stop(); state.syntheticScreen = null; }
         clearTiles();
         if (room) {
             try { room.localParticipant.trackPublications.forEach((pub) => pub.track && pub.track.stop()); } catch (e) { /* ya liberadas */ }
@@ -922,6 +1322,12 @@
     function onUpdate(summary) {
         if (!state.call) return;
         if (summary === null) return finish(null, 'end_ended');
+        // Avisos de la llamada grupal: rechazos, sin respuesta, retirados e invitaciones nuevas.
+        Core.participantChanges(state.call, summary, cfg.me.id).forEach((c) => toast(t('toast_' + c.kind, { name: nameOf(c.userId) })));
+        // Quien se desconectó de la sala y la API ya da por fuera (salió o fue retirado): salida confirmada.
+        (summary.participants || []).forEach((p) => {
+            if (state.departures.has(Number(p.user_id)) && (p.revoked || !['accepted', 'joined'].includes(p.state))) departed(Number(p.user_id), !p.revoked);
+        });
         state.call = summary;
         const mine = me(summary);
         if (!LIVE.includes(summary.status)) return finish(summary);
@@ -1004,6 +1410,24 @@
         $('tc-mic').addEventListener('click', () => toggle('audio'));
         $('tc-cam').addEventListener('click', () => toggle('video'));
         $('tc-hangup').addEventListener('click', hangUp);
+        $('tc-screen').addEventListener('click', toggleScreen);
+        $('tc-people-btn').addEventListener('click', () => {
+            const people = $('tc-people');
+            people.open = !people.open;
+            if (people.open) people.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            renderControls();
+        });
+        $('tc-people').addEventListener('toggle', renderControls);
+        $('tc-invite-open').addEventListener('click', () => toggleInvite($('tc-invite-panel').hidden));
+        $('tc-invite-cancel').addEventListener('click', () => toggleInvite(false));
+        $('tc-invite-send').addEventListener('click', sendInvite);
+        $('tc-invite-search').addEventListener('input', renderInvite);
+        $('tc-fullscreen').addEventListener('click', () => {
+            if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+            else $('tc-stage').requestFullscreen().catch(() => {});
+        });
+        document.addEventListener('fullscreenchange', () => { renderControls(); layout(); });
+        if (window.ResizeObserver) new ResizeObserver(() => layout()).observe($('tc-room'));
         $('tc-accept').addEventListener('click', acceptIncoming);
         $('tc-decline').addEventListener('click', declineIncoming);
         $('tc-search').addEventListener('input', (e) => renderContacts(e.target.value));
@@ -1067,6 +1491,8 @@
             // Lanzador (teamcalls-launcher.js): la ventana de llamadas ya abierta recibe la intención sin recargarse
             // (recargar colgaría la llamada en curso). Solo la alcanza código del mismo origen.
             launch: (query) => runIntent(intentFromQuery(query)),
+            // Solo con medios sintéticos (pruebas): simula «Dejar de compartir» del navegador (evento ended de la pista).
+            simulateScreenEnded: cfg.synthetic ? () => { if (state.syntheticScreen) state.syntheticScreen.track.dispatchEvent(new Event('ended')); } : undefined,
             tabs: () => ({ tabId, controlling: tabs.controlling, pollLeader: poller.leader, realtime: hub.realtime, elsewhere: state.elsewhere && state.elsewhere.id, pollFailures: poller.failures, sessionLost: state.sessionLost }),
             // Bytes recibidos por pista remota (estadísticas WebRTC del SDK): prueba que los medios fluyen.
             stats: async () => {
@@ -1084,6 +1510,13 @@
                 phase: phase(), callId: state.call && state.call.id, status: state.call && state.call.status,
                 admitted: state.admitted, room: state.room ? state.room.state : null,
                 tiles: [...state.tiles.keys()], videos: [...document.querySelectorAll('#tc-tiles video')].map((v) => ({ w: v.videoWidth, h: v.videoHeight, t: v.currentTime })),
+                // Fase 4F: distribución, pantalla principal e indicadores de cada ficha.
+                layout: { mode: $('tc-room').dataset.mode, columns: $('tc-room').style.getPropertyValue('--tc-cols'), strip: $('tc-room').dataset.strip },
+                focus: [...document.querySelectorAll('#tc-focus video')].map((v) => ({ w: v.videoWidth, h: v.videoHeight, t: v.currentTime })),
+                screen: isSharingScreen(), screenAllowed: Boolean(state.room && Core.sourceAllowed(state.room.localParticipant.permissions, 'SCREEN_SHARE')),
+                flags: [...state.tiles.entries()].map(([k, tile]) => k + ':' + ['mic', 'cam'].filter((i) => !tile.el.querySelector('[data-ic="' + i + '"]').hidden).join('+')
+                    + (tile.el.querySelector('.tc-tile-badge').hidden ? '' : ':' + tile.el.querySelector('.tc-tile-badge').textContent)),
+                toasts: toastLog.slice(),
                 mic: state.room ? state.room.localParticipant.isMicrophoneEnabled : null, cam: state.room ? state.room.localParticipant.isCameraEnabled : null,
                 alert: $('tc-alert').hidden ? null : $('tc-alert-text').textContent,
                 remotes: state.room ? [...state.room.remoteParticipants.values()].map((p) => ({
