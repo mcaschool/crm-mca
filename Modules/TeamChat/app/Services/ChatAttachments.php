@@ -141,7 +141,7 @@ final class ChatAttachments
         $conversation = $this->access->conversation($actor, $row->conversation_id, $owner);
         if ($row->message_id !== null) {
             $message = DB::table('collab_chat_messages')->where('institution_id', $actor->institutionId)->where('conversation_id', $row->conversation_id)->where('id', $row->message_id)->first();
-            if (! $message || (int) $message->access_tick < $this->access->fromTick($actor, $conversation)) {
+            if (! $message || $message->deleted_at !== null || (int) $message->access_tick < $this->access->fromTick($actor, $conversation)) {
                 throw new ContractException('not_found', 404);
             }
         } elseif ((int) $row->user_id !== $actor->userId || (int) $row->access_from_tick !== $this->access->fromTick($actor, $conversation) || now()->greaterThan($row->expires_at)) {

@@ -78,7 +78,7 @@ final class ChatQueries
         $last = DB::table('collab_chat_messages')->where('institution_id', $actor->institutionId)->where('conversation_id', $row->id)->where('access_tick', '>=', $from)->orderByDesc('sequence')->first();
         $unread = DB::table('collab_chat_messages as m')->leftJoin('collab_chat_receipts as r', function ($join) use ($actor): void {
             $join->on('r.message_id', '=', 'm.id')->where('r.user_id', $actor->userId);
-        })->where('m.institution_id', $actor->institutionId)->where('m.conversation_id', $row->id)->where('m.access_tick', '>=', $from)->where('m.sender_id', '!=', $actor->userId)->whereNull('r.read_at')->count();
+        })->where('m.institution_id', $actor->institutionId)->where('m.conversation_id', $row->id)->where('m.access_tick', '>=', $from)->where('m.sender_id', '!=', $actor->userId)->whereNull('m.deleted_at')->whereNull('r.read_at')->count();
 
         return ['id' => $row->id, 'type' => $row->type, 'peer' => ['id' => $peer?->id, 'name' => $peer->name ?? $row->name],
             'name' => $row->name, 'description' => $row->description, 'team_id' => $row->team_id, 'visibility' => $row->visibility,
@@ -117,7 +117,7 @@ final class ChatQueries
     }
 
     /** @return array<string,mixed> */
-    private function message(object $row, ActorContext $actor): array
+    public function message(object $row, ActorContext $actor): array
     {
         $receipts = DB::table('collab_chat_receipts')->where('institution_id', $row->institution_id)->where('message_id', $row->id);
         if ((int) $row->sender_id !== $actor->userId) {
@@ -128,8 +128,8 @@ final class ChatQueries
 
         return ['id' => $row->id, 'conversation_id' => $row->conversation_id, 'sender_id' => (int) $row->sender_id,
             'sender_name' => $sender->name ?? '', 'delivered_count' => (clone $receipts)->count(), 'read_count' => (clone $receipts)->whereNotNull('read_at')->count(),
-            'sequence' => (int) $row->sequence, 'command_id' => $row->command_id, 'body' => $row->body, 'attachments' => DB::table('collab_chat_uploads')->where('institution_id', $actor->institutionId)->where('message_id', $row->id)->orderBy('id')->get()->map(fn ($upload) => app(ChatAttachments::class)->metadata($upload))->all(), 'created_at' => $this->date($row->created_at),
-            'status' => $receipt?->read_at !== null ? 'read' : ($receipt ? 'delivered' : 'sent')];
+            'sequence' => (int) $row->sequence, 'command_id' => $row->command_id, 'body' => $row->deleted_at === null ? $row->body : '', 'attachments' => $row->deleted_at !== null ? [] : DB::table('collab_chat_uploads')->where('institution_id', $actor->institutionId)->where('message_id', $row->id)->orderBy('id')->get()->map(fn ($upload) => app(ChatAttachments::class)->metadata($upload))->all(), 'created_at' => $this->date($row->created_at),
+            'status' => $receipt?->read_at !== null ? 'read' : ($receipt ? 'delivered' : 'sent')] + app(MessageInteractions::class)->metadata($actor, $row);
     }
 
     private function date(string $value): string

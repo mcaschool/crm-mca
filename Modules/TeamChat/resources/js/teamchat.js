@@ -1,6 +1,7 @@
 import '../css/teamchat.css';
 import { installSpaces } from './spaces';
 import { installAttachments } from './attachments';
+import { installInteractions } from './interactions';
 
 // Domain content never travels over the socket. It is fetched through the
 // authenticated API after every wake, including reconnects and fallback polls.
@@ -28,7 +29,7 @@ function startChat(root) {
     function error(e) { if (state.stopped) return; if ($('[data-space-dialog]').open) { $('[data-dialog-loading]')?.remove(); let notice=$('[data-dialog-error]'); if(!notice){notice=el('p','tc-dialog-feedback');notice.dataset.dialogError='';notice.setAttribute('role','alert');$('[data-space-panel]').append(notice);} notice.textContent=e?.status===403?t.not_allowed:t.error; } $('[data-error] span').textContent = e?.status === 422 ? t.limit : t.error; $('[data-error]').hidden = false; }
     function stop() {
         if (state.stopped) return;
-        state.stopped = true; attachments.stop(); state.socket?.close(); clearTimeout(retryTimer); clearTimeout(pollTimer);
+        state.stopped = true; interactions.reset(); attachments.stop(); state.socket?.close(); clearTimeout(retryTimer); clearTimeout(pollTimer);
         clearInterval(presenceTimer); clearInterval(socketWatch); clearTimeout(state.receiptTimer);
         state.conversations.clear(); state.messages.clear(); state.pending.clear(); state.drafts.clear();
         messages.replaceChildren(); $('[data-list]').replaceChildren(); $('[data-team-tree]').replaceChildren(); $('[data-space-dialog]').close(); body.value = ''; body.disabled = true;
@@ -65,7 +66,7 @@ function startChat(root) {
         top.append(el('strong','',(!directory && c.type !== 'direct' ? (c.type === 'channel' ? '# ' : '◉ ') : '') + peer.name));
         if (!directory) top.append(el('time','',shortDate(c.activity_at)));
         text.append(top);
-        const preview = el('span','tc-preview'); preview.append(el('span','',directory ? t.new : c.last_message?.body || (c.last_message?.attachments?.length ? t.attachment : t.empty_chat)));
+        const preview = el('span','tc-preview'); preview.append(el('span','',directory ? t.new : c.last_message?.deleted ? t.message_deleted : c.last_message?.body || (c.last_message?.attachments?.length ? t.attachment : t.empty_chat)));
         if (c.unread_count) preview.append(el('span','tc-count',String(c.unread_count)));
         text.append(preview); b.append(text);
         b.addEventListener('click', () => directory ? createDirect(peer.id) : openConversation(c.id));
@@ -125,20 +126,20 @@ function startChat(root) {
     async function refreshConversation(id) {
         try { const c = await api('/conversations/' + id); const old = state.conversations.get(id); state.conversations.set(id,c);
             if (id === state.selected && old?.history_epoch && old.history_epoch !== c.history_epoch) {
-                attachments.reset(); state.messages.clear(); state.pending.delete(id); state.newer = state.older = null; messages.replaceChildren(); await newerMessages(id);
+                attachments.reset(); interactions.reset(); state.messages.clear(); state.pending.delete(id); state.newer = state.older = null; messages.replaceChildren(); await newerMessages(id);
             }
             renderList(); spaces.repaint(); if (id === state.selected) header(); }
         catch (e) {
             if ([403,404].includes(e.status)) {
                 state.conversations.delete(id); state.pending.delete(id); state.drafts.delete(id); renderList(); spaces.repaint();
-                if (id === state.selected) { attachments.reset(); state.selected = null; state.messages.clear(); messages.replaceChildren(); $('[data-thread]').hidden = true; $('[data-welcome]').hidden = false; root.classList.remove('tc-selected'); }
+                if (id === state.selected) { attachments.reset(); interactions.reset(); state.selected = null; state.messages.clear(); messages.replaceChildren(); $('[data-thread]').hidden = true; $('[data-welcome]').hidden = false; root.classList.remove('tc-selected'); }
             } else throw e;
         }
     }
     async function openConversation(id) {
         attachments.reset();
         if (state.selected) state.drafts.set(state.selected,body.value);
-        state.selected = id; state.messages.clear(); state.older = state.newer = null;
+        state.selected = id; interactions.switched(); state.messages.clear(); state.older = state.newer = null;
         observer.disconnect(); messages.replaceChildren(); $('[data-empty-chat]').textContent = t.loading;
         $('[data-empty-chat]').hidden = false; $('[data-thread]').hidden = false; $('[data-welcome]').hidden = true;
         root.classList.add('tc-selected'); body.value = state.drafts.get(id) || ''; header(); renderList();
@@ -153,7 +154,11 @@ function startChat(root) {
     function acceptMessages(id, items) {
         const delivered = [];
         for (const m of items) {
-            if (id === state.selected) state.messages.set(m.id,m);
+            if (id === state.selected) {
+                const current = state.messages.get(m.id);
+                if (current && current.version > m.version) continue;
+                state.messages.set(m.id,m);
+            }
             const pending = state.pending.get(id); if (pending) pending.delete(m.command_id);
             if (m.sender_id !== config.userId && m.status === 'sent') delivered.push(m.id);
         }
@@ -166,8 +171,9 @@ function startChat(root) {
         if (state.conversations.get(state.selected)?.type !== 'direct') {
             const sender = el('div','tc-sender'); sender.append(avatar(m.sender_name || config.labels.you,m.sender_id),el('strong','',m.sender_name || t.you)); bubble.append(sender);
         }
-        bubble.append(el('p','tc-message-body',m.body));
-        attachments.renderMessage(bubble,m);
+        const textNode=el('p','tc-message-body');interactions.renderBody(textNode,m);bubble.append(textNode);
+        if(!m.deleted)attachments.renderMessage(bubble,m);
+        interactions.decorate(bubble,m);
         const meta = el('div','tc-message-meta'); meta.append(el('time','',times.format(new Date(m.created_at))));
         if (mine) meta.append(el('span',m.status,t[m.status]));
         if (mine && m.id && state.conversations.get(state.selected)?.type !== 'direct' && m.delivered_count) meta.append(el('span','',t.read_by+' '+m.read_count+' · '+t.delivered_to+' '+m.delivered_count));
@@ -183,7 +189,7 @@ function startChat(root) {
         for (const m of [...all,...pending]) {
             const date = dates.format(new Date(m.created_at));
             if (date !== day) { messages.append(el('div','tc-day',date)); day = date; }
-            const id = m.id || m.command_id, signature = JSON.stringify([m.body,m.status,m.created_at,m.delivered_count,m.read_count,m.attachments,m.transfer]);
+            const id = m.id || m.command_id, signature = JSON.stringify([m.body,m.status,m.created_at,m.delivered_count,m.read_count,m.attachments,m.transfer,m.version,m.reply,m.reactions,m.mentions,m.pinned,m.deleted,m.can_edit,m.can_delete,m.can_pin]);
             let n = current.get(id);
             if (!n || n.dataset.signature !== signature) {
                 const next = messageNode(m,!m.id); next.dataset.signature = signature; if(n) {observer.unobserve(n);n.replaceWith(next);} n = next;
@@ -224,7 +230,7 @@ function startChat(root) {
         m.status = 'pending'; if (state.selected === m.conversation_id) renderMessages();
         try {
             const uploadIds = await attachments.ensure(m);
-            const saved = await api('/conversations/' + m.conversation_id + '/messages','POST',{command_id:m.command_id,body:m.body,attachments:uploadIds});
+            const saved = await api('/conversations/' + m.conversation_id + '/messages','POST',{command_id:m.command_id,body:m.body,attachments:uploadIds,reply_to_id:m.reply_to_id});
             attachments.release(m);
             $('[data-error]').hidden = true;
             acceptMessages(m.conversation_id,[saved]); if (state.selected === m.conversation_id) {renderMessages();toBottom();}
@@ -232,10 +238,23 @@ function startChat(root) {
         } catch(e) { m.status = 'failed'; if (state.selected === m.conversation_id) renderMessages(); error(e); }
     }
     const attachments = installAttachments({root,config,api,el,error,selected:()=>state.selected,changed:(paint=true)=>{if(paint)renderMessages();},onAuthFailure:stop});
+    const interactions = installInteractions({root,config,api,el,body,selected:()=>state.selected,accept:acceptMessages,error,jump:jumpMessage,paint:async(id)=>{if(id)await refreshLoaded([id]);messages.querySelectorAll('[data-message]').forEach(n=>n.dataset.signature='');renderMessages();}});
+    async function refreshLoaded(extra=[]) {
+        const id=state.selected;if(!id)return;const ids=[...new Set([...state.messages.keys(),...extra])];
+        for(let i=0;i<ids.length;i+=50){const part=ids.slice(i,i+50);const p=await api('/conversations/'+id+'/messages?limit=50&'+part.map(v=>'ids[]='+v).join('&'));
+            if(id!==state.selected)return;const visible=new Set(p.messages.map(m=>m.id));part.forEach(v=>{if(!visible.has(v))state.messages.delete(v);});acceptMessages(id,p.messages);}
+        renderMessages();interactions.refresh();
+    }
+    async function jumpMessage(message,conversation=state.selected) {
+        if(conversation!==state.selected){if(!state.conversations.has(conversation))await refreshConversation(conversation);await openConversation(conversation);}
+        const p=await api('/conversations/'+conversation+'/messages?ids[]='+message+'&limit=1');
+        if(conversation!==state.selected)return;if(!p.messages.length)throw new Error('not_found');acceptMessages(conversation,p.messages);renderMessages();
+        const node=messages.querySelector('[data-message="'+message+'"]');node?.scrollIntoView({block:'center'});node?.classList.add('tc-message-highlight');setTimeout(()=>node?.classList.remove('tc-message-highlight'),2500);
+    }
     function submit(event) {
-        event.preventDefault(); const id = state.selected, text = body.value.trim();
+        event.preventDefault(); const id = state.selected, text = interactions.encodeBody(body.value.trim());
         if (!id || (!text && !attachments.hasFiles()) || body.disabled || attachments.isRecording()) return;
-        const m = {command_id:crypto.randomUUID(),conversation_id:id,sender_id:config.userId,body:text,files:attachments.take(),status:'ready',created_at:new Date().toISOString()};
+        const m = {command_id:crypto.randomUUID(),conversation_id:id,sender_id:config.userId,body:text,mentions:interactions.mentionMetadata(),reply_to_id:interactions.takeReply(),files:attachments.take(),status:'ready',created_at:new Date().toISOString()};
         if (!state.pending.has(id)) state.pending.set(id,new Map()); state.pending.get(id).set(m.command_id,m);
         body.value = ''; body.style.height = ''; state.drafts.set(id,''); transmit(m); body.focus(); toBottom();
     }
@@ -285,6 +304,7 @@ function startChat(root) {
         const entries = await api('/realtime/notifications');
         for (const n of entries) {
             if (state.notices.has(n.id)) continue; state.notices.add(n.id);
+            if(n.type==='teamchat.message.mentioned')interactions.notified(n.resource_id,n.source_event_id);
             if(!initial && n.type === 'teamchat.message.created' && (state.selected !== n.resource_id || document.visibilityState !== 'visible')) toast(t.notification);
         }
         if(state.notices.size>2000)state.notices=new Set([...state.notices].slice(-1000));
@@ -298,7 +318,7 @@ function startChat(root) {
             let page=await api('/sync?bootstrap=1&limit=100'), cut=page.cursor;
             while(page.nextPageCursor)page=await api('/sync?bootstrap=1&limit=100&cursor='+encodeURIComponent(page.nextPageCursor));
             await listMore(true); await spaces.refresh(); await notices(true);
-            if(state.selected) { await refreshConversation(state.selected); if(state.selected)await newerMessages(state.selected); }
+            if(state.selected) { await refreshConversation(state.selected); if(state.selected){await newerMessages(state.selected);await refreshLoaded();} }
             state.cursor=cut;
         } catch(e) { if(e.status===403)stop(); else error(e); }
         finally {state.booting=false;}
@@ -313,11 +333,12 @@ function startChat(root) {
             do {
                 state.wake=false;
                 const page=await api('/sync?limit=100&cursor='+encodeURIComponent(state.cursor));
-                const affected=new Set(), newMessages=new Set(), receipts=new Map();
+                const affected=new Set(), newMessages=new Set(), receipts=new Map(), mutations=new Set();
                 for(const e of page.events) {
                     if(state.seen.has(e.id)||!e.type.startsWith('teamchat.'))continue;
                     const id=e.data.conversation_id;affected.add(id);
                     if(e.type==='teamchat.message.created')newMessages.add(id);
+                    if(e.type.startsWith('teamchat.message.')&&e.type!=='teamchat.message.created'&&id===state.selected)mutations.add(e.data.message_id);
                     if(e.type.startsWith('teamchat.receipt.') && id===state.selected) {
                         if(!receipts.has(id))receipts.set(id,new Set());e.data.message_ids.forEach(v=>receipts.get(id).add(v));
                     }
@@ -326,6 +347,8 @@ function startChat(root) {
                 if (page.events.some(e => e.type.startsWith('teamchat.team.') || e.type.startsWith('teamchat.channel.'))) await spaces.refresh();
                 if (page.events.some(e => e.type.endsWith('members.changed'))) toast(t.members_changed);
                 for(const id of newMessages)if(id===state.selected)await newerMessages(id);
+                if(mutations.size)await refreshLoaded([...mutations]);
+                if(page.events.some(e=>e.type.endsWith('members.changed'))&&state.selected)await refreshLoaded();
                 for(const [id,ids]of receipts) {
                     const list=[...ids].filter(v=>state.messages.has(v));
                     for(let i=0;i<list.length;i+=50){
@@ -336,7 +359,7 @@ function startChat(root) {
                 // Only commit the cursor/dedup set after all authorized domain reads succeeded.
                 page.events.forEach(e=>state.seen.add(e.id));state.cursor=page.cursor;
                 if(state.seen.size>4000)state.seen=new Set([...state.seen].slice(-2000));
-                if(newMessages.size)await notices();
+                if(newMessages.size||page.events.some(e=>e.type==='teamchat.message.mentioned'))await notices();
                 state.wake=state.wake||page.hasMore;
             }while(state.wake&&!state.stopped);
         } catch(e) {
@@ -383,6 +406,7 @@ function startChat(root) {
         await sync();
         // Recheck access even without a domain event (e.g. institutional revocation).
         if(state.selected)await refreshConversation(state.selected).catch(()=>{});
+        interactions.refresh();
         if(state.view === 'team')await spaces.refresh().catch(()=>{});
         pollTimer=setTimeout(poll,document.visibilityState==='visible'?10000:30000);
     }

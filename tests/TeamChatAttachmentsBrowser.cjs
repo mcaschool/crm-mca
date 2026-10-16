@@ -90,10 +90,10 @@ async function api(p,url,method='GET',body=null){return p.evaluate(async({url,me
   await wait(()=>a.locator('[data-attachment=voice]').count().then(v=>v===1),'attachment history restored after switching spaces');
   await wait(()=>a.locator('.tc-message-image').evaluate(n=>n.complete&&n.naturalWidth>0&&n.getBoundingClientRect().width>0),'restored image actually renders');
   await wait(()=>a.locator('[data-attachment=voice] audio').evaluate(n=>Number.isFinite(n.duration)&&n.duration>0),'restored audio loads duration');
-  await a.screenshot({path:'.testing/teamchat-phase6-desktop.png',fullPage:true,animations:'disabled'});
+  await a.screenshot({path:'.testing/'+(process.env.TEAMCHAT_ARTIFACT_PREFIX||'teamchat-phase6')+'-desktop.png',fullPage:true,animations:'disabled'});
   await a.setViewportSize({width:390,height:844});
   await wait(()=>a.locator('.mca-sidebar').evaluate(n=>n.getBoundingClientRect().right<=1),'mobile navigation does not cover the conversation');
-  await a.screenshot({path:'.testing/teamchat-phase6-mobile.png',fullPage:true,animations:'disabled'});
+  await a.screenshot({path:'.testing/'+(process.env.TEAMCHAT_ARTIFACT_PREFIX||'teamchat-phase6')+'-mobile.png',fullPage:true,animations:'disabled'});
   check(await a.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'mobile view has no horizontal overflow');
   await a.evaluate(()=>{navigator.mediaDevices.getUserMedia=()=>Promise.reject(new DOMException('Test denial','NotAllowedError'));});
   await a.locator('[data-record]').click();

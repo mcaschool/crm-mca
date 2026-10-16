@@ -21,7 +21,8 @@ final class ChatEventPolicy implements EventPolicy
             'teamchat.group.created', 'teamchat.group.updated', 'teamchat.group.members.changed',
             'teamchat.team.created', 'teamchat.team.updated', 'teamchat.team.members.changed',
             'teamchat.channel.created', 'teamchat.channel.updated', 'teamchat.channel.members.changed' => ['conversation_id'],
-            'teamchat.message.created' => ['conversation_id', 'message_id', 'sequence'],
+            'teamchat.message.mentioned' => ['conversation_id', 'message_id', 'user_id'],
+            'teamchat.message.edited','teamchat.message.deleted','teamchat.message.reaction.changed','teamchat.message.pin.changed','teamchat.message.created' => ['conversation_id', 'message_id', 'sequence'],
             'teamchat.receipt.delivered', 'teamchat.receipt.read' => ['conversation_id', 'message_ids', 'user_id'],
             'teamchat.membership.changed' => ['conversation_id', 'user_id', 'active'],
             default => throw new \InvalidArgumentException('Unknown TeamChat event'),
@@ -69,6 +70,16 @@ final class ChatEventPolicy implements EventPolicy
             $ids = $event->data['message_ids'] ?? (isset($event->data['message_id']) ? [$event->data['message_id']] : []);
             if ($ids && \Illuminate\Support\Facades\DB::table('collab_chat_messages')->where('institution_id', $actor->institutionId)->where('conversation_id', $row->id)->whereIn('id', $ids)->where('access_tick', '>=', $from)->count() !== count($ids)) {
                 return false;
+            }
+
+            if (in_array($event->type, ['teamchat.message.created', 'teamchat.message.mentioned'], true)) {
+                $message = \Illuminate\Support\Facades\DB::table('collab_chat_messages')->where('institution_id', $actor->institutionId)->where('id', $event->data['message_id'])->first();
+                if (! $message || $message->deleted_at !== null) {
+                    return false;
+                }
+            }
+            if ($event->type === 'teamchat.message.mentioned') {
+                return $event->data['user_id'] === $actor->userId && \Illuminate\Support\Facades\DB::table('collab_chat_mentions')->where('message_id', $event->data['message_id'])->where('user_id', $actor->userId)->where('active', true)->exists();
             }
 
             return true;

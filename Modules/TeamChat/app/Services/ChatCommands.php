@@ -58,7 +58,7 @@ final class ChatCommands
     }
 
     /** @param list<string> $attachments */
-    public function send(ActorContext $actor, string $conversationId, string $commandId, string $body, array $attachments = []): string
+    public function send(ActorContext $actor, string $conversationId, string $commandId, string $body, array $attachments = [], ?string $replyTo = null): string
     {
         Guard::token($commandId);
         $body = trim(str_replace(["\r\n", "\r"], "\n", $body));
@@ -66,9 +66,13 @@ final class ChatCommands
             throw new ContractException('invalid', 422);
         }
         sort($attachments);
-        $hash = hash('sha256', json_encode($attachments === [] ? [$conversationId, $body] : [$conversationId, $body, $attachments], JSON_THROW_ON_ERROR));
+        $payload = $attachments === [] ? [$conversationId, $body] : [$conversationId, $body, $attachments];
+        if ($replyTo !== null) {
+            $payload[] = ['reply_to' => $replyTo];
+        }
+        $hash = hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
 
-        return DB::transaction(function () use ($actor, $conversationId, $commandId, $body, $hash, $attachments): string {
+        return DB::transaction(function () use ($actor, $conversationId, $commandId, $body, $hash, $attachments, $replyTo): string {
             $this->lockInstitution($actor);
             $conversation = $this->lockConversation($actor, $conversationId);
             $this->access->conversation($actor, $conversationId, true);
@@ -84,18 +88,23 @@ final class ChatCommands
 
                 return $existing->id;
             }
+            if ($replyTo !== null) {
+                app(MessageInteractions::class)->message($actor, $conversationId, $replyTo, true);
+            }
+            $mentions = app(MessageInteractions::class)->mentionIds($actor, $conversation, $body);
             $id = (string) Str::ulid();
             $sequence = (int) $conversation->message_sequence + 1;
             DB::table('collab_chat_messages')->insert(['id' => $id, 'institution_id' => $actor->institutionId,
                 'conversation_id' => $conversationId, 'sender_id' => $actor->userId, 'sequence' => $sequence,
-                'command_id' => $commandId, 'request_hash' => $hash, 'body' => $body, 'access_tick' => app(ChatClock::class)->next($actor->institutionId), 'created_at' => now()]);
+                'command_id' => $commandId, 'request_hash' => $hash, 'body' => $body, 'reply_to_id' => $replyTo, 'access_tick' => app(ChatClock::class)->next($actor->institutionId), 'created_at' => now()]);
             DB::table('collab_chat_conversations')->where('id', $conversationId)->where('institution_id', $actor->institutionId)
                 ->update(['message_sequence' => $sequence, 'activity_at' => now()->format('Y-m-d H:i:s.u'), 'updated_at' => now()]);
             app(ChatAttachments::class)->attach($actor, $conversationId, $id, $attachments);
             $eventId = $this->events->record($actor, $conversation, 'teamchat.message.created', ['message_id' => $id, 'sequence' => $sequence]);
             $this->notifications->enqueue(new InstitutionContext($actor->institutionId),
                 new NotificationIntent((string) Str::ulid(), 'teamchat.message.created', $conversationId, $eventId, 'message.'.$id, now()->addDay()->toDateTimeImmutable()),
-                new NotificationAudience($actor->institutionId, array_values(array_diff($this->access->members($conversation), [$actor->userId]))));
+                new NotificationAudience($actor->institutionId, array_values(array_diff($this->access->members($conversation), [$actor->userId], $mentions))));
+            app(MessageInteractions::class)->mentions($actor, $conversation, $id, $mentions);
 
             return $id;
         }, 3);

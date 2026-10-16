@@ -23,13 +23,14 @@ final class TeamChatServiceProvider extends ServiceProvider
     public function boot(): void
     {
         \Illuminate\Support\Facades\RateLimiter::for('teamchat.commands', fn (\Illuminate\Http\Request $request) => \Illuminate\Cache\RateLimiting\Limit::perMinute(30)->by('teamchat:'.($request->user()->id ?? $request->ip())));
+        \Illuminate\Support\Facades\RateLimiter::for('teamchat.search', fn (\Illuminate\Http\Request $r) => \Illuminate\Cache\RateLimiting\Limit::perMinute(20)->by('teamchat-search:'.($r->user()->id ?? $r->ip())));
         $this->commands([\Modules\TeamChat\Console\PruneUploads::class]);
         $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
         $this->loadRoutesFrom(__DIR__.'/../../routes/web.php');
         $this->loadViewsFrom(__DIR__.'/../../resources/views', 'teamchat');
         $this->loadTranslationsFrom(__DIR__.'/../../lang', 'teamchat');
         $policies = $this->app->make(EventPolicies::class);
-        foreach (['conversation.created', 'message.created', 'receipt.delivered', 'receipt.read', 'membership.changed',
+        foreach (['message.edited', 'message.deleted', 'message.reaction.changed', 'message.pin.changed', 'message.mentioned', 'conversation.created', 'message.created', 'receipt.delivered', 'receipt.read', 'membership.changed',
             'group.created', 'group.updated', 'group.members.changed', 'team.created', 'team.updated', 'team.members.changed', 'channel.created', 'channel.updated', 'channel.members.changed'] as $type) {
             $policies->register('teamchat.'.$type, $this->app->make(ChatEventPolicy::class));
         }

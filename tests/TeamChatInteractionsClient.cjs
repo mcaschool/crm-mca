@@ -1,0 +1,24 @@
+// Exercise the production reconciliation function against out-of-order HTTP responses.
+const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert/strict');
+const source = fs.readFileSync('Modules/TeamChat/resources/js/teamchat.js', 'utf8');
+const start = source.indexOf('    function acceptMessages(');
+const end = source.indexOf('    function messageNode(', start);
+assert(start >= 0 && end > start);
+const state = {selected:'conversation', messages:new Map(), pending:new Map()};
+const receipts = [];
+const scope = {state, config:{userId:1}, queueReceipt:(...args)=>receipts.push(args)};
+vm.createContext(scope);
+vm.runInContext(source.slice(start,end),scope);
+const message = {id:'message', command_id:'command', sender_id:2, status:'sent', version:2, body:'new', deleted:false};
+scope.acceptMessages('conversation',[message]);
+scope.acceptMessages('conversation',[{...message,version:1,body:'stale'}]);
+assert.equal(state.messages.get('message').body,'new');
+scope.acceptMessages('conversation',[{...message,version:3,body:'',deleted:true}]);
+scope.acceptMessages('conversation',[message]);
+assert.equal(state.messages.get('message').deleted,true);
+scope.acceptMessages('conversation',[{...message,version:3,body:'',deleted:true,status:'read'}]);
+assert.equal(state.messages.get('message').status,'read');
+scope.acceptMessages('another',[{...message,id:'foreign'}]);
+assert.equal(state.messages.has('foreign'),false);
+assert.equal(receipts.length,3);
+console.log('TEAMCHAT CLIENT RECONCILIATION PASS: 5 assertions');

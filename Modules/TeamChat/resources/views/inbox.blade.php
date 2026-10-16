@@ -5,6 +5,7 @@
             'locale' => app()->getLocale(),
             'api' => url('/api/v1/collaboration'),
             'labels' => trans('teamchat::chat'),
+            'interactions' => ['emojis'=>config('teamchat.interactions.emojis')],
             'attachments' => collect(config('teamchat.attachments'))->only(['max_bytes','max_count','types','voice_seconds'])->all(),
             'socket' => [
                 'key' => config('broadcasting.connections.reverb.key'),
@@ -43,6 +44,7 @@
                     <button type="button" class="tc-back" data-back aria-label="{{ __('teamchat::chat.back') }}">←</button>
                     <span class="tc-avatar" data-peer-avatar aria-hidden="true"></span>
                     <div><h2 data-peer-name></h2><p data-peer-presence></p></div>
+                    <div class="tc-thread-tools"><button type="button" data-search-messages>{{ __('teamchat::chat.search_messages') }}</button><button type="button" data-show-pins>{{ __('teamchat::chat.pinned') }}</button></div>
                     <button type="button" class="tc-manage" data-manage hidden>{{ __('teamchat::chat.manage') }}</button>
                 </header>
                 <div class="tc-history" data-history tabindex="0" aria-label="{{ __('teamchat::chat.messages') }}">
@@ -52,6 +54,7 @@
                 </div>
                 <button type="button" class="tc-new-messages" data-jump hidden>↓ {{ __('teamchat::chat.new_messages') }}</button>
                 <form class="tc-composer" data-form>
+                    <div class="tc-reply-draft" data-reply-draft hidden></div>
                     <div class="tc-attachment-tools">
                         <button type="button" data-attach>{{ __('teamchat::chat.attach_file') }}</button>
                         <button type="button" data-attach-image>{{ __('teamchat::chat.attach_image') }}</button>
@@ -69,6 +72,8 @@
                 </form>
             </div>
         </div>
+        <div class="tc-mention-notice" data-mention-notice role="status" hidden></div>
+        <dialog class="tc-interaction-dialog" data-interaction-dialog aria-label="{{ __('teamchat::chat.message_actions') }}"><button type="button" data-interaction-close>{{ __('teamchat::chat.close') }}</button><div data-interaction-panel></div><p class="tc-interaction-error" data-interaction-error role="alert" hidden></p></dialog>
         <dialog class="tc-image-viewer" data-image-viewer aria-label="{{ __('teamchat::chat.expand_image') }}"><button type="button" data-viewer-close>{{ __('teamchat::chat.close') }}</button><img alt=""></dialog>
         <dialog class="tc-dialog" data-space-dialog aria-labelledby="tc-dialog-title"><div data-space-panel></div></dialog>
         <div class="tc-toast" data-toast role="status" hidden></div>

@@ -50,9 +50,9 @@ final class ChatController
 
     public function send(Request $request, string $conversation): JsonResponse
     {
-        $input = $request->validate(['command_id' => ['required', 'string', 'max:64', 'regex:/^[a-zA-Z0-9._:-]+$/D'], 'body' => 'sometimes|nullable|string|max:5000', 'attachments' => 'sometimes|array|max:'.config('teamchat.attachments.max_count'), 'attachments.*' => 'required|ulid|distinct',
+        $input = $request->validate(['command_id' => ['required', 'string', 'max:64', 'regex:/^[a-zA-Z0-9._:-]+$/D'], 'body' => 'sometimes|nullable|string|max:5000', 'reply_to_id' => 'sometimes|nullable|ulid', 'attachments' => 'sometimes|array|max:'.config('teamchat.attachments.max_count'), 'attachments.*' => 'required|ulid|distinct',
             'sender_id' => 'prohibited', 'user_id' => 'prohibited', 'institution_id' => 'prohibited', 'sequence' => 'prohibited', 'participants' => 'prohibited']);
-        $id = $this->commands->send($this->actor($request), $conversation, $input['command_id'], $input['body'] ?? '', $input['attachments'] ?? []);
+        $id = $this->commands->send($this->actor($request), $conversation, $input['command_id'], $input['body'] ?? '', $input['attachments'] ?? [], $input['reply_to_id'] ?? null);
         $result = $this->queries->messages($this->actor($request), $conversation, new PageRequest(null, 1), [$id]);
 
         return $this->response($request, $result['messages'][0]);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 // Public browser endpoint can differ from the internal publisher address.
 // Never expose the app secret to a browser.
 return [
+    'interactions' => ['edit_minutes' => 15, 'delete_hours' => 24, 'pin_limit' => 10, 'emojis' => ['👍', '❤️', '😂', '🎉', '😮', '🙏']],
     'attachments' => [
         'root' => env('TEAMCHAT_PRIVATE_ROOT', storage_path('app/private/teamchat')),
         'max_bytes' => (int) env('TEAMCHAT_MAX_UPLOAD_BYTES', 20 * 1024 * 1024),

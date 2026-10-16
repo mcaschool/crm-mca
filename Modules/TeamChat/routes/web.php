@@ -24,6 +24,11 @@ Route::prefix('api/v1/collaboration')->middleware(['web', 'auth', CollaborationR
     Route::delete('uploads/{upload}', [\Modules\TeamChat\Http\AttachmentController::class, 'cancel'])->whereUlid('upload');
     Route::get('uploads/{upload}/content', [\Modules\TeamChat\Http\AttachmentController::class, 'content'])->whereUlid('upload');
     Route::get('teamchat/directory', [ChatController::class, 'directory']);
+    Route::post('conversations/{conversation}/messages/{message}/actions/{operation}', [\Modules\TeamChat\Http\InteractionController::class, 'change'])->whereUlid(['conversation', 'message'])->whereIn('operation', ['edit', 'delete', 'react', 'unreact', 'pin', 'unpin'])->middleware('throttle:teamchat.commands');
+    Route::get('conversations/{conversation}/search', [\Modules\TeamChat\Http\InteractionController::class, 'search'])->whereUlid('conversation')->middleware('throttle:teamchat.search');
+    Route::get('conversations/{conversation}/pins', [\Modules\TeamChat\Http\InteractionController::class, 'pins'])->whereUlid('conversation');
+    Route::get('conversations/{conversation}/mention-members', [\Modules\TeamChat\Http\InteractionController::class, 'members'])->whereUlid('conversation');
+    Route::get('conversations/{conversation}/mention-target/{event}', [\Modules\TeamChat\Http\InteractionController::class, 'mentionTarget'])->whereUlid(['conversation', 'event']);
     Route::get('conversations', [ChatController::class, 'index']);
     Route::post('conversations/direct', [ChatController::class, 'direct'])->middleware('throttle:teamchat.commands');
     Route::get('conversations/{conversation}', [ChatController::class, 'show'])->whereUlid('conversation');
