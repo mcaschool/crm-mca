@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\TeamCalls\Contracts\ConversationAccess;
 use Modules\TeamCalls\Contracts\UserDirectory;
@@ -190,24 +189,36 @@ it('identificadores manipulados y métodos no permitidos responden en el formato
 });
 
 it('CSRF: el panel rechaza escrituras sin token (419) y acepta las que lo traen', function () {
-    // Activa la verificación real (Laravel la omite en pruebas) sin tocar la pila del panel.
-    $this->app->bind(PreventRequestForgery::class, fn ($app) => new class($app, $app['encrypter']) extends PreventRequestForgery
-    {
-        protected function runningUnitTests()
-        {
-            return false;
-        }
-    });
-    $body = ['user_id' => $this->beto->id, 'media' => 'audio', 'idempotency_key' => 'http-key-f001'];
+    // Verificación REAL del middleware vigente (WidgetCsrf de CollaborationCore, que delega en el CSRF de Laravel
+    // para las sesiones normales). Laravel solo la omite con env «testing»: durante estas peticiones, «local».
+    $env = app()['env'];
+    app()['env'] = 'local';
+    try {
+        $body = ['user_id' => $this->beto->id, 'media' => 'audio', 'idempotency_key' => 'http-key-f001'];
 
-    Http::as($this->ana)->postJson(route('collab.calls.store'), $body)->assertStatus(419)->assertJsonPath('error.code', 'csrf_token_mismatch');
-    Http::as($this->ana)->withHeader('Sec-Fetch-Site', 'cross-site')->postJson(route('collab.calls.store'), $body)->assertStatus(419);
+        Http::as($this->ana)->postJson(route('collab.calls.store'), $body)->assertStatus(419)->assertJsonPath('error.code', 'csrf_token_mismatch');
+        Http::as($this->ana)->withHeader('Sec-Fetch-Site', 'cross-site')->postJson(route('collab.calls.store'), $body)->assertStatus(419);
+        expect(Call::query()->count())->toBe(0);
+
+        // Navegador nuevo: su sesión empieza con este token (la cookie de sesión es real).
+        Http::as($this->ana, 'ana-csrf')->withSession(['_token' => 'token-de-prueba-csrf'])->withHeader('X-CSRF-TOKEN', 'token-de-prueba-csrf')
+            ->postJson(route('collab.calls.store'), $body)->assertCreated();
+        Http::get($this->ana, 'index')->assertOk(); // las lecturas no lo necesitan
+    } finally {
+        app()['env'] = $env;
+    }
+});
+
+it('widget universal: sus credenciales delegadas no sirven para las llamadas (ni API definitiva ni heredada)', function () {
+    test()->flushHeaders();
+    $body = ['user_ids' => [$this->beto->id], 'media' => 'audio'];
+    // La lista de rutas del widget no incluye las llamadas: se rechaza antes de autenticar nada.
+    $this->withHeaders(['Authorization' => 'MCAWidget token-falso', 'Idempotency-Key' => 'widget-call-0001'])
+        ->postJson('/api/v1/collaboration/calls', $body)->assertForbidden()->assertJsonPath('error.code', 'forbidden');
+    $legacy = $this->withHeaders(['Authorization' => 'MCAWidget token-falso'])
+        ->postJson(route('collab.calls.store'), ['user_id' => $this->beto->id, 'media' => 'audio', 'idempotency_key' => 'widget-call-0002']);
+    $legacy->assertForbidden()->assertJsonPath('error.code', 'forbidden'); // su código, no un 500 genérico
     expect(Call::query()->count())->toBe(0);
-
-    // Navegador nuevo: su sesión empieza con este token (la cookie de sesión es real).
-    Http::as($this->ana, 'ana-csrf')->withSession(['_token' => 'token-de-prueba-csrf'])->withHeader('X-CSRF-TOKEN', 'token-de-prueba-csrf')
-        ->postJson(route('collab.calls.store'), $body)->assertCreated();
-    Http::get($this->ana, 'index')->assertOk(); // las lecturas no lo necesitan
 });
 
 it('límite de frecuencia por persona: 429 con Retry-After', function () {

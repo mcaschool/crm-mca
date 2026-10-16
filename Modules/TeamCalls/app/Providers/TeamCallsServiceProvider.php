@@ -6,12 +6,14 @@ namespace Modules\TeamCalls\Providers;
 
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Modules\CollaborationCore\Contracts\CallsGateway as SharedCallsGatewayContract;
 use Modules\CollaborationCore\Contracts\ConversationDirectory;
 use Modules\CollaborationCore\Contracts\PresenceService;
+use Modules\CollaborationCore\Exceptions\ContractException;
 use Modules\CollaborationCore\Integration\CallPresenceAuthorizer;
 use Modules\CollaborationRealtime\Integration\RevocationConsumer;
 use Modules\CollaborationRealtime\Services\EventPolicies;
@@ -25,6 +27,7 @@ use Modules\TeamCalls\Contracts\MediaRoomService;
 use Modules\TeamCalls\Contracts\Presence;
 use Modules\TeamCalls\Contracts\PushNotifier;
 use Modules\TeamCalls\Contracts\UserDirectory;
+use Modules\TeamCalls\Http\CallResponse;
 use Modules\TeamCalls\Integration\Collaboration\CallEventEnvelopes;
 use Modules\TeamCalls\Integration\Collaboration\CallEventPolicy;
 use Modules\TeamCalls\Integration\Collaboration\CollaborationPresence;
@@ -127,6 +130,19 @@ class TeamCallsServiceProvider extends ModuleServiceProvider
                 $policies->register($type, new CallEventPolicy($ephemeral));
             }
         }
+
+        // Errores del contrato común en las rutas propias de llamadas (p. ej. el CSRF del widget universal rechaza
+        // aquí sus credenciales delegadas): su código y estado, nunca un 500 genérico. El renderizador de Core
+        // solo cubre /api/v1/collaboration.
+        $this->app->make(ExceptionHandler::class)->renderable(function (ContractException $e, Request $request) {
+            if (! $request->is('colaboracion/llamadas', 'colaboracion/llamadas/*', 'colaboracion/teamcalls', 'colaboracion/teamcalls/*')) {
+                return null;
+            }
+
+            return $request->expectsJson() || $request->is('colaboracion/llamadas*')
+                ? CallResponse::error($e->errorCode, $e->errorCode, $e->httpStatus)
+                : response('', $e->httpStatus, ['Cache-Control' => 'no-store, private']);
+        });
 
         // Límites de la API web, por persona (o IP si aún no hay sesión).
         foreach (['start', 'write', 'read'] as $kind) {
