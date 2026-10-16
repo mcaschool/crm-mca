@@ -567,6 +567,20 @@ vigentes los mecanismos actuales: logout (`LeaveCallsOnLogout`), webhooks y barr
 - `CollaborationAdaptersTest`: enlaces, `collaboration.use`, directorio, revocaciones, presencia y la
   excepción de desarrollo de LiveKit.
 
+## Integración funcional (fase 4B)
+Con CollaborationCore, CollaborationRealtime y TeamChat **reales** (rama `integration/collaboration-4b`), los
+adaptadores de la fase 4A están activos:
+- identidad, dispositivo y `collaboration.use` de Core en todas las rutas de llamadas;
+- API definitiva `/api/v1/collaboration/calls`;
+- outbox, políticas `call.*` y `SyncFeed` de Realtime;
+- revocaciones durables consumidas por TeamCalls;
+- presencia de Core;
+- llamadas desde TeamChat;
+- adaptador de tiempo real en la interfaz.
+
+`WebDevice` y `LeaveCallsOnLogout` se retiraron. Detalle, pruebas (reales y simuladas), bloqueos y pendientes de producción:
+[docs/TEAMCALLS-PHASE-4B.md](docs/TEAMCALLS-PHASE-4B.md).
+
 ## Concurrencia
 `tests/Feature/CallRealConcurrencyTest.php` lanza procesos PHP independientes (cada uno con su propia
 conexión MySQL, `tests/Concurrency/worker.php`) que actúan a la vez tras una barrera de tiempo: mismos
