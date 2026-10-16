@@ -25,6 +25,8 @@ use Modules\Social\Models\SocialPostTarget;
  */
 final class SocialPostScheduler
 {
+    // Resolve tenancy at use time: a retained service may outlive a worker's scoped container.
+
     /** Minutos tras los que una ejecución en «preparing» se considera interrumpida. */
     public const STALE_MINUTES = 15;
 
@@ -33,7 +35,6 @@ final class SocialPostScheduler
 
     public function __construct(
         private readonly SocialPublishService $publisher,
-        private readonly CurrentInstitution $context,
         private readonly AuditService $audit,
     ) {}
 
@@ -110,7 +111,7 @@ final class SocialPostScheduler
         $out['recovered'] = $this->recoverStale();
 
         /** @var array<int, array{id:int, institution_id:int}> $due */
-        $due = $this->context->runGlobally(fn () => SocialPost::query()
+        $due = app(CurrentInstitution::class)->runGlobally(fn () => SocialPost::query()
             ->where('status', SocialPost::SCHEDULED)
             ->whereNotNull('scheduled_at')
             ->where('scheduled_at', '<=', now())
@@ -124,7 +125,7 @@ final class SocialPostScheduler
             if (microtime(true) > $deadline) {
                 break; // el resto, en la siguiente pasada (cada minuto)
             }
-            $done = $this->context->runFor($row['institution_id'], function () use ($row): bool {
+            $done = app(CurrentInstitution::class)->runFor($row['institution_id'], function () use ($row): bool {
                 $post = SocialPost::query()->find($row['id']);
                 $runId = $post !== null ? $this->claim($post, [SocialPost::SCHEDULED], requireDue: true) : null;
 
@@ -144,7 +145,7 @@ final class SocialPostScheduler
     private function resumeProcessing(float $deadline): int
     {
         /** @var array<int, array{id:int, institution_id:int}> $rows */
-        $rows = $this->context->runGlobally(fn () => SocialPostTarget::query()
+        $rows = app(CurrentInstitution::class)->runGlobally(fn () => SocialPostTarget::query()
             ->where('network', 'instagram')
             ->where('status', 'processing')
             ->whereNotNull('container_id')
@@ -160,7 +161,7 @@ final class SocialPostScheduler
             if (microtime(true) > $deadline) {
                 break;
             }
-            $this->context->runFor($row['institution_id'], function () use ($row): void {
+            app(CurrentInstitution::class)->runFor($row['institution_id'], function () use ($row): void {
                 $target = SocialPostTarget::query()->find($row['id']);
                 if ($target !== null) {
                     $this->publisher->resumeTarget($target);
@@ -180,7 +181,7 @@ final class SocialPostScheduler
     private function recoverStale(): int
     {
         /** @var array<int, array{id:int, institution_id:int}> $rows */
-        $rows = $this->context->runGlobally(fn () => SocialPost::query()
+        $rows = app(CurrentInstitution::class)->runGlobally(fn () => SocialPost::query()
             ->where('status', SocialPost::PREPARING)
             ->where('locked_at', '<', now()->subMinutes(self::STALE_MINUTES))
             ->get(['id', 'institution_id'])
@@ -188,7 +189,7 @@ final class SocialPostScheduler
             ->all());
 
         foreach ($rows as $row) {
-            $this->context->runFor($row['institution_id'], function () use ($row): void {
+            app(CurrentInstitution::class)->runFor($row['institution_id'], function () use ($row): void {
                 $post = SocialPost::query()->find($row['id']);
                 if ($post === null || $post->status !== SocialPost::PREPARING) {
                     return;

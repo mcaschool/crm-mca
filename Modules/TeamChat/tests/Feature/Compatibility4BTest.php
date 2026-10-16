@@ -108,7 +108,7 @@ it('materializes expiry and lost session eligibility once during reconciliation'
         ->and(revocations4b('collaboration.device.revoked')->count())->toBe(1);
 });
 it('fails closed until a consumer exists and atomically deduplicates its durable effects', function () {
-    // Integración 4B: TeamCalls ya enlaza su consumidor; se retira para comprobar el comportamiento SIN él.
+    // Installed consumers (such as TeamCalls) must not change this explicit absence scenario.
     app()->offsetUnset(RevocationConsumer::class);
     app(Revocation::class)->session($this->v->id, $this->b->sessionId);
     $event = app(EventCodec::class)->decode(revocations4b()->first())->event;

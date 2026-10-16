@@ -25,8 +25,9 @@ use Modules\Social\Support\SocialAutomationAlerts;
  */
 final class DeliveryReconciler
 {
+    // Resolve tenancy at use time: a retained service may outlive a worker's scoped container.
+
     public function __construct(
-        private readonly CurrentInstitution $context,
         private readonly SocialAutomationService $automation,
         private readonly SocialAutomationAlerts $alerts,
     ) {}
@@ -35,7 +36,7 @@ final class DeliveryReconciler
     public function run(): array
     {
         $cutoff = now()->subSeconds(max(30, (int) config('social.delivery.unknown_after_seconds', 180)));
-        $stale = $this->context->runGlobally(fn () => SocialMessage::query()
+        $stale = app(CurrentInstitution::class)->runGlobally(fn () => SocialMessage::query()
             ->where('direction', 'outbound')
             ->whereIn('status', ['pending', 'sending'])
             ->whereNull('external_message_id')
@@ -45,7 +46,7 @@ final class DeliveryReconciler
 
         $done = ['failed' => 0, 'unknown' => 0];
         foreach ($stale as $row) {
-            $outcome = $this->context->runFor((int) $row->institution_id, fn (): ?string => $this->resolve((int) $row->id, $cutoff));
+            $outcome = app(CurrentInstitution::class)->runFor((int) $row->institution_id, fn (): ?string => $this->resolve((int) $row->id, $cutoff));
             if ($outcome !== null) {
                 $done[$outcome]++;
             }

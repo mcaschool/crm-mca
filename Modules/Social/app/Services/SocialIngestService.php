@@ -30,8 +30,9 @@ use Throwable;
  */
 final class SocialIngestService
 {
+    // Resolve tenancy at use time: a retained service may outlive a worker's scoped container.
+
     public function __construct(
-        private readonly CurrentInstitution $context,
         private readonly ContactProfileUpdater $profiles,
     ) {}
 
@@ -40,7 +41,7 @@ final class SocialIngestService
         // El canal se resuelve SIN contexto de institución todavía (modo global desactiva
         // el InstitutionScope limpiamente, sin withoutGlobalScope). Su institución es la
         // fuente de verdad para todo lo que se cree a continuación.
-        $channel = $this->context->runGlobally(fn (): ?SocialChannel => SocialChannel::query()
+        $channel = app(CurrentInstitution::class)->runGlobally(fn (): ?SocialChannel => SocialChannel::query()
             ->where('provider', $m->provider)
             ->where('external_id', $m->channelExternalId)
             ->first());
@@ -54,7 +55,7 @@ final class SocialIngestService
             return IngestResult::parked();
         }
 
-        $result = $this->context->runFor($channel->institution_id, fn (): IngestResult => DB::transaction(
+        $result = app(CurrentInstitution::class)->runFor($channel->institution_id, fn (): IngestResult => DB::transaction(
             fn (): IngestResult => $this->store($channel, $m)
         ));
 
@@ -71,7 +72,7 @@ final class SocialIngestService
         // contestar en esa conversación. Un eco repetido es 'duplicate' y no vuelve a pausar.
         if ($result->status === 'created' && $result->conversationId !== null && $m->direction === 'outbound'
             && $m->senderType === 'app' && ! $m->fromHistory && $channel->advisor_bot_id !== null) {
-            $this->context->runFor($channel->institution_id, function () use ($result, $m): void {
+            app(CurrentInstitution::class)->runFor($channel->institution_id, function () use ($result, $m): void {
                 $conversation = SocialConversation::query()->with('channel')->find($result->conversationId);
                 if ($conversation !== null) {
                     app(SocialAutomationService::class)->humanReplied($conversation, null, $m->provider === 'whatsapp' ? 'replied_from_app' : 'replied_externally');
@@ -96,7 +97,7 @@ final class SocialIngestService
         // nativo del canal sale justo después de responder al webhook.
         if ($result->status === 'created' && $result->messageId !== null && $m->direction === 'inbound'
             && ! $m->fromHistory && AdvisorDispatcher::autoreplyEnabled() && SocialAdvisorResponder::channelIsAutomated($channel)) {
-            $typingDelay = $this->context->runFor($channel->institution_id, fn (): int => (int) ($channel->advisorBot?->typingDelay() ?? 0));
+            $typingDelay = app(CurrentInstitution::class)->runFor($channel->institution_id, fn (): int => (int) ($channel->advisorBot?->typingDelay() ?? 0));
             $delay = max(0, (int) $channel->advisor_reply_delay, $typingDelay);
             SendAdvisorTyping::dispatchAfterResponse($result->messageId, $channel->institution_id);
             RespondWithAdvisor::dispatch($result->messageId, $channel->institution_id)
@@ -115,7 +116,7 @@ final class SocialIngestService
      */
     public function applyStatus(NormalizedStatus $s): string
     {
-        $channel = $this->context->runGlobally(fn (): ?SocialChannel => SocialChannel::query()
+        $channel = app(CurrentInstitution::class)->runGlobally(fn (): ?SocialChannel => SocialChannel::query()
             ->where('provider', $s->provider)
             ->where('external_id', $s->channelExternalId)
             ->first());
@@ -129,7 +130,7 @@ final class SocialIngestService
             return 'parked';
         }
 
-        return $this->context->runFor($channel->institution_id, function () use ($channel, $s): string {
+        return app(CurrentInstitution::class)->runFor($channel->institution_id, function () use ($channel, $s): string {
             $message = SocialMessage::query()
                 ->where('external_message_id', $s->messageExternalId)
                 ->whereHas('conversation', fn ($q) => $q->where('social_channel_id', $channel->id))
@@ -209,7 +210,7 @@ final class SocialIngestService
         // Best-effort de verdad: el mensaje YA quedó ingerido antes de llegar a este punto;
         // resolver el perfil nunca debe tumbar el webhook.
         try {
-            $this->context->runFor($channel->institution_id, function () use ($channel, $conversationId): void {
+            app(CurrentInstitution::class)->runFor($channel->institution_id, function () use ($channel, $conversationId): void {
                 $conversation = SocialConversation::query()->find($conversationId);
                 if ($conversation !== null) {
                     $this->profiles->refresh($conversation, $channel);

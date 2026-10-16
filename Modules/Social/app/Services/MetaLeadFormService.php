@@ -41,6 +41,8 @@ use Throwable;
  */
 final class MetaLeadFormService
 {
+    // Resolve tenancy at use time: a retained service may outlive a worker's scoped container.
+
     /** Línea del programa → tipo de producto del CRM (taxonomía de leads). */
     private const PRODUCT_TYPES = [
         'microcredenciales' => 'microcredencial',
@@ -71,7 +73,6 @@ final class MetaLeadFormService
     private const POLL_OVERLAP_MINUTES = 15;
 
     public function __construct(
-        private readonly CurrentInstitution $tenancy,
         private readonly LeadIntake $intake,
         private readonly EventService $events,
         private readonly MetaLeadAccessCheck $check,
@@ -136,13 +137,13 @@ final class MetaLeadFormService
             return 0;
         }
 
-        $pages = $this->tenancy->runGlobally(fn () => MetaLeadPage::query()
+        $pages = app(CurrentInstitution::class)->runGlobally(fn () => MetaLeadPage::query()
             ->where('receiving_enabled', true)->where('selected', true)->where('available', true)->where('access_status', 'verified')
             ->get(['id', 'institution_id']));
 
         $created = 0;
         foreach ($pages as $row) {
-            $created += $this->tenancy->runFor((int) $row->institution_id, function () use ($row): int {
+            $created += app(CurrentInstitution::class)->runFor((int) $row->institution_id, function () use ($row): int {
                 $page = MetaLeadPage::query()->with('metaConnection')->find($row->id);
 
                 return $page !== null && $page->receiving() ? $this->pollPage($page) : 0;
@@ -269,7 +270,7 @@ final class MetaLeadFormService
         }
 
         // La Página la usa como mucho UNA empresa (se impide al elegirla).
-        $owner = $this->tenancy->runGlobally(fn (): ?MetaLeadPage => MetaLeadPage::query()
+        $owner = app(CurrentInstitution::class)->runGlobally(fn (): ?MetaLeadPage => MetaLeadPage::query()
             ->where('page_id', $pageId)->where('selected', true)->orderByDesc('receiving_enabled')->first(['id', 'institution_id']));
         if ($owner === null) {
             Log::info('social.lead_forms: Página sin empresa', ['page_id' => $pageId]);
@@ -277,7 +278,7 @@ final class MetaLeadFormService
             return 'unknown_page';
         }
 
-        return $this->tenancy->runFor((int) $owner->institution_id, function () use ($owner, $leadgenId, $pageId, $formId): string {
+        return app(CurrentInstitution::class)->runFor((int) $owner->institution_id, function () use ($owner, $leadgenId, $pageId, $formId): string {
             $page = MetaLeadPage::query()->with('metaConnection')->find($owner->id);
             if ($page === null || ! $page->receiving()) {
                 return 'not_receiving';

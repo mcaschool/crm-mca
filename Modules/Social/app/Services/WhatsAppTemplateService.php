@@ -32,6 +32,8 @@ use Throwable;
  */
 final class WhatsAppTemplateService
 {
+    // Resolve tenancy at use time: a retained service may outlive a worker's scoped container.
+
     private const TIMEOUT_SECONDS = 20;
 
     private const SYNC_PAGE_SIZE = 50;
@@ -39,8 +41,6 @@ final class WhatsAppTemplateService
     private const SYNC_MAX_PAGES = 20;
 
     private const FIELDS = 'id,name,status,category,language,components,quality_score,parameter_format,rejected_reason';
-
-    public function __construct(private readonly CurrentInstitution $context) {}
 
     /**
      * Sincroniza todas las plantillas de la WABA del canal. Devuelve [synced, pages].
@@ -192,7 +192,7 @@ final class WhatsAppTemplateService
                     continue;
                 }
 
-                $applied = $this->context->runFor(
+                $applied = app(CurrentInstitution::class)->runFor(
                     $channel->institution_id,
                     fn (): bool => $this->applyTemplateEvent($channel, $field, $value),
                 );
@@ -449,7 +449,7 @@ final class WhatsAppTemplateService
             return null;
         }
 
-        return $this->context->runGlobally(function () use ($wabaId): ?SocialChannel {
+        return app(CurrentInstitution::class)->runGlobally(function () use ($wabaId): ?SocialChannel {
             foreach (SocialChannel::query()->where('provider', 'whatsapp')->get() as $channel) {
                 if ((string) ($channel->credentials['waba_id'] ?? '') === $wabaId) {
                     return $channel;

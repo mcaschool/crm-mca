@@ -11,8 +11,6 @@ use Modules\Institutions\Models\Institution;
 
 final class InstitutionExecution
 {
-    public function __construct(private CurrentInstitution $current) {}
-
     /**
      * @template T
      *
@@ -25,6 +23,6 @@ final class InstitutionExecution
             throw new ContractException('forbidden', 403);
         }
 
-        return $this->current->runFor($context->institutionId, $operation);
+        return app(CurrentInstitution::class)->runFor($context->institutionId, $operation);
     }
 }

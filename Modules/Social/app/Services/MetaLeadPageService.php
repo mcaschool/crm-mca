@@ -25,10 +25,11 @@ use RuntimeException;
  */
 final class MetaLeadPageService
 {
+    // Resolve tenancy at use time: a retained service may outlive a worker's scoped container.
+
     public function __construct(
         private readonly MetaLeadAccessCheck $check,
         private readonly MetaLeadFormService $forms,
-        private readonly CurrentInstitution $tenancy,
         private readonly MetaConnectionService $connections,
         private readonly AuditService $audit,
     ) {}
@@ -36,7 +37,7 @@ final class MetaLeadPageService
     /** ¿Usa esta Página otra empresa ahora mismo? */
     public function takenElsewhere(MetaLeadPage $page): bool
     {
-        return $this->tenancy->runGlobally(fn (): bool => MetaLeadPage::query()
+        return app(CurrentInstitution::class)->runGlobally(fn (): bool => MetaLeadPage::query()
             ->where('page_id', $page->page_id)
             ->where('institution_id', '!=', $page->institution_id)
             ->where('selected', true)
@@ -91,14 +92,14 @@ final class MetaLeadPageService
         }
 
         DB::transaction(function () use ($page, $tasks): void {
-            $previous = $this->tenancy->runGlobally(fn () => MetaLeadPage::query()
+            $previous = app(CurrentInstitution::class)->runGlobally(fn () => MetaLeadPage::query()
                 ->where('page_id', $page->page_id)
                 ->where('institution_id', '!=', $page->institution_id)
                 ->where('selected', true)
                 ->get(['id', 'institution_id']));
 
             foreach ($previous as $row) {
-                $this->tenancy->runFor((int) $row->institution_id, function () use ($row, $page): void {
+                app(CurrentInstitution::class)->runFor((int) $row->institution_id, function () use ($row, $page): void {
                     $old = MetaLeadPage::query()->findOrFail($row->id);
                     $old->forceFill(['selected' => false, 'receiving_enabled' => false, 'released_at' => now()])->save();
                     // En la empresa que la pierde: sin usuario (es de otra empresa) y sin datos de ella.

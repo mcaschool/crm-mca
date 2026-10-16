@@ -52,6 +52,8 @@ use Throwable;
  */
 final class WhatsAppCoexistenceService
 {
+    // Resolve tenancy at use time: a retained service may outlive a worker's scoped container.
+
     private const TIMEOUT_SECONDS = 20;
 
     private const STATE_TTL_SECONDS = 600;
@@ -60,7 +62,6 @@ final class WhatsAppCoexistenceService
     public const HISTORY_DECLINED_CODE = 2593109;
 
     public function __construct(
-        private readonly CurrentInstitution $context,
         private readonly SocialIngestService $ingest,
         private readonly MetaWebhookNormalizer $normalizer,
     ) {}
@@ -122,7 +123,7 @@ final class WhatsAppCoexistenceService
         $this->assertAssetsBelongToToken($token, $wabaId, $phoneNumberId);
         $verified = $this->verifyCoexistenceConnection($token, $phoneNumberId);
 
-        return $this->context->runFor($institutionId, function () use ($wabaId, $phoneNumberId, $displayPhoneNumber, $token, $verified): SocialChannel {
+        return app(CurrentInstitution::class)->runFor($institutionId, function () use ($wabaId, $phoneNumberId, $displayPhoneNumber, $token, $verified): SocialChannel {
             $channel = SocialChannel::query()
                 ->where('provider', 'whatsapp')
                 ->where('external_id', $phoneNumberId)
@@ -396,7 +397,7 @@ final class WhatsAppCoexistenceService
                     }
 
                     if ($field === 'smb_app_state_sync') {
-                        $counts['contacts'] += $this->context->runFor(
+                        $counts['contacts'] += app(CurrentInstitution::class)->runFor(
                             $channel->institution_id,
                             fn (): int => $this->applyStateSync($channel, $value),
                         );
@@ -481,7 +482,7 @@ final class WhatsAppCoexistenceService
         foreach (is_array($value['history'] ?? null) ? $value['history'] : [] as $chunk) {
             $meta = is_array($chunk['metadata'] ?? null) ? $chunk['metadata'] : [];
             if ($meta !== []) {
-                $this->context->runFor($channel->institution_id, function () use ($channel, $meta): void {
+                app(CurrentInstitution::class)->runFor($channel->institution_id, function () use ($channel, $meta): void {
                     $current = $channel->connection_meta ?? [];
                     $progress = max((int) ($current['history_sync_progress'] ?? 0), (int) ($meta['progress'] ?? 0));
                     $channel->connection_meta = array_merge($current, [
@@ -506,7 +507,7 @@ final class WhatsAppCoexistenceService
     {
         $event = strtoupper((string) ($value['event'] ?? ''));
 
-        return $this->context->runFor($channel->institution_id, function () use ($channel, $event): int {
+        return app(CurrentInstitution::class)->runFor($channel->institution_id, function () use ($channel, $event): int {
             if ($event === 'ACCOUNT_OFFBOARDED') {
                 $this->markOffboarded($channel);
 
@@ -551,7 +552,7 @@ final class WhatsAppCoexistenceService
     {
         $phoneNumberId = (string) (is_array($value['metadata'] ?? null) ? ($value['metadata']['phone_number_id'] ?? '') : '');
 
-        return $this->context->runGlobally(function () use ($phoneNumberId, $entryWabaId): ?SocialChannel {
+        return app(CurrentInstitution::class)->runGlobally(function () use ($phoneNumberId, $entryWabaId): ?SocialChannel {
             if ($phoneNumberId !== '') {
                 return SocialChannel::query()
                     ->where('provider', 'whatsapp')

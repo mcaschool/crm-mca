@@ -14,7 +14,7 @@ use Modules\CollaborationRealtime\Data\EventEnvelope;
 
 final class DatabaseEventRecorder implements TransactionalEventRecorder
 {
-    public function __construct(private EventPolicies $policies, private EventCodec $codec, private InstitutionExecution $execution, private \Modules\Core\Tenancy\CurrentInstitution $current) {}
+    public function __construct(private EventPolicies $policies, private EventCodec $codec, private InstitutionExecution $execution) {}
 
     public function append(InstitutionContext $context, EventEnvelope $event, DeliveryAudience $audience): string
     {
@@ -24,7 +24,8 @@ final class DatabaseEventRecorder implements TransactionalEventRecorder
         if ($context->institutionId !== $event->institutionId || $context->institutionId !== $audience->institutionId || count($audience->userIds) > 100) {
             throw new ContractException('invalid', 422);
         }
-        if ($this->current->has() && $this->current->id() !== $context->institutionId) {
+        $current = app(\Modules\Core\Tenancy\CurrentInstitution::class);
+        if ($current->has() && $current->id() !== $context->institutionId) {
             throw new ContractException('forbidden', 403);
         }
         $policy = $this->policies->get($event->type);
@@ -80,7 +81,7 @@ final class DatabaseEventRecorder implements TransactionalEventRecorder
                 throw new ContractException('invalid', 422);
             }
 
-            return $this->current->runFor($context->institutionId, $operation);
+            return $current->runFor($context->institutionId, $operation);
         }
 
         return $this->execution->run($context, $operation);

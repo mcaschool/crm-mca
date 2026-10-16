@@ -38,8 +38,7 @@ final class RealtimeTestPolicy implements EventPolicy
 }
 function realtimePolicies(): RealtimeTestPolicy
 {
-    // Integración 4B: registro PROPIO de la prueba. Los dominios instalados ya registran sus tipos (TeamCalls,
-    // dueño de call.*, registra call.ended); se conservan las políticas internas de revocación de Realtime.
+    // Fixture-owned policies: installed modules retain ownership of their production event types.
     $registry = new EventPolicies;
     foreach (\Modules\CollaborationRealtime\Services\RevocationPolicy::TYPES as $type) {
         $registry->register($type, new \Modules\CollaborationRealtime\Services\RevocationPolicy);
