@@ -45,11 +45,15 @@ class RouteServiceProvider extends ServiceProvider
         // página con la pila HTML del panel (auth redirige al login y el 2FA a «Mi perfil», como el resto).
         $uiJson = Route::middleware([RespondWithCallsJson::class, 'web', 'auth', 'institution.user', 'setlocale', \App\Http\Middleware\EnsureTwoFactorEnabled::class, EnsureCallsUiEnabled::class, RequireCollaborationActor::class]);
         $uiPage = Route::middleware(['web', 'auth', 'institution.user', 'setlocale', \App\Http\Middleware\EnsureTwoFactorEnabled::class, EnsureCallsUiEnabled::class, RequireCollaborationActor::class.':page']);
+        // Lanzador para otras aplicaciones (fase 4E): archivo estático, sin sesión (marco del widget).
+        $uiPublic = Route::middleware([EnsureCallsUiEnabled::class]);
         if ($domain = config('crm.panel_domain')) {
             $uiJson->domain($domain);
             $uiPage->domain($domain);
+            $uiPublic->domain($domain);
         }
         $uiJson->group(module_path($this->name, '/routes/ui-api.php'));
         $uiPage->group(module_path($this->name, '/routes/ui.php'));
+        $uiPublic->group(module_path($this->name, '/routes/ui-public.php'));
     }
 }

@@ -9,6 +9,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\TeamCalls\Exceptions\CallException;
+use Modules\TeamCalls\Http\CallLaunch;
 use Modules\TeamCalls\Http\CallResponse;
 use Modules\TeamCalls\Services\CallService;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -59,7 +60,11 @@ final class CallsUiController
                     'leave' => route('collab.calls.leave', ['call' => '__CALL__']),
                     'end' => route('collab.calls.end', ['call' => '__CALL__']),
                     'credentials' => route('collab.calls.credentials', ['call' => '__CALL__']),
+                    // API definitiva (CallsGateway): llamadas desde conversaciones privadas, grupos y canales.
+                    'conversation_store' => route('collaboration.calls.store'),
                 ],
+                // Intención recibida de otra aplicación (CallLaunch): solo formato; la autoriza la API.
+                'intent' => CallLaunch::fromRequest($request),
                 // CollaborationRealtime: API común y dirección PÚBLICA de Reverb (la clave de la app no es secreta).
                 'realtime' => [
                     'api' => url('/api/v1/collaboration'),
@@ -90,6 +95,20 @@ final class CallsUiController
         }
 
         return $urls;
+    }
+
+    /**
+     * Lanzador para otras aplicaciones (TeamChat, widget universal): JS sin secretos ni datos de la persona,
+     * servido sin sesión (el marco del widget no siempre la tiene). Solo existe con la interfaz habilitada.
+     */
+    public function launcher(): BinaryFileResponse
+    {
+        return response()->file(module_path('TeamCalls', 'resources/assets/js/teamcalls-launcher.js'), [
+            'Content-Type' => 'application/javascript; charset=utf-8',
+            'Cache-Control' => 'public, max-age=3600',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cross-Origin-Resource-Policy' => 'same-origin',
+        ]);
     }
 
     public function asset(string $asset): BinaryFileResponse

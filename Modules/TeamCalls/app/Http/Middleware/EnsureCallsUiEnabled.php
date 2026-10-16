@@ -6,6 +6,7 @@ namespace Modules\TeamCalls\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Modules\TeamCalls\Http\CallLaunch;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -16,8 +17,7 @@ final class EnsureCallsUiEnabled
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $environments = (array) config('teamcalls.ui.environments', ['local', 'testing']);
-        if (! config('teamcalls.ui.enabled') || ! app()->environment($environments)) {
+        if (! CallLaunch::enabled()) {
             abort(404);
         }
 

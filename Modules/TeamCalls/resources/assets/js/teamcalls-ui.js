@@ -63,13 +63,13 @@
         return cfg.routes[name].replace('__CALL__', encodeURIComponent(callId || ''));
     }
 
-    async function api(method, url, body) {
+    async function api(method, url, body, extraHeaders) {
         let res;
         try {
             res = await fetch(url, {
                 method,
                 credentials: 'same-origin',
-                headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+                headers: Object.assign({ Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'X-Requested-With': 'XMLHttpRequest' }, extraHeaders || {}),
                 body: body ? JSON.stringify(body) : undefined,
             });
         } catch (e) {
@@ -97,7 +97,7 @@
             busy: 'err_busy', answered_elsewhere: 'err_answered_elsewhere', media_unavailable: 'err_media_unavailable',
             forbidden: 'err_forbidden', unauthenticated: 'err_session', two_factor_required: 'err_session',
             csrf_token_mismatch: 'err_session', network: 'err_server', too_many_requests: 'err_server',
-            invalid_transition: 'err_call_gone', not_found: 'err_call_gone',
+            invalid_transition: 'err_call_gone', not_found: 'err_call_gone', invalid: 'err_launch_invalid',
         };
         return map[e && e.code] || null;
     }
@@ -748,12 +748,33 @@
     }
 
     // ─── Flujo de la llamada ────────────────────────────────────────────────────────────────────
-    async function startCall(userId, media) {
+    function newKey() {
+        return (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random()).replace(/[^A-Za-z0-9._:-]/g, '');
+    }
+
+    async function startCall(userId, media, key) {
         if (state.call) return;
         if (state.elsewhere || !(await tabs.acquireControl(false))) return alertBox(t('err_other_tab'));
+        // Llamada individual: API web de TeamCalls. La misma clave repetida devuelve la misma llamada.
+        await begin(media, () => api('POST', cfg.routes.store, { user_id: Number(userId), media, idempotency_key: 'ui-' + (key || newKey()) }));
+    }
+
+    /**
+     * Llamada desde una conversación (fase 4E): API definitiva (CallsGateway). En las privadas TeamChat
+     * resuelve a la otra persona en el servidor; en grupos y canales la selección explícita se valida
+     * todo o nada contra la membresía. La página no decide nada: solo transmite la intención.
+     */
+    async function startConversationCall(conversation, invitees, media, key) {
+        if (state.call) return;
+        if (state.elsewhere || !(await tabs.acquireControl(false))) return alertBox(t('err_other_tab'));
+        const body = { media, conversation: { type: conversation.type, id: conversation.id } };
+        if (conversation.type !== 'direct') body.invitees = invitees.map(Number);
+        await begin(media, () => api('POST', cfg.routes.conversation_store, body, { 'Idempotency-Key': 'ui-' + (key || newKey()) }));
+    }
+
+    async function begin(media, request) {
         try {
-            const key = (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random()).replace(/[^A-Za-z0-9._:-]/g, '');
-            state.call = (await api('POST', cfg.routes.store, { user_id: Number(userId), media, idempotency_key: 'ui-' + key })).data;
+            state.call = (await request()).data;
             state.wantMic = true;
             state.wantCam = media === 'video';
             $('tc-alert').hidden = true;
@@ -762,7 +783,95 @@
         } catch (e) {
             showError(e);
             if (state.call) await finish(null, null);
+            else tabs.releaseControl();
         }
+    }
+
+    /** Abrir una llamada existente: contestar si suena; entrar si la persona sigue autorizada (lo decide el servidor). */
+    async function openCall(callId) {
+        if (state.call) return state.call.id === callId ? undefined : alertBox(t('err_in_call'));
+        let s;
+        try {
+            s = (await api('GET', route('show', callId))).data;
+        } catch (e) {
+            return showError(e);
+        }
+        const mine = me(s);
+        if (!LIVE.includes(s.status)) return alertBox(t('err_call_gone'));
+        if (!mine || mine.revoked) return alertBox(t('err_forbidden'));
+        if (mine.state === 'ringing') return showIncoming(s);
+        if (await tabs.controlledElsewhere()) return showElsewhere(s);
+        if (!(await tabs.acquireControl(false))) return alertBox(t('err_other_tab'));
+        hideElsewhere();
+        state.call = s;
+        state.wantMic = true;
+        state.wantCam = s.media === 'video';
+        render();
+        try {
+            await connectMedia(); // unirse: el servidor rechaza a quien ya no puede entrar
+        } catch (e) {
+            showError(e);
+            await finish(null, null);
+        }
+    }
+
+    // ─── Intención recibida de otra aplicación (fase 4E) ───────────────────────────────────────
+    /** Intención normalizada por el lanzador (mismos nombres que la URL) → intención de la página. */
+    function intentFromQuery(q) {
+        if (!q || typeof q !== 'object') return { action: 'invalid' };
+        if (q.call) return { action: 'open', call: String(q.call) };
+        const out = { action: 'start', media: q.media, key: q.key || null };
+        if (q.user) out.user = Number(q.user);
+        if (q.conversation) {
+            const m = /^(direct|group|channel):([A-Za-z0-9_-]{1,64})$/.exec(String(q.conversation));
+            if (!m) return { action: 'invalid' };
+            out.conversation = { type: m[1], id: m[2] };
+            if (m[1] !== 'direct') out.invitees = String(q.invitees || '').split(',').filter(Boolean).map(Number);
+        }
+        if (!['audio', 'video'].includes(out.media) || !(out.user || out.conversation)) return { action: 'invalid' };
+        return out;
+    }
+
+    function describeIntent(intent) {
+        if (intent.action === 'open') return [t('launch_title_open'), t('launch_existing')];
+        const title = t(intent.media === 'video' ? 'launch_title_video' : 'launch_title_audio');
+        if (intent.user) return [title, t('launch_user', { name: nameOf(intent.user) })];
+        if (intent.conversation.type === 'direct') return [title, t('launch_direct')];
+        return [title, t('launch_space', { names: (intent.invitees || []).map(nameOf).join(', ') })];
+    }
+
+    function executeIntent(intent) {
+        if (intent.action === 'open') return openCall(intent.call);
+        if (intent.user) return startCall(intent.user, intent.media, intent.key);
+        if (intent.conversation.type !== 'direct' && !(intent.invitees || []).length) return alertBox(t('err_invitees_required'));
+        return startConversationCall(intent.conversation, intent.invitees || [], intent.media, intent.key);
+    }
+
+    function runIntent(intent) {
+        if (!intent) return;
+        if (intent.action === 'invalid') return alertBox(t('err_launch_invalid'));
+        if (state.call && !(intent.action === 'open' && state.call.id === intent.call)) return alertBox(t('err_in_call'));
+        if (!intent.confirm) return executeIntent(intent);
+        // Navegación que no viene de esta aplicación (enlace externo, URL pegada): nada empieza sin un clic.
+        const [title, detail] = describeIntent(intent);
+        $('tc-launch-title').textContent = title;
+        $('tc-launch-detail').textContent = detail;
+        $('tc-launch-go').textContent = t('launch_confirm');
+        $('tc-launch-cancel').textContent = t('launch_cancel');
+        $('tc-launch').hidden = false;
+        $('tc-launch-go').onclick = () => { $('tc-launch').hidden = true; executeIntent(intent); };
+        $('tc-launch-cancel').onclick = () => { $('tc-launch').hidden = true; };
+        $('tc-launch-go').focus();
+    }
+
+    /** La intención solo vale una vez: se quita de la dirección para que recargar no repita nada. */
+    function consumeIntentFromUrl() {
+        const url = new URL(window.location.href);
+        let changed = false;
+        ['media', 'user', 'conversation', 'invitees', 'call', 'key'].forEach((k) => {
+            if (url.searchParams.has(k)) { url.searchParams.delete(k); changed = true; }
+        });
+        if (changed && window.history && window.history.replaceState) window.history.replaceState(null, '', url.pathname + url.search + url.hash);
     }
 
     function showIncoming(summary) {
@@ -938,7 +1047,11 @@
         poller.schedule(0);
         // Al cargar (o recargar en mitad de una llamada) cada pestaña consulta UNA vez por su cuenta: no espera al
         // próximo sondeo de la que sondea, que en segundo plano puede tardar más que el margen de reconexión.
-        coalescer.run('live', refreshLive).catch(() => {});
+        const firstLive = coalescer.run('live', refreshLive).catch(() => {});
+        // Intención de otra aplicación (fase 4E): se ejecuta tras la primera lista de llamadas vivas, para no
+        // duplicar la recuperación automática tras recargar ni el aviso de una llamada que ya suena.
+        consumeIntentFromUrl();
+        firstLive.then(() => runIntent(cfg.intent));
         // CollaborationRealtime: un adaptador registrado antes de cargar la página o, si el servidor publica la
         // dirección de Reverb, el cliente del sistema común (teamcalls-realtime.js). Sin él, solo sondeo.
         const rt = (window.TeamCallsRealtime && window.TeamCallsRealtime.adapter)
@@ -951,6 +1064,9 @@
         window.teamcallsUi = {
             // Punto de enganche para CollaborationRealtime: adapter.subscribe({ userId, onEvent, onStatus }).
             useRealtime: (adapter) => hub.connect(adapter),
+            // Lanzador (teamcalls-launcher.js): la ventana de llamadas ya abierta recibe la intención sin recargarse
+            // (recargar colgaría la llamada en curso). Solo la alcanza código del mismo origen.
+            launch: (query) => runIntent(intentFromQuery(query)),
             tabs: () => ({ tabId, controlling: tabs.controlling, pollLeader: poller.leader, realtime: hub.realtime, elsewhere: state.elsewhere && state.elsewhere.id, pollFailures: poller.failures, sessionLost: state.sessionLost }),
             // Bytes recibidos por pista remota (estadísticas WebRTC del SDK): prueba que los medios fluyen.
             stats: async () => {

@@ -75,6 +75,18 @@
             </div>
         </div>
     </div>
+
+    {{-- Confirmación de una intención que no viene de esta aplicación (fase 4E: CallLaunch). --}}
+    <div class="tc-modal" id="tc-launch" role="dialog" aria-modal="true" aria-labelledby="tc-launch-title" hidden>
+        <div class="tc-modal-card">
+            <h2 id="tc-launch-title"></h2>
+            <p id="tc-launch-detail" class="tc-muted"></p>
+            <div class="tc-modal-acts">
+                <button type="button" class="tc-ctl" id="tc-launch-cancel"></button>
+                <button type="button" class="tc-ctl tc-ctl--ok" id="tc-launch-go"></button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script type="application/json" id="tc-config">@json($config)</script>
