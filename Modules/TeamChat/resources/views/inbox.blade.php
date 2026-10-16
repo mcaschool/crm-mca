@@ -5,6 +5,7 @@
             'locale' => app()->getLocale(),
             'api' => url('/api/v1/collaboration'),
             'labels' => trans('teamchat::chat'),
+            'attachments' => collect(config('teamchat.attachments'))->only(['max_bytes','max_count','types','voice_seconds'])->all(),
             'socket' => [
                 'key' => config('broadcasting.connections.reverb.key'),
                 'host' => config('teamchat.reverb_host'),
@@ -51,12 +52,24 @@
                 </div>
                 <button type="button" class="tc-new-messages" data-jump hidden>↓ {{ __('teamchat::chat.new_messages') }}</button>
                 <form class="tc-composer" data-form>
+                    <div class="tc-attachment-tools">
+                        <button type="button" data-attach>{{ __('teamchat::chat.attach_file') }}</button>
+                        <button type="button" data-attach-image>{{ __('teamchat::chat.attach_image') }}</button>
+                        <button type="button" data-record>{{ __('teamchat::chat.record_voice') }}</button>
+                        <span data-record-time role="timer"></span>
+                        <button type="button" data-record-cancel hidden>{{ __('teamchat::chat.cancel') }}</button>
+                    </div>
+                    <input type="file" data-file-input multiple hidden accept=".pdf,.txt,.csv,.docx,.xlsx,.pptx,.jpg,.jpeg,.png,.webp">
+                    <input type="file" data-image-input multiple hidden accept="image/jpeg,image/png,image/webp">
+                    <div class="tc-file-drafts" data-file-drafts hidden></div>
+                    <p class="tc-file-error" data-file-error role="alert" hidden></p>
                     <div class="tc-composer-row"><textarea data-body rows="1" maxlength="5000" aria-label="{{ __('teamchat::chat.write') }}" placeholder="{{ __('teamchat::chat.write') }}"></textarea>
                     <button type="submit" class="tc-send" aria-label="{{ __('teamchat::chat.send') }}"><span>{{ __('teamchat::chat.send') }}</span><span aria-hidden="true">➜</span></button></div>
                     <p data-composer-hint>{{ __('teamchat::chat.hint') }}</p>
                 </form>
             </div>
         </div>
+        <dialog class="tc-image-viewer" data-image-viewer aria-label="{{ __('teamchat::chat.expand_image') }}"><button type="button" data-viewer-close>{{ __('teamchat::chat.close') }}</button><img alt=""></dialog>
         <dialog class="tc-dialog" data-space-dialog aria-labelledby="tc-dialog-title"><div data-space-panel></div></dialog>
         <div class="tc-toast" data-toast role="status" hidden></div>
         <div class="tc-error" data-error role="alert" hidden><span></span><button type="button" data-retry>{{ __('teamchat::chat.retry') }}</button><button type="button" data-dismiss aria-label="{{ __('teamchat::chat.close') }}">×</button></div>

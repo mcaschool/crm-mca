@@ -3,6 +3,23 @@
 declare(strict_types=1);
 
 return [
+    'cancel' => 'Cancel',
+    'attach_file' => 'Attach file',
+    'attach_image' => 'Image',
+    'record_voice' => 'Record voice',
+    'stop_recording' => 'Stop',
+    'voice_name' => 'Voice note',
+    'playback_speed' => 'Playback speed',
+    'download' => 'Download',
+    'expand_image' => 'Expand image',
+    'attachment' => 'Attachment',
+    'uploading' => 'Uploading',
+    'file_count' => 'Maximum files per message reached.',
+    'file_size' => 'The file is empty or exceeds the size limit.',
+    'file_type' => 'This file type is not allowed.',
+    'mic_unsupported' => 'Recording requires a compatible browser and a secure connection.',
+    'mic_denied' => 'Microphone access was denied. Check your browser permissions.',
+    'record_error' => 'Audio recording failed. You can try again.',
     'read_by' => 'Read by',
     'delivered_to' => 'Delivered to',
     'standard_membership' => 'All current team members can access this channel. Manage membership in the team.',

@@ -18,6 +18,11 @@ Route::prefix('api/v1/collaboration')->middleware(['web', 'auth', CollaborationR
     Route::get('spaces/{scope}/{id}/changes', [\Modules\TeamChat\Http\SpaceController::class, 'history'])->whereIn('scope', ['team', 'conversation'])->whereUlid('id');
     Route::put('spaces/{scope}/{id}', [\Modules\TeamChat\Http\SpaceController::class, 'update'])->whereIn('scope', ['team', 'conversation'])->whereUlid('id')->middleware('throttle:teamchat.commands');
     Route::post('spaces/{scope}/{id}/members', [\Modules\TeamChat\Http\SpaceController::class, 'member'])->whereIn('scope', ['team', 'conversation'])->whereUlid('id')->middleware('throttle:teamchat.commands');
+    Route::post('conversations/{conversation}/uploads', [\Modules\TeamChat\Http\AttachmentController::class, 'prepare'])->whereUlid('conversation')->middleware('throttle:teamchat.commands');
+    Route::post('uploads/{upload}/content', [\Modules\TeamChat\Http\AttachmentController::class, 'upload'])->whereUlid('upload')->middleware('throttle:teamchat.commands');
+    Route::get('uploads/{upload}', [\Modules\TeamChat\Http\AttachmentController::class, 'status'])->whereUlid('upload');
+    Route::delete('uploads/{upload}', [\Modules\TeamChat\Http\AttachmentController::class, 'cancel'])->whereUlid('upload');
+    Route::get('uploads/{upload}/content', [\Modules\TeamChat\Http\AttachmentController::class, 'content'])->whereUlid('upload');
     Route::get('teamchat/directory', [ChatController::class, 'directory']);
     Route::get('conversations', [ChatController::class, 'index']);
     Route::post('conversations/direct', [ChatController::class, 'direct'])->middleware('throttle:teamchat.commands');

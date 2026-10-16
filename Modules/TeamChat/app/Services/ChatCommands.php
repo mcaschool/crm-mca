@@ -57,16 +57,18 @@ final class ChatCommands
         }, 3);
     }
 
-    public function send(ActorContext $actor, string $conversationId, string $commandId, string $body): string
+    /** @param list<string> $attachments */
+    public function send(ActorContext $actor, string $conversationId, string $commandId, string $body, array $attachments = []): string
     {
         Guard::token($commandId);
         $body = trim(str_replace(["\r\n", "\r"], "\n", $body));
-        if ($body === '' || ! mb_check_encoding($body, 'UTF-8') || mb_strlen($body) > 5000 || str_contains($body, "\0")) {
+        if (($body === '' && $attachments === []) || ! mb_check_encoding($body, 'UTF-8') || mb_strlen($body) > 5000 || str_contains($body, "\0")) {
             throw new ContractException('invalid', 422);
         }
-        $hash = hash('sha256', json_encode([$conversationId, $body], JSON_THROW_ON_ERROR));
+        sort($attachments);
+        $hash = hash('sha256', json_encode($attachments === [] ? [$conversationId, $body] : [$conversationId, $body, $attachments], JSON_THROW_ON_ERROR));
 
-        return DB::transaction(function () use ($actor, $conversationId, $commandId, $body, $hash): string {
+        return DB::transaction(function () use ($actor, $conversationId, $commandId, $body, $hash, $attachments): string {
             $this->lockInstitution($actor);
             $conversation = $this->lockConversation($actor, $conversationId);
             $this->access->conversation($actor, $conversationId, true);
@@ -89,6 +91,7 @@ final class ChatCommands
                 'command_id' => $commandId, 'request_hash' => $hash, 'body' => $body, 'access_tick' => app(ChatClock::class)->next($actor->institutionId), 'created_at' => now()]);
             DB::table('collab_chat_conversations')->where('id', $conversationId)->where('institution_id', $actor->institutionId)
                 ->update(['message_sequence' => $sequence, 'activity_at' => now()->format('Y-m-d H:i:s.u'), 'updated_at' => now()]);
+            app(ChatAttachments::class)->attach($actor, $conversationId, $id, $attachments);
             $eventId = $this->events->record($actor, $conversation, 'teamchat.message.created', ['message_id' => $id, 'sequence' => $sequence]);
             $this->notifications->enqueue(new InstitutionContext($actor->institutionId),
                 new NotificationIntent((string) Str::ulid(), 'teamchat.message.created', $conversationId, $eventId, 'message.'.$id, now()->addDay()->toDateTimeImmutable()),

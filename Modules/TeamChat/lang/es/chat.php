@@ -3,6 +3,23 @@
 declare(strict_types=1);
 
 return [
+    'cancel' => 'Cancelar',
+    'attach_file' => 'Adjuntar archivo',
+    'attach_image' => 'Imagen',
+    'record_voice' => 'Grabar voz',
+    'stop_recording' => 'Detener',
+    'voice_name' => 'Nota de voz',
+    'playback_speed' => 'Velocidad de reproducción',
+    'download' => 'Descargar',
+    'expand_image' => 'Ampliar imagen',
+    'attachment' => 'Archivo adjunto',
+    'uploading' => 'Subiendo',
+    'file_count' => 'Se alcanzó el máximo de archivos por mensaje.',
+    'file_size' => 'El archivo está vacío o supera el tamaño permitido.',
+    'file_type' => 'Este tipo de archivo no está permitido.',
+    'mic_unsupported' => 'La grabación requiere un navegador compatible y una conexión segura.',
+    'mic_denied' => 'No se concedió acceso al micrófono. Revisa los permisos del navegador.',
+    'record_error' => 'No se pudo grabar el audio. Puedes volver a intentarlo.',
     'read_by' => 'Leído por',
     'delivered_to' => 'Entregado a',
     'standard_membership' => 'Todos los miembros vigentes del equipo acceden a este canal. La membresía se administra en el equipo.',

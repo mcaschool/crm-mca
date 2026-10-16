@@ -128,7 +128,7 @@ final class ChatQueries
 
         return ['id' => $row->id, 'conversation_id' => $row->conversation_id, 'sender_id' => (int) $row->sender_id,
             'sender_name' => $sender->name ?? '', 'delivered_count' => (clone $receipts)->count(), 'read_count' => (clone $receipts)->whereNotNull('read_at')->count(),
-            'sequence' => (int) $row->sequence, 'command_id' => $row->command_id, 'body' => $row->body, 'created_at' => $this->date($row->created_at),
+            'sequence' => (int) $row->sequence, 'command_id' => $row->command_id, 'body' => $row->body, 'attachments' => DB::table('collab_chat_uploads')->where('institution_id', $actor->institutionId)->where('message_id', $row->id)->orderBy('id')->get()->map(fn ($upload) => app(ChatAttachments::class)->metadata($upload))->all(), 'created_at' => $this->date($row->created_at),
             'status' => $receipt?->read_at !== null ? 'read' : ($receipt ? 'delivered' : 'sent')];
     }
 

@@ -30,6 +30,7 @@ config(['app.env' => 'local', 'app.debug' => false, 'app.url' => 'http://127.0.0
     'broadcasting.connections.reverb.key' => 'local-test-key', 'broadcasting.connections.reverb.secret' => 'local-test-secret',
     'broadcasting.connections.reverb.app_id' => 'local-test', 'broadcasting.connections.reverb.options.host' => '127.0.0.1',
     'broadcasting.connections.reverb.options.port' => 33318, 'broadcasting.connections.reverb.options.scheme' => 'http', 'broadcasting.connections.reverb.options.useTLS' => false,
+    'filesystems.disks.teamchat_private.root' => __DIR__.'/../.testing/uploads',
     'teamchat.reverb_host' => '127.0.0.1', 'teamchat.reverb_port' => 33318, 'teamchat.reverb_scheme' => 'http']);
 $fixture = __DIR__.'/../.testing/teamchat-browser.json';
 $mode = PHP_SAPI === 'cli-server' ? 'http' : ($argv[1] ?? 'seed');
@@ -89,13 +90,13 @@ if ($mode === 'history') {
 }
 if ($mode === 'verify') {
     $deadline = microtime(true) + 45;
-    while (DB::table('collab_outbox')->where('institution_id', $f['institution'])->whereIn('status', ['pending', 'claimed'])->exists()) {
+    while (DB::table('collab_outbox')->where('institution_id', $f['institution'])->whereNotIn('event_id', DB::table('collab_events')->where('aggregate_type', 'collaboration_revocation')->select('id'))->whereIn('status', ['pending', 'claimed'])->exists()) {
         if (microtime(true) > $deadline) {
             throw new RuntimeException('Worker did not drain pending events');
         }
         usleep(200000);
     }
-    if (DB::table('collab_outbox')->where('institution_id', $f['institution'])->where('status', 'failed')->exists()) {
+    if (DB::table('collab_outbox')->where('institution_id', $f['institution'])->whereNotIn('event_id', DB::table('collab_events')->where('aggregate_type', 'collaboration_revocation')->select('id'))->where('status', 'failed')->exists()) {
         throw new RuntimeException('Failed outbox events');
     }
     app(\Modules\CollaborationRealtime\Services\NotificationDelivery::class)->reconcile($f['institution'], 1000);
@@ -108,6 +109,7 @@ if ($mode === 'verify') {
 }
 if ($mode === 'cleanup') {
     DB::table('collab_chat_conversations')->where('institution_id', $f['institution'])->delete();
+    \Illuminate\Support\Facades\Storage::disk('teamchat_private')->deleteDirectory((string) $f['institution']);
     DB::table('collab_chat_teams')->where('institution_id', $f['institution'])->delete();
     DB::table('collab_chat_membership_history')->where('institution_id', $f['institution'])->delete();
     DB::table('collab_chat_space_commands')->where('institution_id', $f['institution'])->delete();
