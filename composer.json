@@ -10,6 +10,7 @@
         "bacon/bacon-qr-code": "^3.1",
         "firebase/php-jwt": "^7.2",
         "laravel/framework": "^13.17",
+        "laravel/reverb": "^1.12",
         "laravel/tinker": "^3.0",
         "livewire/livewire": "4.3",
         "nwidart/laravel-modules": "13.0",
@@ -32,6 +33,7 @@
             "App\\": "app/",
             "Modules\\CollaborationCore\\": "Modules/CollaborationCore/app/",
             "Modules\\CollaborationRealtime\\": "Modules/CollaborationRealtime/app/",
+            "Modules\\TeamChat\\": "Modules/TeamChat/app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
         }

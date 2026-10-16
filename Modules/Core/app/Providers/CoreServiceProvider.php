@@ -34,7 +34,7 @@ class CoreServiceProvider extends ModuleServiceProvider
         parent::register();
 
         // Contexto de institucion: un unico valor por peticion (Capa 1).
-        $this->app->singleton(CurrentInstitution::class);
+        $this->app->scoped(CurrentInstitution::class);
     }
 
     /**
@@ -56,7 +56,7 @@ class CoreServiceProvider extends ModuleServiceProvider
         // aqui, en cada update, a partir del usuario autenticado (no-op si no hay
         // sesion; el gating fino lo siguen haciendo las Policies de cada componente).
         Livewire::setUpdateRoute(fn ($handle) => Route::post('/livewire/update', $handle)
-            ->middleware(['web', 'institution.user', 'setlocale']));
+            ->middleware(['web', 'institution.user', 'setlocale', \Modules\CollaborationCore\Http\Middleware\RequireCrmAccess::class]));
     }
 
     /**

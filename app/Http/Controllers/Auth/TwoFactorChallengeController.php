@@ -78,11 +78,12 @@ class TwoFactorChallengeController extends Controller
 
         Auth::guard('web')->loginUsingId($userId, $remember);
         $request->session()->regenerate();
+        \Modules\CollaborationCore\Services\MfaSessionProof::record($request->session(), $user);
         $user->forceFill(['last_login_at' => now()])->save();
 
         // Login completado tras superar el segundo factor.
         $audit->logAuth('auth.login_success', $user->email, ['via' => '2fa']);
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        return redirect()->intended(route($user->canWorkCrm() ? 'dashboard' : 'profile.edit', absolute: false));
     }
 }

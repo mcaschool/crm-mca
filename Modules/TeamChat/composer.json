@@ -1,0 +1,9 @@
+{
+    "name": "mca/teamchat",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "Modules\\TeamChat\\": "app/"
+        }
+    }
+}

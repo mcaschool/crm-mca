@@ -28,6 +28,7 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request, AuditService $audit): RedirectResponse
     {
+        $request->session()->forget('auth.mfa_user_id');
         $request->authenticate();
 
         $user = $request->user();
@@ -65,7 +66,7 @@ class AuthenticatedSessionController extends Controller
         // el desafio, en TwoFactorChallengeController.
         $audit->logAuth('auth.login_success', $user->email);
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        return redirect()->intended(route($user->canWorkCrm() ? 'dashboard' : 'profile.edit', absolute: false));
     }
 
     /**

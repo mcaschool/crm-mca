@@ -1,12 +1,14 @@
 {
     "name": "CollaborationRealtime",
     "alias": "collaborationrealtime",
-    "description": "Shared collaboration contracts 1.0.0; no runtime implementation.",
+    "description": "Shared contracts 1.1.0: institutional outbox, secure sync, internal revocation delivery and Reverb transport",
     "keywords": [
         "collaboration",
-        "contracts"
+        "realtime"
     ],
     "priority": 0,
-    "providers": [],
+    "providers": [
+        "Modules\\CollaborationRealtime\\Providers\\CollaborationRealtimeServiceProvider"
+    ],
     "files": []
 }

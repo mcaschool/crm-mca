@@ -118,6 +118,7 @@ class MiPerfil extends Component
 
         $user->two_factor_confirmed_at = now();
         $user->save();
+        \Modules\CollaborationCore\Services\MfaSessionProof::record(session()->driver(), $user);
         $audit->log('2fa.enabled', $user);
 
         $this->recoveryCodesShown = $user->two_factor_recovery_codes ?? [];

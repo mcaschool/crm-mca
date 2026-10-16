@@ -24,5 +24,8 @@ interface PresenceService
     /** Internal TeamCalls adapter only; validate institution/user/call association. Apply after commit. */
     public function setInCall(InstitutionContext $context, int $userId, string $callId, int $ttlSeconds): void;
 
+    /** Internal only; historical association authorized by CallPresenceCleanupAuthorizer (1.1).
+     * No active participant requirement. Clears only this tenant/user/call; repeated cleanup is safe.
+     */
     public function clearInCall(InstitutionContext $context, int $userId, string $callId): void;
 }

@@ -21,7 +21,7 @@ use Modules\Institutions\Database\Factories\InstitutionFactory;
 class Institution extends Model
 {
     /** @use HasFactory<InstitutionFactory> */
-    use HasFactory;
+    use HasFactory, \Modules\CollaborationCore\Integration\AtomicCollaborationRevocation;
 
     /** Rango sano para el alto del logo en el sidebar (px). */
     public const LOGO_SIZE_MIN = 24;

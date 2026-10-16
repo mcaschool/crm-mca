@@ -1,12 +1,12 @@
 {
     "name": "CollaborationCore",
     "alias": "collaborationcore",
-    "description": "Shared collaboration contracts 1.0.0; no runtime implementation.",
+    "description": "Shared collaboration contracts 1.1.0 and institutional core services.",
     "keywords": [
         "collaboration",
         "contracts"
     ],
     "priority": 0,
-    "providers": [],
+    "providers": ["Modules\\CollaborationCore\\Providers\\CollaborationCoreServiceProvider"],
     "files": []
 }

@@ -1,0 +1,10 @@
+{
+    "name": "TeamChat",
+    "alias": "teamchat",
+    "description": "Institutional direct conversations and text messaging",
+    "priority": 10,
+    "providers": [
+        "Modules\\TeamChat\\Providers\\TeamChatServiceProvider"
+    ],
+    "files": []
+}

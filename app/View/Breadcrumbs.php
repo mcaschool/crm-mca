@@ -22,6 +22,7 @@ final class Breadcrumbs
      */
     private const SECTIONS = [
         ['dashboard', 'home', 'Inicio', 'dashboard'],
+        ['teamchat.*', 'message-circle', 'teamchat::chat.title', 'teamchat.index'],
         ['crm.leads.*', 'users', 'Leads', 'crm.leads.index'],
         ['crm.pipeline', 'funnel', 'Pipeline Comercial', 'crm.pipeline'],
         [['crm.contacts.*', 'crm.conversations.*'], 'contact', 'Contactos', 'crm.contacts.index'],

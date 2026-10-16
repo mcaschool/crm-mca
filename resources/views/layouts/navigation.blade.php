@@ -34,6 +34,14 @@
     <div class="mca-brand-gap"></div>
 
     <nav class="mca-nav">
+        @can('collaboration.use')
+        <div class="mca-nav-group">
+            <a href="{{ route('teamchat.index') }}" class="mca-nav-item {{ request()->routeIs('teamchat.*') ? 'on' : '' }}">
+                <x-ui.icon name="message-circle" /> {{ __('teamchat::chat.title') }}
+            </a>
+        </div>
+        @endcan
+        @if ($u->canWorkCrm())
         <div class="mca-nav-group">
             <div class="mca-nav-label">{{ __('CAPTACIÓN') }}</div>
             <a href="{{ route('dashboard') }}" class="mca-nav-item {{ request()->routeIs('dashboard') ? 'on' : '' }}">
@@ -71,6 +79,7 @@
             @endif
         </div>
 
+        @endif
         @if (auth()->user()?->canWorkCrm() || auth()->user()?->canPublishSocial())
             <div class="mca-nav-group">
                 <div class="mca-nav-label">{{ __('SOCIAL MEDIA') }}</div>
@@ -99,9 +108,11 @@
 
         <div class="mca-nav-group">
             <div class="mca-nav-label">{{ __('CONFIGURACIÓN') }}</div>
+            @if ($u->canWorkCrm())
             <a href="{{ route('advisors.index') }}" class="mca-nav-item {{ request()->routeIs('advisors.*') || request()->routeIs('ai.advisor.*') ? 'on' : '' }}">
                 <x-ui.icon name="bot" /> {{ __('Asesores Inteligentes') }}
             </a>
+            @endif
             @can('viewAny', \Modules\Ai\Models\KnowledgeSource::class)
                 <a href="{{ route('ai.knowledge.library') }}" class="mca-nav-item {{ request()->routeIs('ai.knowledge.library', 'ai.knowledge.agents') ? 'on' : '' }}">
                     <x-ui.icon name="book-open" /> {{ __('Centro de Conocimiento') }}

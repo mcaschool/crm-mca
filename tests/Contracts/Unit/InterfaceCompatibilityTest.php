@@ -48,7 +48,7 @@ final class InterfaceCompatibilityTest extends TestCase
                 }
                 $relative = substr($file->getPathname(), strlen($base), -4);
                 $class = 'Modules\\'.$module.'\\'.str_replace(['/', '\\'], '\\', $relative);
-                self::assertTrue(class_exists($class) || interface_exists($class) || enum_exists($class), $class);
+                self::assertTrue(class_exists($class) || interface_exists($class) || enum_exists($class) || trait_exists($class), $class);
                 $loaded++;
             }
         }

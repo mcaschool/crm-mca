@@ -35,6 +35,9 @@ class LeadPolicy
      */
     public function create(User $actor): bool
     {
+        if (! $actor->canWorkCrm()) {
+            return false;
+        }
         if ($actor->isSuperAdmin() || $actor->role === UserRole::Admin) {
             return true;
         }
@@ -48,6 +51,9 @@ class LeadPolicy
     /** Cambiar estado/interes/notas/transferir: segun persona (ver arriba). */
     public function update(User $actor, Lead $lead): bool
     {
+        if (! $actor->canWorkCrm()) {
+            return false;
+        }
         if ($actor->isSuperAdmin() || $actor->role === UserRole::Admin) {
             return true;
         }
@@ -68,6 +74,6 @@ class LeadPolicy
     /** Accion destructiva: solo Admin/super. */
     public function delete(User $actor, Lead $lead): bool
     {
-        return $actor->canManageUsers();
+        return $actor->canManageCrm();
     }
 }

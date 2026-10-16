@@ -38,9 +38,17 @@ final class ResolveInstitutionFromUser
                 $institutionId = $user->institution_id !== null ? (int) $user->institution_id : null;
             }
 
-            $this->context->set($institutionId);
+            if ($institutionId !== null) {
+                // Restore an explicit enclosing context; normal request scopes start unresolved.
+                return $this->context->runFor($institutionId, fn () => $next($request));
+            }
         }
 
-        return $next($request);
+        $this->context->forget();
+        try {
+            return $next($request);
+        } finally {
+            $this->context->forget();
+        }
     }
 }

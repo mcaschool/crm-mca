@@ -46,7 +46,7 @@ class Form extends Component
 
     public string $department = '';
 
-    public string $role = 'admissions';
+    public string $role = 'member';
 
     public string $status = 'active';
 
@@ -142,7 +142,12 @@ class Form extends Component
             $target->password = Hash::make(Str::random(48));
         }
 
-        $target->save();
+        \Illuminate\Support\Facades\DB::transaction(function () use ($target, $editing): void {
+            $target->save();
+            if (! $editing && $target->role !== UserRole::Member) {
+                app(\Modules\CollaborationCore\Services\ApplicationAccess::class)->set(auth()->user(), $target, 'crm', true);
+            }
+        });
 
         if ($editing) {
             // Auditoria: se registra el HECHO de cada cambio sensible (nunca datos en claro).

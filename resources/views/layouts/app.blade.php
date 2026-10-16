@@ -76,13 +76,19 @@
                     @endif
 
                     {{-- Aviso in-app de leads nuevos (sondeo ~10s): campana = toggle de sonido + pop-up. --}}
-                    <livewire:crm.new-lead-notifier />
+                    @if (auth()->user()?->canWorkCrm())
+                        <livewire:crm.new-lead-notifier />
+                    @endif
 
                     {{-- Avisos internos de la agenda (actividad asignada y recordatorios). --}}
-                    <livewire:crm.agenda.alert-bell />
+                    @if (auth()->user()?->canWorkCrm())
+                        <livewire:crm.agenda.alert-bell />
+                    @endif
 
                     {{-- Campana de alertas de IA (solo administradores): servicio caído/restablecido. --}}
-                    <livewire:ai.ai-alert-bell />
+                    @if (auth()->user()?->canManageIntegrations())
+                        <livewire:ai.ai-alert-bell />
+                    @endif
 
                     {{-- Selector de idioma (ES/EN): persiste en users.preferred_language, que SetLocale lee. --}}
                     <x-dropdown align="right" width="48">
@@ -122,7 +128,9 @@
 
         {{-- Indicadores del menú al día desde cualquier pantalla (un solo sincronizador). --}}
         @auth
-            @include('partials.panel-badges-sync')
+            @if (auth()->user()?->canWorkCrm() || auth()->user()?->canPublishSocial())
+                @include('partials.panel-badges-sync')
+            @endif
         @endauth
         @livewireScripts
     </body>

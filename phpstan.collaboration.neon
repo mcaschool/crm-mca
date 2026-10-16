@@ -1,0 +1,21 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+parameters:
+    level: 6
+    paths:
+        - Modules/CollaborationCore/app
+        - app/Models/User.php
+        - Modules/Institutions/app/Models/Institution.php
+        - database/factories/UserFactory.php
+        - database/seeders/DatabaseSeeder.php
+        - app/Http/Controllers/Auth
+        - Modules/Core/app/Http/Middleware/ResolveInstitutionFromUser.php
+        - Modules/Core/app/Providers/CoreServiceProvider.php
+        - Modules/Identity/app/Enums/UserRole.php
+        - Modules/Identity/app/Livewire
+        - Modules/Crm/app/Policies
+        - Modules/Crm/app/Services/Agenda/ActivityService.php
+        - Modules/Crm/app/Livewire/Pipeline/Board.php
+    tmpDir: .testing/phpstan
+    # Same defensive DTO validation policy as the approved contracts analysis.
+    treatPhpDocTypesAsCertain: false

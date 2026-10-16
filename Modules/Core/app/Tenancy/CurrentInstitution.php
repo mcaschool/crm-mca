@@ -13,7 +13,7 @@ use Modules\Core\Exceptions\MissingInstitutionContextException;
  * (middleware de panel / de bot), o en la frontera de un job / comando de consola.
  * El resto del sistema solo lee de aqui.
  *
- * Registrado como singleton en el contenedor (ver CoreServiceProvider), de modo
+ * Registrado como scoped en el contenedor (ver CoreServiceProvider), de modo
  * que un unico valor viaja por toda la peticion.
  */
 final class CurrentInstitution
