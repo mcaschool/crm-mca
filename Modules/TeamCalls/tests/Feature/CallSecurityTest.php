@@ -67,9 +67,12 @@ it('usuarios inactivos o sin permiso no inician, no reciben ni se incorporan', f
         ->and(tcReason(fn () => TC::call($this->ana, [$inactive->id])))->toBe('forbidden')
         ->and(tcReason(fn () => TC::call($this->ana, [$this->beto->id, $inactive->id])))->toBe('forbidden');
 
-    $noRole = TC::user($this->inst);
-    $noRole->forceFill(['role' => null]); // sin acceso al CRM (sin guardar: solo en memoria)
-    expect(tcReason(fn () => TC::service()->history($noRole)))->toBe('forbidden');
+    // Permiso definitivo (fase 4B): sin rol del CRM pero con collaboration.use SÍ usa llamadas; sin él, no.
+    $noRole = TC::user($this->inst, ['role' => 'member', 'department' => null]);
+    expect(tcReason(fn () => TC::service()->history($noRole)))->toBe('sin-error');
+    $admin = TC::user($this->inst, ['role' => 'admin']);
+    app(\Modules\CollaborationCore\Services\ApplicationAccess::class)->set($admin, $noRole, 'collaboration', false);
+    expect(tcReason(fn () => TC::service()->history($noRole->fresh())))->toBe('forbidden');
 
     // Un usuario que se desactiva durante la llamada ya no puede contestar.
     $call = TC::call($this->ana, [$this->beto->id]);
