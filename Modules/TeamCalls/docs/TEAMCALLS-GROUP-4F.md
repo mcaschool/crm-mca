@@ -58,7 +58,7 @@ modificaron TeamChat ni el widget universal.
 - El diálogo nativo de compartir pantalla con una pantalla real (no se puede automatizar), así como cámara y
   micrófono físicos.
 - Audio de la pestaña o del sistema al compartir: depende del navegador y no está verificado.
-- Fijar a un participante, cuadrícula con más de 25 personas y paginación: fuera de esta fase.
+- Cuadrícula con más de 25 personas y paginación: fuera de esta fase (fijar participantes llegó en la fase 4G).
 
 ## Fase 4G — Controles avanzados (rama `integration/collaboration-4g`)
 Todo es local a quien mira: nada se comparte con los demás.
