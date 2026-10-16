@@ -32,6 +32,9 @@ config(['app.env' => 'local', 'app.debug' => false, 'app.url' => 'http://127.0.0
     'broadcasting.connections.reverb.options.port' => 33318, 'broadcasting.connections.reverb.options.scheme' => 'http', 'broadcasting.connections.reverb.options.useTLS' => false,
     'filesystems.disks.teamchat_private.root' => __DIR__.'/../.testing/uploads',
     'teamchat.reverb_host' => '127.0.0.1', 'teamchat.reverb_port' => 33318, 'teamchat.reverb_scheme' => 'http']);
+if (getenv('MCA_WIDGET_TEST') === '1') {
+    config(['collaboration_widget.allow_local_http' => true, 'collaboration_widget.central_origin' => 'http://127.0.0.1:33319', 'collaboration_widget.cache_store' => 'database', 'collaboration_widget.crm_application' => 'local-crm']);
+}
 $fixture = __DIR__.'/../.testing/teamchat-browser.json';
 $mode = PHP_SAPI === 'cli-server' ? 'http' : ($argv[1] ?? 'seed');
 if ($mode === 'http') {
@@ -67,6 +70,11 @@ if ($mode === 'seed') {
         $ids[$key] = $u->id;
     }
     file_put_contents($fixture, json_encode(['institution' => $i->id] + $ids, JSON_THROW_ON_ERROR));
+    if (getenv('MCA_WIDGET_TEST') === '1') {
+        foreach (['crm' => 33320, 'sigac' => 33321, 'moodle' => 33322] as $name => $port) {
+            app(\Modules\CollaborationCore\Services\WidgetApplications::class)->register('local-'.$name, $i->id, strtoupper($name), ['http://localhost:'.$port, ...($name === 'crm' ? ['http://127.0.0.1:33319'] : [])], 'local', ['chat', 'media', 'notifications']);
+        }
+    }
     echo "Four isolated fixture users ready\n";
     exit;
 }

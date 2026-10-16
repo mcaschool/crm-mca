@@ -132,6 +132,9 @@
                 @include('partials.panel-badges-sync')
             @endif
         @endauth
+        @if (!request()->routeIs('teamchat.index') && config('collaboration_widget.crm_application') && auth()->user()?->can('collaboration.use'))
+            <script defer src="{{ url('/collaboration/widget.js') }}" data-app="{{ config('collaboration_widget.crm_application') }}"></script>
+        @endif
         @livewireScripts
     </body>
 </html>

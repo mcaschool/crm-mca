@@ -27,7 +27,7 @@ async function api(p,url,method='GET',body=null){return p.evaluate(async({url,me
  try{
   const a=await login('alice'),b=await login('bob');
   check(true,'two real institutional login and MFA sessions');
-  await a.locator('[data-search]').fill('Bruno');await a.locator('[data-list] [data-contact]').first().click();
+  await a.locator('[data-search]').fill('Bruno');await a.locator('[data-list] [data-contact]').first().click();await a.locator('#teamchat.tc-selected').waitFor();
   const direct=(await api(a,'/conversations')).body.data.conversations.find(c=>c.type==='direct').id;
   await b.locator('[data-contact="'+direct+'"]').click();
   await a.locator('[data-record]').click();await wait(()=>a.locator('[data-record-cancel]').isVisible(),'microphone capture starts');
@@ -37,6 +37,7 @@ async function api(p,url,method='GET',body=null){return p.evaluate(async({url,me
   await wait(()=>a.locator('[data-file-draft] audio').count().then(v=>v===1),'recorded voice preview');
   await submit(a);
   await wait(()=>b.locator('[data-attachment=voice] audio').count().then(v=>v===1),'other account receives voice without navigation');
+  await b.bringToFront();await b.locator('[data-message][data-status=read] [data-attachment=voice] audio').waitFor();
   const audio=b.locator('[data-attachment=voice] audio').first();
   await audio.evaluate(n=>n.play());
   await wait(()=>audio.evaluate(n=>n.currentTime>0&&!n.error),'real browser decodes and plays normalized voice');

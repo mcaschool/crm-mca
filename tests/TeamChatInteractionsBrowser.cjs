@@ -25,7 +25,7 @@ async function api(p,url,method='GET',body=null){return p.evaluate(async({url,me
  async function find(p,c,body){const messages=(await api(p,'/conversations/'+c+'/messages')).body.data.messages;return messages.find(m=>m.body===body)?.id;}
  try{
   const a=await login('alice'),b=await login('bob'),other=await login('bob');check(true,'two accounts and three independent MFA device sessions');
-  await a.locator('[data-search]').fill('Bruno');await a.locator('[data-list] [data-contact]').first().click();
+  await a.locator('[data-search]').fill('Bruno');await a.locator('[data-list] [data-contact]').first().click();await a.locator('#teamchat.tc-selected').waitFor();
   const direct=(await api(a,'/conversations')).body.data.conversations.find(c=>c.type==='direct').id;
   await b.locator('[data-contact="'+direct+'"]').click();await other.locator('[data-contact="'+direct+'"]').click();
   await send(a,'Plan inicial de colaboración');

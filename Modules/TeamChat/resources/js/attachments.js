@@ -3,7 +3,9 @@ import '../css/attachments.css';
 export function installAttachments({root,config,api,el,error,selected,changed,onAuthFailure}) {
     const $=s=>root.querySelector(s), t=config.labels, limits=config.attachments;
     let files=[], recorder=null, stream=null, chunks=[], recording=false, discard=false, timer=null, started=0, epoch=0, requesting=false;
-    const requests=new Set();
+    const requests=new Set(), media=new Map(), bridge=window.mcaWidgetTransport;
+    const mediaUrl=url=>{if(!media.has(url))media.set(url,bridge.media(url).catch(e=>{media.delete(url);throw e;}));return media.get(url);};
+    function source(node,url){if(!bridge||url.startsWith('blob:'))node.src=url;else mediaUrl(url).then(v=>{if(node.isConnected)node.src=v;}).catch(error);}
     function notice(key){ $('[data-file-error]').textContent=t[key]||key; $('[data-file-error]').hidden=false; }
     function closeViewer(){ const d=$('[data-image-viewer]');d.close();d.querySelector('img').removeAttribute('src'); }
     function render(){
@@ -79,9 +81,11 @@ export function installAttachments({root,config,api,el,error,selected,changed,on
                     mime:item.file.type.split(';')[0]||limits.types[ext][0],size:item.file.size,sha256});
             }
             if(item.remote.state!=='ready'){
-                item.remote=await new Promise((resolve,reject)=>{
+                const release=bridge?await bridge.beginOperation():()=>{};
+                  try{item.remote=await new Promise((resolve,reject)=>{
                     const xhr=new XMLHttpRequest();requests.add(xhr);
-                    xhr.open('POST',config.api+'/uploads/'+item.remote.id+'/content');xhr.withCredentials=true;
+                    xhr.open('POST',config.api+'/uploads/'+item.remote.id+'/content');xhr.withCredentials=!bridge;
+                    if(bridge)for(const [key,value]of Object.entries(bridge.headers()))xhr.setRequestHeader(key,value);
                     xhr.setRequestHeader('Accept','application/json');xhr.setRequestHeader('X-CSRF-TOKEN',document.querySelector('meta[name=csrf-token]').content);
                     xhr.upload.onprogress=e=>{m.transfer=e.lengthComputable?Math.round(e.loaded/e.total*100):0;changed();};
                     xhr.onload=()=>{requests.delete(xhr);let result;try{result=JSON.parse(xhr.responseText);}catch{}
@@ -89,27 +93,27 @@ export function installAttachments({root,config,api,el,error,selected,changed,on
                         else {if([401,419].includes(xhr.status)||['device_revoked','session_revoked'].includes(result?.error?.code))onAuthFailure();reject(Object.assign(new Error(result?.error?.code||'upload_failed'),{status:xhr.status}));}};
                     xhr.onerror=xhr.onabort=()=>{requests.delete(xhr);reject(new Error('upload_failed'));};
                     const data=new FormData();data.append('file',item.file);xhr.send(data);
-                });
+                });}finally{release();}
             }
         }
         return (m.files||[]).map(item=>item.remote.id);
     }
     function renderMessage(bubble,m){
-        const items=m.attachments|| (m.files||[]).map(v=>({...v.remote,name:v.file.name,kind:v.kind,size:v.file.size,content_url:v.remote?.state==='ready'?v.remote.content_url:v.preview}));
+        const items=m.attachments|| (m.files||[]).map(v=>({...v.remote,name:v.file.name,kind:v.kind,size:v.file.size,content_url:v.preview}));
         for(const item of items){
             const card=el('div','tc-attachment');card.dataset.attachment=item.kind;
             if(item.kind==='image'){
                 const button=el('button','tc-image-button');button.type='button';button.setAttribute('aria-label',t.expand_image);
-                const img=el('img','tc-message-image');img.src=item.content_url;img.alt=item.name;img.loading='lazy';img.addEventListener('load',()=>changed(false));button.append(img);
-                button.onclick=()=>{const d=$('[data-image-viewer]');d.querySelector('img').src=item.content_url;d.querySelector('img').alt=item.name;d.showModal();};card.append(button);
+                const img=el('img','tc-message-image');source(img,item.content_url);img.alt=item.name;img.loading='lazy';img.addEventListener('load',()=>changed(false));button.append(img);
+                button.onclick=()=>{const d=$('[data-image-viewer]');source(d.querySelector('img'),item.content_url);d.querySelector('img').alt=item.name;d.showModal();};card.append(button);
             }else if(item.kind==='voice'){
-                const audio=el('audio','tc-voice');audio.controls=true;audio.preload='metadata';audio.src=item.content_url;audio.setAttribute('aria-label',t.voice_name);card.append(audio);
+                const audio=el('audio','tc-voice');audio.controls=true;audio.preload='metadata';source(audio,item.content_url);audio.setAttribute('aria-label',t.voice_name);card.append(audio);
                 const speed=el('select','tc-speed');speed.setAttribute('aria-label',t.playback_speed);
                 for(const v of [1,1.5,2]){const o=el('option','',v+'×');o.value=v;speed.append(o);}
                 speed.onchange=()=>audio.playbackRate=Number(speed.value);card.append(speed);
                 if(item.duration_ms)card.append(el('span','tc-file-detail',Math.ceil(item.duration_ms/1000)+' s'));
             } else {card.append(el('span','tc-file-icon','▤'),el('strong','',item.name),el('span','tc-file-detail',(item.mime||'')+' · '+formatSize(item.size)));}
-            if(item.id){const download=el('a','tc-file-download',t.download);download.href=item.content_url+'?download=1';download.setAttribute('download','');card.append(download);}
+            if(item.id&&m.id){const download=el('a','tc-file-download',t.download);download.href=item.content_url+'?download=1';download.setAttribute('download','');if(bridge)download.onclick=async e=>{e.preventDefault();try{const url=await bridge.media(item.content_url+'?download=1');const a=el('a');a.href=url;a.download=item.name;a.click();}catch(err){error(err);}};card.append(download);}
             bubble.append(card);
         }
         if(m.files&&m.status==='pending')bubble.append(el('span','tc-transfer',t.uploading+' '+(m.transfer||0)+'%'));

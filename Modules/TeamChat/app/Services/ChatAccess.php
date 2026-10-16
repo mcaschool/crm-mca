@@ -127,6 +127,29 @@ final class ChatAccess
         return DB::table('collab_chat_team_members')->where('institution_id', $institutionId)->where('team_id', $id);
     }
 
+    public function unreadCount(ActorContext $actor): int
+    {
+        $this->access->authorize($actor, 'collaboration.use');
+
+        return DB::table('collab_chat_messages as m')->join('collab_chat_conversations as c', 'c.id', '=', 'm.conversation_id')
+            ->leftJoin('collab_chat_participants as p', function ($q) use ($actor): void {
+                $q->on('p.conversation_id', '=', 'c.id')->where('p.institution_id', $actor->institutionId)->where('p.user_id', $actor->userId)->where('p.active', true);
+            })
+            ->leftJoin('collab_chat_team_members as t', function ($q) use ($actor): void {
+                $q->on('t.team_id', '=', 'c.team_id')->where('t.institution_id', $actor->institutionId)->where('t.user_id', $actor->userId)->where('t.active', true);
+            })
+            ->where('m.institution_id', $actor->institutionId)->where('c.institution_id', $actor->institutionId)
+            ->where('m.sender_id', '!=', $actor->userId)->whereNull('m.deleted_at')
+            ->where(function ($q): void {
+                $q->where(fn ($q) => $q->whereNull('c.team_id')->whereNotNull('p.id'))
+                    ->orWhere(fn ($q) => $q->whereNotNull('c.team_id')->whereNotNull('t.id')->where(fn ($q) => $q->where('c.visibility', 'standard')->orWhereNotNull('p.id')));
+            })
+            ->whereRaw("m.access_tick >= CASE WHEN c.team_id IS NULL THEN p.from_tick WHEN c.visibility = 'standard' THEN t.from_tick ELSE GREATEST(p.from_tick, t.from_tick) END")
+            ->whereNotExists(function ($q) use ($actor): void {
+                $q->selectRaw('1')->from('collab_chat_receipts as r')->whereColumn('r.message_id', 'm.id')->where('r.institution_id', $actor->institutionId)->where('r.user_id', $actor->userId)->whereNotNull('r.read_at');
+            })->count();
+    }
+
     public function peerId(object $conversation, int $userId): int
     {
         return (int) $conversation->first_user_id === $userId ? (int) $conversation->second_user_id : (int) $conversation->first_user_id;

@@ -9,6 +9,9 @@ const root = document.querySelector('#teamchat');
 if (root) startChat(root);
 
 function startChat(root) {
+    const lifecycle = new AbortController();
+    const listen = (target,event,handler,options={}) => target.addEventListener(event,handler,{...options,signal:lifecycle.signal});
+    const bridge = window.mcaWidgetTransport;
     const config = JSON.parse(document.querySelector('#teamchat-config').textContent);
     const t = config.labels, $ = (s) => root.querySelector(s);
     const state = { conversations: new Map(), messages: new Map(), drafts: new Map(), pending: new Map(),
@@ -39,6 +42,7 @@ function startChat(root) {
     }
     async function api(path, method = 'GET', payload = null) {
         if (state.stopped) throw new Error('stopped');
+        if (bridge) return bridge.request(path,method,payload);
         const response = await fetch(config.api + path, { method, credentials:'same-origin', cache:'no-store',
             headers:{ Accept:'application/json', 'Content-Type':'application/json', 'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content },
             ...(payload === null ? {} : { body:JSON.stringify(payload) }) });
@@ -51,7 +55,7 @@ function startChat(root) {
         }
         return json.data ?? json;
     }
-    function connection(key) { $('[data-connection]').textContent = t[key]; root.dataset.online = String(key === 'connected'); }
+    function connection(key) { bridge?.connection(key); $('[data-connection]').textContent = t[key]; root.dataset.online = String(key === 'connected'); }
     function avatar(name, userId) {
         const a = el('span','tc-avatar',initials(name)); a.setAttribute('aria-hidden','true');
         const p = state.presence.get(userId); const dot = el('i','tc-presence-dot' + (p?.online ? ' ' + (p.manual_status === 'busy' ? 'busy' : 'online') : ''));
@@ -185,16 +189,19 @@ function startChat(root) {
         const pending = [...(state.pending.get(state.selected)?.values() || [])];
         const current = new Map([...messages.querySelectorAll('[data-message]')].map(n => [n.dataset.message,n]));
         messages.querySelectorAll('.tc-day').forEach(n => n.remove());
+        let position = messages.firstChild;
         let day = '';
         for (const m of [...all,...pending]) {
             const date = dates.format(new Date(m.created_at));
-            if (date !== day) { messages.append(el('div','tc-day',date)); day = date; }
+            if (date !== day) { messages.insertBefore(el('div','tc-day',date),position); day = date; }
             const id = m.id || m.command_id, signature = JSON.stringify([m.body,m.status,m.created_at,m.delivered_count,m.read_count,m.attachments,m.transfer,m.version,m.reply,m.reactions,m.mentions,m.pinned,m.deleted,m.can_edit,m.can_delete,m.can_pin]);
             let n = current.get(id);
             if (!n || n.dataset.signature !== signature) {
-                const next = messageNode(m,!m.id); next.dataset.signature = signature; if(n) {observer.unobserve(n);n.replaceWith(next);} n = next;
+                const next = messageNode(m,!m.id); next.dataset.signature = signature; if(n) {observer.unobserve(n);if(position===n)position=next;n.replaceWith(next);} n = next;
             }
-            messages.append(n); current.delete(id);
+            // Moving an unchanged media element restarts playback in browsers.
+            if(n!==position)messages.insertBefore(n,position);
+            position=n.nextSibling; current.delete(id);
             if (m.id && m.sender_id !== config.userId && m.status !== 'read') observer.observe(n);
         }
         current.forEach(n => {observer.unobserve(n);n.remove();});
@@ -285,7 +292,7 @@ function startChat(root) {
         return a.bottom > b.top + 8 && a.top < b.bottom - 8 && a.left < b.right && a.right > b.left;
     }
     function observeRead() {
-        if (document.visibilityState !== 'visible' || !document.hasFocus() || !root.classList.contains('tc-selected')) return;
+        if ((bridge&&!bridge.reading()) || document.visibilityState !== 'visible' || !document.hasFocus() || !root.classList.contains('tc-selected')) return;
         const ids = [...messages.querySelectorAll('[data-message]')].filter(visible).map(n => n.dataset.message)
             .filter(id => { const m = state.messages.get(id); return m && m.sender_id !== config.userId && m.status !== 'read'; });
         if (ids.length) queueReceipt(state.selected,ids,'read');
@@ -302,6 +309,7 @@ function startChat(root) {
     }
     async function notices(initial = false) {
         const entries = await api('/realtime/notifications');
+        if(bridge){bridge.notifications(entries,initial);return;}
         for (const n of entries) {
             if (state.notices.has(n.id)) continue; state.notices.add(n.id);
             if(n.type==='teamchat.message.mentioned')interactions.notified(n.resource_id,n.source_event_id);
@@ -360,6 +368,7 @@ function startChat(root) {
                 page.events.forEach(e=>state.seen.add(e.id));state.cursor=page.cursor;
                 if(state.seen.size>4000)state.seen=new Set([...state.seen].slice(-2000));
                 if(newMessages.size||page.events.some(e=>e.type==='teamchat.message.mentioned'))await notices();
+                bridge?.updated();
                 state.wake=state.wake||page.hasMore;
             }while(state.wake&&!state.stopped);
         } catch(e) {
@@ -406,9 +415,9 @@ function startChat(root) {
         await sync();
         // Recheck access even without a domain event (e.g. institutional revocation).
         if(state.selected)await refreshConversation(state.selected).catch(()=>{});
-        interactions.refresh();
+        interactions.refresh();bridge?.updated();
         if(state.view === 'team')await spaces.refresh().catch(()=>{});
-        pollTimer=setTimeout(poll,document.visibilityState==='visible'?10000:30000);
+        pollTimer=setTimeout(poll,bridge?(state.connected?45000:15000):(document.visibilityState==='visible'?10000:30000));
     }
     const spaces = installSpaces({root, state, t, api, el, renderList, openConversation, refreshConversation, listMore, error, toast});
     $('[data-form]').addEventListener('submit',submit);
@@ -423,13 +432,14 @@ function startChat(root) {
     $('[data-dismiss]').onclick=()=>{$('[data-error]').hidden=true;};
     $('[data-retry]').onclick=()=>{$('[data-error]').hidden=true;sync();if(state.selected)openConversation(state.selected);};
     history.addEventListener('scroll',()=>{if(nearBottom())$('[data-jump]').hidden=true;observeRead();},{passive:true});
-    window.addEventListener('focus',()=>{observeRead();sync();});
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){sync();observeRead();}});
-    window.addEventListener('online',()=>{state.socket?.close();if(!state.socket)connect();sync();});
-    window.addEventListener('offline',()=>connection('offline'));
-    window.addEventListener('pagehide',()=>{state.stopped=true;state.socket?.close();clearTimeout(retryTimer);clearTimeout(pollTimer);clearInterval(presenceTimer);clearInterval(socketWatch);});
-    window.addEventListener('pageshow',e=>{if(e.persisted)window.location.reload();});
+    listen(window,'focus',()=>{observeRead();sync();});
+    listen(document,'visibilitychange',()=>{if(document.visibilityState==='visible'){sync();observeRead();}});
+    listen(window,'online',()=>{state.socket?.close();if(!state.socket)connect();sync();});
+    listen(window,'offline',()=>connection('offline'));
+    listen(window,'pagehide',()=>{state.stopped=true;state.socket?.close();clearTimeout(retryTimer);clearTimeout(pollTimer);clearInterval(presenceTimer);clearInterval(socketWatch);});
+    listen(window,'pageshow',e=>{if(e.persisted)window.location.reload();});
     socketWatch=setInterval(()=>{if(state.socket?.readyState===WebSocket.OPEN){if(Date.now()-lastSocketAt>90000)state.socket.close();else state.socket.send(JSON.stringify({event:'pusher:ping',data:{}}));}},25000);
     presenceTimer=setInterval(()=>refreshPresence().catch(()=>{}),30000);
+    window.mcaTeamChat = {selected:()=>state.selected,destroy:()=>{stop();lifecycle.abort();observer.disconnect();clearTimeout(searchTimer);clearTimeout(toastTimer);}};
     connect(); pollTimer=setTimeout(poll,1500); refreshPresence().catch(()=>{});
 }

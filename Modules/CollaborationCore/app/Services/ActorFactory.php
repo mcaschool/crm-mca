@@ -18,6 +18,12 @@ final class ActorFactory implements ActorContextFactory
 
     public function fromAuthenticatedRequest(Request $request): ActorContext
     {
+        $delegated = $request->attributes->get('widget.actor');
+        if ($delegated instanceof ActorContext) {
+            $this->devices->assertSessionBinding($delegated);
+
+            return $delegated;
+        }
         $session = $this->sessions->fromAuthenticatedRequest($request);
         $device = $this->devices->register($session, new DeviceRegistration(DevicePlatform::Web, 'Web'));
         $actor = new ActorContext($session->institutionId, $session->userId, $device->id, $session->sessionId, $session->requestId, $session->authenticationLevel);

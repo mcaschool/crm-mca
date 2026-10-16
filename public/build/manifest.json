@@ -1,4 +1,36 @@
 {
+  "Modules/TeamChat/resources/js/teamchat.js": {
+    "file": "assets/teamchat-BOGG8YtO.js",
+    "name": "teamchat",
+    "src": "Modules/TeamChat/resources/js/teamchat.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_teamchat-BzOzV1dG.js"
+    ]
+  },
+  "Modules/TeamChat/resources/js/widget-frame.js": {
+    "file": "assets/widget-frame-Dnft1ftK.js",
+    "name": "widget-frame",
+    "src": "Modules/TeamChat/resources/js/widget-frame.js",
+    "isEntry": true,
+    "dynamicImports": [
+      "Modules/TeamChat/resources/js/teamchat.js"
+    ],
+    "css": [
+      "assets/widget-frame-WXB4j0BP.css"
+    ]
+  },
+  "_teamchat-3NgHSzPY.css": {
+    "file": "assets/teamchat-3NgHSzPY.css",
+    "src": "_teamchat-3NgHSzPY.css"
+  },
+  "_teamchat-BzOzV1dG.js": {
+    "file": "assets/teamchat-BzOzV1dG.js",
+    "name": "teamchat",
+    "css": [
+      "assets/teamchat-3NgHSzPY.css"
+    ]
+  },
   "resources/css/app.css": {
     "file": "assets/app-DM8Xk7N3.css",
     "name": "app",
@@ -9,12 +41,12 @@
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-B8p0Dfn1.js",
+    "file": "assets/app-BOGG8YtO.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
-    "css": [
-      "assets/app-3NgHSzPY.css"
+    "imports": [
+      "_teamchat-BzOzV1dG.js"
     ]
   }
 }

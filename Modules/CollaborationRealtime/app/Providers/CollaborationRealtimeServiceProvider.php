@@ -15,6 +15,7 @@ final class CollaborationRealtimeServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(Services\EventPolicies::class);
+        $this->app->bind(\Modules\CollaborationRealtime\Storage\WidgetStateStore::class, \Modules\CollaborationRealtime\Storage\CacheWidgetStateStore::class);
         $this->app->bind(\Modules\CollaborationCore\Contracts\RevocationRecorder::class, Services\RevocationEvents::class);
         $this->app->bind(Contracts\TransactionalEventRecorder::class, Services\DatabaseEventRecorder::class);
         $this->app->bind(Contracts\SyncFeed::class, Services\DatabaseSyncFeed::class);

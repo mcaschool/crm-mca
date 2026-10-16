@@ -27,6 +27,7 @@ final class TeamChatServiceProvider extends ServiceProvider
         $this->commands([\Modules\TeamChat\Console\PruneUploads::class]);
         $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
         $this->loadRoutesFrom(__DIR__.'/../../routes/web.php');
+        $this->loadRoutesFrom(__DIR__.'/../../routes/widget.php');
         $this->loadViewsFrom(__DIR__.'/../../resources/views', 'teamchat');
         $this->loadTranslationsFrom(__DIR__.'/../../lang', 'teamchat');
         $policies = $this->app->make(EventPolicies::class);

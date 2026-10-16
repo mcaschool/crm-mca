@@ -38,7 +38,7 @@ final class CollaborationCoreServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
         $this->loadRoutesFrom(__DIR__.'/../../routes/web.php');
-        $this->commands([\Modules\CollaborationCore\Console\PruneCollaboration::class]);
+        $this->commands([\Modules\CollaborationCore\Console\PruneCollaboration::class, \Modules\CollaborationCore\Console\WidgetApplicationsCommand::class]);
         Gate::define('collaboration.use', fn (User $user) => app(Services\ApplicationAccess::class)->allows($user, 'collaboration'));
         User::updated(function (User $user): void {
             app(Services\PanelAccessSnapshot::class)->forget();

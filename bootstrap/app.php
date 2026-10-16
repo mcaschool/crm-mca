@@ -17,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(replace: [
+            \Illuminate\Session\Middleware\StartSession::class => \Modules\CollaborationCore\Http\Middleware\WidgetSessionMiddleware::class,
+            \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class => \Modules\CollaborationCore\Http\Middleware\WidgetCsrf::class,
+        ]);
+        $middleware->prependToPriorityList(\Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class, \Modules\CollaborationCore\Http\Middleware\WidgetCsrf::class);
         // El contexto de institucion debe fijarse ANTES de SubstituteBindings,
         // porque el route-model-binding de un modelo con scope global (p. ej.
         // Program) consulta la BD y sin contexto la barandilla lo rechaza (500).
