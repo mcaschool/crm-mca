@@ -86,9 +86,10 @@ final class CallService
         if ($invitees->count() + 1 > $max) {
             throw CallException::tooManyParticipants($max);
         }
-        if ($this->isBusy($initiator->id)) {
-            throw CallException::busy();
-        }
+        // «Ocupado» se decide SOLO dentro de la transacción, tras bloquear a la persona y revisar la clave:
+        // una comprobación previa sin bloqueo veía como ocupación la llamada que otro proceso acababa de
+        // confirmar con ESTA misma clave (entre la lectura de idempotencia y esta) y respondía «busy» a un
+        // reintento legítimo del mismo comando.
 
         try {
             return DB::transaction(function () use ($initiator, $media, $key, $hash, $deviceId, $scope, $context, $invitees): Call {

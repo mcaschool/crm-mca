@@ -97,6 +97,31 @@ function tcReasons(array $results): array
     return $counts;
 }
 
+it('mismo comando mientras otro proceso lo confirma (entrelazado determinista): misma llamada, nunca «busy»', function () {
+    ['inst' => $inst, 'users' => [$ana, $beto]] = tcSeed($this, 2);
+
+    $r = tcRun([['start_interleaved', ['inst' => $inst, 'user' => $ana, 'to' => [$beto], 'key' => 'race-interleave-01']]], barrier: false)[0];
+
+    expect($r['interleaved'])->toBeTrue()
+        ->and($r['competing']['ok'] ?? null)->toBeTrue(json_encode($r))
+        ->and($r['ok'])->toBeTrue(json_encode($r)) // antes: «busy» por su propia llamada recién confirmada
+        ->and($r['call'])->toBe($r['competing']['call'])
+        ->and(tcProbe('collab_call_calls')->where('institution_id', $inst)->count())->toBe(1)
+        ->and(tcProbe('collab_call_participants')->where('institution_id', $inst)->count())->toBe(2);
+});
+
+it('comandos DISTINTOS entrelazados para la misma persona: se conserva la protección (uno inicia, el otro «busy»)', function () {
+    ['inst' => $inst, 'users' => [$ana, $beto]] = tcSeed($this, 2);
+
+    $r = tcRun([['start_interleaved', ['inst' => $inst, 'user' => $ana, 'to' => [$beto], 'key' => 'race-distinct-01',
+        'competing_key' => 'race-distinct-02']]], barrier: false)[0];
+
+    expect($r['interleaved'])->toBeTrue()
+        ->and($r['competing']['ok'] ?? null)->toBeTrue(json_encode($r))
+        ->and($r['ok'])->toBeFalse()->and($r['reason'] ?? null)->toBe('busy')
+        ->and(tcProbe('collab_call_calls')->where('institution_id', $inst)->count())->toBe(1);
+});
+
 it('reintentos simultáneos con la misma clave: una sola llamada para todos', function () {
     ['inst' => $inst, 'users' => [$ana, $beto]] = tcSeed($this, 2);
 
