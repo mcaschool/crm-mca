@@ -67,7 +67,11 @@ final class FakeLiveKit
             'api_url' => self::URL, 'client_url' => self::CLIENT_URL, 'api_key' => self::KEY, 'api_secret' => self::SECRET,
             'timeout' => 2, 'connect_timeout' => 1, 'retries' => 2, 'retry_sleep_ms' => 0,
             'server_token_ttl' => 60, 'empty_timeout' => 120, 'departure_timeout' => 20, 'webhook_leeway' => 5,
+            // Disyuntor (fase 4I) apagado por defecto en el servidor simulado: las pruebas que lo necesitan
+            // lo activan; así un fallo simulado no condiciona el resto de la prueba.
+            'breaker_seconds' => 0,
         ], $over)]);
+        \Illuminate\Support\Facades\Cache::forget('teamcalls:media:down_until');
         app()->forgetInstance(MediaRoomService::class);
         app()->forgetInstance(CallService::class);
         Http::preventStrayRequests();

@@ -1,0 +1,62 @@
+# nginx · TLS para el CRM de staging, Reverb (wss) y la señalización de LiveKit (wss). Ejemplo (fase 4I).
+# Certificados con certbot (Let's Encrypt). Sustituir los dominios. El tráfico de medios (UDP 50000-60000,
+# TCP 7881 y TURN 3478/5349) NO pasa por nginx: va directo a LiveKit.
+
+map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+
+# CRM (Laravel, PHP-FPM) — staging.example.com
+server {
+    listen 443 ssl http2;
+    server_name staging.example.com;
+    ssl_certificate     /etc/letsencrypt/live/staging.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/staging.example.com/privkey.pem;
+    root /var/www/crm/public;
+    index index.php;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    client_max_body_size 30m;
+    location / { try_files $uri $uri/ /index.php?$query_string; }
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+    }
+}
+
+# Reverb (CollaborationRealtime) — ws.staging.example.com → 127.0.0.1:8080
+server {
+    listen 443 ssl http2;
+    server_name ws.staging.example.com;
+    ssl_certificate     /etc/letsencrypt/live/ws.staging.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ws.staging.example.com/privkey.pem;
+    location / {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 3600s;
+        proxy_pass http://127.0.0.1:8080;
+    }
+}
+
+# LiveKit (señalización) — rtc.staging.example.com → 127.0.0.1:7880
+server {
+    listen 443 ssl http2;
+    server_name rtc.staging.example.com;
+    ssl_certificate     /etc/letsencrypt/live/rtc.staging.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/rtc.staging.example.com/privkey.pem;
+    location / {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+        proxy_pass http://127.0.0.1:7880;
+    }
+}
+
+server {
+    listen 80;
+    server_name staging.example.com ws.staging.example.com rtc.staging.example.com turn.staging.example.com;
+    return 301 https://$host$request_uri;
+}

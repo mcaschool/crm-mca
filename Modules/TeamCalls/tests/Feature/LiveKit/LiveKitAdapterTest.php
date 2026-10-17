@@ -161,13 +161,13 @@ it('errores de comunicación: reintentos acotados y luego media_unavailable, sin
         expect($e->reason)->toBe('media_unavailable')->and($e->status)->toBe(503)
             ->and($e->getMessage())->not->toContain(FakeLiveKit::SECRET);
     }
-    expect(count(FakeLiveKit::$calls))->toBe($attempts); // 1 intento + 2 reintentos
+    expect(count(FakeLiveKit::$calls))->toBe($attempts); // sin conexión: 1 + connect_retries (1); 5xx: 1 + retries (2)
 
     // Desconectar o cerrar con el servidor caído no rompe la operación del motor (se registra y sigue).
     TC::service()->end($this->ana, $call->id);
     expect(TC::fresh($call)->status->value)->toBe('ended');
 })->with([
-    'sin conexión' => ['down', 3],
+    'sin conexión' => ['down', 2], // fase 4I: un servidor caído no responde antes por insistir
     'HTTP 500' => ['error', 3],
 ]);
 

@@ -31,12 +31,16 @@
                 <span class="tc-status" id="tc-status" data-phase="idle"></span>
                 <span class="tc-peer" id="tc-peer"></span>
                 <span class="tc-synthetic" id="tc-synthetic" hidden></span>
+                {{-- Fase 4I: estado de la conexión (red, servidor de llamadas y tiempo real), siempre a la vista. --}}
+                <span class="tc-net" id="tc-net" role="status" hidden></span>
                 <span class="tc-head-acts">
                     <button type="button" class="tc-ico-btn" id="tc-view" hidden></button>
                     <button type="button" class="tc-ico-btn" id="tc-fullscreen" hidden></button>
                 </span>
             </div>
             <div class="tc-toasts" id="tc-toasts" role="status" aria-live="polite"></div>
+            {{-- Fase 4I: paso de la conexión en curso (y aviso si tarda más de lo normal). --}}
+            <p class="tc-progress" id="tc-progress" role="status" aria-live="polite" hidden></p>
             <div class="tc-elsewhere" id="tc-elsewhere" role="status" hidden>
                 <span>{{ __('teamcalls.ui.elsewhere') }}</span>
                 <span class="tc-elsewhere-acts">

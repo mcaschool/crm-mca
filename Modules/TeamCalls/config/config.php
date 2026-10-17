@@ -50,6 +50,10 @@ return [
             'connect_timeout' => (int) env('TEAMCALLS_LIVEKIT_CONNECT_TIMEOUT', 3),
             'retries' => (int) env('TEAMCALLS_LIVEKIT_RETRIES', 2),
             'retry_sleep_ms' => (int) env('TEAMCALLS_LIVEKIT_RETRY_SLEEP_MS', 200),
+            // Fase 4I · fallos de LiveKit: reintentos ante fallo de CONEXIÓN (menos que ante 5xx) y disyuntor:
+            // tras un fallo, las operaciones fallan al instante durante breaker_seconds (0 lo desactiva).
+            'connect_retries' => (int) env('TEAMCALLS_LIVEKIT_CONNECT_RETRIES', 1),
+            'breaker_seconds' => (int) env('TEAMCALLS_LIVEKIT_BREAKER_SECONDS', 30),
 
             // Vigencia de los tokens de servicio del backend hacia LiveKit (segundos).
             'server_token_ttl' => (int) env('TEAMCALLS_LIVEKIT_SERVER_TOKEN_TTL', 60),
@@ -99,6 +103,25 @@ return [
         'poll_ms' => (int) env('TEAMCALLS_UI_POLL_MS', 4000),
         // Permite ?sintetico=1 (audio/video generados) para pruebas automatizadas sin cámara ni micrófono.
         'synthetic_media' => (bool) env('TEAMCALLS_UI_SYNTHETIC_MEDIA', false),
+        // Fase 4I · tiempos máximos del navegador (ms): peticiones normales, unirse y credenciales (incluye la
+        // detección de LiveKit caído en el servidor, ~6 s), conexión de medios de LiveKit (WebSocket y WebRTC,
+        // holgada para redes lentas legítimas) y a partir de cuándo se avisa de que tarda más de lo normal.
+        // Fase 4I · aviso de llamada entrante en cualquier pantalla del CRM (solo donde la interfaz está habilitada).
+        // Se desactiva cuando TeamChat/el widget asuman los avisos de llamada (o lo hacen marcando
+        // <html data-mca-call-alerts="widget">). Sondeo de respaldo de la pestaña que lidera, en ms.
+        'incoming' => [
+            'enabled' => (bool) env('TEAMCALLS_UI_INCOMING_NOTIFIER', true),
+            'ringtone' => (bool) env('TEAMCALLS_UI_INCOMING_RINGTONE', true),
+            'poll_ms' => (int) env('TEAMCALLS_UI_INCOMING_POLL_MS', 8000),
+            'hidden_poll_ms' => (int) env('TEAMCALLS_UI_INCOMING_HIDDEN_POLL_MS', 20000),
+            'realtime_poll_ms' => (int) env('TEAMCALLS_UI_INCOMING_REALTIME_POLL_MS', 30000),
+        ],
+        'timeouts' => [
+            'request_ms' => (int) env('TEAMCALLS_UI_REQUEST_TIMEOUT_MS', 15000),
+            'connect_ms' => (int) env('TEAMCALLS_UI_CONNECT_TIMEOUT_MS', 20000),
+            'media_ms' => (int) env('TEAMCALLS_UI_MEDIA_TIMEOUT_MS', 20000),
+            'slow_ms' => (int) env('TEAMCALLS_UI_SLOW_AFTER_MS', 6000),
+        ],
     ],
 
     // Límites de la API web por persona y minuto: iniciar llamadas, resto de operaciones y consultas.

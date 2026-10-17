@@ -94,6 +94,14 @@
 }
 @media (prefers-reduced-motion: reduce) { .tc-tile[data-kind="pending"] .tc-tile-av, .tc-toast { animation: none; } }
 
+/* ─── Conexión (fase 4I): indicador siempre visible y paso de la conexión en curso ─── */
+.tc-net { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--mca-success-soft, var(--mca-ok-soft)); color: var(--mca-success, var(--mca-ok)); font-size: var(--mca-fs-xs, 12px); font-weight: 600; }
+.tc-net::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
+.tc-net[data-state="polling"], .tc-net[data-state="media_none"] { background: var(--mca-neutral-soft); color: var(--mca-neutral); }
+.tc-net[data-state="offline"], .tc-net[data-state="media_down"] { background: var(--mca-danger-soft); color: var(--mca-danger); }
+.tc-progress { margin: 0; padding: 8px 12px; border-radius: var(--mca-radius-sm, 8px); background: var(--mca-info-soft); color: var(--mca-info); font-size: var(--mca-fs-sm, 13px); }
+.tc-progress[data-slow="1"] { background: var(--mca-gold-soft); color: var(--mca-gold-ink); }
+
 /* ─── Controles avanzados (fase 4G): fijar, vista, nivel de audio y calidad de conexión ─── */
 .tc-head-acts { margin-left: auto; display: inline-flex; gap: 6px; }
 .tc-room[data-mode="focus"][data-strip=""] { grid-template-columns: minmax(0, 1fr); }

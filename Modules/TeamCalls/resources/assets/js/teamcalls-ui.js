@@ -51,6 +51,8 @@
         admitted: false,       // LiveKit confirmó los permisos que concedió el backend
         recovering: false,
         connecting: false,
+        attempt: null,         // intento de conexión en curso (AbortController): colgar lo corta (fase 4I)
+        media: null,           // estado del servidor de medios según el servidor: available | down | unconfigured
         wantMic: true,
         wantCam: true,
         contacts: new Map(),   // user_id → nombre
@@ -81,7 +83,21 @@
         return cfg.routes[name].replace('__CALL__', encodeURIComponent(callId || ''));
     }
 
-    async function api(method, url, body, extraHeaders) {
+    /**
+     * Petición a la API. Fase 4I: tiempo máximo configurable (timeouts.requestMs, o opts.timeoutMs) y
+     * cancelación (opts.signal: colgar mientras se conecta corta la espera al instante). Códigos propios:
+     * timeout (el servidor tarda demasiado), aborted (lo canceló la persona) y network (sin red).
+     */
+    async function api(method, url, body, extraHeaders, opts) {
+        const o = opts || {};
+        const ctl = new AbortController();
+        let timedOut = false;
+        const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, o.timeoutMs || cfg.timeouts.requestMs);
+        const onAbort = () => ctl.abort();
+        if (o.signal) {
+            if (o.signal.aborted) ctl.abort();
+            else o.signal.addEventListener('abort', onAbort, { once: true });
+        }
         let res;
         try {
             res = await fetch(url, {
@@ -89,11 +105,16 @@
                 credentials: 'same-origin',
                 headers: Object.assign({ Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'X-Requested-With': 'XMLHttpRequest' }, extraHeaders || {}),
                 body: body ? JSON.stringify(body) : undefined,
+                signal: ctl.signal,
             });
         } catch (e) {
-            const err = new Error('network');
-            err.code = 'network';
+            const code = timedOut ? 'timeout' : (o.signal && o.signal.aborted ? 'aborted' : 'network');
+            const err = new Error(code);
+            err.code = code;
             throw err;
+        } finally {
+            clearTimeout(timer);
+            if (o.signal) o.signal.removeEventListener('abort', onAbort);
         }
         let json = null;
         try { json = await res.json(); } catch (e) { /* sin cuerpo */ }
@@ -112,16 +133,9 @@
         return json;
     }
 
+    /** Mensaje por causa de fallo (fase 4I: clasificación común en teamcalls-core.js, probada con Node). */
     function errorKey(e) {
-        const map = {
-            busy: 'err_busy', answered_elsewhere: 'err_answered_elsewhere', media_unavailable: 'err_media_unavailable',
-            forbidden: 'err_forbidden', unauthenticated: 'err_session', two_factor_required: 'err_session',
-            csrf_token_mismatch: 'err_session', session_revoked: 'err_session', device_revoked: 'err_device_revoked',
-            network: 'err_server', too_many_requests: 'err_server',
-            invalid_transition: 'err_call_gone', not_found: 'err_call_gone', invalid: 'err_launch_invalid',
-            too_many_participants: 'err_too_many_participants',
-        };
-        return map[e && e.code] || null;
+        return window.TeamCallsCore.failureKey(e && e.code);
     }
 
     function showError(e) {
@@ -140,7 +154,7 @@
         if (state.call || state.room) {
             disposeRoom(true).then(() => { state.call = null; tabs.releaseControl(); render(); });
         }
-        alertBox(t(code === 'device_revoked' ? 'err_device_revoked' : 'err_session'));
+        alertBox(t(window.TeamCallsCore.failureKey(code) || 'err_session'));
     }
 
     // ─── Señales de llamadas: pestañas, sondeo de respaldo y tiempo real (fase 3D) ───────────────
@@ -229,7 +243,10 @@
     }
 
     async function refreshLive() {
-        const calls = (await api('GET', cfg.routes.live)).data || [];
+        const res = await api('GET', cfg.routes.live);
+        const calls = res.data || [];
+        // Fase 4I: estado del servidor de medios según el servidor (disyuntor), para el indicador de conexión.
+        if (res.meta && res.meta.media && res.meta.media !== state.media) { state.media = res.meta.media; render(); }
         tabs.send('snapshot', { calls });
         await onSnapshot(calls);
     }
@@ -386,8 +403,20 @@
         renderParticipants();
         syncPending();
         layout();
-        document.querySelectorAll('[data-call-btn]').forEach((b) => { b.disabled = inCall; });
+        // Con el servidor de medios caído no se ofrece llamar (el servidor también lo rechazaría al instante).
+        const mediaDown = state.media === 'down';
+        document.querySelectorAll('[data-call-btn]').forEach((b) => { b.disabled = inCall || mediaDown; });
+        renderConnection();
         document.title = p === 'incoming' ? '📞 ' + t('status_incoming') : baseTitle;
+    }
+
+    /** Indicador de conexión siempre visible (fase 4I): red del navegador, servidor de llamadas y tiempo real. */
+    function renderConnection() {
+        const el = $('tc-net');
+        const st = window.TeamCallsCore.connectionState({ online: navigator.onLine, media: state.media, realtime: hub.realtime });
+        el.dataset.state = st;
+        el.textContent = t('net_' + st);
+        el.hidden = false;
     }
 
     function renderControls() {
@@ -1218,23 +1247,47 @@
         });
     }
 
+    /**
+     * Conexión a los medios como un INTENTO cancelable (fase 4I): unirse y pedir credenciales con el tiempo
+     * máximo de conexión y conectar la sala de LiveKit con sus tiempos máximos (WebSocket y WebRTC), todos
+     * configurables. Colgar durante el intento lo aborta al instante y libera lo que se hubiera abierto.
+     */
     async function connectMedia() {
         if (!state.call || state.connecting) return;
         state.connecting = true;
+        const attempt = { ctl: new AbortController() };
+        state.attempt = attempt;
+        const signal = attempt.ctl.signal;
+        const T = cfg.timeouts;
         try {
             const callId = state.call.id;
-            state.call = (await api('POST', route('join', callId))).data;
+            progress('room');
+            state.call = (await api('POST', route('join', callId), undefined, undefined, { signal, timeoutMs: T.connectMs })).data;
             // Credenciales NUEVAS en cada conexión (también tras una rotación de sala).
-            const cred = (await api('POST', route('credentials', callId))).data;
-            if (!state.call || state.call.id !== callId) return;
+            const cred = (await api('POST', route('credentials', callId), undefined, undefined, { signal, timeoutMs: T.connectMs })).data;
+            if (signal.aborted || !state.call || state.call.id !== callId) return;
+            progress('media');
             // adaptiveStream pausa el video remoto que no se ve; en el modo sintético (pruebas automatizadas en
             // ventanas que pueden no dibujarse) se desactiva para medir el flujo real de medios.
             const room = new LK.Room({ adaptiveStream: !cfg.synthetic, dynacast: true, disconnectOnPageLeave: true });
             state.room = room;
             state.admitted = false;
             wireRoom(room);
-            await room.connect(cred.server_url, cred.token, { autoSubscribe: true });
-            if (state.room !== room) return;
+            try {
+                await room.connect(cred.server_url, cred.token, { autoSubscribe: true, websocketTimeout: T.mediaMs, peerConnectionTimeout: T.mediaMs });
+            } catch (e) {
+                // El API respondió, pero la conexión de audio y video no llega (red, cortafuegos o TURN).
+                if (state.room === room) state.room = null;
+                try { await room.disconnect(true); } catch (x) { /* ya cerrada */ }
+                if (signal.aborted) return;
+                const err = new Error('media_connect_failed');
+                err.code = 'media_connect_failed';
+                throw err;
+            }
+            if (signal.aborted || state.room !== room) {
+                try { await room.disconnect(true); } catch (x) { /* ya cerrada */ }
+                return;
+            }
             // Ficha propia (avatar en voz) y las de quienes ya estaban en la sala (sin evento de entrada).
             tileFor(camKey(null, true), { label: t('you'), avatar: cfg.me.name, local: true });
             room.remoteParticipants.forEach((p) => {
@@ -1256,7 +1309,25 @@
             render();
         } finally {
             state.connecting = false;
+            if (state.attempt === attempt) state.attempt = null;
+            progress(null);
         }
+    }
+
+    // ─── Progreso de la conexión (fase 4I) ──────────────────────────────────────────────────────
+    let progressTimer = null;
+    /** Paso visible mientras se conecta; si tarda más de lo normal se dice, con la opción de cancelar. */
+    function progress(step) {
+        const el = $('tc-progress');
+        clearTimeout(progressTimer);
+        if (!step) { el.hidden = true; el.dataset.slow = '0'; return; }
+        el.textContent = t('step_' + step);
+        el.dataset.slow = '0';
+        el.hidden = false;
+        progressTimer = setTimeout(() => {
+            el.textContent = t('step_slow');
+            el.dataset.slow = '1';
+        }, cfg.timeouts.slowMs);
     }
 
     async function disposeRoom(intentional) {
@@ -1312,6 +1383,7 @@
             render();
             await connectMedia(); // quien llama espera en la sala mientras suena
         } catch (e) {
+            if (e.code === 'aborted') return; // colgó mientras se conectaba: hangUp ya lo resolvió
             showError(e);
             if (state.call) await abandon();
             else tabs.releaseControl();
@@ -1332,7 +1404,7 @@
     }
 
     /** Abrir una llamada existente: contestar si suena; entrar si la persona sigue autorizada (lo decide el servidor). */
-    async function openCall(callId) {
+    async function openCall(callId, answer) {
         if (state.call) return state.call.id === callId ? undefined : alertBox(t('err_in_call'));
         let s;
         try {
@@ -1343,7 +1415,11 @@
         const mine = me(s);
         if (!LIVE.includes(s.status)) return alertBox(t('err_call_gone'));
         if (!mine || mine.revoked) return alertBox(t('err_forbidden'));
-        if (mine.state === 'ringing') return showIncoming(s);
+        if (mine.state === 'ringing') {
+            showIncoming(s);
+            // Fase 4I: «Aceptar» en el aviso de llamada entrante de otra pantalla ya es la decisión de contestar.
+            return answer ? acceptIncoming() : undefined;
+        }
         if (await tabs.controlledElsewhere()) return showElsewhere(s);
         if (!(await tabs.acquireControl(false))) return alertBox(t('err_other_tab'));
         hideElsewhere();
@@ -1354,6 +1430,7 @@
         try {
             await connectMedia(); // unirse: el servidor rechaza a quien ya no puede entrar
         } catch (e) {
+            if (e.code === 'aborted') return; // colgó mientras se conectaba: hangUp ya lo resolvió
             showError(e);
             await abandon();
         }
@@ -1363,7 +1440,7 @@
     /** Intención normalizada por el lanzador (mismos nombres que la URL) → intención de la página. */
     function intentFromQuery(q) {
         if (!q || typeof q !== 'object') return { action: 'invalid' };
-        if (q.call) return { action: 'open', call: String(q.call) };
+        if (q.call) return { action: 'open', call: String(q.call), answer: q.answer === '1' || q.answer === true };
         const out = { action: 'start', media: q.media, key: q.key || null };
         if (q.user) out.user = Number(q.user);
         if (q.conversation) {
@@ -1385,7 +1462,7 @@
     }
 
     function executeIntent(intent) {
-        if (intent.action === 'open') return openCall(intent.call);
+        if (intent.action === 'open') return openCall(intent.call, Boolean(intent.answer));
         if (intent.user) return startCall(intent.user, intent.media, intent.key);
         if (intent.conversation.type !== 'direct' && !(intent.invitees || []).length) return alertBox(t('err_invitees_required'));
         return startConversationCall(intent.conversation, intent.invitees || [], intent.media, intent.key);
@@ -1412,7 +1489,7 @@
     function consumeIntentFromUrl() {
         const url = new URL(window.location.href);
         let changed = false;
-        ['media', 'user', 'conversation', 'invitees', 'call', 'key'].forEach((k) => {
+        ['media', 'user', 'conversation', 'invitees', 'call', 'answer', 'key'].forEach((k) => {
             if (url.searchParams.has(k)) { url.searchParams.delete(k); changed = true; }
         });
         if (changed && window.history && window.history.replaceState) window.history.replaceState(null, '', url.pathname + url.search + url.hash);
@@ -1448,6 +1525,7 @@
             render();
             await connectMedia();
         } catch (e) {
+            if (e.code === 'aborted') return; // colgó mientras se conectaba: hangUp ya lo resolvió
             showError(e);
             await abandon();
         }
@@ -1506,7 +1584,10 @@
                         if (e.code !== 'not_found') showError(e);
                         return finish(null, e.code === 'forbidden' ? 'end_removed' : null);
                     }
+                    if (e.code === 'aborted' || !state.call) return; // colgó durante la recuperación
                     if (e.code === 'network') alertBox(t('err_network'), 'info');
+                    // Reintentos controlados dentro del margen de reconexión, diciendo qué ocurre (fase 4I).
+                    progress(e.code === 'media_unavailable' ? 'retry_media' : (e.code === 'timeout' ? 'retry_slow' : 'retry_network'));
                 }
                 await sleep(Math.min(1000 * attempt, 4000));
             }
@@ -1520,9 +1601,14 @@
     async function hangUp() {
         const call = state.call;
         if (!call) return;
-        await disposeRoom(true);
-        try { await api('POST', route(hangUpRoute(call), call.id)); } catch (e) { /* ya terminada */ }
-        finish(null, 'end_ended');
+        const ringingOut = phase() === 'calling';
+        // Fase 4I: si todavía se está conectando, se corta ya (sin esperar a que respondan el API o LiveKit), se
+        // cierra y libera todo EN LOCAL al instante y el servidor se entera en segundo plano (finaliza o sale; si
+        // la petición se pierde, el servidor aplica el margen de reconexión y los tiempos de llamada).
+        if (state.attempt) state.attempt.ctl.abort();
+        const notify = api('POST', route(hangUpRoute(call), call.id)).catch(() => { /* ya terminada */ });
+        await finish(null, ringingOut ? 'end_cancelled' : 'end_ended');
+        notify.then(() => loadHistory());
     }
 
     async function finish(summary, messageKey) {
@@ -1532,9 +1618,10 @@
         state.recovering = false;
         tabs.releaseControl();
         if (s) tabs.send('released', { callId: s.id });
+        progress(null);
         let key = messageKey;
         if (key === undefined || (key === null && summary)) {
-            key = s ? ({ declined: 'end_declined', missed: 'end_missed', cancelled: 'end_cancelled', ended: 'end_ended', failed: 'end_failed' }[s.status] || null) : null;
+            key = window.TeamCallsCore.endKey(s, cfg.me.id); // incluye «la finalizó quien la inició» (fase 4I)
         }
         if (key) alertBox(t(key), key === 'end_ended' ? 'info' : (key === 'end_failed' || key === 'end_removed' ? 'error' : 'info'));
         render();
@@ -1590,8 +1677,8 @@
         $('tc-elsewhere-hangup').addEventListener('click', hangUpElsewhere);
         // Al volver a la pestaña se consulta enseguida (en segundo plano el sondeo se espacia).
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poller.poke(); });
-        window.addEventListener('offline', () => { if (state.call) alertBox(t('err_network'), 'info', false, 'network'); });
-        window.addEventListener('online', () => { poller.poke(); if (state.call && !state.room) recover(); });
+        window.addEventListener('offline', () => { renderConnection(); if (state.call) alertBox(t('err_network'), 'info', false, 'network'); });
+        window.addEventListener('online', () => { renderConnection(); poller.poke(); if (state.call && !state.room) recover(); });
         // Al cerrar o recargar: cámara y micrófono se paran ya (LiveKit cierra la conexión, el motor espera el
         // margen de reconexión y el bloqueo de control se libera solo).
         window.addEventListener('pagehide', () => {
@@ -1611,6 +1698,9 @@
         }
         renderContacts('');
         loadHistory();
+        // Fase 4I: mientras esta página está abierta, el aviso de llamada entrante de las demás pantallas del CRM se
+        // calla (avisa esta página); el bloqueo se libera solo al cerrarla.
+        if (navigator.locks && navigator.locks.request) navigator.locks.request('teamcalls-page:' + cfg.me.id, () => new Promise(() => {})).catch(() => {});
         tabs.onMessage(onTabMessage);
         // Solo una pestaña de la sesión sondea la lista de llamadas; si se cierra, la sustituye otra.
         tabs.pollLeadership(() => { poller.leader = true; poller.poke(); });

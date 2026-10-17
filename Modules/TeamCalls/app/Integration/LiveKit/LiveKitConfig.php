@@ -26,6 +26,9 @@ final class LiveKitConfig
         public readonly int $departureTimeout = 20,
         public readonly int $webhookLeeway = 30,
         public readonly bool $requireSecureUrls = true,
+        // Reintentos ante fallo de CONEXIÓN (fase 4I): menos que ante 5xx, porque un servidor caído no
+        // responde antes por insistir. Con 3 s de conexión y 1 reintento, el primer fallo se conoce en ~6 s.
+        public readonly int $connectRetries = 1,
     ) {}
 
     public static function fromConfig(): self
@@ -46,6 +49,7 @@ final class LiveKitConfig
             departureTimeout: max(0, min(600, (int) ($c['departure_timeout'] ?? 20))),
             webhookLeeway: max(0, min(300, (int) ($c['webhook_leeway'] ?? 30))),
             requireSecureUrls: ! self::insecureDevAllowed($c),
+            connectRetries: max(0, min(5, (int) ($c['connect_retries'] ?? 1))),
         );
     }
 

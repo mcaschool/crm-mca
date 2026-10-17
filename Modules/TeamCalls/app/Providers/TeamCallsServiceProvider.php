@@ -19,6 +19,7 @@ use Modules\CollaborationRealtime\Integration\RevocationConsumer;
 use Modules\CollaborationRealtime\Services\EventPolicies;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\TeamCalls\Console\ExpireStaleCallsCommand;
+use Modules\TeamCalls\Console\HealthCommand;
 use Modules\TeamCalls\Console\SweepMediaRoomsCommand;
 use Modules\TeamCalls\Contracts\CallEventPublisher;
 use Modules\TeamCalls\Contracts\CallsGateway;
@@ -41,6 +42,7 @@ use Modules\TeamCalls\Integration\LiveKit\LiveKitConfig;
 use Modules\TeamCalls\Integration\LiveKit\LiveKitMediaRooms;
 use Modules\TeamCalls\Integration\LiveKit\LiveKitRoomClient;
 use Modules\TeamCalls\Integration\LiveKit\LiveKitTokens;
+use Modules\TeamCalls\Integration\LiveKit\MediaHealth;
 use Modules\TeamCalls\Integration\Provisional\DenyAllConversationAccess;
 use Modules\TeamCalls\Integration\Provisional\NoopCallEventPublisher;
 use Modules\TeamCalls\Integration\Provisional\NoopPresence;
@@ -73,6 +75,7 @@ class TeamCallsServiceProvider extends ModuleServiceProvider
     protected array $commands = [
         ExpireStaleCallsCommand::class,
         SweepMediaRoomsCommand::class,
+        HealthCommand::class,
     ];
 
     public function register(): void
@@ -103,8 +106,9 @@ class TeamCallsServiceProvider extends ModuleServiceProvider
                 return new UnconfiguredMediaRooms;
             }
             $tokens = new LiveKitTokens($config);
+            $health = MediaHealth::fromConfig(); // disyuntor compartido (fase 4I)
 
-            return new LiveKitMediaRooms($config, new LiveKitRoomClient($config, $tokens), $tokens);
+            return new LiveKitMediaRooms($config, new LiveKitRoomClient($config, $tokens, $health), $tokens, $health);
         });
         $this->app->bindIf(CallsGateway::class, TeamCallsGateway::class);
         // Puerta del contrato común (MCA Colaboración 1.1), con el contexto autenticado de Core.

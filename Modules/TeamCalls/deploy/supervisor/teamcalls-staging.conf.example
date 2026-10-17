@@ -1,0 +1,29 @@
+; /etc/supervisor/conf.d/teamcalls-staging.conf · procesos persistentes de MCA Colaboración (ejemplo, fase 4I).
+; Reinicio automático, registros rotados SIN secretos (Laravel nunca registra credenciales de LiveKit ni de Reverb).
+
+[program:mca-reverb]
+; WebSockets de CollaborationRealtime (detrás de nginx en wss://ws.staging.example.com)
+command=/usr/bin/php /var/www/crm/artisan reverb:start --host=127.0.0.1 --port=8080
+directory=/var/www/crm
+user=www-data
+autostart=true
+autorestart=true
+stopwaitsecs=10
+stdout_logfile=/var/log/mca/reverb.log
+stdout_logfile_maxbytes=20MB
+redirect_stderr=true
+
+[program:mca-collaboration-queue]
+; Entrega de eventos de CollaborationRealtime (trabajos DrainOutbox de la cola «collaboration»): llamadas, chat,
+; revocaciones. Dos procesos para tolerar uno ocupado; se reciclan cada hora.
+command=/usr/bin/php /var/www/crm/artisan queue:work database --queue=collaboration --sleep=1 --tries=3 --max-time=3600
+directory=/var/www/crm
+user=www-data
+numprocs=2
+process_name=%(program_name)s_%(process_num)02d
+autostart=true
+autorestart=true
+stopwaitsecs=30
+stdout_logfile=/var/log/mca/collaboration-queue.log
+stdout_logfile_maxbytes=20MB
+redirect_stderr=true

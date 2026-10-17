@@ -1,0 +1,9 @@
+# /etc/cron.d/mca-staging · planificador de Laravel y comprobación de salud (ejemplo, fase 4I).
+# schedule:run ejecuta teamcalls:expire-stale (cada minuto) y teamcalls:media-sweep (cada 5 minutos).
+* * * * * www-data cd /var/www/crm && /usr/bin/php artisan schedule:run >> /dev/null 2>&1
+
+# Red de seguridad de la entrega de eventos (por si el worker estuvo parado): recomendación, confirmar con Codex.
+* * * * * www-data cd /var/www/crm && /usr/bin/php artisan collaboration:realtime drain --all-institutions --limit=500 >> /dev/null 2>&1
+
+# Salud de TeamCalls cada 5 minutos: JSON sin secretos; código 1 = degradado (lo recoge la supervisión).
+*/5 * * * * www-data cd /var/www/crm && /usr/bin/php artisan teamcalls:health --json > /var/log/mca/teamcalls-health.json 2>&1 || logger -t teamcalls "teamcalls:health degradado"

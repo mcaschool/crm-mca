@@ -387,6 +387,87 @@
         return SESSION_ENDING.includes(code);
     }
 
+    // ─── Fallos y conexión (fase 4I) ───────────────────────────────────────────────────────────
+    /**
+     * Mensaje (clave de i18n) para cada causa de fallo, sin mezclarlas: servidor de medios caído, conexión
+     * lenta o cortada, sin respuesta, permisos del navegador, sesión o dispositivo revocados, autenticación
+     * y llamada terminada por otra persona. Desconocido → null (mensaje genérico con el código).
+     */
+    const FAILURES = {
+        media_unavailable: 'err_media_unavailable',      // servidor de medios caído (disyuntor o 503)
+        media_connect_failed: 'err_media_connect',       // API bien, pero la conexión de medios (WebRTC) no llega
+        timeout: 'err_timeout',                          // el servidor tarda demasiado en responder
+        network: 'err_server',                           // sin red o servidor inaccesible
+        too_many_requests: 'err_server',
+        unauthenticated: 'err_session',                  // sesión caducada o cerrada
+        csrf_token_mismatch: 'err_session',
+        two_factor_required: 'err_two_factor',           // hay que volver a verificar el segundo factor
+        session_revoked: 'err_session_revoked',          // sesión cerrada desde otro sitio o por un administrador
+        device_revoked: 'err_device_revoked',            // este dispositivo ya no está autorizado
+        forbidden: 'err_forbidden',
+        busy: 'err_busy',
+        answered_elsewhere: 'err_answered_elsewhere',
+        invalid_transition: 'err_call_gone',
+        not_found: 'err_call_gone',
+        invalid: 'err_launch_invalid',
+        too_many_participants: 'err_too_many_participants',
+    };
+    function failureKey(code) {
+        return FAILURES[code] || null;
+    }
+
+    /** Cómo terminó una llamada para quien mira (clave de i18n), según el estado y el motivo del servidor. */
+    function endKey(summary, me) {
+        if (!summary) return null;
+        if (summary.status === 'ended' && summary.end_reason === 'ended_by_host' && Number(summary.initiator_id) !== Number(me)) return 'end_by_host';
+        return { declined: 'end_declined', missed: 'end_missed', cancelled: 'end_cancelled', ended: 'end_ended', failed: 'end_failed' }[summary.status] || null;
+    }
+
+    /** Indicador de conexión: sin red > servidor de llamadas caído > sin servidor en este entorno > conectado. */
+    function connectionState(opts) {
+        if (opts.online === false) return 'offline';
+        if (opts.media === 'down') return 'media_down';
+        if (opts.media === 'unconfigured') return 'media_none';
+        return opts.realtime ? 'live' : 'polling';
+    }
+
+    // ─── Aviso de llamada entrante en cualquier pantalla (fase 4I) ─────────────────────────────
+    const LIVE_STATUSES = ['initiating', 'ringing', 'connecting', 'active'];
+
+    /** Llamadas vivas que SUENAN para quien mira (su participación en «ringing», sin expulsión). */
+    function ringingFor(calls, me) {
+        return (calls || []).filter((c) => {
+            const p = (c.participants || []).find((x) => Number(x.user_id) === Number(me));
+            return Boolean(p) && p.state === 'ringing' && !p.revoked && LIVE_STATUSES.includes(c.status);
+        });
+    }
+
+    /**
+     * Qué avisos mostrar u ocultar SIN duplicados: cada llamada se muestra una vez mientras suene; una
+     * llamada ya atendida (aceptada o rechazada aquí o en otra pestaña) no vuelve a mostrarse aunque una
+     * lista atrasada la siga trayendo. Las ocultas sin atender se devuelven para comprobar si fue perdida.
+     */
+    class IncomingTracker {
+        constructor() { this.shown = new Map(); this.handled = new Set(); }
+
+        /** @returns {{show: object[], hide: string[]}} */
+        update(calls, me) {
+            const ringing = ringingFor(calls, me).filter((c) => !this.handled.has(c.id));
+            const ids = new Set(ringing.map((c) => c.id));
+            const show = ringing.filter((c) => !this.shown.has(c.id));
+            const hide = [...this.shown.keys()].filter((id) => !ids.has(id));
+            show.forEach((c) => this.shown.set(c.id, c));
+            hide.forEach((id) => this.shown.delete(id));
+            return { show, hide };
+        }
+
+        /** Atendida (aquí o en otra pestaña): se oculta y no vuelve. true si estaba a la vista. */
+        handle(id) {
+            this.handled.add(id);
+            return this.shown.delete(id);
+        }
+    }
+
     return { EventDeduper, Coalescer, POLL, pollDelay, sanitize, sanitizeSummary, TabCoordinator, SignalHub, REFRESH_TYPES, layoutFor, participantChanges, sourceAllowed,
-        SpeakerTracker, levelBars, qualityClass, featuredFor, endsSession };
+        SpeakerTracker, levelBars, qualityClass, featuredFor, endsSession, failureKey, endKey, connectionState, ringingFor, IncomingTracker };
 });

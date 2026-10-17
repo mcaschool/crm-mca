@@ -54,8 +54,10 @@
             if (['media', 'user', 'conversation', 'invitees', 'key'].some(given)) fail('call excludes other fields');
             const call = String(intent.call);
             if (!RE.call.test(call)) fail('call');
-            return { call }; // tal cual: los identificadores de llamada son ULID en minúsculas
+            // answer (fase 4I): contestar al abrir, p. ej. desde el aviso de llamada entrante de cualquier pantalla.
+            return intent.answer ? { call, answer: '1' } : { call }; // tal cual: ULID en minúsculas
         }
+        if (given('answer')) fail('answer only opens an existing call');
         if (intent.media !== 'audio' && intent.media !== 'video') fail('media');
         if (given('user') === given('conversation')) fail('user xor conversation');
         const out = { media: intent.media };

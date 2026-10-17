@@ -1,0 +1,22 @@
+# /etc/systemd/system/livekit.service · LiveKit para TeamCalls (staging). Reinicio automático y secretos fuera del repo.
+# /etc/livekit/livekit.env (permisos 600, propietario livekit) contiene UNA línea:
+#   LIVEKIT_KEYS="APIstagingCAMBIAR: <secreto de 32 o más caracteres generado en el servidor>"
+[Unit]
+Description=LiveKit (TeamCalls staging)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=livekit
+Group=livekit
+EnvironmentFile=/etc/livekit/livekit.env
+ExecStart=/usr/local/bin/livekit-server --config /etc/livekit/livekit.yaml
+Restart=always
+RestartSec=3
+LimitNOFILE=500000
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

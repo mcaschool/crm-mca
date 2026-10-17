@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\TeamCalls\Contracts\ConversationAccess;
+use Modules\TeamCalls\Contracts\MediaOutage;
 use Modules\TeamCalls\Contracts\MediaRoomService;
 use Modules\TeamCalls\Contracts\Presence;
 use Modules\TeamCalls\Contracts\PushNotifier;
@@ -79,6 +80,11 @@ final class CallService
         $existing = $this->byIdempotency($initiator, $key);
         if ($existing !== null) {
             return $this->sameRequest($existing, $hash);
+        }
+        // Fase 4I: con el servidor de medios caído (disyuntor) no se inicia una llamada que sonaría a los demás
+        // sin que nadie pudiera conectarse; quien llama recibe 503 media_unavailable al instante.
+        if ($this->media instanceof MediaOutage && $this->media->outage()) {
+            throw CallException::mediaUnavailable();
         }
 
         [$scope, $context, $invitees] = $this->resolveTarget($initiator, $target);

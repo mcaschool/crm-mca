@@ -1,0 +1,48 @@
+# LiveKit autohospedado para TeamCalls · STAGING (ejemplo, fase 4I). Copiar a /etc/livekit/livekit.yaml.
+# SIN secretos aquí: la clave y el secreto llegan por la variable LIVEKIT_KEYS (ver livekit.service.example).
+# Sustituir staging.example.com por los dominios reales.
+
+port: 7880                      # señalización (WebSocket/HTTP): SOLO en local; la expone nginx por TLS (wss://rtc.…)
+bind_addresses:
+  - 127.0.0.1
+
+rtc:
+  tcp_port: 7881                # WebRTC por TCP (respaldo cuando el UDP está bloqueado)
+  port_range_start: 50000       # WebRTC por UDP (abrir en el cortafuegos)
+  port_range_end: 60000
+  use_external_ip: true         # descubre la IP pública por STUN (VPS con IP pública)
+
+# TURN integrado: imprescindible para redes corporativas o móviles que bloquean UDP. TURN/TLS por 5349 (o por
+# 443 con una IP o dominio propios). El certificado lo renueva certbot (ver el manual de preproducción).
+turn:
+  enabled: true
+  domain: turn.staging.example.com
+  tls_port: 5349
+  udp_port: 3478
+  external_tls: false
+  cert_file: /etc/livekit/certs/turn.staging.example.com/fullchain.pem
+  key_file: /etc/livekit/certs/turn.staging.example.com/privkey.pem
+
+room:
+  auto_create: false            # OBLIGATORIO: solo el backend de TeamCalls crea salas
+  max_participants: 25          # coherente con TEAMCALLS_MAX_PARTICIPANTS
+  empty_timeout: 120            # coherente con TEAMCALLS_LIVEKIT_EMPTY_TIMEOUT
+  departure_timeout: 20         # coherente con TEAMCALLS_LIVEKIT_DEPARTURE_TIMEOUT
+
+# Webhooks FIRMADOS hacia el CRM (el api_key es el NOMBRE de la clave, no el secreto).
+webhook:
+  api_key: APIstagingCAMBIAR
+  urls:
+    - https://staging.example.com/api/teamcalls/media/livekit
+
+# Límites de recursos (ajustar al tamaño del VPS; ver el manual).
+limit:
+  num_tracks: 400
+  bytes_per_sec: 50_000_000
+  subscription_limit_video: 25
+  subscription_limit_audio: 25
+
+prometheus_port: 6789           # métricas, solo en local (Prometheus o el agente de supervisión)
+logging:
+  level: info
+  json: true

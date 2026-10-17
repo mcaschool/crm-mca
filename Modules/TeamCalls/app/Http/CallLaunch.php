@@ -18,7 +18,7 @@ use InvalidArgumentException;
  *  - media=audio|video & user=<id>                                    llamada individual
  *  - media=audio|video & conversation=direct:<id>                     desde una conversación privada
  *  - media=audio|video & conversation=group|channel:<id> & invitees=<id,id,…>   invitación explícita
- *  - call=<ulid>                                                      abrir una llamada existente
+ *  - call=<ulid> [& answer=1]                                         abrir una llamada existente (y contestarla)
  *  - key=<8–48 [A-Za-z0-9._:-]> (opcional)                            idempotencia del inicio
  *
  * Una navegación que no viene del mismo origen (Sec-Fetch-Site distinto de same-origin: enlace de
@@ -28,7 +28,7 @@ final class CallLaunch
 {
     public const MAX_INVITEES = 24;
 
-    private const KEYS = ['media', 'user', 'conversation', 'invitees', 'call', 'key'];
+    private const KEYS = ['media', 'user', 'conversation', 'invitees', 'call', 'answer', 'key'];
 
     /**
      * La interfaz de llamadas (y este punto de entrada) existe solo con el interruptor activo y en un entorno
@@ -109,13 +109,18 @@ final class CallLaunch
             return null;
         }
 
+        if (isset($q['answer']) && ! isset($q['call'])) {
+            return null; // contestar solo tiene sentido al abrir una llamada existente
+        }
         if (isset($q['call'])) {
-            if (count(array_diff_key($q, ['call' => 1])) > 0 || preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/iD', $q['call']) !== 1) {
+            if (count(array_diff_key($q, ['call' => 1, 'answer' => 1])) > 0 || preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/iD', $q['call']) !== 1
+                || (isset($q['answer']) && $q['answer'] !== '1')) {
                 return null;
             }
 
             // Tal cual: TeamCalls usa ULID en minúsculas y la página compara identificadores literalmente.
-            return ['action' => 'open', 'call' => $q['call']];
+            // answer=1 (fase 4I): contestar al abrir, desde el aviso de llamada entrante de cualquier pantalla.
+            return ['action' => 'open', 'call' => $q['call']] + (isset($q['answer']) ? ['answer' => true] : []);
         }
 
         $media = $q['media'] ?? null;

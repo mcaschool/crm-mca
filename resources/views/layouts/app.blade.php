@@ -135,6 +135,8 @@
         @if (!request()->routeIs('teamchat.index') && config('collaboration_widget.crm_application') && auth()->user()?->can('collaboration.use'))
             <script defer src="{{ url('/collaboration/widget.js') }}" data-app="{{ config('collaboration_widget.crm_application') }}"></script>
         @endif
+        {{-- TeamCalls · aviso de llamada entrante desde cualquier pantalla (solo donde las llamadas están habilitadas). --}}
+        @includeIf('teamcalls::partials.incoming')
         @livewireScripts
     </body>
 </html>

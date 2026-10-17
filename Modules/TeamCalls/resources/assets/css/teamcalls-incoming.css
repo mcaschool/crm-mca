@@ -1,0 +1,21 @@
+/* TeamCalls · aviso de llamada entrante en cualquier pantalla del CRM (fase 4I). Tokens MCA (--mca-*),
+   superficies suaves y sin franjas laterales de acento. Queda por encima del botón del widget universal. */
+.tci-host { position: fixed; z-index: 2147482000; right: 18px; bottom: 92px; display: grid; gap: 10px; width: min(360px, calc(100vw - 32px)); font-family: inherit; }
+.tci-card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px 12px; padding: 14px; border: 1px solid var(--mca-card-border, var(--mca-line, #dce5f0)); border-radius: var(--mca-r-card, 12px); background: var(--mca-card, #fff); color: var(--mca-text, #13253d); box-shadow: var(--mca-shadow-pop, 0 10px 30px rgba(15, 23, 42, .18)); animation: tci-in .2s ease-out; }
+.tci-card--missed { grid-template-columns: minmax(0, 1fr); }
+.tci-av { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--mca-success-soft, #e7f4ec); color: var(--mca-success, #1e6b45); font-weight: 600; animation: tci-pulse 1.4s ease-in-out infinite; }
+.tci-text { display: grid; min-width: 0; }
+.tci-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--mca-fs-md, 15px); color: var(--mca-ink, #13253d); }
+.tci-kind { color: var(--mca-text-3, #5a6b84); font-size: var(--mca-fs-sm, 13px); }
+.tci-acts { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.tci-btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border: 1px solid transparent; border-radius: 999px; font: inherit; font-size: var(--mca-fs-sm, 13px); font-weight: 600; cursor: pointer; }
+.tci-btn svg { width: 16px; height: 16px; }
+.tci-btn--ok { background: var(--mca-success, #1e6b45); color: #fff; }
+.tci-btn--no { background: var(--mca-danger, #b42318); color: #fff; }
+.tci-btn--plain { background: transparent; border-color: var(--mca-line-strong, var(--mca-line, #dce5f0)); color: var(--mca-text, #13253d); }
+.tci-btn:focus-visible { outline: 2px solid var(--mca-gold, #c9a84c); outline-offset: 2px; }
+.tci-btn:hover { filter: brightness(.96); }
+@keyframes tci-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes tci-pulse { 50% { transform: scale(1.06); } }
+@media (max-width: 600px) { .tci-host { right: 16px; left: 16px; width: auto; bottom: 84px; } }
+@media (prefers-reduced-motion: reduce) { .tci-card, .tci-av { animation: none; } }

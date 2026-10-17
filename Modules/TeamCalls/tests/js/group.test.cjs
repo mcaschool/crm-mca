@@ -83,6 +83,54 @@ test('4H · sesión o dispositivo revocados terminan la sesión de la página (d
     }
 });
 
+test('4I · cada causa de fallo tiene su mensaje (sin mezclar medios, red, sesión, 2FA ni revocaciones)', () => {
+    const k = core.failureKey;
+    assert.equal(k('media_unavailable'), 'err_media_unavailable');
+    assert.equal(k('media_connect_failed'), 'err_media_connect');
+    assert.equal(k('timeout'), 'err_timeout');
+    assert.equal(k('network'), 'err_server');
+    assert.equal(k('unauthenticated'), 'err_session');
+    assert.equal(k('two_factor_required'), 'err_two_factor');
+    assert.equal(k('session_revoked'), 'err_session_revoked');
+    assert.equal(k('device_revoked'), 'err_device_revoked');
+    assert.equal(k('forbidden'), 'err_forbidden');
+    assert.equal(k('desconocido'), null);
+    const keys = ['media_unavailable', 'media_connect_failed', 'timeout', 'two_factor_required', 'session_revoked', 'device_revoked'].map(k);
+    assert.equal(new Set(keys).size, keys.length);
+});
+
+test('4I · cómo terminó: la finalizó quien la inició (para los demás), cancelada, perdida, fallida', () => {
+    const s = (status, reason, initiator) => ({ status, end_reason: reason, initiator_id: initiator });
+    assert.equal(core.endKey(s('ended', 'ended_by_host', 1), 2), 'end_by_host');
+    assert.equal(core.endKey(s('ended', 'ended_by_host', 2), 2), 'end_ended'); // quien la terminó no recibe ese aviso
+    assert.equal(core.endKey(s('cancelled', 'cancelled_by_caller', 1), 2), 'end_cancelled');
+    assert.equal(core.endKey(s('missed', 'no_answer', 1), 2), 'end_missed');
+    assert.equal(core.endKey(s('failed', 'connect_timeout', 1), 2), 'end_failed');
+    assert.equal(core.endKey(null, 2), null);
+});
+
+test('4I · indicador de conexión: sin red > servidor de llamadas caído > sin servidor > tiempo real o sondeo', () => {
+    const c = core.connectionState;
+    assert.equal(c({ online: false, media: 'down', realtime: true }), 'offline');
+    assert.equal(c({ online: true, media: 'down', realtime: true }), 'media_down');
+    assert.equal(c({ online: true, media: 'unconfigured', realtime: true }), 'media_none');
+    assert.equal(c({ online: true, media: 'available', realtime: true }), 'live');
+    assert.equal(c({ online: true, media: null, realtime: false }), 'polling');
+});
+
+test('4I · aviso de llamada entrante: solo lo que suena para mí, una vez, y lo atendido no vuelve', () => {
+    const call = (id, myState, status = 'ringing', revoked = false) => ({ id, status, participants: [{ user_id: 1, state: 'joined' }, { user_id: 2, state: myState, revoked }] });
+    assert.deepEqual(core.ringingFor([call('a', 'ringing'), call('b', 'joined'), call('c', 'ringing', 'ended'), call('d', 'ringing', 'ringing', true)], 2).map((c) => c.id), ['a']);
+
+    const tr = new core.IncomingTracker();
+    assert.deepEqual(tr.update([call('a', 'ringing')], 2).show.map((c) => c.id), ['a']);
+    assert.deepEqual(tr.update([call('a', 'ringing')], 2), { show: [], hide: [] }); // la misma lista otra vez: sin duplicar
+    assert.deepEqual(tr.update([call('a', 'ringing'), call('b', 'ringing')], 2).show.map((c) => c.id), ['b']);
+    assert.equal(tr.handle('b'), true); // atendida aquí o en otra pestaña
+    assert.deepEqual(tr.update([call('a', 'ringing'), call('b', 'ringing')], 2), { show: [], hide: [] }); // una lista atrasada no la revive
+    assert.deepEqual(tr.update([], 2), { show: [], hide: ['a'] }); // dejó de sonar sin atenderla: comprobar si fue perdida
+});
+
 test('pantalla: solo si LiveKit concede la fuente (numérica o por nombre); sin permiso de publicar, nunca', () => {
     assert.equal(core.sourceAllowed({ canPublish: true, canPublishSources: [2, 1, 3, 4] }, 'SCREEN_SHARE'), true);
     assert.equal(core.sourceAllowed({ canPublish: true, canPublishSources: ['MICROPHONE', 'CAMERA', 'SCREEN_SHARE'] }, 'SCREEN_SHARE'), true);

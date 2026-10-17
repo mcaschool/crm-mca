@@ -6,6 +6,7 @@ namespace Modules\TeamCalls\Integration\LiveKit;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Modules\TeamCalls\Contracts\MediaOutage;
 use Modules\TeamCalls\Contracts\MediaRoomService;
 use Modules\TeamCalls\Exceptions\CallException;
 use Modules\TeamCalls\Support\JoinCredentials;
@@ -20,17 +21,24 @@ use Modules\TeamCalls\Support\MediaParticipant;
  * Errores de comunicación → CallException «media_unavailable» (503). «No existe» en operaciones
  * idempotentes (retirar, cerrar, listar) no es un error.
  */
-final class LiveKitMediaRooms implements MediaRoomService
+final class LiveKitMediaRooms implements MediaOutage, MediaRoomService
 {
     public function __construct(
         private readonly LiveKitConfig $config,
         private readonly LiveKitRoomClient $client,
         private readonly LiveKitTokens $tokens,
+        private readonly ?MediaHealth $health = null,
     ) {}
 
+    /** Configurado y no marcado como caído por el disyuntor (sin llamada de red: se consulta a menudo). */
     public function available(): bool
     {
-        return true;
+        return ! $this->outage();
+    }
+
+    public function outage(): bool
+    {
+        return $this->health?->isDown() ?? false;
     }
 
     public function confirmsConnections(): bool

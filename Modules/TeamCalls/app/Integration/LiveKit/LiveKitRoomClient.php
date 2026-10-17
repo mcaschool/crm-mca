@@ -24,6 +24,7 @@ final class LiveKitRoomClient
     public function __construct(
         private readonly LiveKitConfig $config,
         private readonly LiveKitTokens $tokens,
+        private readonly ?MediaHealth $health = null,
     ) {}
 
     /** @return array<string, mixed> */
@@ -76,19 +77,44 @@ final class LiveKitRoomClient
      */
     private function call(string $method, array $body, array $grant): array
     {
+        // Disyuntor (fase 4I): con el servidor marcado como caído se falla al instante, sin esperar.
+        if ($this->health?->isDown()) {
+            throw new LiveKitException('unreachable', "LiveKit {$method}: marked unavailable.");
+        }
+        $connectFailures = 0;
         try {
             $response = Http::withToken($this->tokens->server($grant))
                 ->acceptJson()
                 ->asJson()
                 ->timeout($this->config->timeout)
                 ->connectTimeout($this->config->connectTimeout)
-                ->retry($this->config->retries + 1, $this->config->retrySleepMs, fn (Throwable $e) => $this->retryable($e), throw: false)
+                // Los fallos de CONEXIÓN se reintentan como mucho connect_retries veces (un servidor caído no
+                // responde antes por insistir); 5xx y 429, hasta retries.
+                ->retry($this->config->retries + 1, $this->config->retrySleepMs, function (Throwable $e) use (&$connectFailures): bool {
+                    if ($e instanceof ConnectionException) {
+                        return ++$connectFailures <= $this->config->connectRetries;
+                    }
+
+                    return $this->retryable($e);
+                }, throw: false)
                 ->post($this->config->apiUrl.self::SERVICE.$method, $body === [] ? new stdClass : $body);
         } catch (ConnectionException) {
+            $this->health?->markDown();
+
             throw new LiveKitException('unreachable', "LiveKit {$method}: server unreachable.");
         }
+        try {
+            $result = $this->decode($method, $response);
+        } catch (LiveKitException $e) {
+            if ($e->kind === 'unreachable' && $e->httpStatus >= 500) {
+                $this->health?->markDown();
+            }
 
-        return $this->decode($method, $response);
+            throw $e;
+        }
+        $this->health?->markUp();
+
+        return $result;
     }
 
     /** @return array<string, mixed> */

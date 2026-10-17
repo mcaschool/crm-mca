@@ -54,6 +54,9 @@ test('normalize: mismas combinaciones que el servidor (CallLaunch)', () => {
     assert.deepEqual(normalize({ media: 'audio', conversation: { type: 'direct', id: ULID } }, fixedCrypto).conversation, 'direct:' + ULID);
     assert.equal(normalize({ media: 'audio', conversation: 'channel:' + ULID, invitees: [5, '6', 5] }).invitees, '5,6');
     assert.deepEqual(normalize({ call: ULID.toLowerCase() }), { call: ULID.toLowerCase() }); // tal cual (TeamCalls: minúsculas)
+    // Fase 4I: contestar al abrir (aviso de llamada entrante); solo con una llamada existente.
+    assert.deepEqual(normalize({ call: ULID, answer: true }), { call: ULID, answer: '1' });
+    assert.throws(() => normalize({ media: 'audio', user: 1, answer: true }), TypeError);
     // Clave de idempotencia generada si no se da (recargar la misma URL no crea otra llamada).
     assert.match(normalize({ media: 'audio', user: 1 }, fixedCrypto).key, /^l-[A-Za-z0-9-]{8,46}$/);
 
