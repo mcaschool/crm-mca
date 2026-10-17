@@ -35,12 +35,18 @@ final class CallsUiController
     public function page(Request $request): View
     {
         $user = $this->user($request);
-        $synthetic = (bool) config('teamcalls.ui.synthetic_media') && $request->boolean('sintetico');
+        $stage = CallLaunch::stage();
+        // Medios sintéticos: solo para pruebas automatizadas EN DESARROLLO, nunca en preproducción.
+        $synthetic = $stage === 'development' && (bool) config('teamcalls.ui.synthetic_media') && $request->boolean('sintetico');
+        // Fuera de desarrollo, el canal de tiempo real solo por TLS (wss); si no, la página usa el sondeo.
+        $scheme = (string) config('teamcalls.realtime.scheme');
+        $socketKey = $stage === 'development' || $scheme === 'https' ? (string) config('broadcasting.connections.reverb.key', '') : '';
 
         return view('teamcalls::app', [
             'assets' => $this->assetUrls(),
             'config' => [
                 'me' => ['id' => (int) $user->id, 'name' => (string) $user->name],
+                'stage' => $stage,
                 // Sondeo temporal: cadencia base sin llamada y con la pestaña visible (el núcleo adapta el resto).
                 'poll' => ['idle' => max(2000, min(30000, (int) config('teamcalls.ui.poll_ms', 4000)))],
                 'reconnectGraceMs' => max(5, (int) config('teamcalls.reconnect_grace', 20)) * 1000,
@@ -72,10 +78,10 @@ final class CallsUiController
                 'realtime' => [
                     'api' => url('/api/v1/collaboration'),
                     'socket' => [
-                        'key' => (string) config('broadcasting.connections.reverb.key', ''),
+                        'key' => $socketKey,
                         'host' => (string) config('teamcalls.realtime.host'),
                         'port' => (int) config('teamcalls.realtime.port'),
-                        'scheme' => (string) config('teamcalls.realtime.scheme'),
+                        'scheme' => $scheme,
                     ],
                 ],
                 'i18n' => (array) trans('teamcalls.ui.js'),

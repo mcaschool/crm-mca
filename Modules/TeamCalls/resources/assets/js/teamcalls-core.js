@@ -376,6 +376,17 @@
         return { key: null, reason: null };
     }
 
+    // ─── Preproducción (fase 4H) ───────────────────────────────────────────────────────────────
+    /**
+     * Errores con los que la sesión de ESTE navegador deja de servir: sin sesión, sin segundo factor,
+     * CSRF caducado, o sesión o dispositivo revocados por CollaborationCore. La página deja de consultar,
+     * cuelga localmente y libera cámara y micrófono; el servidor ya sacó a la persona de la llamada.
+     */
+    const SESSION_ENDING = ['unauthenticated', 'two_factor_required', 'csrf_token_mismatch', 'session_revoked', 'device_revoked'];
+    function endsSession(code) {
+        return SESSION_ENDING.includes(code);
+    }
+
     return { EventDeduper, Coalescer, POLL, pollDelay, sanitize, sanitizeSummary, TabCoordinator, SignalHub, REFRESH_TYPES, layoutFor, participantChanges, sourceAllowed,
-        SpeakerTracker, levelBars, qualityClass, featuredFor };
+        SpeakerTracker, levelBars, qualityClass, featuredFor, endsSession };
 });

@@ -30,11 +30,25 @@ final class CallLaunch
 
     private const KEYS = ['media', 'user', 'conversation', 'invitees', 'call', 'key'];
 
-    /** La interfaz de llamadas (y por tanto este punto de entrada) solo existe en desarrollo con el interruptor. */
+    /**
+     * La interfaz de llamadas (y este punto de entrada) existe solo con el interruptor activo y en un entorno
+     * listado explícitamente (fase 4H: desarrollo, pruebas o una preproducción nombrada). Producción nunca,
+     * aunque se configure: queda pendiente de una autorización posterior.
+     */
     public static function enabled(): bool
     {
-        return (bool) config('teamcalls.ui.enabled')
-            && app()->environment((array) config('teamcalls.ui.environments', ['local', 'testing']));
+        if (! config('teamcalls.ui.enabled') || app()->environment('production')) {
+            return false;
+        }
+        $environments = array_values(array_diff((array) config('teamcalls.ui.environments', ['local', 'testing']), ['production', '']));
+
+        return $environments !== [] && app()->environment($environments);
+    }
+
+    /** Desarrollo (local/testing) o preproducción: decide avisos y lo que solo se permite al desarrollar. */
+    public static function stage(): string
+    {
+        return app()->environment(['local', 'testing']) ? 'development' : 'preproduction';
     }
 
     /**

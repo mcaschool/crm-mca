@@ -5,7 +5,7 @@
 <x-app-layout>
     <div class="mca-page tc-page">
         <x-ui.page-header :title="__('teamcalls.ui.title')" :subtitle="__('teamcalls.ui.subtitle')">
-            <x-slot name="badge"><x-ui.badge tone="gold">{{ __('teamcalls.ui.dev_badge') }}</x-ui.badge></x-slot>
+            <x-slot name="badge"><x-ui.badge tone="gold">{{ __(($config['stage'] ?? 'development') === 'development' ? 'teamcalls.ui.dev_badge' : 'teamcalls.ui.preprod_badge') }}</x-ui.badge></x-slot>
         </x-ui.page-header>
 
         @include('teamcalls::partials.calls', ['config' => $config, 'assets' => $assets])

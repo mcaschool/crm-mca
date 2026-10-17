@@ -102,8 +102,10 @@
             err.code = (json && json.error && json.error.code) || 'http_' + res.status;
             err.status = res.status;
             err.retryAfter = Number(res.headers.get('Retry-After')) || 0;
-            if (['unauthenticated', 'two_factor_required', 'csrf_token_mismatch'].includes(err.code)) {
-                sessionLost();
+            // Incluye sesión o dispositivo revocados por CollaborationCore (fase 4H): antes la página seguía
+            // consultando y no liberaba cámara ni micrófono hasta agotar el margen de reconexión.
+            if (window.TeamCallsCore.endsSession(err.code)) {
+                sessionLost(err.code);
             }
             throw err;
         }
@@ -114,7 +116,8 @@
         const map = {
             busy: 'err_busy', answered_elsewhere: 'err_answered_elsewhere', media_unavailable: 'err_media_unavailable',
             forbidden: 'err_forbidden', unauthenticated: 'err_session', two_factor_required: 'err_session',
-            csrf_token_mismatch: 'err_session', network: 'err_server', too_many_requests: 'err_server',
+            csrf_token_mismatch: 'err_session', session_revoked: 'err_session', device_revoked: 'err_device_revoked',
+            network: 'err_server', too_many_requests: 'err_server',
             invalid_transition: 'err_call_gone', not_found: 'err_call_gone', invalid: 'err_launch_invalid',
             too_many_participants: 'err_too_many_participants',
         };
@@ -126,7 +129,7 @@
         alertBox(key ? t(key) : t('err_generic', { code: (e && e.code) || '?' }));
     }
 
-    function sessionLost() {
+    function sessionLost(code) {
         if (state.sessionLost) return;
         state.sessionLost = true;
         // Sesión cerrada o caducada: se deja de consultar, se cuelga localmente y se liberan cámara y
@@ -137,7 +140,7 @@
         if (state.call || state.room) {
             disposeRoom(true).then(() => { state.call = null; tabs.releaseControl(); render(); });
         }
-        alertBox(t('err_session'));
+        alertBox(t(code === 'device_revoked' ? 'err_device_revoked' : 'err_session'));
     }
 
     // ─── Señales de llamadas: pestañas, sondeo de respaldo y tiempo real (fase 3D) ───────────────
@@ -1310,9 +1313,22 @@
             await connectMedia(); // quien llama espera en la sala mientras suena
         } catch (e) {
             showError(e);
-            if (state.call) await finish(null, null);
+            if (state.call) await abandon();
             else tabs.releaseControl();
         }
+    }
+
+    /**
+     * No se pudo entrar a los medios (p. ej. servidor de medios caído) con la llamada ya creada o aceptada:
+     * además de cerrarla aquí, se sale en el servidor (quien llama la termina; el resto sale). Antes la
+     * llamada seguía sonando a las demás personas sin que nadie pudiera conectarse (fase 4H).
+     */
+    async function abandon() {
+        const call = state.call;
+        if (call) {
+            try { await api('POST', route(hangUpRoute(call), call.id)); } catch (e) { /* ya terminada o sin sesión */ }
+        }
+        await finish(null, null);
     }
 
     /** Abrir una llamada existente: contestar si suena; entrar si la persona sigue autorizada (lo decide el servidor). */
@@ -1339,7 +1355,7 @@
             await connectMedia(); // unirse: el servidor rechaza a quien ya no puede entrar
         } catch (e) {
             showError(e);
-            await finish(null, null);
+            await abandon();
         }
     }
 
@@ -1433,7 +1449,7 @@
             await connectMedia();
         } catch (e) {
             showError(e);
-            await finish(null, null);
+            await abandon();
         }
     }
 

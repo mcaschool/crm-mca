@@ -74,6 +74,15 @@ test('4G · área principal: fijado (temporal) > pantalla compartida > orador; n
     assert.equal(core.layoutFor({ tiles: 0, screens: 1, width: 1280 }).strip, null);
 });
 
+test('4H · sesión o dispositivo revocados terminan la sesión de la página (dejar de consultar y liberar medios)', () => {
+    for (const code of ['unauthenticated', 'two_factor_required', 'csrf_token_mismatch', 'session_revoked', 'device_revoked']) {
+        assert.equal(core.endsSession(code), true, code);
+    }
+    for (const code of ['forbidden', 'not_found', 'media_unavailable', 'network', 'too_many_requests', undefined]) {
+        assert.equal(core.endsSession(code), false, String(code));
+    }
+});
+
 test('pantalla: solo si LiveKit concede la fuente (numérica o por nombre); sin permiso de publicar, nunca', () => {
     assert.equal(core.sourceAllowed({ canPublish: true, canPublishSources: [2, 1, 3, 4] }, 'SCREEN_SHARE'), true);
     assert.equal(core.sourceAllowed({ canPublish: true, canPublishSources: ['MICROPHONE', 'CAMERA', 'SCREEN_SHARE'] }, 'SCREEN_SHARE'), true);

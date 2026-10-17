@@ -85,12 +85,15 @@ return [
     ],
 
     /*
-    | Interfaz web de llamadas (fase 3C). SOLO en los entornos listados y con el interruptor activo,
-    | mientras falten los permisos definitivos de CollaborationCore. Fuera de eso, sus rutas dan 404.
+    | Interfaz web de llamadas. Deshabilitada por defecto: solo existe con el interruptor activo Y en uno
+    | de los entornos listados (fuera de eso, sus rutas dan 404). Por defecto, solo desarrollo y pruebas;
+    | la PREPRODUCCIÓN se habilita nombrando su entorno de forma explícita (fase 4H), p. ej.
+    | TEAMCALLS_UI_ENVIRONMENTS=staging. «production» se ignora siempre (CallLaunch::enabled): abrirla a
+    | producción requiere una autorización posterior y un cambio de código, no de configuración.
     */
     'ui' => [
         'enabled' => (bool) env('TEAMCALLS_UI_ENABLED', false),
-        'environments' => ['local', 'testing'],
+        'environments' => array_values(array_filter(array_map('trim', explode(',', (string) env('TEAMCALLS_UI_ENVIRONMENTS', 'local,testing'))))),
         // Sondeo temporal (hasta CollaborationRealtime): cadencia base con la pestaña visible y sin llamada.
         // El cliente la adapta (oculta 15 s, en llamada 6 s, retroceso ante fallos) y solo sondea una pestaña.
         'poll_ms' => (int) env('TEAMCALLS_UI_POLL_MS', 4000),

@@ -7,7 +7,7 @@
 --}}
 <link rel="stylesheet" href="{{ $assets['teamcalls-ui.css'] }}">
 <div class="tc-root" id="tc-root">
-    <p class="tc-notice" role="note">{{ __('teamcalls.ui.dev_notice') }}</p>
+    <p class="tc-notice" role="note">{{ __(($config['stage'] ?? 'development') === 'development' ? 'teamcalls.ui.dev_notice' : 'teamcalls.ui.preprod_notice') }}</p>
     <div class="tc-alert" id="tc-alert" role="alert" hidden>
         <span id="tc-alert-text"></span>
         <button type="button" class="tc-alert-x" id="tc-alert-close" aria-label="×">×</button>
