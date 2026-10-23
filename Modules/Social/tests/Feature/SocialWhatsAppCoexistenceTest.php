@@ -528,14 +528,36 @@ it('con el flag apagado la página de Canales NO carga el SDK y muestra Configur
         ->assertDontSee('connect.facebook.net');
 });
 
-it('con el flag activo la página carga el SDK con el flujo v4 (config_id + featureType)', function () {
+it('con el flag activo la página carga el SDK con el flujo Embedded Signup v4 (setup + sessionInfoVersion 3)', function () {
     [, $user] = wcCtx();
 
     \Livewire\Livewire::actingAs($user)->test(\Modules\Social\Livewire\Channels::class)
         ->assertSee('connect.facebook.net', false)
         ->assertSee('whatsapp_business_app_onboarding', false)
         ->assertSee('override_default_response_type', false)
-        ->assertDontSee('sessionInfoVersion');
+        // Embedded Signup v4 para coexistencia: setup + sessionInfoVersion '3' presentes.
+        ->assertSee('setup: {}', false)
+        ->assertSee("sessionInfoVersion: '3'", false)
+        ->assertSee("response_type: 'code'", false)
+        ->assertSee('config_id', false);
+});
+
+it('el listener del Embedded Signup procesa finish/cancel/error sin registrar code ni tokens', function () {
+    [, $user] = wcCtx();
+
+    $html = \Livewire\Livewire::actingAs($user)->test(\Modules\Social\Livewire\Channels::class)->html();
+
+    // Reconoce el evento de finalización de coexistencia y extrae waba_id/phone_number_id.
+    expect($html)->toContain('WA_EMBEDDED_SIGNUP');
+    expect($html)->toContain('FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING');
+    expect($html)->toContain('waba_id');
+    expect($html)->toContain('phone_number_id');
+    // Maneja cancelación y error del flujo.
+    expect($html)->toContain("data.event === 'CANCEL'");
+    expect($html)->toContain("data.event === 'ERROR'");
+    // El code se captura del callback de FB.login y NO se vuelca a consola/logs.
+    expect($html)->toContain('authResponse');
+    expect($html)->not->toContain('console.log');
 });
 
 it('signupState() emite un state válido de un solo uso, y null con el flujo apagado', function () {

@@ -89,7 +89,14 @@
                                             config_id: this.cfg.config_id,
                                             response_type: 'code',
                                             override_default_response_type: true,
-                                            extras: { featureType: 'whatsapp_business_app_onboarding' },
+                                            // Embedded Signup v4 (coexistencia / WhatsApp Business App onboarding):
+                                            // setup + sessionInfoVersion '3' son obligatorios para que Meta emita
+                                            // el evento final con waba_id/phone_number_id y devuelva el code.
+                                            extras: {
+                                                setup: {},
+                                                featureType: 'whatsapp_business_app_onboarding',
+                                                sessionInfoVersion: '3',
+                                            },
                                         });
                                     },
 
