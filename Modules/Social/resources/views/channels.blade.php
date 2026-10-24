@@ -23,6 +23,7 @@
                                 return {
                                     cfg: @js($waSignupCfg),
                                     endpoint: @js(route('social.wa-signup')),
+                                    endpointDiag: @js(route('social.wa-signup-diagnostic')),
                                     csrf: @js(csrf_token()),
                                     labels: @js([
                                         'idle' => __('Conectar WhatsApp Business'),
@@ -36,7 +37,9 @@
                                     message: '',
                                     busy: false,
                                     submitted: false,
-                                    state: null, code: null, wabaId: null, phoneId: null,
+                                    // attempt: id de correlación del intento (liga el beacon de diagnóstico
+                                    // con el POST de conexión en los logs; nunca contiene datos sensibles).
+                                    state: null, code: null, wabaId: null, phoneId: null, attempt: null,
 
                                     init() {
                                         // SDK solo aquí (la rama existe únicamente con el flag activo).
@@ -59,13 +62,21 @@
                                                 const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
                                                 if (! data || data.type !== 'WA_EMBEDDED_SIGNUP') return;
                                                 if (data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING' || data.event === 'FINISH') {
+                                                    // Coexistencia v4: el evento FINISH entrega SOLO waba_id. El
+                                                    // phone_number_id NO llega aquí (se descubre en el servidor);
+                                                    // si en algún flujo llegara, se aprovecha como pista.
                                                     this.wabaId = data.data?.waba_id ?? null;
                                                     this.phoneId = data.data?.phone_number_id ?? null;
                                                     this.trySubmit();
                                                 } else if (data.event === 'CANCEL') {
+                                                    this.report('cancel', data.data);
                                                     if (this.status !== 'connected') { this.status = 'cancelled'; this.busy = false; }
                                                 } else if (data.event === 'ERROR') {
-                                                    this.fail(@js(__('La conexión con Meta devolvió un error. Inténtalo de nuevo.')));
+                                                    // Captura segura del error que el SDK expone (p. ej. #1690130):
+                                                    // se muestra el mensaje de Meta y se registra vía beacon, nunca el code.
+                                                    this.report('error', data.data);
+                                                    const metaMsg = data.data?.error_message;
+                                                    this.fail(metaMsg ? ('Meta: ' + String(metaMsg).slice(0, 300)) : @js(__('La conexión con Meta devolvió un error. Inténtalo de nuevo.')));
                                                 }
                                                 // Nunca se loguea el payload ni el code.
                                             } catch (e) { /* mensajes ajenos: ignorar */ }
@@ -76,6 +87,7 @@
                                         if (this.busy || this.status === 'connected' || typeof FB === 'undefined') return;
                                         this.busy = true; this.submitted = false; this.message = '';
                                         this.code = null; this.wabaId = null; this.phoneId = null;
+                                        this.attempt = (window.crypto?.randomUUID?.() ?? ('a' + Date.now() + Math.random().toString(16).slice(2)));
                                         this.status = 'starting';
                                         // El state SIEMPRE lo emite el backend (one-time, ligado a usuario+institución).
                                         this.state = await this.$wire.signupState();
@@ -101,13 +113,16 @@
                                     },
 
                                     async trySubmit() {
-                                        if (this.submitted || ! this.state || ! this.code || ! this.wabaId || ! this.phoneId) return;
+                                        // Coexistencia v4: basta state + code + waba_id (el phone_number_id lo
+                                        // resuelve el servidor desde la WABA). Se envía phone_number_id solo
+                                        // si algún flujo lo aportara como pista.
+                                        if (this.submitted || ! this.state || ! this.code || ! this.wabaId) return;
                                         this.submitted = true; // anti doble-submit/doble onboarding
                                         try {
                                             const res = await fetch(this.endpoint, {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrf },
-                                                body: JSON.stringify({ state: this.state, code: this.code, waba_id: this.wabaId, phone_number_id: this.phoneId }),
+                                                body: JSON.stringify({ state: this.state, code: this.code, waba_id: this.wabaId, phone_number_id: this.phoneId, correlation_id: this.attempt }),
                                             });
                                             const body = await res.json();
                                             this.code = null; this.state = null; // el code no se conserva en memoria
@@ -123,6 +138,27 @@
                                     },
 
                                     fail(message) { this.status = 'error'; this.message = message; this.busy = false; this.submitted = false; },
+
+                                    // Diagnóstico best-effort: manda al CRM SOLO lo que el SDK de Meta expone en
+                                    // el navegador (fase, paso, mensaje de error de Meta, error_id, session_id).
+                                    // Nunca el authorization code ni tokens. Un fallo del beacon no afecta al flujo.
+                                    report(phase, d) {
+                                        try {
+                                            const body = JSON.stringify({
+                                                correlation_id: this.attempt,
+                                                phase: phase,
+                                                current_step: d?.current_step ? String(d.current_step).slice(0, 80) : null,
+                                                error_message: d?.error_message ? String(d.error_message).slice(0, 300) : null,
+                                                error_id: d?.error_id ? String(d.error_id).slice(0, 64) : null,
+                                                session_id: d?.session_id ? String(d.session_id).slice(0, 120) : null,
+                                            });
+                                            fetch(this.endpointDiag, {
+                                                method: 'POST', keepalive: true,
+                                                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrf },
+                                                body: body,
+                                            }).catch(() => {});
+                                        } catch (e) { /* diagnóstico best-effort */ }
+                                    },
                                 };
                             };
                         </script>

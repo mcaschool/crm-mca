@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Social\Services;
 
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -29,11 +30,13 @@ use Throwable;
  * DOS fuentes del flujo v4 y mandarlas juntas al endpoint del CRM:
  *  1) fbLoginCallback → response.authResponse.code (el authorization code; se envía de
  *     inmediato al backend, jamás a localStorage/sessionStorage ni a logs);
- *  2) window message con type = 'WA_EMBEDDED_SIGNUP' → evento de la sesión con los asset
- *     IDs; reconocer al menos FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING y capturar de forma
- *     segura data.waba_id y data.phone_number_id (sin loguear el payload).
+ *  2) window message con type = 'WA_EMBEDDED_SIGNUP' → evento de la sesión; reconocer
+ *     FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING y capturar data.waba_id (sin loguear el
+ *     payload). IMPORTANTE (Embedded Signup v4 de coexistencia): el evento FINISH entrega
+ *     SOLO waba_id; NO incluye phone_number_id. El número se DESCUBRE server-side a partir
+ *     de la WABA (GET /{WABA_ID}/phone_numbers).
  * Los asset IDs del navegador son SOLO una pista: la AUTORIDAD es la validación
- * server-side posterior (ver completeSignup → assertAssetsBelongToToken).
+ * server-side posterior (ver completeSignup → resolvePhoneNumber).
  *
  * NADA de esto llama a Meta hasta el cutover real (social.embedded_signup.enabled=false
  * bloquea el onboarding). El resto de handlers de webhook (contactos/historial/account)
@@ -106,23 +109,34 @@ final class WhatsAppCoexistenceService
      *    confirma el número en el WhatsApp Business App por Cloud API;
      *  - 'onboarding' si esa verificación aún no pudo confirmarse (no se finge conexión).
      */
-    public function completeSignup(int $institutionId, string $code, string $wabaId, string $phoneNumberId, string $displayPhoneNumber = ''): SocialChannel
+    public function completeSignup(int $institutionId, string $code, string $wabaId, string $phoneNumberId = '', string $displayPhoneNumber = '', string $correlationId = ''): SocialChannel
     {
         if (! $this->isEnabled()) {
             throw new RuntimeException(__('La conexión de WhatsApp Business aún no está habilitada (configuración de Meta pendiente).'));
         }
-        if ($code === '' || $wabaId === '' || $phoneNumberId === '') {
-            throw new RuntimeException(__('Faltan datos de la conexión (código, WABA o número). Inténtalo de nuevo.'));
+        // Embedded Signup v4 de coexistencia: el evento FINISH entrega SOLO waba_id. El
+        // phone_number_id NO llega del navegador y se descubre server-side; por eso aquí
+        // solo code + waba_id son imprescindibles.
+        if ($code === '' || $wabaId === '') {
+            throw new RuntimeException(__('Faltan datos de la conexión (código o WABA). Inténtalo de nuevo.'));
         }
 
-        $token = $this->exchangeCode($code);
+        $token = $this->exchangeCode($code, $correlationId);
 
-        // Autoridad server-side: si los activos no corresponden al token, se ABORTA sin
-        // persistir token ni tocar canal alguno.
-        $this->assertAssetsBelongToToken($token, $wabaId, $phoneNumberId);
+        // Autoridad server-side: resuelve y verifica el número a partir de la WABA. Si el
+        // navegador aportó un phone_number_id (compatibilidad), DEBE pertenecer a la WABA;
+        // si no (caso v4), se descubre el número de la Business App dentro de la WABA. Si no
+        // se puede determinar con seguridad, se ABORTA sin persistir token ni tocar canales.
+        $resolved = $this->resolvePhoneNumber($token, $wabaId, $phoneNumberId, $correlationId);
+        $phoneNumberId = $resolved['id'];
+        if ($displayPhoneNumber === '') {
+            $displayPhoneNumber = $resolved['display'];
+        }
+
         $verified = $this->verifyCoexistenceConnection($token, $phoneNumberId);
+        $this->logPhase('verified', $correlationId, ['verified' => $verified]);
 
-        return $this->context->runFor($institutionId, function () use ($wabaId, $phoneNumberId, $displayPhoneNumber, $token, $verified): SocialChannel {
+        return $this->context->runFor($institutionId, function () use ($wabaId, $phoneNumberId, $displayPhoneNumber, $token, $verified, $correlationId): SocialChannel {
             $channel = SocialChannel::query()
                 ->where('provider', 'whatsapp')
                 ->where('external_id', $phoneNumberId)
@@ -148,6 +162,7 @@ final class WhatsAppCoexistenceService
                 'onboarded_at' => now()->toIso8601String(),
             ]);
             $channel->save();
+            $this->logPhase('channel_persisted', $correlationId, ['channel_id' => $channel->id, 'status' => $channel->connection_status]);
 
             $this->subscribeWaba($channel);
 
@@ -156,11 +171,18 @@ final class WhatsAppCoexistenceService
     }
 
     /**
-     * El navegador NO es autoridad sobre los asset IDs: se verifica con el business token
-     * que el PHONE_NUMBER_ID pertenece realmente al WABA (GET /{WABA_ID}/phone_numbers).
-     * Si no coincide, se aborta el onboarding sin persistir nada, con error sanitizado.
+     * El navegador NO es autoridad sobre los activos. Con el business token se listan los
+     * números de la WABA (GET /{WABA_ID}/phone_numbers) y:
+     *  - si el navegador aportó un phone_number_id (compatibilidad), DEBE pertenecer a la
+     *    WABA, o se aborta sin persistir nada;
+     *  - si no lo aportó (Embedded Signup v4 de coexistencia entrega solo waba_id), se
+     *    DESCUBRE el número de la Business App (is_on_biz_app=true y platform_type=CLOUD_API);
+     *    como respaldo, si Meta aún no expone esos campos en el edge pero la WABA tiene un
+     *    único número, se usa ese.
+     *
+     * @return array{id: string, display: string}
      */
-    private function assertAssetsBelongToToken(string $token, string $wabaId, string $phoneNumberId): void
+    private function resolvePhoneNumber(string $token, string $wabaId, string $providedPhoneId, string $correlationId): array
     {
         $version = (string) config('social.graph_version', 'v26.0');
 
@@ -168,28 +190,62 @@ final class WhatsAppCoexistenceService
             $response = Http::timeout(self::TIMEOUT_SECONDS)
                 ->withToken($token)
                 ->acceptJson()
-                ->get("https://graph.facebook.com/{$version}/{$wabaId}/phone_numbers", ['fields' => 'id,display_phone_number']);
+                ->get("https://graph.facebook.com/{$version}/{$wabaId}/phone_numbers", [
+                    'fields' => 'id,display_phone_number,is_on_biz_app,platform_type',
+                ]);
         } catch (Throwable $e) {
-            Log::warning('social.wa.coex: error de red al verificar activos', ['error' => $e->getMessage()]);
+            Log::warning('social.wa.coex: error de red al listar números de la WABA', $this->logCtx($correlationId, ['error' => $e->getMessage()]));
             throw new RuntimeException(__('No se pudo completar la conexión con Meta (red). Inténtalo de nuevo.'));
         }
 
+        if (! $response->successful()) {
+            Log::warning('social.wa.coex: Meta rechazó el listado de números de la WABA', $this->logCtx($correlationId, $this->metaError($response)));
+            throw new RuntimeException(__('Los datos de la conexión no corresponden a la cuenta autorizada. Vuelve a iniciar el proceso.'));
+        }
+
         $rows = $response->json('data');
-        $ids = [];
+        /** @var array<string, array{id: string, display: string, coex: bool}> $numbers */
+        $numbers = [];
         foreach (is_array($rows) ? $rows : [] as $row) {
             if (is_array($row) && isset($row['id'])) {
-                $ids[] = (string) $row['id'];
+                $id = (string) $row['id'];
+                $numbers[$id] = [
+                    'id' => $id,
+                    'display' => (string) ($row['display_phone_number'] ?? ''),
+                    'coex' => ($row['is_on_biz_app'] ?? null) === true
+                        && strtoupper((string) ($row['platform_type'] ?? '')) === 'CLOUD_API',
+                ];
             }
         }
 
-        if (! $response->successful() || ! in_array($phoneNumberId, $ids, true)) {
-            // Diagnóstico seguro: nunca el token ni el payload.
-            Log::warning('social.wa.coex: los activos no corresponden al token', [
-                'status' => $response->status(),
-                'phone_in_waba' => in_array($phoneNumberId, $ids, true),
-            ]);
-            throw new RuntimeException(__('Los datos de la conexión no corresponden a la cuenta autorizada. Vuelve a iniciar el proceso.'));
+        // Compatibilidad: si el navegador aportó un phone_number_id, debe pertenecer a la WABA.
+        if ($providedPhoneId !== '') {
+            if (! isset($numbers[$providedPhoneId])) {
+                Log::warning('social.wa.coex: el número aportado no pertenece a la WABA del token', $this->logCtx($correlationId, ['status' => $response->status()]));
+                throw new RuntimeException(__('Los datos de la conexión no corresponden a la cuenta autorizada. Vuelve a iniciar el proceso.'));
+            }
+            $this->logPhase('phone_verified', $correlationId);
+
+            return ['id' => $providedPhoneId, 'display' => $numbers[$providedPhoneId]['display']];
         }
+
+        // Descubrimiento (v4): el número de la Business App dentro de la WABA.
+        $coex = array_values(array_filter($numbers, static fn (array $n): bool => $n['coex']));
+        if ($coex !== []) {
+            $this->logPhase('phone_discovered', $correlationId, ['basis' => 'coexistence_flag']);
+
+            return ['id' => $coex[0]['id'], 'display' => $coex[0]['display']];
+        }
+        // Respaldo: edge sin is_on_biz_app/platform_type pero con un único número.
+        if (count($numbers) === 1) {
+            $only = array_values($numbers)[0];
+            $this->logPhase('phone_discovered', $correlationId, ['basis' => 'single_number']);
+
+            return ['id' => $only['id'], 'display' => $only['display']];
+        }
+
+        Log::warning('social.wa.coex: no se pudo determinar el número de la WABA', $this->logCtx($correlationId, ['count' => count($numbers)]));
+        throw new RuntimeException(__('No se pudo identificar el número de WhatsApp de la cuenta autorizada. Vuelve a iniciar el proceso.'));
     }
 
     /**
@@ -245,7 +301,7 @@ final class WhatsAppCoexistenceService
         $ok = $response->successful() && (bool) $response->json('success');
         if (! $ok) {
             // Fallo: NO se marca suscrito y no se toca meta → el retry sigue disponible.
-            Log::warning('social.wa.coex: subscribed_apps no confirmó la suscripción', ['status' => $response->status()]);
+            Log::warning('social.wa.coex: subscribed_apps no confirmó la suscripción', $this->metaError($response));
 
             return false;
         }
@@ -569,7 +625,7 @@ final class WhatsAppCoexistenceService
     }
 
     /** Intercambio server-side del authorization code por el business token. */
-    private function exchangeCode(string $code): string
+    private function exchangeCode(string $code, string $correlationId = ''): string
     {
         $version = (string) config('social.graph_version', 'v26.0');
         $appId = (string) config('social.meta_app_id', '');
@@ -592,18 +648,16 @@ final class WhatsAppCoexistenceService
                     'code' => $code,
                 ]);
         } catch (Throwable $e) {
-            Log::warning('social.wa.coex: error de red en el intercambio de código', ['error' => $e->getMessage()]);
+            Log::warning('social.wa.coex: error de red en el intercambio de código', $this->logCtx($correlationId, ['error' => $e->getMessage()]));
             throw new RuntimeException(__('No se pudo completar la conexión con Meta (red). Inténtalo de nuevo.'));
         }
 
         $token = $response->json('access_token');
         if (! $response->successful() || ! is_string($token) || $token === '') {
-            Log::warning('social.wa.coex: Meta rechazó el intercambio de código', [
-                'status' => $response->status(),
-                'code' => (int) ($response->json('error.code') ?? 0),
-            ]);
+            Log::warning('social.wa.coex: Meta rechazó el intercambio de código', $this->logCtx($correlationId, $this->metaError($response)));
             throw new RuntimeException(__('Meta rechazó la conexión. Vuelve a intentar el proceso desde el principio.'));
         }
+        $this->logPhase('code_exchanged', $correlationId);
 
         return $token;
     }
@@ -611,5 +665,47 @@ final class WhatsAppCoexistenceService
     private function stateKey(int $userId, string $state): string
     {
         return "social.wa.signup.state.{$userId}.".hash('sha256', $state);
+    }
+
+    // ------------------------------------------------------------ observabilidad
+
+    /**
+     * Contexto de log del intento (correlación) SIN datos sensibles: jamás tokens,
+     * authorization codes ni secretos.
+     *
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
+    private function logCtx(string $correlationId, array $extra = []): array
+    {
+        return array_merge($correlationId !== '' ? ['attempt' => $correlationId] : [], $extra);
+    }
+
+    /**
+     * Marca de fase del onboarding para diagnóstico (inicialización → código → número →
+     * verificación → persistencia → suscripción). Nunca registra credenciales.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    private function logPhase(string $phase, string $correlationId, array $extra = []): void
+    {
+        Log::info('social.wa.coex.phase', $this->logCtx($correlationId, array_merge(['phase' => $phase], $extra)));
+    }
+
+    /**
+     * Campos de error de Meta SEGUROS para registrar (código, subcódigo y fbtrace_id, que es
+     * la «referencia del error» que pide el soporte de Meta). Nunca incluye el token ni la
+     * respuesta completa.
+     *
+     * @return array{status: int, code: int, subcode: int, fbtrace: string}
+     */
+    private function metaError(Response $response): array
+    {
+        return [
+            'status' => $response->status(),
+            'code' => (int) ($response->json('error.code') ?? 0),
+            'subcode' => (int) ($response->json('error.error_subcode') ?? 0),
+            'fbtrace' => (string) ($response->json('error.fbtrace_id') ?? ''),
+        ];
     }
 }

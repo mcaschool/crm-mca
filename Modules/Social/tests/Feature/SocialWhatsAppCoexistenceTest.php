@@ -337,6 +337,120 @@ it('el business token queda CIFRADO en la base de datos', function () {
     expect($raw)->not->toContain('BIZTOKEN_SECRETO'); // ciphertext, jamás en claro
 });
 
+// ----------------------------------------------------------------------------------
+// Embedded Signup v4 (coexistencia): el evento FINISH entrega SOLO waba_id; el número
+// se descubre server-side desde la WABA. Causa raíz de que el CRM no completara la conexión.
+// ----------------------------------------------------------------------------------
+
+it('coexistencia v4: SIN phone_number_id, el servidor lo descubre desde la WABA y conecta', function () {
+    [$institution, $user] = wcCtx();
+    wcFakeSignup(); // la WABA expone un único número (PHONE_NEW), en la Business App
+    $state = wcService()->issueState($user->id, $institution->id);
+
+    // El navegador NO manda phone_number_id (Meta solo entrega waba_id en el FINISH v4).
+    $res = test()->actingAs($user)->postJson(route('social.wa-signup'), [
+        'state' => $state, 'code' => 'AUTHCODE_V4', 'waba_id' => 'WABA_NEW',
+    ]);
+
+    $res->assertOk()->assertJsonPath('status', 'connected');
+    $channel = SocialChannel::query()->where('external_id', 'PHONE_NEW')->first();
+    expect($channel)->not->toBeNull();
+    expect($channel->credentials['waba_id'])->toBe('WABA_NEW');
+    expect($channel->connection_status)->toBe('connected_coexistence');
+});
+
+it('coexistencia v4: con varios números elige el marcado is_on_biz_app/CLOUD_API', function () {
+    [$institution, $user] = wcCtx();
+    Http::fake([
+        'graph.facebook.com/v26.0/oauth/access_token' => Http::response(['access_token' => 'BIZTOKEN_M'], 200),
+        'graph.facebook.com/v26.0/WABA_MULTI/phone_numbers*' => Http::response(['data' => [
+            ['id' => 'PHONE_SOLO_CLOUD', 'display_phone_number' => '+1 111', 'is_on_biz_app' => false, 'platform_type' => 'CLOUD_API'],
+            ['id' => 'PHONE_COEX', 'display_phone_number' => '+1 222', 'is_on_biz_app' => true, 'platform_type' => 'CLOUD_API'],
+        ]], 200),
+        'graph.facebook.com/v26.0/PHONE_COEX?*' => Http::response(['is_on_biz_app' => true, 'platform_type' => 'CLOUD_API', 'id' => 'PHONE_COEX'], 200),
+        'graph.facebook.com/v26.0/WABA_MULTI/subscribed_apps' => Http::response(['success' => true], 200),
+        'graph.facebook.com/v26.0/*/smb_app_data' => Http::response(['success' => true, 'request_id' => 'R'], 200),
+    ]);
+    $state = wcService()->issueState($user->id, $institution->id);
+
+    test()->actingAs($user)->postJson(route('social.wa-signup'), [
+        'state' => $state, 'code' => 'C', 'waba_id' => 'WABA_MULTI',
+    ])->assertOk()->assertJsonPath('status', 'connected');
+
+    expect(SocialChannel::query()->where('external_id', 'PHONE_COEX')->exists())->toBeTrue();
+    expect(SocialChannel::query()->where('external_id', 'PHONE_SOLO_CLOUD')->exists())->toBeFalse();
+});
+
+it('coexistencia v4: sin phone y varios números SIN marca de coexistencia → error (no adivina)', function () {
+    [$institution, $user] = wcCtx();
+    Http::fake([
+        'graph.facebook.com/v26.0/oauth/access_token' => Http::response(['access_token' => 'BIZTOKEN_A'], 200),
+        // Dos números y ninguno marcado is_on_biz_app: no se puede determinar con seguridad.
+        'graph.facebook.com/v26.0/WABA_AMB/phone_numbers*' => Http::response(['data' => [
+            ['id' => 'P_UNO', 'display_phone_number' => '+1 1'],
+            ['id' => 'P_DOS', 'display_phone_number' => '+1 2'],
+        ]], 200),
+    ]);
+    $state = wcService()->issueState($user->id, $institution->id);
+
+    test()->actingAs($user)->postJson(route('social.wa-signup'), [
+        'state' => $state, 'code' => 'C', 'waba_id' => 'WABA_AMB',
+    ])->assertStatus(422)->assertJsonPath('status', 'error');
+
+    expect(SocialChannel::query()->whereIn('external_id', ['P_UNO', 'P_DOS'])->exists())->toBeFalse();
+});
+
+it('falta waba_id → 422 de validación y no se llama a Meta', function () {
+    [$institution, $user] = wcCtx();
+    Http::fake();
+    $state = wcService()->issueState($user->id, $institution->id);
+
+    test()->actingAs($user)->postJson(route('social.wa-signup'), [
+        'state' => $state, 'code' => 'C', // sin waba_id
+    ])->assertStatus(422)->assertJsonValidationErrors('waba_id');
+
+    Http::assertNothingSent();
+});
+
+it('conectar un número de coexistencia NO toca el canal WhatsApp Test existente (Cloud API)', function () {
+    [$institution, $user, $test] = wcCtx(); // $test = canal manual Cloud API (PHONE_C1), «WhatsApp Test»
+    wcFakeSignup(); // incorpora OTRO número: WABA_NEW / PHONE_NEW
+    $state = wcService()->issueState($user->id, $institution->id);
+
+    test()->actingAs($user)->postJson(route('social.wa-signup'), [
+        'state' => $state, 'code' => 'C', 'waba_id' => 'WABA_NEW',
+    ])->assertOk();
+
+    $test->refresh();
+    expect($test->external_id)->toBe('PHONE_C1');          // intacto
+    expect($test->credentials['token'])->toBe('WA_TOKEN');  // credenciales conservadas
+    expect($test->credentials['waba_id'])->toBe('WABA_C1');
+    // Quedan DOS canales: el de prueba y el nuevo de coexistencia.
+    expect(SocialChannel::query()->where('provider', 'whatsapp')->count())->toBe(2);
+});
+
+it('el beacon de diagnóstico registra SOLO campos seguros del SDK (sin code ni tokens)', function () {
+    [, $user] = wcCtx();
+    $logged = [];
+    Log::listen(function ($event) use (&$logged) {
+        $logged[] = $event->message.' '.json_encode($event->context);
+    });
+
+    test()->actingAs($user)->postJson(route('social.wa-signup-diagnostic'), [
+        'correlation_id' => 'ATTEMPT_1',
+        'phase' => 'error',
+        'current_step' => 'WHATSAPP_BUSINESS_ACCOUNT',
+        'error_message' => '745830533083618 no es un identificador comercial válido',
+        'error_id' => '1690130',
+        'session_id' => 'SESS_1',
+    ])->assertStatus(202)->assertJsonPath('status', 'logged');
+
+    $joined = implode(' ', $logged);
+    expect($joined)->toContain('social.wa.coex.client');
+    expect($joined)->toContain('ATTEMPT_1');
+    expect($joined)->toContain('1690130'); // el error de Meta queda trazado para soporte
+});
+
 // ==================================================================================
 // Suscripción y sincronizaciones (una sola vez)
 // ==================================================================================
@@ -552,9 +666,19 @@ it('el listener del Embedded Signup procesa finish/cancel/error sin registrar co
     expect($html)->toContain('FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING');
     expect($html)->toContain('waba_id');
     expect($html)->toContain('phone_number_id');
+    // Coexistencia v4: el envío NO exige phone_number_id del navegador (lo resuelve el
+    // servidor desde la WABA); basta state + code + waba_id.
+    expect($html)->toContain('! this.wabaId) return;');
+    expect($html)->not->toContain('|| ! this.phoneId) return');
     // Maneja cancelación y error del flujo.
     expect($html)->toContain("data.event === 'CANCEL'");
     expect($html)->toContain("data.event === 'ERROR'");
+    // Observabilidad: liga el intento (correlation_id) y manda un beacon seguro con el
+    // mensaje de error que Meta expone (p. ej. #1690130), sin volcar code ni tokens.
+    expect($html)->toContain('correlation_id');
+    expect($html)->toContain('endpointDiag'); // beacon cableado (URL /social/whatsapp/diagnostico)
+    expect($html)->toContain('error_message');
+    expect($html)->toContain('session_id');
     // El code se captura del callback de FB.login y NO se vuelca a consola/logs.
     expect($html)->toContain('authResponse');
     expect($html)->not->toContain('console.log');

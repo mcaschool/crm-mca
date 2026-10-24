@@ -36,3 +36,8 @@ Route::get('/social/meta', MetaConnect::class)->name('social.meta');
 // Callback del Embedded Signup (Coexistence). CSRF del grupo web + flag + state.
 Route::post('/social/whatsapp/conectar', [WhatsAppSignupController::class, 'store'])
     ->name('social.wa-signup');
+
+// Beacon de diagnóstico del Embedded Signup: registra de forma segura los eventos ERROR/
+// CANCEL que el SDK de Meta expone en el navegador (sin tokens ni authorization codes).
+Route::post('/social/whatsapp/diagnostico', [WhatsAppSignupController::class, 'diagnostic'])
+    ->name('social.wa-signup-diagnostic');
