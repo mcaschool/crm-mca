@@ -231,12 +231,19 @@ final class WhatsAppCoexistenceService
 
         // Descubrimiento (v4): el número de la Business App dentro de la WABA.
         $coex = array_values(array_filter($numbers, static fn (array $n): bool => $n['coex']));
-        if ($coex !== []) {
+        if (count($coex) === 1) {
             $this->logPhase('phone_discovered', $correlationId, ['basis' => 'coexistence_flag']);
 
             return ['id' => $coex[0]['id'], 'display' => $coex[0]['display']];
         }
-        // Respaldo: edge sin is_on_biz_app/platform_type pero con un único número.
+        if (count($coex) > 1) {
+            // Ambigüedad real: varios números marcados en la Business App. NO se elige uno
+            // arbitrariamente: se detiene con un error claro y sin persistir nada.
+            Log::warning('social.wa.coex: varios números de coexistencia en la WABA (ambiguo)', $this->logCtx($correlationId, ['coex_count' => count($coex)]));
+            throw new RuntimeException(__('La cuenta autorizada tiene varios números de WhatsApp Business App. No se pudo determinar cuál conectar automáticamente.'));
+        }
+        // Respaldo: edge sin is_on_biz_app/platform_type pero con un ÚNICO número (sin
+        // ambigüedad posible). Con más de uno y ninguno marcado, no se adivina.
         if (count($numbers) === 1) {
             $only = array_values($numbers)[0];
             $this->logPhase('phone_discovered', $correlationId, ['basis' => 'single_number']);

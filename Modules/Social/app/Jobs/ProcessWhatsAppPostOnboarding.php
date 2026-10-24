@@ -37,6 +37,16 @@ final class ProcessWhatsAppPostOnboarding extends TenantAwareJob
             return;
         }
 
+        // Solo CUANDO CORRESPONDE: los syncs de contactos/historial (smb_app_data) solo
+        // aplican a un número confirmado en la Business App vía Cloud API. Si la conexión
+        // quedó en 'onboarding' (sin confirmar is_on_biz_app/platform_type), NO se inician:
+        // arrancarían prematuramente. Se reintentarán cuando la conexión quede confirmada.
+        if ($channel->connection_status !== 'connected_coexistence') {
+            Log::info('social.wa.coex: post-onboarding omitido (conexión no confirmada)', ['channel_id' => $channel->id, 'status' => $channel->connection_status]);
+
+            return;
+        }
+
         $coexistence = app(WhatsAppCoexistenceService::class);
 
         try {

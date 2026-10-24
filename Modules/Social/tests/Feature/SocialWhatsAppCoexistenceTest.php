@@ -400,6 +400,25 @@ it('coexistencia v4: sin phone y varios números SIN marca de coexistencia → e
     expect(SocialChannel::query()->whereIn('external_id', ['P_UNO', 'P_DOS'])->exists())->toBeFalse();
 });
 
+it('coexistencia v4: con VARIOS números marcados en la Business App → error (no elige arbitrariamente)', function () {
+    [$institution, $user] = wcCtx();
+    Http::fake([
+        'graph.facebook.com/v26.0/oauth/access_token' => Http::response(['access_token' => 'BIZTOKEN_2C'], 200),
+        // Dos números marcados coexistencia: ambigüedad real → NO se elige uno al azar.
+        'graph.facebook.com/v26.0/WABA_2COEX/phone_numbers*' => Http::response(['data' => [
+            ['id' => 'PHONE_A', 'display_phone_number' => '+1 1', 'is_on_biz_app' => true, 'platform_type' => 'CLOUD_API'],
+            ['id' => 'PHONE_B', 'display_phone_number' => '+1 2', 'is_on_biz_app' => true, 'platform_type' => 'CLOUD_API'],
+        ]], 200),
+    ]);
+    $state = wcService()->issueState($user->id, $institution->id);
+
+    test()->actingAs($user)->postJson(route('social.wa-signup'), [
+        'state' => $state, 'code' => 'C', 'waba_id' => 'WABA_2COEX',
+    ])->assertStatus(422)->assertJsonPath('status', 'error');
+
+    expect(SocialChannel::query()->whereIn('external_id', ['PHONE_A', 'PHONE_B'])->exists())->toBeFalse();
+});
+
 it('falta waba_id → 422 de validación y no se llama a Meta', function () {
     [$institution, $user] = wcCtx();
     Http::fake();
@@ -576,6 +595,8 @@ it('el signup exitoso despacha el post-onboarding after-response', function () {
 
 it('el post-onboarding ejecuta PRIMERO contactos y DESPUÉS historial, con request_id', function () {
     [$institution, , $channel] = wcCtx();
+    $channel->connection_status = 'connected_coexistence'; // precondición: conexión confirmada
+    $channel->save();
     $order = [];
     Http::fake(function ($request) use (&$order) {
         if (str_contains($request->url(), 'smb_app_data')) {
@@ -619,6 +640,8 @@ it('history declined durante el post-onboarding no rompe el canal ya conectado',
 
 it('un fallo transitorio en el post-onboarding no consume los syncs (retry del job posible)', function () {
     [$institution, , $channel] = wcCtx();
+    $channel->connection_status = 'connected_coexistence'; // conexión confirmada: los syncs SÍ se intentan
+    $channel->save();
     Http::fake(['graph.facebook.com/*' => Http::response(['error' => ['message' => 'oops', 'code' => 1]], 500)]);
 
     (new ProcessWhatsAppPostOnboarding($channel->id, $institution->id))->handle();
@@ -627,6 +650,20 @@ it('un fallo transitorio en el post-onboarding no consume los syncs (retry del j
     expect($meta)->not->toHaveKey('contacts_sync_started_at');
     expect($meta)->not->toHaveKey('history_sync_started_at');
     expect($channel->refresh()->is_active)->toBeTrue(); // el canal no se invalida
+});
+
+it('el post-onboarding NO inicia syncs si la conexión NO está confirmada (onboarding)', function () {
+    [$institution, , $channel] = wcCtx();
+    $channel->connection_status = 'onboarding'; // aún sin confirmar is_on_biz_app/platform_type
+    $channel->save();
+    Http::fake();
+
+    (new ProcessWhatsAppPostOnboarding($channel->id, $institution->id))->handle();
+
+    Http::assertNothingSent(); // ningún smb_app_data prematuro
+    $meta = $channel->refresh()->connection_meta ?? [];
+    expect($meta)->not->toHaveKey('contacts_sync_started_at');
+    expect($meta)->not->toHaveKey('history_sync_started_at');
 });
 
 // ==================================================================================
