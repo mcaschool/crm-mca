@@ -18,6 +18,7 @@ final class ActionInvalidator
         return DB::transaction(function () use ($query, $reason): int {
             $actions = $query->whereIn('status', FollowUpAction::ACTIVE_STATUSES)->lockForUpdate()->get();
             foreach ($actions as $action) {
+                app(FollowUpDraftService::class)->invalidate($action, $reason);
                 $action->forceFill(['status' => 'cancelled', 'cancelled_at' => now(), 'cancelled_by_user_id' => auth()->id(), 'block_reason' => $reason, 'eligibility_version' => $action->eligibility_version + 1])->save();
                 $this->events->record('action.cancelled', action: $action, reason: $reason);
             }

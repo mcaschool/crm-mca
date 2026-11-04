@@ -16,6 +16,7 @@ use Modules\FollowUp\Models\FollowUpAction;
 use Modules\FollowUp\Models\FollowUpOpportunity;
 use Modules\FollowUp\Services\ConsentService;
 use Modules\FollowUp\Services\FollowUpActionPlanner;
+use Modules\FollowUp\Services\FollowUpDraftService;
 use Modules\FollowUp\Services\FollowUpSettingsResolver;
 use Modules\Institutions\Models\Bot;
 
@@ -51,6 +52,39 @@ class Opportunities extends Component
     public string $consentSource = '';
 
     public string $consentEvidence = '';
+
+    public string $draftText = '';
+
+    public int $draftActionId = 0;
+
+    public int $draftVersion = 0;
+
+    public function generateDraft(int $id, int $version, FollowUpDraftService $service): void
+    {
+        $service->request(auth()->user(), $id, $version);
+    }
+
+    public function openDraft(int $id, FollowUpDraftService $service): void
+    {
+        $this->authorize('viewAny', FollowUpOpportunity::class);
+        $action = FollowUpAction::query()->findOrFail($id);
+        if ($service->refreshValidity($action)) {
+            $this->draftActionId = $id;
+            $this->draftVersion = $action->draft_version;
+            $this->draftText = (string) ($action->draft_payload['draft_text'] ?? '');
+        }
+    }
+
+    public function saveDraft(FollowUpDraftService $service): void
+    {
+        $service->edit(auth()->user(), $this->draftActionId, $this->draftVersion, $this->draftText);
+        $this->reset(['draftActionId', 'draftText', 'draftVersion']);
+    }
+
+    public function discardDraft(int $id, int $version, FollowUpDraftService $service): void
+    {
+        $service->discard(auth()->user(), $id, $version);
+    }
 
     public function mount(): void
     {
@@ -153,6 +187,11 @@ class Opportunities extends Component
         $botIds = FollowUpOpportunity::query()->distinct()->pluck('bot_id');
 
         $selected = ctype_digit($this->selectedOpportunity) ? FollowUpOpportunity::query()->with(['channel.whatsappTemplates', 'socialConversation', 'contact'])->find((int) $this->selectedOpportunity) : null;
+        if ($selected !== null) {
+            foreach (FollowUpAction::query()->where('follow_up_opportunity_id', $selected->id)->whereIn('draft_state', ['queued', 'generating', 'review', 'no_contact'])->get() as $action) {
+                app(FollowUpDraftService::class)->refreshValidity($action);
+            }
+        }
 
         return view('followup::livewire.opportunities', [
             'opportunities' => $this->filteredQuery()->orderByDesc('score')->orderByDesc('detected_at')->paginate(25),
@@ -160,6 +199,7 @@ class Opportunities extends Component
             'bots' => Bot::query()->whereIn('id', $botIds)->orderBy('assistant_name')->get(['id', 'assistant_name', 'name']),
             'selected' => $selected,
             'actions' => $selected ? FollowUpAction::query()->where('follow_up_opportunity_id', $selected->id)->latest()->get() : collect(),
+            'draftEvents' => $selected ? \Modules\FollowUp\Models\FollowUpEvent::query()->where('follow_up_opportunity_id', $selected->id)->where('event_type', 'like', 'draft.%')->latest('id')->limit(30)->get() : collect(),
             'consents' => $selected ? CommunicationConsent::query()->where($selected->contact_id ? 'contact_id' : 'social_conversation_id', $selected->contact_id ?: $selected->social_conversation_id)->latest()->get() : collect(),
         ]);
     }

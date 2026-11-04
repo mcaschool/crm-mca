@@ -34,6 +34,15 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * @property \Carbon\CarbonInterface|null $cancelled_at
  * @property \Carbon\CarbonInterface|null $paused_at
  * @property FollowUpOpportunity $opportunity
+ * @property string $draft_state
+ * @property int $draft_version
+ * @property array<string,mixed>|null $draft_payload
+ * @property string|null $context_fingerprint
+ * @property string|null $draft_reservation
+ * @property \Carbon\CarbonInterface|null $draft_reserved_at
+ * @property \Carbon\CarbonInterface|null $draft_generated_at
+ * @property \Carbon\CarbonInterface|null $draft_expires_at
+ * @property string|null $draft_error
  */
 class FollowUpAction extends Model
 {
@@ -43,11 +52,13 @@ class FollowUpAction extends Model
 
     public const STATUSES = [...self::ACTIVE_STATUSES, 'cancelled', 'expired', 'suppressed'];
 
+    protected $hidden = ['draft_payload', 'draft_reservation'];
+
     protected $fillable = ['institution_id', 'follow_up_opportunity_id', 'follow_up_cycle_id', 'type', 'channel', 'purpose', 'status', 'scheduled_at', 'expires_at', 'policy_status', 'policy_reason_code', 'policy_version', 'eligibility_version', 'idempotency_key', 'approval_required', 'approved_by_user_id', 'approved_at', 'cancelled_by_user_id', 'cancelled_at', 'paused_at', 'block_reason', 'social_whatsapp_template_id', 'attempt_number', 'cycle_attempt_number'];
 
     protected function casts(): array
     {
-        return ['scheduled_at' => 'datetime', 'expires_at' => 'datetime', 'approved_at' => 'datetime', 'cancelled_at' => 'datetime', 'paused_at' => 'datetime', 'approval_required' => 'boolean', 'eligibility_version' => 'integer', 'attempt_number' => 'integer', 'cycle_attempt_number' => 'integer'];
+        return ['draft_payload' => 'encrypted:array', 'draft_version' => 'integer', 'draft_reserved_at' => 'datetime', 'draft_generated_at' => 'datetime', 'draft_expires_at' => 'datetime', 'draft_edited_at' => 'datetime', 'scheduled_at' => 'datetime', 'expires_at' => 'datetime', 'approved_at' => 'datetime', 'cancelled_at' => 'datetime', 'paused_at' => 'datetime', 'approval_required' => 'boolean', 'eligibility_version' => 'integer', 'attempt_number' => 'integer', 'cycle_attempt_number' => 'integer'];
     }
 
     /** @return BelongsTo<FollowUpOpportunity, $this> */

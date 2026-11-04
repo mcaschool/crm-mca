@@ -21,4 +21,5 @@ return [
     // Etapa 2: interruptor independiente para evaluar/programar acciones locales.
     // Nace apagado y no existe ningún ejecutor de envíos en este módulo.
     'policy_enabled' => (bool) env('FOLLOW_UP_POLICY_ENABLED', false),
+    'draft_generations_per_hour' => 3,
 ];

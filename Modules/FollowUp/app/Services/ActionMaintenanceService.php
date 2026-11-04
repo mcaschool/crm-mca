@@ -14,6 +14,11 @@ final class ActionMaintenanceService
     /** @return array{expired:int,invalidated:int} */
     public function run(): array
     {
+        FollowUpAction::query()->whereIn('draft_state', ['queued', 'generating', 'review', 'no_contact'])->chunkById(100, function ($actions): void {
+            foreach ($actions as $action) {
+                app(FollowUpDraftService::class)->refreshValidity($action);
+            }
+        });
         $expired = 0;
         FollowUpAction::query()->with('opportunity')->whereIn('status', FollowUpAction::ACTIVE_STATUSES)->where('expires_at', '<=', now())->chunkById(100, function ($actions) use (&$expired): void {
             foreach ($actions as $action) {

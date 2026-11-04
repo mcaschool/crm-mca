@@ -62,6 +62,45 @@
     </div>
 
     @if ($selected)
+        <section class="ui-card" wire:poll.10s>
+            <h2>{{ __('Borradores de seguimiento') }}</h2>
+            @foreach ($actions as $draftAction)
+                <article wire:key="draft-{{ $draftAction->id }}-{{ $draftAction->draft_version }}">
+                    <p>#{{ $draftAction->id }} · {{ $draftAction->draft_state }} · v{{ $draftAction->draft_version }} · {{ $draftAction->draft_error }}</p>
+                    @if ($draftAction->draft_state === 'review' || $draftAction->draft_state === 'no_contact')
+                        <p>{{ $draftAction->draft_payload['commercial_objective'] ?? '' }}</p>
+                        <p style="white-space: pre-wrap">{{ $draftAction->draft_payload['draft_text'] ?? '' }}</p>
+                        <p>{{ $draftAction->draft_payload['context_summary'] ?? '' }}</p>
+                        <p>{{ $draftAction->draft_payload['recommended_action'] ?? '' }} · {{ implode(', ', $draftAction->draft_payload['reason_codes'] ?? []) }}</p>
+                        <p>{{ __('Fuentes') }} {{ implode(', ', $draftAction->draft_payload['source_references'] ?? []) }}</p>
+                        <p>{{ implode(', ', $draftAction->draft_payload['warnings'] ?? []) }}</p>
+                        <p>{{ __('Caduca') }} {{ $draftAction->draft_expires_at?->toDateTimeString() }}</p>
+                        @if ($draftAction->draft_state === 'review')
+                            <x-ui.button wire:click="openDraft({{ $draftAction->id }})">{{ __('Editar') }}</x-ui.button>
+                        @endif
+                    @endif
+                    @if (in_array($draftAction->status, \Modules\FollowUp\Models\FollowUpAction::ACTIVE_STATUSES) && !in_array($draftAction->draft_state, ['queued', 'generating']))
+                        <x-ui.button wire:click="generateDraft({{ $draftAction->id }}, {{ $draftAction->draft_version }})">{{ $draftAction->draft_version ? __('Regenerar borrador') : __('Generar borrador') }}</x-ui.button>
+                    @endif
+                    @if (in_array($draftAction->draft_state, ['queued', 'generating', 'review', 'no_contact']))
+                        <x-ui.button wire:click="discardDraft({{ $draftAction->id }}, {{ $draftAction->draft_version }})">{{ __('Descartar') }}</x-ui.button>
+                    @endif
+                </article>
+            @endforeach
+            @if ($draftActionId)
+                <form wire:submit="saveDraft">
+                    <label>{{ __('Texto del borrador') }}<textarea class="ui-input" wire:model="draftText" maxlength="1500"></textarea></label>
+                    <x-ui.button type="submit">{{ __('Guardar edición') }}</x-ui.button>
+                </form>
+            @endif
+            @error('draft') <p role="alert">{{ $message }}</p> @enderror
+            <details>
+                <summary>{{ __('Historial de borradores') }}</summary>
+                @foreach ($draftEvents as $draftEvent)
+                    <p>{{ $draftEvent->occurred_at }} · {{ $draftEvent->event_type }} · {{ $draftEvent->reason_code }}</p>
+                @endforeach
+            </details>
+        </section>
         <div class="ui-grid ui-grid--2" id="followup-detail">
             <form wire:submit="recordConsent" class="ui-card">
                 <h2>{{ __('Consentimiento vigente') }}</h2>
