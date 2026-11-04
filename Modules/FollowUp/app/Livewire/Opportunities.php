@@ -59,6 +59,16 @@ class Opportunities extends Component
 
     public int $draftVersion = 0;
 
+    public function approveExecution(int $id, int $version, string $contentHash, \Modules\FollowUp\Services\FollowUpExecutor $executor): void
+    {
+        $executor->approve(auth()->user(), $id, $version, expectedContentHash: $contentHash);
+    }
+
+    public function stopExecution(\Modules\FollowUp\Services\ExecutionSwitches $switches): void
+    {
+        $switches->set(auth()->user(), 'institution', (int) auth()->user()->institution_id, false);
+    }
+
     public function generateDraft(int $id, int $version, FollowUpDraftService $service): void
     {
         $service->request(auth()->user(), $id, $version);
@@ -111,7 +121,7 @@ class Opportunities extends Component
         $this->selectedOpportunity = (string) $id;
         $effective = app(FollowUpSettingsResolver::class)->effective((int) $opportunity->institution_id, (int) $opportunity->bot_id);
         $local = CarbonImmutable::now($effective->timezone)->addDay()->setTimeFromTimeString($effective->businessHoursStart);
-        while (! in_array($local->isoWeekday(), $effective->allowedDays, true)) {
+        while ($effective->allowedDays !== [] && ! in_array($local->isoWeekday(), $effective->allowedDays, true)) {
             $local = $local->addDay();
         }
         $this->scheduledAt = $local->format('Y-m-d\TH:i');
@@ -139,7 +149,7 @@ class Opportunities extends Component
     public function approveAction(int $id, FollowUpActionPlanner $planner): void
     {
         $planner->approve(auth()->user(), $id);
-        session()->flash('followup_action', __('Acción aprobada localmente. Aún no existe ejecutor de envío.'));
+        session()->flash('followup_action', __('Acción aprobada localmente. La ejecución requiere aprobar el contenido vigente y activar sus controles independientes.'));
     }
 
     public function scheduleAction(int $id, FollowUpActionPlanner $planner): void
@@ -193,13 +203,24 @@ class Opportunities extends Component
             }
         }
 
+        $actions = $selected ? FollowUpAction::query()->where('follow_up_opportunity_id', $selected->id)->latest()->get() : collect();
+        $executionPreviews = [];
+        foreach ($actions as $action) {
+            try {
+                $executionPreviews[$action->id] = app(\Modules\FollowUp\Services\ExecutionContent::class)->build($action);
+            } catch (\Throwable) {
+                // No approval control for content that cannot be verified.
+            }
+        }
+
         return view('followup::livewire.opportunities', [
+            'executionPreviews' => $executionPreviews,
             'opportunities' => $this->filteredQuery()->orderByDesc('score')->orderByDesc('detected_at')->paginate(25),
             'summary' => $summary,
             'bots' => Bot::query()->whereIn('id', $botIds)->orderBy('assistant_name')->get(['id', 'assistant_name', 'name']),
             'selected' => $selected,
-            'actions' => $selected ? FollowUpAction::query()->where('follow_up_opportunity_id', $selected->id)->latest()->get() : collect(),
-            'draftEvents' => $selected ? \Modules\FollowUp\Models\FollowUpEvent::query()->where('follow_up_opportunity_id', $selected->id)->where('event_type', 'like', 'draft.%')->latest('id')->limit(30)->get() : collect(),
+            'actions' => $actions,
+            'draftEvents' => $selected ? \Modules\FollowUp\Models\FollowUpEvent::query()->where('follow_up_opportunity_id', $selected->id)->latest('id')->limit(50)->get() : collect(),
             'consents' => $selected ? CommunicationConsent::query()->where($selected->contact_id ? 'contact_id' : 'social_conversation_id', $selected->contact_id ?: $selected->social_conversation_id)->latest()->get() : collect(),
         ]);
     }

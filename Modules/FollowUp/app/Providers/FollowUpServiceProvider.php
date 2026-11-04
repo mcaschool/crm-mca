@@ -24,6 +24,8 @@ class FollowUpServiceProvider extends ModuleServiceProvider
     protected array $commands = [
         DetectOpportunitiesCommand::class,
         MaintainActionsCommand::class,
+        \Modules\FollowUp\Console\DispatchActionsCommand::class,
+        \Modules\FollowUp\Console\StopExecutionCommand::class,
     ];
 
     protected array $providers = [

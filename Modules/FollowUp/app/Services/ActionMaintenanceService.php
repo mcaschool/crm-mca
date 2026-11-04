@@ -22,7 +22,10 @@ final class ActionMaintenanceService
         $expired = 0;
         FollowUpAction::query()->with('opportunity')->whereIn('status', FollowUpAction::ACTIVE_STATUSES)->where('expires_at', '<=', now())->chunkById(100, function ($actions) use (&$expired): void {
             foreach ($actions as $action) {
-                $action->forceFill(['status' => 'expired', 'block_reason' => 'proposal_expired'])->save();
+                $changed = FollowUpAction::query()->whereKey($action->id)->whereIn('status', FollowUpAction::ACTIVE_STATUSES)->update(['status' => 'expired', 'block_reason' => 'proposal_expired']);
+                if (! $changed) {
+                    continue;
+                }
                 $this->events->record('action.expired', $action->opportunity, $action, 'proposal_expired');
                 $expired++;
             }

@@ -26,7 +26,10 @@ final class WhatsAppPolicy implements ChannelPolicy
             return null;
         }
 
-        $withinWindow = $opportunity->last_inbound_at !== null && $opportunity->last_inbound_at->gte(now()->subHours(24));
+        $lastInbound = $request->stage === 'send'
+            ? \Modules\Social\Models\SocialMessage::query()->where('social_conversation_id', $opportunity->social_conversation_id)->where('direction', 'inbound')->latest('provider_timestamp')->first()?->provider_timestamp
+            : $opportunity->last_inbound_at;
+        $withinWindow = $lastInbound !== null && $lastInbound->gt(now()->subHours(24)) && $lastInbound->lte(now());
         if ($withinWindow) {
             return null;
         }

@@ -45,7 +45,10 @@ final class FollowUpPolicyEngine
             return $this->decision('denied', 'invalid_policy_stage', 'La etapa de política no es válida.', $settings, $request);
         }
         if ($request->stage === 'send') {
-            return $this->decision('unknown', 'execution_not_implemented', 'La autorización final de envío no está implementada en esta etapa.', $settings, $request);
+            $reason = $request->action === null ? 'execution_action_required' : app(ExecutionSwitches::class)->reason($request->action);
+            if ($reason !== null) {
+                return $this->decision('denied', $reason, 'La ejecución está bloqueada por sus interruptores o límites.', $settings, $request);
+            }
         }
         if (! (bool) config('followup.policy_enabled', false)) {
             return $this->decision('denied', 'global_feature_disabled', 'El motor de seguimiento está desactivado globalmente.', $settings, $request);
@@ -108,6 +111,9 @@ final class FollowUpPolicyEngine
             return $this->decision('denied', 'first_follow_up_not_due', 'Aún no se ha cumplido la espera configurada para el primer seguimiento.', $settings, $request, CarbonImmutable::instance($firstAllowed));
         }
         $local = CarbonImmutable::instance($request->scheduledAt)->setTimezone($settings->timezone);
+        if ($settings->allowedDays === [] || $settings->businessHoursStart > $settings->businessHoursEnd) {
+            return $this->decision('denied', 'no_business_hours', 'No existe un horario permitido.', $settings, $request);
+        }
         if (! in_array($local->isoWeekday(), $settings->allowedDays, true) || $local->format('H:i:s') < $settings->businessHoursStart || $local->format('H:i:s') > $settings->businessHoursEnd) {
             return $this->decision('denied', 'outside_business_hours', 'La fecha queda fuera del horario comercial efectivo.', $settings, $request, $this->nextBusinessTime($local, $settings));
         }
@@ -132,7 +138,14 @@ final class FollowUpPolicyEngine
             return $this->decision('denied', 'consent_'.$consent->state, 'El consentimiento vigente bloquea esta acción.', $settings, $request);
         }
 
-        return $this->channel($request, $settings) ?? $this->decision('allowed', 'schedule_allowed', 'La acción puede quedar programada localmente; no autoriza su envío.', $settings, $request);
+        if ($request->stage === 'send') {
+            $reason = app(ExecutionAuthorization::class)->reason($request->action, $settings);
+            if ($reason !== null) {
+                return $this->decision('denied', $reason, 'La autorización de ejecución no está vigente.', $settings, $request);
+            }
+        }
+
+        return $this->channel($request, $settings) ?? $this->decision('allowed', $request->stage === 'send' ? 'send_allowed' : 'schedule_allowed', 'La evaluación de esta etapa permite continuar.', $settings, $request);
     }
 
     private function channel(PolicyRequest $request, EffectiveFollowUpSettings $settings): ?PolicyDecision

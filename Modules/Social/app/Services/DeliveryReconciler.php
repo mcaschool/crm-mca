@@ -51,6 +51,21 @@ final class DeliveryReconciler
             }
         }
 
+        // FollowUp projects the same Social Inbox result, never retries an external call.
+        $this->context->runGlobally(function (): void {
+            \Modules\FollowUp\Models\FollowUpAction::query()->whereIn('status', ['claimed', 'sending', 'delivery_unknown', 'sent', 'delivered'])
+                ->where(function ($query): void {
+                    $query->whereIn('status', ['claimed', 'sending'])->orWhereExists(function ($messages): void {
+                        $messages->selectRaw('1')->from('social_messages')->whereColumn('social_messages.id', 'follow_up_actions.social_message_id')
+                            ->whereColumn('social_messages.status', '!=', 'follow_up_actions.status');
+                    });
+                })->chunkById(100, function ($actions): void {
+                    foreach ($actions as $action) {
+                        $this->context->runFor((int) $action->institution_id, fn () => app(\Modules\FollowUp\Services\FollowUpExecutor::class)->reconcile((int) $action->id));
+                    }
+                });
+        });
+
         return $done;
     }
 
@@ -70,7 +85,11 @@ final class DeliveryReconciler
             'reconciled_by' => 'timeout',
             'reconciled_at' => now()->toIso8601String(),
         ]);
-        $message->save();
+        $updated = SocialMessage::query()->whereKey($message->id)->where('status', $neverSent ? 'pending' : 'sending')
+            ->whereNull('external_message_id')->where('updated_at', '<', $cutoff)->update($message->getDirty());
+        if (! $updated) {
+            return null;
+        }
 
         Log::warning('social.delivery: saliente sin confirmar resuelto por plazo', [
             'message_id' => $message->getKey(),

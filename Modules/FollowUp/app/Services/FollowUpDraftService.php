@@ -162,6 +162,9 @@ final class FollowUpDraftService
         $this->authorize($actor);
         DB::transaction(function () use ($id, $version): void {
             $action = FollowUpAction::query()->lockForUpdate()->findOrFail($id);
+            if ($action->dispatch_at !== null) {
+                throw ValidationException::withMessages(['draft' => 'already_dispatched']);
+            }
             $this->version($action, $version);
             $this->invalidate($action, 'discarded_by_admin');
         }, 3);
@@ -169,6 +172,10 @@ final class FollowUpDraftService
 
     public function refreshValidity(FollowUpAction $action): bool
     {
+        // Dispatched content is historical evidence, not an editable live draft.
+        if ($action->dispatch_at !== null) {
+            return false;
+        }
         if (! in_array($action->draft_state, ['queued', 'generating', 'review', 'no_contact'], true)) {
             return false;
         }

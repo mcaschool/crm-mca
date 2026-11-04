@@ -125,7 +125,7 @@ final class WhatsAppMessageSender
                 ->acceptJson()
                 ->post("https://graph.facebook.com/{$version}/{$phoneNumberId}/messages", $payload);
         } catch (Throwable $e) {
-            Log::warning('social.send.wa: error de red', ['error' => $e->getMessage()]);
+            Log::warning('social.send.wa: error de red', ['category' => SendResult::network($e)->status]);
 
             return SendResult::network($e);
         }
@@ -142,7 +142,7 @@ final class WhatsAppMessageSender
         $subcode = (int) ($response->json('error.error_subcode') ?? 0);
         $message = (string) ($response->json('error.message') ?? 'Error desconocido de Meta.');
         // Diagnóstico seguro: jamás token, Authorization ni payload completo.
-        Log::warning('social.send.wa: Meta rechazó el envío', compact('code', 'subcode', 'message'));
+        Log::warning('social.send.wa: Meta rechazó el envío', compact('code', 'subcode'));
 
         return in_array($code, self::OUTSIDE_WINDOW_CODES, true)
             ? SendResult::window($message)

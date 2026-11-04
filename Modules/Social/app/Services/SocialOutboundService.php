@@ -64,6 +64,57 @@ final class SocialOutboundService
         return $message;
     }
 
+    /** Prepare inside the coordinator's final transaction; no network or human takeover. */
+    public function prepareFollowUp(SocialConversation $conversation, string $text, int $botId, int $actionId, ?SocialWhatsAppTemplate $template = null): SocialMessage
+    {
+        $message = $this->newOutbound($conversation, $template === null ? 'text' : 'template', $text, $template === null ? null : [['type' => 'template', 'template_id' => $template->meta_template_id, 'template_name' => $template->name, 'template_language' => $template->language]], null, 'bot');
+        $message->ai_bot_id = $botId;
+        $message->ai_meta = ['follow_up_action_id' => $actionId];
+        $message->save();
+
+        return $message;
+    }
+
+    /**
+     * Dispatch a reserved Social Inbox record once. Atomic pending -> sending is the
+     * gateway's no-return boundary; only the caller winning that transition may call Meta.
+     *
+     * @param  array<int,string>  $parameters
+     */
+    public function dispatchFollowUp(SocialMessage $message, ?SocialWhatsAppTemplate $template = null, array $parameters = []): SocialMessage
+    {
+        if (! SocialMessage::query()->whereKey($message->id)->where('status', 'pending')->update(['status' => 'sending'])) {
+            return $message->refresh();
+        }
+        $conversation = SocialConversation::query()->with('channel')->findOrFail($message->social_conversation_id);
+        $channel = $conversation->channel;
+        try {
+            $result = match (true) {
+                $channel === null || $conversation->provider !== 'whatsapp' => SendResult::failed('Unsupported follow-up channel'),
+                $template !== null => $this->whatsapp->sendTemplate($channel, $conversation, $template->name, $template->language, $this->templateComponents($template, $parameters)),
+                default => $this->whatsapp->sendText($channel, $conversation, (string) $message->body),
+            };
+        } catch (\Throwable) {
+            $result = SendResult::unknown();
+        }
+        if ($result->status === 'sent' && trim((string) $result->externalId) === '') {
+            $result = SendResult::unknown();
+        }
+        \Illuminate\Support\Facades\DB::transaction(function () use ($message, $result): void {
+            $current = SocialMessage::query()->lockForUpdate()->findOrFail($message->id);
+            // A webhook may have delivered/read the message before the HTTP response arrives.
+            if (in_array($current->status, ['pending', 'sending', 'delivery_unknown'], true)) {
+                $current->ai_meta = array_merge((array) $current->ai_meta, ['send_error_code' => $result->errorCode]);
+                $this->applyResult($current, $result);
+            }
+        });
+        SocialConversation::query()->whereKey($conversation->id)->where(function ($q) use ($message): void {
+            $q->whereNull('last_message_at')->orWhere('last_message_at', '<=', $message->provider_timestamp);
+        })->update(['last_message_at' => $message->provider_timestamp, 'last_message_preview' => Str::limit((string) $message->body, 140)]);
+
+        return $message->refresh();
+    }
+
     /**
      * Respuesta del ASESOR INTELIGENTE por el mismo remitente del canal (MetaMessageSender /
      * WhatsAppMessageSender). Queda en el hilo como 'bot' (sin usuario) con el estado del envío:

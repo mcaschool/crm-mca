@@ -64,9 +64,16 @@
     @if ($selected)
         <section class="ui-card" wire:poll.10s>
             <h2>{{ __('Borradores de seguimiento') }}</h2>
+            <x-ui.button wire:click="stopExecution">{{ __('Detener nuevos seguimientos de la institución') }}</x-ui.button>
             @foreach ($actions as $draftAction)
                 <article wire:key="draft-{{ $draftAction->id }}-{{ $draftAction->draft_version }}">
                     <p>#{{ $draftAction->id }} · {{ $draftAction->draft_state }} · v{{ $draftAction->draft_version }} · {{ $draftAction->draft_error }}</p>
+                    <p>{{ __('Ejecución') }}: {{ $draftAction->status }} · {{ $draftAction->execution_error }} · {{ __('Mensaje') }} #{{ $draftAction->social_message_id }}</p>
+                    @if (isset($executionPreviews[$draftAction->id]) && $draftAction->draft_state === 'review' && in_array($draftAction->status, ['draft', 'pending_approval', 'approved', 'scheduled']))
+                        <p>{{ __('Contenido definitivo para aprobar') }}: {{ $executionPreviews[$draftAction->id]['text'] }}</p>
+                        <x-ui.button wire:click="approveExecution({{ $draftAction->id }}, {{ $draftAction->draft_version }}, '{{ $executionPreviews[$draftAction->id]['hash'] }}')">{{ __('Aprobar esta versión y programar ejecución') }}</x-ui.button>
+                        <p class="t-3">{{ __('La ejecución requiere activación independiente y revalidación de políticas. Predeterminada: deshabilitada.') }}</p>
+                    @endif
                     @if ($draftAction->draft_state === 'review' || $draftAction->draft_state === 'no_contact')
                         <p>{{ $draftAction->draft_payload['commercial_objective'] ?? '' }}</p>
                         <p style="white-space: pre-wrap">{{ $draftAction->draft_payload['draft_text'] ?? '' }}</p>
@@ -75,14 +82,14 @@
                         <p>{{ __('Fuentes') }} {{ implode(', ', $draftAction->draft_payload['source_references'] ?? []) }}</p>
                         <p>{{ implode(', ', $draftAction->draft_payload['warnings'] ?? []) }}</p>
                         <p>{{ __('Caduca') }} {{ $draftAction->draft_expires_at?->toDateTimeString() }}</p>
-                        @if ($draftAction->draft_state === 'review')
+                        @if ($draftAction->draft_state === 'review' && !$draftAction->dispatch_at)
                             <x-ui.button wire:click="openDraft({{ $draftAction->id }})">{{ __('Editar') }}</x-ui.button>
                         @endif
                     @endif
                     @if (in_array($draftAction->status, \Modules\FollowUp\Models\FollowUpAction::ACTIVE_STATUSES) && !in_array($draftAction->draft_state, ['queued', 'generating']))
                         <x-ui.button wire:click="generateDraft({{ $draftAction->id }}, {{ $draftAction->draft_version }})">{{ $draftAction->draft_version ? __('Regenerar borrador') : __('Generar borrador') }}</x-ui.button>
                     @endif
-                    @if (in_array($draftAction->draft_state, ['queued', 'generating', 'review', 'no_contact']))
+                    @if (!$draftAction->dispatch_at && in_array($draftAction->draft_state, ['queued', 'generating', 'review', 'no_contact']))
                         <x-ui.button wire:click="discardDraft({{ $draftAction->id }}, {{ $draftAction->draft_version }})">{{ __('Descartar') }}</x-ui.button>
                     @endif
                 </article>
@@ -94,6 +101,7 @@
                 </form>
             @endif
             @error('draft') <p role="alert">{{ $message }}</p> @enderror
+            @error('execution') <p role="alert">{{ $message }}</p> @enderror
             <details>
                 <summary>{{ __('Historial de borradores') }}</summary>
                 @foreach ($draftEvents as $draftEvent)
@@ -115,7 +123,7 @@
             </form>
             <form wire:submit="proposeAction" class="ui-card">
                 <h2>{{ __('Evaluar acción local') }}</h2>
-                <p class="t-3">{{ __('No existe campo de mensaje ni botón de envío.') }}</p>
+                <p class="t-3">{{ __('Programar no sustituye la aprobación del contenido ni activa la ejecución.') }}</p>
                 <label>{{ __('Programar para') }}<input class="ui-input" type="datetime-local" wire:model="scheduledAt"></label>
                 <label>{{ __('Caduca') }}<input class="ui-input" type="datetime-local" wire:model="expiresAt"></label>
                 @if ($selected->provider === 'whatsapp')<label>{{ __('Plantilla aprobada (opcional dentro de 24 h)') }}<select class="ui-input" wire:model="templateId"><option value="">{{ __('Sin plantilla') }}</option>@foreach($selected->channel?->whatsappTemplates?->where('status','APPROVED') ?? [] as $template)<option value="{{ $template->id }}">{{ $template->name }} · {{ $template->category }}</option>@endforeach</select></label>@endif

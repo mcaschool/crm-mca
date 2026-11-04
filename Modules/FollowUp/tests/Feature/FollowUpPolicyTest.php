@@ -198,7 +198,7 @@ it('mantiene Instagram y el contrato final de envío en estado no autorizante', 
     $at = stageTwoSchedule();
     $engine = app(FollowUpPolicyEngine::class);
     expect($engine->evaluate(new PolicyRequest($data['opportunity'], 'schedule', 'instagram', 'requested_follow_up', $at, $at->addDays(5), actor: $data['admin']))->status)->toBe('unknown')
-        ->and($engine->evaluate(new PolicyRequest($data['opportunity'], 'send', 'instagram', 'requested_follow_up', actor: $data['admin']))->reasonCode)->toBe('execution_not_implemented');
+        ->and($engine->evaluate(new PolicyRequest($data['opportunity'], 'send', 'instagram', 'requested_follow_up', actor: $data['admin']))->reasonCode)->toBe('execution_action_required');
 });
 
 it('crea una sola acción idempotente, acumula intentos y no crea mensajes', function () {

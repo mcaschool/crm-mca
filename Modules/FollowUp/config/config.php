@@ -19,7 +19,8 @@ return [
     'batch_size' => (int) env('FOLLOW_UP_BATCH_SIZE', 100),
 
     // Etapa 2: interruptor independiente para evaluar/programar acciones locales.
-    // Nace apagado y no existe ningún ejecutor de envíos en este módulo.
+    // Nace apagado; la ejecución requiere además su propio interruptor independiente.
     'policy_enabled' => (bool) env('FOLLOW_UP_POLICY_ENABLED', false),
     'draft_generations_per_hour' => 3,
+    'execution_enabled' => (bool) env('FOLLOW_UP_EXECUTION_ENABLED', false),
 ];
