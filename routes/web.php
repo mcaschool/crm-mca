@@ -166,6 +166,9 @@ $panel->group(function () {
     // Bandeja social unificada (Livewire full-page; acceso canWorkCrm, gated en mount).
     Route::get('/social/bandeja', \Modules\Social\Livewire\Inbox::class)->name('social.inbox');
 
+    // Seguimiento inteligente (Etapa 1): vista administrativa de solo lectura.
+    Route::get('/crm/seguimiento', \Modules\FollowUp\Livewire\Opportunities::class)->name('followup.opportunities');
+
     // Publicador de contenido (FB Página + Instagram; acceso canPublishSocial, gated en mount).
     Route::get('/social/publicar', \Modules\Social\Livewire\Publisher::class)->name('social.publisher');
     Route::get('/social/publicar/historial', \Modules\Social\Livewire\PublisherHistory::class)->name('social.publisher.history');

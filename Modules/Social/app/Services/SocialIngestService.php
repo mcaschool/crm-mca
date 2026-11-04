@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Social\Events\SocialMessageStored;
 use Modules\Social\Jobs\ProcessWhatsAppInboundMedia;
 use Modules\Social\Jobs\RespondWithAdvisor;
 use Modules\Social\Jobs\SendAdvisorTyping;
@@ -57,6 +58,20 @@ final class SocialIngestService
         $result = $this->context->runFor($channel->institution_id, fn (): IngestResult => DB::transaction(
             fn (): IngestResult => $this->store($channel, $m)
         ));
+
+        // Evento de dominio minimo (sin texto ni PII) una vez confirmada la transaccion. Los
+        // consumidores, como FollowUp, no forman parte del nucleo de ingesta. Un fallo suyo nunca
+        // debe impedir que Meta reciba 200; el barrido incremental recupera el estado despues.
+        if ($result->status === 'created' && $result->conversationId !== null && $result->messageId !== null && ! $m->fromHistory) {
+            try {
+                SocialMessageStored::dispatch($channel->institution_id, $result->conversationId, $result->messageId, $m->direction);
+            } catch (Throwable $e) {
+                Log::warning('social.ingest: consumidor posterior al mensaje fallo', [
+                    'event' => 'social_message_stored',
+                    'error' => class_basename($e),
+                ]);
+            }
+        }
 
         // Resolución de perfil FUERA de la transacción (no hace HTTP con la fila bloqueada) y
         // best-effort: si falla, el mensaje ya quedó ingerido. Solo si al contacto le falta el nombre

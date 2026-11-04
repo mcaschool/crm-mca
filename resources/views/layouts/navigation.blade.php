@@ -52,6 +52,11 @@
                 <a href="{{ route('crm.pipeline') }}" class="mca-nav-item {{ request()->routeIs('crm.pipeline') ? 'on' : '' }}">
                     <x-ui.icon name="funnel" /> {{ __('Pipeline Comercial') }}
                 </a>
+                @can('viewAny', \Modules\FollowUp\Models\FollowUpOpportunity::class)
+                    <a href="{{ route('followup.opportunities') }}" class="mca-nav-item {{ request()->routeIs('followup.*') ? 'on' : '' }}">
+                        <x-ui.icon name="funnel" /> {{ __('Seguimiento inteligente') }}
+                    </a>
+                @endcan
                 <a href="{{ route('crm.contacts.index') }}" class="mca-nav-item {{ request()->routeIs('crm.contacts.*') || request()->routeIs('crm.conversations.*') ? 'on' : '' }}"
                    x-data="{ n: {{ $crmBadges['contacts'] }} }" x-on:crm-badges-updated.window="n = $event.detail.contacts ?? n">
                     <x-ui.icon name="contact" /> {{ __('Contactos') }}

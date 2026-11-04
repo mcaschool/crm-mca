@@ -24,6 +24,7 @@ final class Breadcrumbs
         ['dashboard', 'home', 'Inicio', 'dashboard'],
         ['crm.leads.*', 'users', 'Leads', 'crm.leads.index'],
         ['crm.pipeline', 'funnel', 'Pipeline Comercial', 'crm.pipeline'],
+        ['followup.*', 'funnel', 'Seguimiento inteligente', 'followup.opportunities'],
         [['crm.contacts.*', 'crm.conversations.*'], 'contact', 'Contactos', 'crm.contacts.index'],
         ['crm.calendar-templates', 'calendar', 'Plantillas de Calendario', 'crm.calendar-templates'],
         ['crm.agenda.*', 'calendar', 'Calendario', 'crm.agenda.index'],

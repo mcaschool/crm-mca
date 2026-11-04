@@ -67,3 +67,9 @@ Schedule::command('social:refresh-contact-profiles --limit=25')
 Schedule::command('social:meta-connections-check')
     ->dailyAt('04:10')
     ->withoutOverlapping();
+
+// Seguimiento inteligente (Etapa 1): solo deteccion y registro, sin generar ni enviar mensajes.
+// El comando es un no-op mientras FOLLOW_UP_DETECTION_ENABLED no se active explicitamente.
+Schedule::command('followup:detect --all-institutions')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10);

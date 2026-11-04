@@ -1,0 +1,16 @@
+{
+    "name": "nwidart/follow-up",
+    "description": "Seguimiento inteligente de MCA CRM",
+    "autoload": {
+        "psr-4": {
+            "Modules\\FollowUp\\": "app/",
+            "Modules\\FollowUp\\Database\\Factories\\": "database/factories/",
+            "Modules\\FollowUp\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\FollowUp\\Tests\\": "tests/"
+        }
+    }
+}
