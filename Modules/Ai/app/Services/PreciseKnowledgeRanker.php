@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Ai\Services;
 
 use Illuminate\Support\Str;
+use Modules\Ai\Support\KnowledgeTaxonomy;
 use Modules\Ai\Support\KnowledgeText;
 
 /**
@@ -45,9 +46,45 @@ final class PreciseKnowledgeRanker
         // Línea: la nombrada en la pregunta; si no nombra ninguna, la del tema activo.
         ['line' => $line, 'source' => $lineSource] = $this->topic($question, $history);
 
+        // Programa en foco: el que nombra la pregunta o, en un seguimiento breve («requisitos»,
+        // «precio», «cómo me inscribo»), el último elegido/nombrado en la conversación. Si fija el
+        // foco y aún no hay línea, su línea pasa a ser la línea en curso (para el filtro).
+        $focus = $this->focusProgram($sources, $question, $history);
+        if ($line === null && $focus !== null && $focus['category'] !== null) {
+            $line = $focus['category'];
+            $lineSource = 'program';
+        }
+
         $named = $this->namedPrograms($sources, $terms, $line);
-        $relevance = $this->bm25($sections, $terms);
-        $max = max([0.0, ...$relevance]);
+        // El programa en foco heredado del contexto cuenta como nombrado: sus secciones priman.
+        if ($named === [] && $focus !== null) {
+            $named[$focus['code']] = 1.0;
+        }
+
+        // Sinónimos de recuperación: la pregunta busca también por los términos equivalentes del grupo
+        // que toque, con un peso menor que el original.
+        $weighted = $this->weightedTerms($terms);
+        $relevance = $this->bm25($sections, $weighted);
+
+        // FILTRO POR LÍNEA: con una línea identificada, la recuperación se ACOTA SIEMPRE a esa línea más
+        // «General institucional»; NUNCA se reabren otras líneas de programa (DA, PE, MMBA…). Si la línea
+        // no aporta ninguna sección por encima del umbral, los resultados (si hay) salen de «General
+        // institucional» (diagnóstico: «expanded»); si tampoco hay, se devuelve vacío y el asesor dice
+        // que no tiene el dato.
+        $institutional = KnowledgeTaxonomy::institutionalLine();
+        $inPool = fn (int $i): bool => $sections[$i]['category'] === $line || $sections[$i]['category'] === $institutional;
+        $applyFilter = $line !== null && (bool) ($cfg['line_filter'] ?? true);
+        $lineMin = (float) ($cfg['line_filter_min_relevance'] ?? 0.0);
+        $lineHasHit = false;
+        if ($applyFilter) {
+            foreach (array_keys($sections) as $i) {
+                if ($sections[$i]['category'] === $line && $relevance[$i] > $lineMin) {
+                    $lineHasHit = true;
+                    break;
+                }
+            }
+        }
+        $expanded = $applyFilter && ! $lineHasHit;   // la línea no aportó nada: solo «General institucional»
 
         $lineBonus = (float) ($cfg['line_bonus'] ?? 0.5);
         $namedBonus = (float) ($cfg['named_program_bonus'] ?? 0.6);
@@ -56,7 +93,21 @@ final class PreciseKnowledgeRanker
         $definition = KnowledgeText::asksDefinition($question);
         $definitionBonus = (float) ($cfg['definition_bonus'] ?? 0.3);
 
+        // La normalización 0..1 se mide solo sobre las secciones elegibles (las de la línea cuando se
+        // filtra), para que el filtro no dependa de una sección de otra línea con mayor relevancia.
+        $eligibleRelevance = [];
+        foreach (array_keys($sections) as $i) {
+            if (! $applyFilter || $inPool($i)) {
+                $eligibleRelevance[] = $relevance[$i];
+            }
+        }
+        $max = max([0.0, ...$eligibleRelevance]);
+
         foreach ($sections as $i => &$s) {
+            if ($applyFilter && ! $inPool($i)) {
+                $s['score'] = 0.0;   // fuera de la línea en curso + General institucional: no compite
+                continue;
+            }
             $score = $max > 0 ? $relevance[$i] / $max : 0.0;
             if ($score > 0) {
                 if ($line !== null && $s['category'] === $line) {
@@ -84,10 +135,41 @@ final class PreciseKnowledgeRanker
                 'terms' => $terms,
                 'line' => $line,
                 'line_source' => $lineSource,
+                'line_applied' => $applyFilter,
+                'expanded' => $expanded,
+                'focus_program' => $focus['code'] ?? null,
                 'named_programs' => array_keys($named),
                 'top' => array_map(fn (array $s): array => ['code' => $s['code'], 'title' => Str::limit(ltrim($s['title'], '# '), 80), 'score' => $s['score']], array_slice($sections, 0, 5)),
             ],
         ];
+    }
+
+    /**
+     * Programa en FOCO de la conversación: el que nombra la pregunta o, en un seguimiento breve y no
+     * general, el último elegido/nombrado en el contexto reciente. Reutiliza el mismo detector que la
+     * búsqueda clásica (ProgramMentions::scope), de modo que ambos coinciden en qué es «un» programa.
+     *
+     * @param  list<array{code: string, priority: int, category: ?string, type: ?string, content: string}>  $sources
+     * @param  list<string>  $history
+     * @return array{code: string, category: ?string}|null
+     */
+    private function focusProgram(array $sources, string $question, array $history): ?array
+    {
+        $programs = array_values(array_filter($sources, fn (array $s): bool => ($s['type'] ?? null) === KnowledgeTaxonomy::TYPE_PROGRAM));
+        if ($programs === []) {
+            return null;
+        }
+        $scope = app(ProgramMentions::class)->scope($programs, $question, $history);
+        if ($scope['state'] !== 'one' || $scope['code'] === null) {
+            return null;
+        }
+        foreach ($programs as $p) {
+            if ((string) $p['code'] === $scope['code']) {
+                return ['code' => $scope['code'], 'category' => $p['category'] !== null ? (string) $p['category'] : null];
+            }
+        }
+
+        return ['code' => $scope['code'], 'category' => null];
     }
 
     /**
@@ -197,15 +279,17 @@ final class PreciseKnowledgeRanker
 
     /**
      * BM25 con el título contando el doble (frecuencia ponderada) y la rareza de cada palabra
-     * calculada sobre las secciones de ESTE asesor.
+     * calculada sobre las secciones de ESTE asesor. Cada término lleva un peso (1.0 el original de la
+     * pregunta; menor los sinónimos de recuperación añadidos), que multiplica su aporte al puntaje.
      *
      * @param  list<array{title_terms: list<string>, body_terms: list<string>}>  $sections
-     * @param  list<string>  $terms
+     * @param  array<string, float>  $weighted  término => peso
      * @return list<float>
      */
-    private function bm25(array $sections, array $terms): array
+    private function bm25(array $sections, array $weighted): array
     {
         $n = count($sections);
+        $terms = array_keys($weighted);
         if ($n === 0 || $terms === []) {
             return array_fill(0, $n, 0.0);
         }
@@ -241,12 +325,46 @@ final class PreciseKnowledgeRanker
                     continue;
                 }
                 $idf = log(1 + ($n - $df[$t] + 0.5) / ($df[$t] + 0.5));
-                $score += $idf * ($f * (self::K1 + 1)) / ($f + self::K1 * (1 - self::B + self::B * $lengths[$i] / $avg));
+                $score += $weighted[$t] * $idf * ($f * (self::K1 + 1)) / ($f + self::K1 * (1 - self::B + self::B * $lengths[$i] / $avg));
             }
             $scores[] = $score;
         }
 
         return $scores;
+    }
+
+    /**
+     * Términos de búsqueda con su peso: los de la pregunta a 1.0 y, por cada grupo de sinónimos de
+     * recuperación (config) que la pregunta toque, sus demás raíces a `synonym_weight` (< 1). Las
+     * frases de la config se reducen a raíces con el mismo normalizador del conocimiento.
+     *
+     * @param  list<string>  $terms
+     * @return array<string, float>
+     */
+    private function weightedTerms(array $terms): array
+    {
+        $weighted = [];
+        foreach ($terms as $t) {
+            $weighted[$t] = 1.0;
+        }
+        $synWeight = (float) config('crm.knowledge.retrieval.synonym_weight', 0.5);
+        foreach ((array) config('crm.knowledge.retrieval.synonyms', []) as $key => $members) {
+            $groupStems = [];
+            foreach (array_merge([(string) $key], (array) $members) as $phrase) {
+                foreach (KnowledgeText::terms((string) $phrase) as $stem) {
+                    $groupStems[$stem] = true;
+                }
+            }
+            // Solo se expande si la pregunta ya contiene alguna raíz del grupo.
+            if (array_intersect(array_keys($groupStems), $terms) === []) {
+                continue;
+            }
+            foreach (array_keys($groupStems) as $stem) {
+                $weighted[$stem] ??= $synWeight;   // no rebaja el peso de un término original
+            }
+        }
+
+        return $weighted;
     }
 
     /**

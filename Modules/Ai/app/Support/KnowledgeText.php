@@ -85,7 +85,12 @@ final class KnowledgeText
      */
     public static function queryTerms(string $question): array
     {
-        return array_values(array_unique(self::terms(self::expandAcronyms($question))));
+        $expanded = self::expandAcronyms($question);
+        $terms = array_values(array_unique(self::terms($expanded)));
+        // Si al quitar las etiquetas del formulario de Meta la pregunta se queda SIN términos (p. ej.
+        // una pregunta corta «¿qué nivel de estudios?»), se usan los términos sin ese filtro: el filtro
+        // elimina ruido del formulario, nunca deja una pregunta real sin búsqueda.
+        return $terms !== [] ? $terms : array_values(array_unique(self::terms($expanded, false)));
     }
 
     /**
@@ -93,13 +98,18 @@ final class KnowledgeText
      *
      * @return list<string>
      */
-    public static function terms(string $text): array
+    public static function terms(string $text, bool $dropFormWords = true): array
     {
         $stop = self::stopwords();
+        $form = $dropFormWords ? self::formWords() : [];
         $short = self::shortTerms();
         $out = [];
         foreach (self::words($text) as $w) {
-            if (isset($stop[$w])) {
+            if (isset($stop[$w]) || isset($form[$w])) {
+                continue;
+            }
+            // Números de teléfono y cifras sueltas de los campos del formulario: nunca son términos.
+            if (ctype_digit($w)) {
                 continue;
             }
             if (strlen($w) < 4 && ! isset($short[$w])) {
@@ -283,5 +293,16 @@ final class KnowledgeText
     private static function shortTerms(): array
     {
         return array_fill_keys(array_map(fn ($w) => self::normalize((string) $w), (array) config('crm.knowledge.retrieval.short_terms', [])), true);
+    }
+
+    /**
+     * Palabras de los campos del formulario de Meta (Lead Ads): no cuentan como términos de
+     * búsqueda. Normalizadas (minúsculas, sin acentos).
+     *
+     * @return array<string, true>
+     */
+    private static function formWords(): array
+    {
+        return array_fill_keys(array_map(fn ($w) => self::normalize((string) $w), (array) config('crm.knowledge.retrieval.form_words', [])), true);
     }
 }

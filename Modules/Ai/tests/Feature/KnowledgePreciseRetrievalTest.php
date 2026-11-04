@@ -255,3 +255,79 @@ it('la ficha del asesor guarda el modo de búsqueda y el límite de respuestas (
     Livewire::actingAs($admin)->test(Form::class, ['bot' => $bot->fresh()])->set('messageLimit', '')->call('save');
     expect($bot->fresh()->ai_message_limit)->toBeNull();
 });
+
+// ─────────────────────────────── Filtro por línea, programa en foco y palabras del formulario
+
+/**
+ * KB multilínea de un asesor como Sophia: la base general de Microcredenciales (con su «Inscripción y
+ * proceso», que es donde vive la info de requisitos, sin usar la palabra «requisito»), la ficha MC-053,
+ * la base institucional y las bases de DA y Micro MBA (estas SÍ dicen «Requisitos de admisión», para
+ * comprobar que el filtro por línea las deja fuera aunque casen con la palabra).
+ */
+function pkrFormCaseSources(): array
+{
+    return [
+        ['code' => 'INST-GENERAL', 'priority' => 6, 'category' => 'general_institucional', 'type' => 'base_conocimiento',
+            'content' => "# Información institucional de MCA School\n\n## Formas de pago en MCA School\nAceptamos tarjeta y transferencia bancaria.\n\n## Becas y financiamiento institucional\nHay becas y descuentos institucionales según disponibilidad."],
+        ['code' => 'KB-MC-GENERAL-001', 'priority' => 6, 'category' => 'microcredenciales', 'type' => 'base_conocimiento',
+            'content' => "# Conocimiento general de Microcredenciales\n\n## Qué es una microcredencial\nUna microcredencial es una certificación corta y aplicada.\n\n## Inscripción y proceso\nLa inscripción es en línea; el proceso de admisión no exige título universitario, basta con interés en el tema.\n\n## Precio e inversión de las microcredenciales\nConsulta el precio y la inversión en la página; se puede pagar en cuotas.\n\n## Duración y dedicación\nCada microcredencial equivale a seis semanas de dedicación a ritmo propio."],
+        ['code' => 'MC-053', 'priority' => 3, 'category' => 'microcredenciales', 'type' => 'programa_academico',
+            'content' => "# Marketing digital para el personal branding — Microcredencial\n\n## Descripción de Marketing digital para el personal branding\nEnseña a construir marca personal con marketing digital.\n\n## Qué aprenderás en Marketing digital para el personal branding\nEstrategia de contenidos y posicionamiento de marca personal."],
+        ['code' => 'DA-INFORMACION-GENERAL', 'priority' => 6, 'category' => 'diplomas_avanzados', 'type' => 'base_conocimiento',
+            'content' => "# Información general — Diploma Avanzado\n\n## Requisitos de admisión del Diploma Avanzado\nSe recomienda título universitario y experiencia.\n\n## Becas del Diploma Avanzado\nHay becas parciales para el Diploma Avanzado."],
+        ['code' => 'MMBA-INFORMACION-GENERAL', 'priority' => 6, 'category' => 'micro_mba', 'type' => 'base_conocimiento',
+            'content' => "# Información general — Micro MBA\n\n## Requisitos de admisión del Micro MBA\nExperiencia profesional previa."],
+    ];
+}
+
+it('caso MC-053: «requisitos» con foco en la ficha recupera «Inscripción y proceso» de Microcredenciales y NINGUNA de DA/MMBA', function () {
+    // Formulario de Meta (Andrés), la elección del programa y la pregunta de seguimiento.
+    $history = ['Sí, la de personal branding', 'Full name: Andrés Pérez · Country: RD · Categoría: Marketing y Marca Personal'];
+    $r = app(PreciseKnowledgeRanker::class)->rank(pkrFormCaseSources(), 'Cuales son los requisitos', $history, 3);
+    $codes = array_column($r['sections'], 'code');
+
+    expect($r['diagnostics'])->toMatchArray([
+        'line' => 'microcredenciales', 'line_source' => 'program', 'line_applied' => true, 'expanded' => false, 'focus_program' => 'MC-053',
+    ])
+        ->and($codes)->not->toContain('DA-INFORMACION-GENERAL')   // aunque dicen «Requisitos de admisión»
+        ->and($codes)->not->toContain('MMBA-INFORMACION-GENERAL')
+        ->and($r['sections'][0]['code'])->toBe('KB-MC-GENERAL-001')
+        ->and($r['sections'][0]['title'])->toContain('Inscripción y proceso');  // el sinónimo lleva a la sección correcta
+});
+
+it('una pregunta de la línea sin datos en su línea amplía SOLO a General institucional, nunca a DA/MMBA', function () {
+    // Línea en curso: Microcredenciales (no tiene sección de becas). Las becas solo están en la base
+    // institucional y en DA; debe salir la institucional y jamás la de DA.
+    $r = app(PreciseKnowledgeRanker::class)->rank(pkrFormCaseSources(), 'hay becas disponibles', ['Hola, información de las microcredenciales'], 3);
+    $codes = array_column($r['sections'], 'code');
+
+    expect($r['diagnostics'])->toMatchArray(['line' => 'microcredenciales', 'line_applied' => true, 'expanded' => true])
+        ->and($codes)->toContain('INST-GENERAL')
+        ->and($codes)->not->toContain('DA-INFORMACION-GENERAL')
+        ->and($codes)->not->toContain('MMBA-INFORMACION-GENERAL');
+});
+
+it('sinónimos de recuperación: «cuánto cuesta» llega a la sección de precio y «cómo me inscribo» a «Inscripción y proceso»', function () {
+    $sources = pkrFormCaseSources();
+    $precio = app(PreciseKnowledgeRanker::class)->rank($sources, 'cuanto cuesta', ['información de las microcredenciales'], 3);
+    $inscr = app(PreciseKnowledgeRanker::class)->rank($sources, 'como me inscribo', ['información de las microcredenciales'], 3);
+
+    expect($precio['sections'][0]['code'])->toBe('KB-MC-GENERAL-001')
+        ->and($precio['sections'][0]['title'])->toContain('Precio')
+        ->and($inscr['sections'][0]['code'])->toBe('KB-MC-GENERAL-001')
+        ->and($inscr['sections'][0]['title'])->toContain('Inscripción y proceso');
+});
+
+it('las palabras del formulario de Meta y los números de teléfono no cuentan como términos de búsqueda', function () {
+    $q = 'Full name: Andrés Pérez · Country: RD · WhatsApp number +1 809 555 1234 · email andres@gmail.com · Cargo gerente · Nivel estudios universitario · Categoría Marketing';
+    $terms = KnowledgeText::queryTerms($q);
+
+    foreach (['full', 'name', 'country', 'whatsapp', 'number', 'email', 'gmail', 'cargo', 'nivel', 'estudios', 'categoria'] as $w) {
+        expect($terms)->not->toContain($w);
+    }
+    expect(array_filter($terms, 'ctype_digit'))->toBe([])                 // ningún teléfono/cifra suelta
+        ->and(KnowledgeText::queryTerms('Me interesa Marketing y Marca Personal'))->toContain('marketing');
+
+    // Si al quitar las etiquetas la pregunta se queda sin términos, se recuperan (no queda muda).
+    expect(KnowledgeText::queryTerms('nivel de estudios'))->toContain('nivel')->toContain('estudi');
+});

@@ -234,7 +234,7 @@ class CeliaService
             $diagnostics = (array) ($knowledge['diagnostics'] ?? []);
             $extra['retrieval'] = $preview
                 ? $diagnostics + ($removed !== [] ? ['links_removed' => $removed] : [])
-                : array_intersect_key($diagnostics, array_flip(['line', 'line_source', 'named_programs', 'top']));
+                : array_intersect_key($diagnostics, array_flip(['line', 'line_source', 'line_applied', 'expanded', 'focus_program', 'named_programs', 'top']));
         }
         $reply = $this->truncate($reply, $locale);
 

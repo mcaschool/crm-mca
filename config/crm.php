@@ -396,6 +396,26 @@ return [
             'generic_program_words' => ['diploma', 'diplomas', 'avanzado', 'programa', 'ejecutivo', 'micro', 'mba', 'mca', 'school', 'advanced', 'professional', 'certificate', 'formacion', 'curso', 'enfasis'],
             // Palabras vacías adicionales a las de serie (ES/EN).
             'stopwords' => [],
+            // Etiquetas de los campos del formulario de Meta (Lead Ads): cuando el contacto llega con
+            // sus datos, estas palabras no deben contar como términos de búsqueda ni fijar programa o
+            // línea. Los números de teléfono (cualquier token solo de dígitos) se descartan siempre.
+            'form_words' => ['full', 'name', 'country', 'whatsapp', 'number', 'email', 'gmail', 'cargo', 'nivel', 'estudios', 'categoria'],
+            // La línea detectada (en la pregunta o en el tema activo) ACOTA la recuperación a esa línea
+            // más «General institucional». Si la línea no aporta ninguna sección por encima del umbral,
+            // la recuperación se amplía SOLO a «General institucional»; NUNCA se reabren otras líneas de
+            // programa. Si tampoco hay nada ahí, se devuelve vacío (el asesor dice que no tiene el dato).
+            'line_filter' => true,
+            'line_filter_min_relevance' => 0.0,
+            // Sinónimos de RECUPERACIÓN (comunes a todos los asesores): si la pregunta toca un grupo, sus
+            // demás términos se añaden a la búsqueda con un peso menor (synonym_weight). Se expanden sobre
+            // las raíces ya normalizadas. Distintos de corrections.synonyms (que solo comparan preguntas).
+            'synonym_weight' => 0.5,
+            'synonyms' => [
+                'requisitos' => ['requisito', 'admision', 'inscripcion', 'inscribirme', 'proceso', 'matricula', 'como me inscribo'],
+                'precio' => ['costo', 'valor', 'inversion', 'cuanto cuesta', 'pago', 'pagos', 'cuotas'],
+                'duracion' => ['cuanto dura', 'semanas', 'meses', 'tiempo'],
+                'certificado' => ['credencial', 'diploma', 'certificacion'],
+            ],
             'title_weight' => 2.0,                // el título de la sección cuenta el doble
             'line_bonus' => 0.5,                  // sección de la línea nombrada o del tema activo
             'named_program_bonus' => 0.6,         // sección de la ficha del programa nombrado

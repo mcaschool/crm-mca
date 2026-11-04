@@ -141,7 +141,9 @@
                                     · #{{ $check['id'] }} «{{ \Illuminate\Support\Str::limit((string) ($correctionQuestions[$check['id']] ?? ''), 80) }}» · {{ __('parecido') }} {{ $check['score'] }} ({{ __('umbral') }} {{ $check['threshold'] }})</div>
                             @endif
                             @if ($diag)
-                            <div>{{ __('Línea') }}: <b>{{ $diag['line'] ?? '—' }}</b>@if (! empty($diag['line_source'])) ({{ $diag['line_source'] === 'question' ? __('nombrada en la pregunta') : __('tema de la conversación') }})@endif</div>
+                            <div>{{ __('Línea') }}: <b>{{ $diag['line'] ?? '—' }}</b>@if (! empty($diag['line_source'])) ({{ $diag['line_source'] === 'question' ? __('nombrada en la pregunta') : ($diag['line_source'] === 'program' ? __('programa en foco') : __('tema de la conversación')) }})@endif</div>
+                            <div>{{ __('Línea aplicada como filtro') }}: <b>{{ ! empty($diag['line_applied']) ? __('sí') : __('no') }}</b>@if (! empty($diag['expanded'])) · <b>{{ __('ampliado a General institucional (sin resultados en la línea)') }}</b>@endif</div>
+                            @if (! empty($diag['focus_program']))<div>{{ __('Programa en foco') }}: {{ $diag['focus_program'] }}</div>@endif
                             @if (! empty($diag['named_programs']))<div>{{ __('Programa nombrado') }}: {{ implode(', ', $diag['named_programs']) }}</div>@endif
                             <div>{{ __('Palabras buscadas') }}: {{ implode(', ', (array) ($diag['terms'] ?? [])) ?: '—' }}</div>
                             <ol>
