@@ -17,4 +17,8 @@ return [
 
     // Lote pequeno e indexado; cada pasada continua donde haya actividad nueva.
     'batch_size' => (int) env('FOLLOW_UP_BATCH_SIZE', 100),
+
+    // Etapa 2: interruptor independiente para evaluar/programar acciones locales.
+    // Nace apagado y no existe ningún ejecutor de envíos en este módulo.
+    'policy_enabled' => (bool) env('FOLLOW_UP_POLICY_ENABLED', false),
 ];

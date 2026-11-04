@@ -7,6 +7,7 @@ namespace Modules\FollowUp\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
 use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Lead;
@@ -112,6 +113,18 @@ class FollowUpOpportunity extends Model
     public function sourceLastMessage(): BelongsTo
     {
         return $this->belongsTo(SocialMessage::class, 'source_last_message_id');
+    }
+
+    /** @return HasMany<FollowUpCycle, $this> */
+    public function cycles(): HasMany
+    {
+        return $this->hasMany(FollowUpCycle::class);
+    }
+
+    /** @return HasMany<FollowUpAction, $this> */
+    public function actions(): HasMany
+    {
+        return $this->hasMany(FollowUpAction::class);
     }
 
     protected static function newFactory(): FollowUpOpportunityFactory

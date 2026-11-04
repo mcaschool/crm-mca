@@ -85,6 +85,15 @@ final class AuditPresenter
         'social_post.remote_updated' => ['label' => 'Texto editado en Facebook', 'group' => 'info'],
         'social_post.executed' => ['label' => 'Publicación ejecutada', 'group' => 'ok'],
         'social_post.interrupted' => ['label' => 'Publicación interrumpida', 'group' => 'warn'],
+        // Seguimiento comercial (decisiones y acciones locales; nunca equivalen a envío)
+        'follow_up.settings_changed' => ['label' => 'Políticas de seguimiento actualizadas', 'group' => 'info'],
+        'follow_up.advisor_settings_changed' => ['label' => 'Políticas de asesor actualizadas', 'group' => 'info'],
+        'follow_up.consent_changed' => ['label' => 'Consentimiento de comunicación actualizado', 'group' => 'warn'],
+        'follow_up.action_proposed' => ['label' => 'Acción de seguimiento evaluada', 'group' => 'neutral'],
+        'follow_up.action_approved' => ['label' => 'Acción de seguimiento aprobada', 'group' => 'info'],
+        'follow_up.action_scheduled' => ['label' => 'Acción de seguimiento programada localmente', 'group' => 'info'],
+        'follow_up.action_paused' => ['label' => 'Acción de seguimiento pausada', 'group' => 'warn'],
+        'follow_up.action_cancelled' => ['label' => 'Acción de seguimiento cancelada', 'group' => 'warn'],
     ];
 
     /** @var array<string, string> */
@@ -100,6 +109,10 @@ final class AuditPresenter
         'Modules\Social\Models\MetaLeadPage' => 'Página de formularios',
         'Modules\Social\Models\SocialPost' => 'Publicación',
         'Modules\Crm\Models\VideoRoom' => 'Sala de videoconferencia',
+        'Modules\FollowUp\Models\FollowUpSetting' => 'Políticas de seguimiento',
+        'Modules\FollowUp\Models\FollowUpAdvisorSetting' => 'Políticas de asesor',
+        'Modules\FollowUp\Models\CommunicationConsent' => 'Consentimiento de comunicación',
+        'Modules\FollowUp\Models\FollowUpAction' => 'Acción de seguimiento',
     ];
 
     public static function actionLabel(string $action): string

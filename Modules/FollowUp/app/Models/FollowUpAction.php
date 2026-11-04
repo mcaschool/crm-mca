@@ -1,0 +1,64 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Modules\FollowUp\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
+
+/**
+ * @property int $institution_id
+ * @property int $follow_up_opportunity_id
+ * @property int $follow_up_cycle_id
+ * @property string $type
+ * @property string $channel
+ * @property string $purpose
+ * @property string $status
+ * @property string $policy_status
+ * @property string $policy_reason_code
+ * @property string $policy_version
+ * @property int $eligibility_version
+ * @property string $idempotency_key
+ * @property bool $approval_required
+ * @property int|null $approved_by_user_id
+ * @property int|null $cancelled_by_user_id
+ * @property int|null $social_whatsapp_template_id
+ * @property string|null $block_reason
+ * @property int $attempt_number
+ * @property int $cycle_attempt_number
+ * @property \Carbon\CarbonInterface|null $scheduled_at
+ * @property \Carbon\CarbonInterface|null $expires_at
+ * @property \Carbon\CarbonInterface|null $approved_at
+ * @property \Carbon\CarbonInterface|null $cancelled_at
+ * @property \Carbon\CarbonInterface|null $paused_at
+ * @property FollowUpOpportunity $opportunity
+ */
+class FollowUpAction extends Model
+{
+    use BelongsToInstitution;
+
+    public const ACTIVE_STATUSES = ['draft', 'pending_approval', 'approved', 'scheduled', 'paused'];
+
+    public const STATUSES = [...self::ACTIVE_STATUSES, 'cancelled', 'expired', 'suppressed'];
+
+    protected $fillable = ['institution_id', 'follow_up_opportunity_id', 'follow_up_cycle_id', 'type', 'channel', 'purpose', 'status', 'scheduled_at', 'expires_at', 'policy_status', 'policy_reason_code', 'policy_version', 'eligibility_version', 'idempotency_key', 'approval_required', 'approved_by_user_id', 'approved_at', 'cancelled_by_user_id', 'cancelled_at', 'paused_at', 'block_reason', 'social_whatsapp_template_id', 'attempt_number', 'cycle_attempt_number'];
+
+    protected function casts(): array
+    {
+        return ['scheduled_at' => 'datetime', 'expires_at' => 'datetime', 'approved_at' => 'datetime', 'cancelled_at' => 'datetime', 'paused_at' => 'datetime', 'approval_required' => 'boolean', 'eligibility_version' => 'integer', 'attempt_number' => 'integer', 'cycle_attempt_number' => 'integer'];
+    }
+
+    /** @return BelongsTo<FollowUpOpportunity, $this> */
+    public function opportunity(): BelongsTo
+    {
+        return $this->belongsTo(FollowUpOpportunity::class, 'follow_up_opportunity_id');
+    }
+
+    /** @return BelongsTo<FollowUpCycle, $this> */
+    public function cycle(): BelongsTo
+    {
+        return $this->belongsTo(FollowUpCycle::class, 'follow_up_cycle_id');
+    }
+}

@@ -7,6 +7,7 @@ namespace Modules\FollowUp\Services;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Modules\Crm\Models\Lead;
+use Modules\FollowUp\Models\FollowUpCycle;
 use Modules\FollowUp\Models\FollowUpOpportunity;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialMessage;
@@ -14,7 +15,7 @@ use Modules\Social\Support\ConversationContactLink;
 
 final class OpportunityDetector
 {
-    public function __construct(private readonly OpportunityClassifier $classifier) {}
+    public function __construct(private readonly OpportunityClassifier $classifier, private readonly ActionInvalidator $invalidator) {}
 
     /** @return array{detected:int,updated:int,cancelled:int,skipped:int} */
     public function detectDue(?CarbonInterface $at = null): array
@@ -107,7 +108,8 @@ final class OpportunityDetector
             $created = $opportunity === null;
             $opportunity ??= new FollowUpOpportunity;
 
-            if (! $created && (int) $opportunity->source_last_message_id !== (int) $latest->id) {
+            $newCycle = $created || ($opportunity->status !== 'open' && (int) $opportunity->source_last_message_id !== (int) $latest->id);
+            if ($newCycle && ! $created) {
                 $opportunity->cycle = max(1, (int) $opportunity->cycle) + 1;
             }
 
@@ -138,6 +140,29 @@ final class OpportunityDetector
                 ? $classification['reasons'][0]
                 : null;
             $opportunity->save();
+
+            $previousAttempts = $created ? 0 : (int) $opportunity->actions()->whereNotIn('status', ['cancelled', 'suppressed'])->count();
+            $cycle = FollowUpCycle::query()->firstOrNew([
+                'follow_up_opportunity_id' => $opportunity->id,
+                'sequence' => $opportunity->cycle,
+            ]);
+            $cycle->fill([
+                'institution_id' => $opportunity->institution_id,
+                'status' => $opportunity->status,
+                'classification' => $opportunity->classification,
+                'priority' => $opportunity->priority,
+                'score' => $opportunity->score,
+                'reason_codes' => $opportunity->reason_codes,
+                'context_snapshot' => $opportunity->context_snapshot,
+                'source_first_message_id' => $cycle->source_first_message_id ?? $latest->id,
+                'source_last_message_id' => $latest->id,
+                'previous_attempts' => $cycle->exists ? $cycle->previous_attempts : $previousAttempts,
+                'started_at' => $cycle->started_at ?? $this->messageTime($latest),
+                'detected_at' => $cycle->detected_at ?? $at,
+                'ended_at' => $opportunity->status === 'open' ? null : $at,
+                'end_reason' => $opportunity->cancellation_reason,
+            ]);
+            $cycle->save();
 
             return $created ? 'detected' : 'updated';
         }, 3);
@@ -173,6 +198,13 @@ final class OpportunityDetector
                 'prospect_replied',
             ]));
             $opportunity->save();
+
+            FollowUpCycle::query()
+                ->where('follow_up_opportunity_id', $opportunity->id)
+                ->where('sequence', $opportunity->cycle)
+                ->whereNull('ended_at')
+                ->update(['status' => 'cancelled', 'ended_at' => now(), 'end_reason' => 'prospect_replied', 'source_last_message_id' => $message->id, 'updated_at' => now()]);
+            $this->invalidator->forOpportunity((int) $opportunity->id, 'prospect_replied');
 
             return true;
         }, 3);

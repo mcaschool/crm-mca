@@ -9,6 +9,7 @@ use Modules\Core\Tenancy\CurrentInstitution;
 use Modules\Crm\Models\Contact;
 use Modules\Crm\Models\Lead;
 use Modules\FollowUp\Livewire\Opportunities;
+use Modules\FollowUp\Models\FollowUpCycle;
 use Modules\FollowUp\Models\FollowUpOpportunity;
 use Modules\FollowUp\Services\OpportunityDetector;
 use Modules\Institutions\Models\Bot;
@@ -184,7 +185,23 @@ it('reabre la misma oportunidad como un nuevo ciclo después de otra respuesta y
         $opportunity = FollowUpOpportunity::query()->sole();
         expect($opportunity->status)->toBe('open')
             ->and($opportunity->cycle)->toBe(2)
-            ->and($opportunity->source_last_message_id)->toBe($newOutbound->id);
+            ->and($opportunity->source_last_message_id)->toBe($newOutbound->id)
+            ->and(FollowUpCycle::query()->count())->toBe(2)
+            ->and(FollowUpCycle::query()->where('sequence', 1)->sole()->end_reason)->toBe('prospect_replied')
+            ->and(FollowUpCycle::query()->where('sequence', 2)->sole()->status)->toBe('open');
+    });
+});
+
+it('no asigna prioridad alta por una palabra comercial aislada', function () {
+    $data = followUpSilentConversation(question: 'Pago');
+
+    app(CurrentInstitution::class)->runFor($data['institution']->id, function (): void {
+        app(OpportunityDetector::class)->detectDue();
+        $opportunity = FollowUpOpportunity::query()->sole();
+        expect($opportunity->classification)->toBe('enrollment_intent')
+            ->and($opportunity->priority)->toBe('medium')
+            ->and($opportunity->reason_codes)->toContain('enrollment_term')
+            ->and($opportunity->reason_codes)->not->toContain('verified_enrollment_phrase');
     });
 });
 

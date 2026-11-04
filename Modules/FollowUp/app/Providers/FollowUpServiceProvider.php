@@ -7,7 +7,9 @@ namespace Modules\FollowUp\Providers;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Modules\FollowUp\Console\DetectOpportunitiesCommand;
+use Modules\FollowUp\Console\MaintainActionsCommand;
 use Modules\FollowUp\Livewire\Opportunities;
+use Modules\FollowUp\Livewire\Settings;
 use Modules\FollowUp\Models\FollowUpOpportunity;
 use Modules\FollowUp\Policies\FollowUpOpportunityPolicy;
 use Nwidart\Modules\Support\ModuleServiceProvider;
@@ -21,6 +23,7 @@ class FollowUpServiceProvider extends ModuleServiceProvider
     /** @var string[] */
     protected array $commands = [
         DetectOpportunitiesCommand::class,
+        MaintainActionsCommand::class,
     ];
 
     protected array $providers = [
@@ -33,5 +36,6 @@ class FollowUpServiceProvider extends ModuleServiceProvider
 
         Gate::policy(FollowUpOpportunity::class, FollowUpOpportunityPolicy::class);
         Livewire::component('followup.opportunities', Opportunities::class);
+        Livewire::component('followup.settings', Settings::class);
     }
 }

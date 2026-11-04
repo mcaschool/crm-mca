@@ -19,6 +19,12 @@ final class OpportunityClassifier
         'pago', 'pagar', 'enrollment', 'enrolment', 'register', 'apply now',
     ];
 
+    private const STRONG_ENROLLMENT_PHRASES = [
+        'quiero inscribirme', 'quiero matricularme', 'como hago el pago', 'cómo hago el pago',
+        'donde puedo pagar', 'reservar mi cupo', 'iniciar la inscripcion', 'start my enrollment',
+        'i want to enroll', 'i want to register',
+    ];
+
     private const COMMERCIAL_TERMS = [
         'precio', 'costo', 'coste', 'valor', 'programa', 'duracion', 'certificado',
         'beca', 'descuento', 'horario', 'modalidad', 'price', 'cost', 'course',
@@ -54,12 +60,16 @@ final class OpportunityClassifier
         }
 
         $enrollment = $this->containsAny($text, self::ENROLLMENT_TERMS);
+        $strongEnrollment = $this->containsAny($text, self::STRONG_ENROLLMENT_PHRASES);
         $commercial = $this->containsAny($text, self::COMMERCIAL_TERMS);
         $score = 20;
 
-        if ($enrollment) {
+        if ($strongEnrollment) {
             $score += 50;
-            $reasons[] = 'enrollment_intent';
+            $reasons[] = 'verified_enrollment_phrase';
+        } elseif ($enrollment) {
+            $score += 25;
+            $reasons[] = 'enrollment_term';
         } elseif ($commercial) {
             $score += 25;
             $reasons[] = 'commercial_question';
@@ -79,7 +89,7 @@ final class OpportunityClassifier
         }
 
         $score = min(100, $score);
-        $classification = $enrollment ? 'enrollment_intent' : ($commercial ? 'commercial_interest' : 'general_interest');
+        $classification = ($strongEnrollment || $enrollment) ? 'enrollment_intent' : ($commercial ? 'commercial_interest' : 'general_interest');
         $priority = $score >= 70 ? 'high' : ($score >= 40 ? 'medium' : 'low');
 
         return [
@@ -88,7 +98,7 @@ final class OpportunityClassifier
             'priority' => $priority,
             'score' => $score,
             'reasons' => array_values(array_unique($reasons)),
-            'context' => $this->context($inbound->count(), $outbound->count(), $lead, $enrollment, $commercial),
+            'context' => $this->context($inbound->count(), $outbound->count(), $lead, $enrollment, $commercial, $strongEnrollment),
         ];
     }
 
@@ -118,7 +128,7 @@ final class OpportunityClassifier
     }
 
     /** @return array<string,int|bool|string|null> */
-    private function context(int $inbound, int $outbound, ?Lead $lead, bool $enrollment, bool $commercial): array
+    private function context(int $inbound, int $outbound, ?Lead $lead, bool $enrollment, bool $commercial, bool $strongEnrollment = false): array
     {
         return [
             'inbound_messages' => $inbound,
@@ -127,6 +137,8 @@ final class OpportunityClassifier
             'lead_status' => $lead?->status->value,
             'enrollment_signal' => $enrollment,
             'commercial_signal' => $commercial,
+            'strong_enrollment_signal' => $strongEnrollment,
+            'corroborating_signal_count' => (int) $enrollment + (int) $commercial + (int) $strongEnrollment + (int) ($inbound >= 2) + (int) ($lead?->status === LeadStatus::Qualified),
         ];
     }
 }

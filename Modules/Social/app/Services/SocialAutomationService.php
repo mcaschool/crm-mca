@@ -6,11 +6,14 @@ namespace Modules\Social\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Modules\Ai\Services\AdvisorTurnService;
+use Modules\Social\Events\SocialConversationStateChanged;
 use Modules\Social\Exceptions\AdvisorTurnInProgress;
 use Modules\Social\Models\SocialConversation;
 use Modules\Social\Models\SocialMessage;
 use Modules\Social\Support\SocialAutomationAlerts;
+use Throwable;
 
 /**
  * Control humano de las conversaciones de redes con asesor inteligente:
@@ -134,6 +137,7 @@ final class SocialAutomationService
 
     private function transition(SocialConversation $conversation, string $state, string $reason, ?User $user): void
     {
+        $previous = (string) ($conversation->automation_state ?? 'bot');
         $conversation->automation_state = $state;
         $conversation->automation_reason = $reason;
         $conversation->automation_changed_by = $user?->getKey();
@@ -141,6 +145,11 @@ final class SocialAutomationService
         $conversation->save();
         $this->closeUnresolvedStreak($conversation, $reason);
         $this->syncAdvisor($conversation, human: $state !== 'bot');
+        try {
+            event(new SocialConversationStateChanged((int) $conversation->institution_id, (int) $conversation->id, $previous, $state, $reason));
+        } catch (Throwable $exception) {
+            Log::warning('No se pudo propagar el cambio de conversación a módulos auxiliares.', ['conversation_id' => $conversation->id, 'exception' => $exception::class]);
+        }
     }
 
     /**

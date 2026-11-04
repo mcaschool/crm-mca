@@ -73,3 +73,8 @@ Schedule::command('social:meta-connections-check')
 Schedule::command('followup:detect --all-institutions')
     ->everyFiveMinutes()
     ->withoutOverlapping(10);
+
+// Etapa 2: mantenimiento exclusivamente local (caducidad e invalidación; nunca envía).
+Schedule::command('followup:maintain --all-institutions')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10);

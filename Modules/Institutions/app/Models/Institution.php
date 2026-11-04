@@ -17,6 +17,7 @@ use Modules\Institutions\Database\Factories\InstitutionFactory;
  *
  * @property string|null $logo_path
  * @property int $logo_size
+ * @property string $timezone
  */
 class Institution extends Model
 {
