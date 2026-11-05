@@ -50,19 +50,30 @@ final class FollowUpSettingsResolver
 
         return new EffectiveFollowUpSettings(
             institutionEnabled: $institution->enabled,
-            advisorEnabled: $advisor->enabled,
-            mode: $institution->mode,
+            advisorEnabled: $advisor->enabled && ($advisor->timezone === null || $advisor->timezone === $institution->timezone),
+            mode: $this->restrictedMode($institution->mode, $advisor->mode),
             firstFollowUpHours: max($institution->first_follow_up_hours, $advisor->first_follow_up_hours ?? 0),
             minimumIntervalHours: max($institution->minimum_interval_hours, $advisor->minimum_interval_hours ?? 0),
             maximumAttempts: min($institution->maximum_attempts, $advisor->maximum_attempts ?? $institution->maximum_attempts),
             allowedDays: array_values(array_intersect($institution->allowed_days, $advisor->allowed_days ?? $institution->allowed_days)),
             businessHoursStart: max($institution->business_hours_start, $advisor->business_hours_start ?? $institution->business_hours_start),
             businessHoursEnd: min($institution->business_hours_end, $advisor->business_hours_end ?? $institution->business_hours_end),
-            timezone: $advisor->timezone ?? $institution->timezone,
+            timezone: $institution->timezone,
             allowedChannels: array_values(array_intersect($institution->allowed_channels, $advisor->allowed_channels ?? $institution->allowed_channels)),
             pauseOnHuman: $advisor->pause_on_human,
             policyVersion: $institution->policy_version,
             eligibilityVersion: $institution->lock_version + $advisor->lock_version,
+            allowedChannelIds: $advisor->allowed_channel_ids,
         );
+    }
+
+    public function restrictedMode(string $institution, ?string $advisor): string
+    {
+        $ranks = ['manual' => 0, 'supervised' => 1, 'controlled_auto' => 2];
+        if (! isset($ranks[$institution]) || ($advisor !== null && ! isset($ranks[$advisor]))) {
+            return 'unknown';
+        }
+
+        return $advisor !== null && $ranks[$advisor] < $ranks[$institution] ? $advisor : $institution;
     }
 }

@@ -29,7 +29,7 @@ final class FollowUpPolicyEngine
 
     public function evaluate(PolicyRequest $request, bool $record = true): PolicyDecision
     {
-        $opportunity = $request->opportunity->loadMissing(['channel', 'socialConversation', 'contact', 'lead']);
+        $opportunity = $request->opportunity->loadMissing(['channel', 'socialConversation', 'contact', 'lead', 'bot']);
         $effective = $this->settings->effective((int) $opportunity->institution_id, (int) $opportunity->bot_id);
         $decision = $this->central($request, $effective);
         if ($record) {
@@ -59,6 +59,9 @@ final class FollowUpPolicyEngine
         if (! $settings->advisorEnabled) {
             return $this->decision('denied', 'advisor_disabled', 'El seguimiento del asesor está desactivado.', $settings, $request);
         }
+        if ($request->opportunity->bot?->status !== 'active') {
+            return $this->decision('denied', 'advisor_inactive', 'El asesor está inactivo.', $settings, $request);
+        }
         if (! in_array($settings->mode, ['manual', 'supervised', 'controlled_auto'], true)) {
             return $this->decision('unknown', 'operating_mode_unknown', 'El modo operativo no tiene una política reconocida.', $settings, $request);
         }
@@ -79,6 +82,12 @@ final class FollowUpPolicyEngine
         }
         if ($request->opportunity->channel === null || ! $request->opportunity->channel->is_active || (int) $request->opportunity->channel->institution_id !== (int) $request->opportunity->institution_id) {
             return $this->decision('denied', 'channel_unavailable', 'El canal no está activo y disponible para esta institución.', $settings, $request);
+        }
+        if ((int) $request->opportunity->channel->advisor_bot_id !== (int) $request->opportunity->bot_id || ! $request->opportunity->channel->advisor_enabled) {
+            return $this->decision('denied', 'advisor_channel_changed', 'El canal ya no está asignado y habilitado para este asesor.', $settings, $request);
+        }
+        if ($settings->allowedChannelIds !== null && ! in_array((int) $request->opportunity->social_channel_id, $settings->allowedChannelIds, true)) {
+            return $this->decision('denied', 'channel_not_selected', 'Este canal no está seleccionado para el seguimiento del asesor.', $settings, $request);
         }
         if (! in_array($settings->timezone, DateTimeZone::listIdentifiers(), true)) {
             return $this->decision('unknown', 'timezone_unknown', 'La zona horaria efectiva no es válida.', $settings, $request);

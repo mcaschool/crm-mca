@@ -52,6 +52,127 @@ afterEach(function () {
     Http::assertNothingSent();
 });
 
+it('configura el asesor seleccionado con canales reales sin cambiar atención reactiva', function () {
+    $channel = $this->conversation->channel;
+    $before = $channel->getAttributes();
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)
+        ->assertSee('Canales asignados y permiso de seguimiento')
+        ->set('advisorMode', 'manual')->set('advisorFirstHours', 2)->set('advisorMinimumHours', 3)
+        ->set('advisorMaximumAttempts', 2)->set('advisorAllowedDays', [1, 2])
+        ->set('advisorHoursStart', '09:00')->set('advisorHoursEnd', '17:00')
+        ->set('advisorChannelIds', [$channel->id])->call('saveAdvisor')->assertHasNoErrors();
+    $saved = FollowUpAdvisorSetting::query()->where('bot_id', $this->bot->id)->sole();
+    expect($saved->mode)->toBe('manual')->and($saved->allowed_channel_ids)->toBe([$channel->id])
+        ->and($saved->minimum_interval_hours)->toBe(3)->and($saved->allowed_days)->toBe([1, 2])
+        ->and($channel->fresh()->getAttributes())->toBe($before)
+        ->and($this->action->fresh()->status)->toBe('cancelled')
+        ->and(\Modules\Audit\Models\AuditLog::query()->where('action', 'follow_up.advisor_settings_changed')->exists())->toBeTrue();
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->assertSet('advisorMode', 'manual')->assertSet('advisorChannelIds', [$channel->id]);
+    Queue::assertNothingPushed();
+});
+
+it('rechaza canales ajenos reasignados desconectados y proveedores bloqueados', function (string $kind) {
+    $channel = $this->conversation->channel;
+    if ($kind === 'foreign') {
+        $institution = Institution::factory()->create();
+        $channel = app(CurrentInstitution::class)->runFor($institution->id, fn () => SocialChannel::factory()->create());
+    } elseif ($kind === 'assignment') {
+        $channel->update(['advisor_bot_id' => Bot::factory()->create()->id]);
+    } elseif ($kind === 'disconnected') {
+        $channel->update(['connection_status' => 'disconnected']);
+    } else {
+        $channel->update(['provider' => $kind]);
+    }
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->set('advisorChannelIds', [$channel->id])
+        ->call('saveAdvisor')->assertHasErrors('allowed_channel_ids');
+    expect($this->action->fresh()->status)->toBe('pending_approval');
+})->with(['foreign', 'assignment', 'disconnected', 'instagram', 'messenger']);
+
+it('impide ampliar modo horario límites y pausa institucional desde solicitudes manipuladas', function (string $field, mixed $value, string $error) {
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->set($field, $value)->call('saveAdvisor')->assertHasErrors($error);
+})->with([
+    ['advisorMode', 'controlled_auto', 'mode'], ['advisorMaximumAttempts', 4, 'maximum_attempts'],
+    ['advisorFirstHours', 0, 'first_follow_up_hours'], ['advisorTimezone', 'America/New_York', 'timezone'],
+    ['pauseOnHuman', false, 'pause_on_human'], ['advisorHoursStart', '18:00', 'business_hours_end'],
+]);
+
+it('mantiene modos individuales más restrictivos al cambiar los límites institucionales', function () {
+    $setting = FollowUpSetting::query()->sole();
+    $setting->update(['mode' => 'controlled_auto']);
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->set('advisorMode', 'controlled_auto')->call('saveAdvisor')->assertHasNoErrors();
+    $resolver = app(\Modules\FollowUp\Services\FollowUpSettingsResolver::class);
+    expect($resolver->effective($this->institution->id, $this->bot->id)->mode)->toBe('controlled_auto');
+    $setting->update(['mode' => 'manual']);
+    expect($resolver->effective($this->institution->id, $this->bot->id)->mode)->toBe('manual');
+});
+
+it('una selección vacía bloquea canales y una reasignación bloquea la evaluación', function () {
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->set('advisorChannelIds', [])->call('saveAdvisor')->assertHasNoErrors();
+    $engine = app(\Modules\FollowUp\Services\FollowUpPolicyEngine::class);
+    $request = fn () => new \Modules\FollowUp\Data\PolicyRequest($this->op->fresh(), 'prepare', 'whatsapp', 'requested_follow_up', actor: $this->admin);
+    expect($engine->evaluate($request())->reasonCode)->toBe('channel_not_selected');
+    $this->conversation->channel->update(['advisor_bot_id' => Bot::factory()->create()->id]);
+    expect($engine->evaluate($request())->reasonCode)->toBe('advisor_channel_changed');
+});
+
+it('cambiar asesor limpia campos y rechaza identificadores de otra institución', function () {
+    $second = Bot::factory()->create(['assistant_name' => 'Otro asesor']);
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->set('advisorMaximumAttempts', 2)
+        ->set('botId', (string) $second->id)->assertSet('advisorMaximumAttempts', null)->assertSet('advisorEnabled', false);
+    $other = Institution::factory()->create();
+    $foreign = app(CurrentInstitution::class)->runFor($other->id, fn () => Bot::factory()->create());
+    expect(fn () => Livewire::test(Settings::class)->set('botId', (string) $foreign->id))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+});
+
+it('guardar asesor no cancela oportunidades de otros asesores ni resultados despachados', function () {
+    $otherOp = FollowUpOpportunity::factory()->create();
+    $cycle = FollowUpCycle::query()->create(['follow_up_opportunity_id' => $otherOp->id, 'sequence' => 1, 'classification' => 'general_interest', 'reason_codes' => [], 'started_at' => now(), 'detected_at' => now()]);
+    $otherAction = $this->action->replicate();
+    $otherAction->fill(['follow_up_opportunity_id' => $otherOp->id, 'follow_up_cycle_id' => $cycle->id, 'idempotency_key' => hash('sha256', 'other-advisor')])->save();
+    $this->action->update(['status' => 'delivery_unknown', 'dispatch_at' => now()]);
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->call('saveAdvisor')->assertHasNoErrors();
+    expect($otherAction->fresh()->status)->toBe('pending_approval')->and($this->action->fresh()->status)->toBe('delivery_unknown');
+});
+
+it('un asesor inactivo no puede habilitar reglas ni preparar acciones', function () {
+    $this->bot->update(['status' => 'inactive']);
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->set('advisorEnabled', true)->set('advisorChannelIds', [])->call('saveAdvisor')->assertHasErrors('enabled');
+    $decision = app(\Modules\FollowUp\Services\FollowUpPolicyEngine::class)->evaluate(new \Modules\FollowUp\Data\PolicyRequest($this->op->fresh(), 'prepare', 'whatsapp', 'requested_follow_up', actor: $this->admin));
+    expect($decision->reasonCode)->toBe('advisor_inactive');
+});
+
+it('acepta los extremos exactos del horario y rechaza días fuera de la institución', function () {
+    FollowUpSetting::query()->sole()->update(['business_hours_start' => '09:00:00', 'business_hours_end' => '18:00:00', 'allowed_days' => [1, 2]]);
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->set('advisorHoursStart', '09:00')->set('advisorHoursEnd', '18:00')
+        ->call('saveAdvisor')->assertHasNoErrors()->set('advisorAllowedDays', [7])->call('saveAdvisor')->assertHasErrors('allowed_days');
+});
+
+it('la matriz de canales no añade una consulta por asesor o canal', function () {
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->assertOk();
+    $base = count(DB::getQueryLog());
+    SocialChannel::factory()->count(12)->create(['advisor_bot_id' => $this->bot->id]);
+    DB::flushQueryLog();
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->assertOk();
+    expect(count(DB::getQueryLog()))->toBeLessThanOrEqual($base + 1);
+    DB::disableQueryLog();
+});
+
+it('abre la configuración del asesor desde la oportunidad y conserva selección en la URL', function () {
+    Livewire::withQueryParams(['oportunidad' => (string) $this->op->id])->test(Opportunities::class)
+        ->assertSee(route('followup.settings', ['asesor' => $this->bot->id]), false);
+    Livewire::withQueryParams(['asesor' => (string) $this->bot->id])->test(Settings::class)
+        ->assertSet('botId', (string) $this->bot->id)->assertViewHas('selectedBot', fn ($bot) => $bot->id === $this->bot->id);
+});
+
+it('la matriz respeta restricciones heredadas por proveedor al cargar ajustes antiguos', function () {
+    FollowUpAdvisorSetting::query()->where('bot_id', $this->bot->id)->update(['allowed_channels' => ['instagram']]);
+    Livewire::test(Settings::class)->set('botId', (string) $this->bot->id)->assertSet('advisorChannelIds', [])
+        ->call('saveAdvisor')->assertHasNoErrors();
+    expect(FollowUpAdvisorSetting::query()->where('bot_id', $this->bot->id)->sole()->allowed_channel_ids)->toBe([]);
+});
+
 it('filtra historial por actor y ambos extremos de un mismo día', function () {
     $events = \Modules\FollowUp\Models\FollowUpEvent::query();
     $events->delete();
@@ -93,7 +214,7 @@ it('filtra oportunidades por búsqueda aprobación consentimiento fecha y orden'
 
 it('abre detalle con enlace exacto a Inbox e historial sin duplicar mensajes', function () {
     $count = SocialMessage::query()->count();
-    Livewire::withQueryParams(['oportunidad' => (string) $this->op->id])->test(Opportunities::class)->assertSee('Contexto reciente')->assertSee('Consulta local')->assertSee(route('social.inbox', ['conversacion' => $this->conversation->id]), false)->assertSee('Ver historial completo');
+    Livewire::withQueryParams(['oportunidad' => (string) $this->op->id])->test(Opportunities::class)->assertSee('Contexto reciente')->assertSee('Consulta local')->assertSee(route('social.inbox', ['conversacion' => $this->conversation->id]), false)->assertSee('Ver historial completo')->assertSee('Preparar un borrador')->assertSee('Pregunta pendiente');
     expect(SocialMessage::query()->count())->toBe($count);
     $this->get(route('social.inbox', ['conversacion' => $this->conversation->id]))->assertOk();
 });
@@ -152,7 +273,7 @@ it('explica resultado desconocido sin ofrecer reenvío', function () {
 });
 
 it('muestra configuración e interruptores sin habilitar ejecución', function () {
-    Livewire::test(Settings::class)->assertSee('Deshabilitada')->assertSee('Esta pantalla no ofrece activación de envíos')->call('stopExecution')->assertHasNoErrors();
+    Livewire::test(Settings::class)->assertSee('Envíos deshabilitados globalmente')->assertSee('Guardar reglas no activa envíos')->call('stopExecution')->assertHasNoErrors();
     expect(DB::table('follow_up_execution_switches')->where('scope', 'institution')->value('enabled'))->toBe(0);
 });
 

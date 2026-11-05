@@ -24,14 +24,14 @@
             $crumbs = \App\View\Breadcrumbs::for(request());
         @endphp
 
-        <div class="mca-shell" x-data="{ sidebarOpen: false }">
+        <div class="mca-shell" x-data="{ sidebarOpen: false }" @keydown.escape.window="if (sidebarOpen) { sidebarOpen = false; $refs.sidebarToggle.focus() }">
             @include('layouts.navigation')
 
             <div class="mca-backdrop" :class="{ show: sidebarOpen }" @click="sidebarOpen = false" x-cloak></div>
 
             <div class="mca-main">
                 <header class="mca-topbar">
-                    <button type="button" class="mca-hamburger" @click="sidebarOpen = true" aria-label="{{ __('Abrir menú') }}">
+                    <button type="button" class="mca-hamburger" x-ref="sidebarToggle" @click="sidebarOpen = !sidebarOpen" :aria-expanded="sidebarOpen.toString()" aria-label="{{ __('Abrir menú') }}">
                         <x-ui.icon name="menu" style="width:22px;height:22px" />
                     </button>
                     <nav class="mca-crumbs" aria-label="{{ __('Ruta de navegación') }}">

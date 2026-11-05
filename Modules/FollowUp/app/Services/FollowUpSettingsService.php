@@ -52,6 +52,16 @@ final class FollowUpSettingsService
         $this->validateWindow($data, true);
         $institution = app(FollowUpSettingsResolver::class)->institution((int) $actor->institution_id);
         $this->validateTightening($data, $institution);
+        if ($data['enabled'] && $bot->status !== 'active') {
+            throw ValidationException::withMessages(['enabled' => 'No se puede habilitar el seguimiento de un asesor inactivo.']);
+        }
+        if (isset($data['allowed_channel_ids'])) {
+            $data['allowed_channel_ids'] = array_map('intval', $data['allowed_channel_ids']);
+            $channels = \Modules\Social\Models\SocialChannel::query()->whereIn('id', $data['allowed_channel_ids'])->get();
+            if ($channels->count() !== count($data['allowed_channel_ids']) || $channels->contains(fn ($channel) => \Modules\FollowUp\Support\AdvisorChannels::restriction($channel, $bot, $institution->allowed_channels) !== null)) {
+                throw ValidationException::withMessages(['allowed_channel_ids' => 'Selecciona únicamente canales asignados, conectados y permitidos para este asesor.']);
+            }
+        }
 
         return DB::transaction(function () use ($actor, $bot, $data): FollowUpAdvisorSetting {
             $setting = FollowUpAdvisorSetting::query()->where('bot_id', $bot->id)->lockForUpdate()->first() ?? new FollowUpAdvisorSetting;
@@ -63,7 +73,7 @@ final class FollowUpSettingsService
             $setting->created_by_user_id ??= $actor->id;
             $setting->updated_by_user_id = $actor->id;
             $setting->save();
-            $this->invalidator->forInstitution('advisor_settings_changed');
+            $this->invalidator->forAdvisor((int) $bot->id, 'advisor_settings_changed');
             $this->events->record('settings.changed', reason: 'advisor_settings_changed', safeData: ['advisor_settings_id' => (int) $setting->id, 'bot_id' => (int) $bot->id, 'lock_version' => $setting->lock_version]);
             $this->audit->log('follow_up.advisor_settings_changed', $setting, ['bot_id' => (int) $bot->id, 'fields' => array_keys($data), 'lock_version' => $setting->lock_version]);
 
@@ -80,7 +90,9 @@ final class FollowUpSettingsService
 
         return [
             'enabled' => ['required', 'boolean'],
-            'mode' => $advisor ? ['prohibited'] : ['required', Rule::in(FollowUpSetting::MODES)],
+            'mode' => [$advisor ? 'nullable' : 'required', Rule::in(FollowUpSetting::MODES)],
+            'allowed_channel_ids' => $advisor ? ['nullable', 'array'] : ['prohibited'],
+            'allowed_channel_ids.*' => ['integer', 'min:1', 'distinct'],
             'first_follow_up_hours' => $number('integer', 2160),
             'minimum_interval_hours' => $number('integer', 2160),
             'maximum_attempts' => $number('integer', 20),
@@ -113,6 +125,12 @@ final class FollowUpSettingsService
     private function validateTightening(array $data, FollowUpSetting $institution): void
     {
         $errors = [];
+        if (isset($data['mode']) && app(FollowUpSettingsResolver::class)->restrictedMode($institution->mode, $data['mode']) !== $data['mode']) {
+            $errors['mode'] = 'El modo del asesor no puede superar la autonomía institucional.';
+        }
+        if (isset($data['timezone']) && $data['timezone'] !== $institution->timezone) {
+            $errors['timezone'] = 'El horario del asesor debe usar la zona horaria institucional.';
+        }
         if (isset($data['first_follow_up_hours']) && $data['first_follow_up_hours'] < $institution->first_follow_up_hours) {
             $errors['first_follow_up_hours'] = 'El asesor no puede adelantar el primer seguimiento institucional.';
         }
@@ -128,10 +146,10 @@ final class FollowUpSettingsService
         if (isset($data['allowed_channels']) && array_diff((array) $data['allowed_channels'], (array) $institution->allowed_channels) !== []) {
             $errors['allowed_channels'] = 'Los canales del asesor deben pertenecer a los canales institucionales.';
         }
-        if (isset($data['business_hours_start']) && $data['business_hours_start'] < $institution->business_hours_start) {
+        if (isset($data['business_hours_start']) && $data['business_hours_start'] < substr($institution->business_hours_start, 0, 5)) {
             $errors['business_hours_start'] = 'El horario del asesor debe estar dentro del institucional.';
         }
-        if (isset($data['business_hours_end']) && $data['business_hours_end'] > $institution->business_hours_end) {
+        if (isset($data['business_hours_end']) && $data['business_hours_end'] > substr($institution->business_hours_end, 0, 5)) {
             $errors['business_hours_end'] = 'El horario del asesor debe estar dentro del institucional.';
         }
         if ($errors !== []) {

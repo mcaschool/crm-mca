@@ -24,6 +24,13 @@ final class Presentation
     public static function label(?string $value): string
     {
         return match ($value) {
+            'advisor_channel_changed' => 'El canal ya no está asignado a este asesor',
+            'channel_not_selected' => 'Canal no seleccionado para seguimiento',
+            'advisor_inactive' => 'Asesor inactivo',
+            'advisor_settings_changed' => 'Reglas del asesor actualizadas',
+            'institution_settings_changed' => 'Políticas institucionales actualizadas',
+            'settings.changed' => 'Configuración actualizada',
+            'execution.switch_changed' => 'Control de ejecución actualizado',
             'execution.approved' => 'Contenido aprobado', 'policy.evaluated' => 'Política evaluada', 'draft.edited' => 'Borrador editado',
             'commercial.synchronized' => 'Contexto comercial actualizado', 'consent.changed', 'consent_changed' => 'Consentimiento actualizado',
             'action.cancelled' => 'Acción cancelada', 'action.rescheduled' => 'Acción pospuesta', 'action.scheduled' => 'Acción programada',

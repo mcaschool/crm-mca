@@ -42,6 +42,11 @@ final class ActionInvalidator
         return $this->cancel(FollowUpAction::query(), $reason);
     }
 
+    public function forAdvisor(int $botId, string $reason): int
+    {
+        return $this->cancel(FollowUpAction::query()->whereHas('opportunity', fn ($q) => $q->where('bot_id', $botId)), $reason);
+    }
+
     public function forSubject(string $subjectKey, string $channel, string $purpose, string $reason): int
     {
         $query = FollowUpAction::query()->where('channel', $channel)->where('purpose', $purpose);

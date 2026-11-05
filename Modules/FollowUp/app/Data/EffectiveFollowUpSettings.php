@@ -9,6 +9,7 @@ final readonly class EffectiveFollowUpSettings
     /**
      * @param  array<int,int>  $allowedDays
      * @param  array<int,string>  $allowedChannels
+     * @param  array<int,int>|null  $allowedChannelIds
      */
     public function __construct(
         public bool $institutionEnabled,
@@ -25,5 +26,6 @@ final readonly class EffectiveFollowUpSettings
         public bool $pauseOnHuman,
         public string $policyVersion,
         public int $eligibilityVersion,
+        public ?array $allowedChannelIds = null,
     ) {}
 }

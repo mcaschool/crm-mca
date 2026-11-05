@@ -292,7 +292,7 @@ it('bloquea preparación con feature flag global apagado y reserva configuració
     Livewire::actingAs($nonAdmin)->test(FollowUpSettingsPage::class)->assertForbidden();
 
     config(['followup.policy_enabled' => true]);
-    Livewire::actingAs($data['admin'])->test(FollowUpSettingsPage::class)->assertOk()->assertSee('Políticas de seguimiento');
+    Livewire::actingAs($data['admin'])->test(FollowUpSettingsPage::class)->assertOk()->assertSee('Configuración de seguimiento');
 });
 
 it('aplica horarios, intervalos y límites acumulados antes de programar', function () {

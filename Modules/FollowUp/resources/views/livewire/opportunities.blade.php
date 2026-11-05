@@ -11,10 +11,10 @@
     @if (session('followup_action')) <div class="ui-card" role="status">{{ session('followup_action') }}</div> @endif
 
     @if(!$selected)
-    <div class="ui-grid ui-grid--3" data-testid="followup-summary">
-        <div class="ui-card"><div class="t-3">{{ __('Abiertas') }}</div><strong class="ui-kpi">{{ (int) ($summary['open'] ?? 0) }}</strong></div>
-        <div class="ui-card"><div class="t-3">{{ __('Canceladas por respuesta') }}</div><strong class="ui-kpi">{{ (int) ($summary['cancelled'] ?? 0) }}</strong></div>
-        <div class="ui-card"><div class="t-3">{{ __('Excluidas por reglas') }}</div><strong class="ui-kpi">{{ (int) ($summary['suppressed'] ?? 0) }}</strong></div>
+    <div class="fu-overview" data-testid="followup-summary">
+        <div><span>{{ __('Abiertas') }}</span><strong>{{ (int) ($summary['open'] ?? 0) }}</strong></div>
+        <div><span>{{ __('Canceladas por respuesta') }}</span><strong>{{ (int) ($summary['cancelled'] ?? 0) }}</strong></div>
+        <div><span>{{ __('Excluidas por reglas') }}</span><strong>{{ (int) ($summary['suppressed'] ?? 0) }}</strong></div>
     </div>
 
     <div class="ui-card ui-card--list">
@@ -72,6 +72,7 @@
     @endif
 
     @if ($selected)
+        <p><a class="ui-link" href="{{ route('followup.settings', ['asesor'=>$selected->bot_id]) }}">Revisar configuración del asesor y restricciones del canal</a></p>
         <div class="fu-actions"><a class="ui-link" href="{{ route('followup.opportunities') }}">← Volver a oportunidades</a><a class="ui-link" href="{{ route('social.inbox',['conversacion'=>$selected->social_conversation_id]) }}">Abrir conversación completa</a><a class="ui-link" href="{{ route('followup.dashboard',['vista'=>'history','oportunidad'=>$selected->id]) }}">Ver historial completo</a></div>
         <section class="ui-card">
             <h2>{{ $selected->socialConversation?->contact_name ?: 'Prospecto #'.$selected->id }}</h2>
@@ -90,7 +91,7 @@
             <p>{{ __('Recomendación') }}: {{ P::label($selected->commercial_recommendation['action'] ?? null) }} · {{ P::label($selected->commercial_recommendation['stage'] ?? 'keep') }} · {{ P::label($selected->commercial_recommendation['reason'] ?? null) }}</p>
             <p>{{ __('Resultado') }}: {{ P::label($selected->commercial_result['kind'] ?? null) }} · {{ P::label($selected->commercial_result['code'] ?? null) }}</p>
             <p>{{ __('Actualización comercial') }}: {{ $selected->commercial_updated_at?->userTz()->toDateTimeString() }}</p>
-            <p>{{ __('Origen de la asociación') }}: {{ $selected->commercial_link_source ?? __('Pendiente') }} · {{ $selected->commercial_linked_at?->userTz()->toDateTimeString() }}</p>
+            <p>{{ __('Origen de la asociación') }}: {{ P::label($selected->commercial_link_source) }} · {{ $selected->commercial_linked_at?->userTz()->toDateTimeString() }}</p>
             <x-ui.button wire:click="evaluateCommercial">{{ __('Actualizar contexto comercial') }}</x-ui.button>
             @if (!$selected->commercial_close_reason)
                 <x-ui.button wire:click="holdCommercial({{ $selected->commercial_version }}, {{ $selected->commercial_hold ? 'false' : 'true' }})">{{ $selected->commercial_hold ? __('Reanudar tras revisión humana') : __('Pausar seguimiento') }}</x-ui.button>
@@ -136,7 +137,7 @@
                         <p>{{ $draftAction->draft_payload['commercial_objective'] ?? '' }}</p>
                         <p style="white-space: pre-wrap">{{ $draftAction->draft_payload['draft_text'] ?? '' }}</p>
                         <p>{{ $draftAction->draft_payload['context_summary'] ?? '' }}</p>
-                        <p>{{ $draftAction->draft_payload['recommended_action'] ?? '' }} · {{ implode(', ', $draftAction->draft_payload['reason_codes'] ?? []) }}</p>
+                        <p>{{ P::label($draftAction->draft_payload['recommended_action'] ?? null) }} · {{ implode(', ', array_map(fn ($code) => P::label($code), $draftAction->draft_payload['reason_codes'] ?? [])) }}</p>
                         <p>{{ __('Fuentes') }} {{ implode(', ', $draftAction->draft_payload['source_references'] ?? []) }}</p>
                         <p>{{ implode(', ', $draftAction->draft_payload['warnings'] ?? []) }}</p>
                         <p>{{ __('Caduca') }} {{ $draftAction->draft_expires_at?->toDateTimeString() }}</p>

@@ -21,7 +21,18 @@ $email = 'followup-'.bin2hex(random_bytes(3)).'@example.test';
 $user = \App\Models\User::factory()->create(['institution_id' => $institution->id, 'name' => 'Administración de prueba', 'email' => $email, 'password' => \Illuminate\Support\Facades\Hash::make('LocalStage6!Review2026'), 'role' => 'admin', 'status' => 'active']);
 auth()->setUser($user);
 $bot = \Modules\Institutions\Models\Bot::factory()->create(['name' => 'Admisiones', 'assistant_name' => 'Sofía']);
-$channel = \Modules\Social\Models\SocialChannel::factory()->create(['provider' => 'whatsapp', 'advisor_bot_id' => $bot->id, 'advisor_enabled' => true, 'is_active' => true, 'connection_status' => 'connected_cloud_api']);
+$channel = \Modules\Social\Models\SocialChannel::factory()->create(['display_name' => 'Admisiones · WhatsApp ficticio', 'provider' => 'whatsapp', 'advisor_bot_id' => $bot->id, 'advisor_enabled' => true, 'is_active' => true, 'connection_status' => 'connected_cloud_api']);
+$otherBot = \Modules\Institutions\Models\Bot::factory()->create(['name' => 'Orientación', 'assistant_name' => 'Daniel']);
+\Modules\Institutions\Models\Bot::factory()->create(['name' => 'Archivo', 'assistant_name' => 'Asesor inactivo', 'status' => 'inactive']);
+foreach ([
+    ['Coexistence ficticio', 'whatsapp', 'connected_coexistence', $bot->id],
+    ['Instagram ficticio', 'instagram', 'connected_cloud_api', $bot->id],
+    ['Messenger ficticio', 'messenger', 'connected_cloud_api', $bot->id],
+    ['WhatsApp desconectado ficticio', 'whatsapp', 'disconnected', $bot->id],
+    ['Orientación · WhatsApp ficticio', 'whatsapp', 'connected_cloud_api', $otherBot->id],
+] as [$name, $provider, $connection, $advisor]) {
+    \Modules\Social\Models\SocialChannel::factory()->create(['display_name' => $name, 'provider' => $provider, 'advisor_bot_id' => $advisor, 'advisor_enabled' => true, 'is_active' => true, 'connection_status' => $connection]);
+}
 \Modules\FollowUp\Models\FollowUpSetting::query()->create(['enabled' => true, 'mode' => 'supervised', 'first_follow_up_hours' => 1, 'minimum_interval_hours' => 1, 'maximum_attempts' => 3, 'allowed_days' => [1, 2, 3, 4, 5, 6, 7], 'business_hours_start' => '00:00', 'business_hours_end' => '23:59:59', 'timezone' => 'UTC', 'allowed_channels' => ['whatsapp']]);
 \Modules\FollowUp\Models\FollowUpAdvisorSetting::query()->create(['bot_id' => $bot->id, 'enabled' => true]);
 $ids = [];

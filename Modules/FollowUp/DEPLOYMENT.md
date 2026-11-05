@@ -36,7 +36,7 @@ El procedimiento de referencia de ESTE CRM es
    instalación existente: incluye generación de clave y migraciones.
 4. Revisar `migrate:status` y la copia de seguridad; ejecutar `migrate --force`
    únicamente con la autorización correspondiente de producción. No `fresh`,
-   `refresh`, `reset` ni scripts de pruebas. Las seis migraciones FollowUp añaden
+   `refresh`, `reset` ni scripts de pruebas. Las siete migraciones FollowUp añaden
    tablas/campos; no alteran Leads existentes ni habilitan ejecución.
 5. Regenerar cachés de configuración, rutas y vistas según el procedimiento
    oficial. Mantener APP_DEBUG=false y cookies/HTTPS existentes. No modificar
