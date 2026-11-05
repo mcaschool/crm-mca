@@ -48,6 +48,7 @@ final class Breadcrumbs
     private const PAGES = [
         'followup.opportunities' => 'Oportunidades',
         'followup.settings' => 'Configuración',
+        'followup.analytics' => 'Analítica',
         'crm.leads.create' => 'Nuevo lead',
         'crm.leads.show' => 'Ficha del lead',
         'crm.contacts.show' => 'Ficha del contacto',

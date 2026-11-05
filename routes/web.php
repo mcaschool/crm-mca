@@ -168,6 +168,7 @@ $panel->group(function () {
 
     // Seguimiento inteligente: decisiones y acciones locales; no existe ruta de envío.
     Route::get('/crm/seguimiento', \Modules\FollowUp\Livewire\Workspace::class)->name('followup.dashboard');
+    Route::get('/crm/seguimiento/analitica', \Modules\FollowUp\Livewire\Analytics::class)->name('followup.analytics');
     Route::get('/crm/seguimiento/oportunidades', \Modules\FollowUp\Livewire\Opportunities::class)->name('followup.opportunities');
     Route::get('/crm/seguimiento/configuracion', \Modules\FollowUp\Livewire\Settings::class)->name('followup.settings');
 

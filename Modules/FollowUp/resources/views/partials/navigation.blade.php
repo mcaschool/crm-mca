@@ -6,8 +6,8 @@
 </style>
 @endonce
 <nav class="fu-nav" aria-label="Secciones de seguimiento inteligente">
-    @foreach (['summary'=>'Resumen','opportunities'=>'Oportunidades','actions'=>'Seguimientos','drafts'=>'Borradores','human'=>'Atención humana','history'=>'Historial','settings'=>'Configuración'] as $key=>$label)
-        <a href="{{ in_array($key,['opportunities','settings']) ? route('followup.'.$key) : route('followup.dashboard',['vista'=>$key]) }}" @if(($active ?? '') === $key) aria-current="page" @endif>{{ $label }}</a>
+    @foreach (['summary'=>'Resumen','opportunities'=>'Oportunidades','actions'=>'Seguimientos','drafts'=>'Borradores','human'=>'Atención humana','history'=>'Historial','settings'=>'Configuración','analytics'=>'Analítica'] as $key=>$label)
+        <a href="{{ in_array($key,['opportunities','settings','analytics']) ? route('followup.'.$key) : route('followup.dashboard',['vista'=>$key]) }}" @if(($active ?? '') === $key) aria-current="page" @endif>{{ $label }}</a>
     @endforeach
 </nav>
 <div wire:loading.delay role="status" aria-live="polite" class="fu-muted">Actualizando información…</div>

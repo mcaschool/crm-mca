@@ -29,6 +29,7 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * @property int $attempt_number
  * @property int $cycle_attempt_number
  * @property \Carbon\CarbonInterface|null $scheduled_at
+ * @property \Carbon\CarbonInterface $created_at
  * @property \Carbon\CarbonInterface|null $expires_at
  * @property \Carbon\CarbonInterface|null $approved_at
  * @property \Carbon\CarbonInterface|null $cancelled_at

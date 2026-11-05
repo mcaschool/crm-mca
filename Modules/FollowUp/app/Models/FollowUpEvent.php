@@ -7,11 +7,22 @@ namespace Modules\FollowUp\Models;
 use Illuminate\Database\Eloquent\Model;
 use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
 
+/**
+ * @property string $event_type
+ * @property int|null $follow_up_action_id
+ * @property \Carbon\CarbonInterface $occurred_at
+ */
 class FollowUpEvent extends Model
 {
     use BelongsToInstitution;
 
     public const UPDATED_AT = null;
+
+    /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<FollowUpOpportunity, $this> */
+    public function opportunity(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(FollowUpOpportunity::class, 'follow_up_opportunity_id');
+    }
 
     /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this> */
     public function actor(): \Illuminate\Database\Eloquent\Relations\BelongsTo
