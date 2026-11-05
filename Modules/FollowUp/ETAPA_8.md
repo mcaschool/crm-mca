@@ -266,3 +266,122 @@ Los archivos ajenos `capturas-publicador/` y `evaluacion_sophia_30_preguntas.md`
 permanecen intactos y excluidos del commit. No se modificaron credenciales, datos
 operativos, producción ni configuración productiva. Los scripts stage8 están
 limitados explícitamente a testing/crm_mca_test y no son herramientas de despliegue.
+
+## Cierre técnico de liberación — 5 de noviembre de 2026
+
+Verificación solicitada después del commit `487d1b46b1270eaac168ce0b40a25a6a5403c054`.
+Se repite la suite global sobre MySQL `crm_mca_test`, con informe JUnit para
+contabilizar también errores y omisiones. No se ejecuta ningún worker operativo,
+scheduler completo, llamada real a Meta ni comunicación real.
+
+### Suite global definitiva
+
+`php artisan test --compact --log-junit storage/logs/followup-release-junit.xml`
+terminó con código **0** después de todas las correcciones de la Etapa 8:
+
+| Resultado | Cantidad |
+|---|---:|
+| Pruebas ejecutadas y correctas | 1.696 |
+| Aserciones | 10.970 |
+| Fallos | 0 |
+| Errores | 0 |
+| Omitidas | 0 |
+
+Duración de consola: **1.233,47 segundos**. El XML JUnit confirma los mismos
+totales y contiene 1.696 elementos testcase, sin failure/error/skipped.
+Los resultados anteriores de este documento son históricos; este cierre sí
+acredita una nueva ejecución completa satisfactoria, sin sumar suites solapadas.
+
+Dentro de la ejecución global, `CalendarScreensTest` pasó sus 9 pruebas/94
+aserciones, `EmailSenderTest` sus 8/39 y `FollowUpStage8Test` sus 16/83, incluidas
+la concurrencia multiproceso y la cola MySQL. No se detectó una regresión funcional
+asociada a las dos incidencias estáticas preexistentes ni a FollowUp. No fue
+necesario cambiar código o añadir pruebas para reparar regresiones en este cierre.
+
+Evidencia local (logs ignorados por Git): `storage/logs/followup-release-tests.log`,
+`followup-release-junit.xml`, `followup-release-phpstan-global.log`,
+`followup-release-phpstan-scope.log`, `followup-release-pint.log`,
+`followup-release-pint-scope.log`, `followup-release-build.log` y
+`followup-release-migrations.log`, todos bajo `storage/logs/`.
+
+### Calidad y procedencia de incidencias
+
+- PHPStan/Larastan de FollowUp y `SocialOutboundService`: **sin errores**.
+- PHPStan global: reproduce exactamente las dos incidencias ya documentadas.
+  Los blobs Git de ambos archivos coinciden antes de la Etapa 1 y en el cierre:
+  `CalendarGrid.php`: `acd0ab735d1ad60e740b5542c8ae78ad1c0c0ea0`;
+  `EmailSenders/Manage.php`: `9ec04bbb78911a14fece815381269e24bec64757`.
+  No fueron introducidas por las ocho etapas. La primera es una inferencia
+  estática de arrays capturados por referencia; existe una prueba funcional de
+  carriles simultáneos en `CalendarScreensTest`. La segunda es una anotación
+  PHPDoc de los destinatarios de prueba SMTP, no un error del ejecutor FollowUp.
+- Pint de FollowUp y gateway: **82 archivos correctos**. Pint global en modo
+  `--test`: **864 archivos, cuatro incidencias de estilo** en
+  `Modules/Ai/app/Services/PreciseKnowledgeRanker.php`,
+  `Modules/Ai/app/Support/KnowledgeText.php`,
+  `Modules/Crm/app/Livewire/Contacts/Index.php` y
+  `Modules/Mcp/tests/Feature/McpOpsTest.php`. No hay diferencias de esos archivos
+  entre el padre de la Etapa 1 y HEAD. Se conservan intactos; no se presenta el
+  formato global como aprobado.
+- `npm run build`: **correcto**, Vite 8.2.1, 32,28 segundos. La configuración
+  Tailwind preexistente incluye `storage/framework/views`; el CSS resultante
+  varía con la caché local. Se restauraron únicamente el manifest y CSS que esta
+  verificación había regenerado, previamente limpios. No se publica un cambio
+  incidental de assets. La preparación futura de assets debe controlar esa
+  dependencia de la caché; esta comprobación no acredita un build reproducible.
+
+### Interruptores y colas
+
+`detection_enabled`, `policy_enabled` y `execution_enabled` conservan valor por
+defecto `false`; no hay overrides `FOLLOW_UP_*_ENABLED` en el `.env` local leído.
+Las migraciones crean configuración institucional/de asesor deshabilitada,
+modo `manual` y switches de ejecución con `enabled=false`. La ausencia de un
+switch también deniega ejecución: no existe activación implícita por ausencia.
+
+`followup:dispatch` no encola con ejecución global apagada. Un job ya persistido
+vuelve a validar política y switches global/institución/asesor/canal antes de
+reservar y antes de comprometer el despacho. Se exige capacidad del canal vigente
+y con evidencia. La cola `followup-drafts` solo genera/persiste borradores; no
+invoca envíos. Aprobar contenido tampoco despacha. Las pruebas existentes consumen
+jobs reales de DatabaseQueue con proveedor simulado y comprueban cero envíos al
+apagar ejecución. No se confunde la disponibilidad de un worker con autorización.
+Un intento ya comprometido tras activación previa conserva su conciliación: el
+apagado no revierte mensajes ni autoriza reintentar resultados desconocidos.
+
+### Estado Git y alcance
+
+Al comenzar, `main` tenía ocho commits por delante de la referencia local
+`origin/main`, correspondientes a Etapas 1–8, y cero por detrás. No se ejecutó
+fetch: esta comparación describe las referencias locales, no verifica el estado
+actual del servidor GitHub. No se modificaron los archivos ajenos
+`capturas-publicador/` ni `evaluacion_sophia_30_preguntas.md`.
+
+### Migraciones y dictamen definitivo
+
+Después de terminar la suite se repitió `stage8-migrations.php`: **correcto**,
+código de salida 0. Se validaron instalación limpia, rollback inverso,
+reinstalación incremental y conservación del contacto ficticio previo, únicamente
+en `crm_mca_test`. Las seis migraciones quedaron registradas en este orden:
+
+1. `2026_11_04_100000_create_follow_up_opportunities_table`
+2. `2026_11_04_110000_create_follow_up_policy_tables`
+3. `2026_11_04_120000_add_drafts_to_follow_up_actions`
+4. `2026_11_04_140000_add_follow_up_execution`
+5. `2026_11_04_160000_create_follow_up_analytics`
+6. `2026_11_05_010000_add_follow_up_commercial_context`
+
+Consulta final del entorno de prueba: detection/policy/execution = false;
+cero switches persistidos y cero switches habilitados. No se añadieron migraciones.
+
+**APTO PARA PUBLICACIÓN CONTROLADA EN GITHUB**, con las incidencias preexistentes
+de análisis estático/formato y la limitación de reproducibilidad de assets
+expresamente documentadas. La suite global está verde y no se han encontrado
+regresiones funcionales ni bloqueadores nuevos de FollowUp para publicar el código.
+Este dictamen sustituye la incertidumbre sobre la repetición de la suite global
+del dictamen anterior; no acredita preparación productiva del hosting.
+
+No se autoriza ni se ejecuta publicación, despliegue o activación. Las condiciones
+de operación de `DEPLOYMENT.md` siguen vigentes. Solo se actualiza este informe
+y se registra en un commit documental local adicional: nueve commits por delante
+de la referencia local `origin/main`, con los ocho commits funcionales intactos.
+Los dos elementos ajenos continúan sin seguimiento y fuera del commit.
