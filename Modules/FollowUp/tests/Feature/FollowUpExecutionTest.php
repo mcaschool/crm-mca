@@ -67,6 +67,29 @@ function executionDraft(FollowUpAction $action): void
     $action->forceFill(['context_fingerprint' => app(FollowUpDraftContext::class)->build($action)['fingerprint']])->save();
 }
 
+it('stage8 exige evidencia vigente aunque el consentimiento figure concedido', function () {
+    \Modules\FollowUp\Models\CommunicationConsent::query()->update(['source' => null, 'evidence' => null]);
+    $action = $this->action->fresh();
+    $decision = app(\Modules\FollowUp\Services\FollowUpPolicyEngine::class)->evaluate(new \Modules\FollowUp\Data\PolicyRequest($action->opportunity, 'schedule', $action->channel, $action->purpose, $action->scheduled_at, $action->expires_at, actor: $this->admin, action: $action));
+    expect($decision->allows())->toBeFalse()->and($decision->reasonCode)->toBe('consent_evidence_missing');
+    Http::assertNothingSent();
+});
+
+it('stage8 impide preparar mensajes sin una acción reclamada y autorizada', function () {
+    $count = SocialMessage::query()->count();
+    expect(fn () => app(\Modules\Social\Services\SocialOutboundService::class)->prepareFollowUp($this->conversation, 'Texto no autorizado', $this->bot->id, $this->action->id))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+    expect(SocialMessage::query()->count())->toBe($count);
+    Http::assertNothingSent();
+});
+
+it('stage8 impide despachar un mensaje sin intención de despacho vinculada', function () {
+    $message = SocialMessage::factory()->create(['social_conversation_id' => $this->conversation->id, 'direction' => 'outbound', 'status' => 'pending', 'ai_meta' => ['follow_up_action_id' => $this->action->id]]);
+    expect(fn () => app(\Modules\Social\Services\SocialOutboundService::class)->dispatchFollowUp($message))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+    Http::assertNothingSent();
+});
+
 it('ejecuta una sola vez por el gateway sin transacción de red ni transferencia humana', function () {
     $level = DB::transactionLevel();
     executionHttp(function () use ($level) {

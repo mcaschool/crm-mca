@@ -20,7 +20,7 @@ final class FollowUpActionPlanner
 
     public function propose(User $actor, int $opportunityId, string $channel, string $purpose, CarbonInterface $scheduledAt, CarbonInterface $expiresAt, ?int $templateId = null): FollowUpAction
     {
-        abort_unless($actor->canManageSettings(), 403);
+        abort_unless($actor->isActive() && $actor->canManageSettings() && (int) $actor->institution_id === app(\Modules\Core\Tenancy\CurrentInstitution::class)->idOrFail(), 403);
         $key = hash('sha256', implode('|', [$actor->institution_id, $opportunityId, $channel, $purpose, $scheduledAt->utc()->format('Y-m-d H:i:s'), $templateId ?? 0]));
 
         return DB::transaction(function () use ($actor, $opportunityId, $channel, $purpose, $scheduledAt, $expiresAt, $templateId, $key): FollowUpAction {
@@ -61,7 +61,7 @@ final class FollowUpActionPlanner
 
     public function approve(User $actor, int $actionId): FollowUpAction
     {
-        abort_unless($actor->canManageSettings(), 403);
+        abort_unless($actor->isActive() && $actor->canManageSettings() && (int) $actor->institution_id === app(\Modules\Core\Tenancy\CurrentInstitution::class)->idOrFail(), 403);
         $candidate = FollowUpAction::query()->findOrFail($actionId);
         abort_unless((int) $candidate->institution_id === (int) $actor->institution_id, 404);
 
@@ -144,7 +144,7 @@ final class FollowUpActionPlanner
     /** @param array<int,string> $from */
     private function transition(User $actor, int $actionId, array $from, string $to, string $reason): FollowUpAction
     {
-        abort_unless($actor->canManageSettings(), 403);
+        abort_unless($actor->isActive() && $actor->canManageSettings() && (int) $actor->institution_id === app(\Modules\Core\Tenancy\CurrentInstitution::class)->idOrFail(), 403);
 
         return DB::transaction(function () use ($actor, $actionId, $from, $to, $reason): FollowUpAction {
             $action = FollowUpAction::query()->with('opportunity')->lockForUpdate()->findOrFail($actionId);

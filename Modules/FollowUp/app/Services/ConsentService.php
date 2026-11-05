@@ -28,7 +28,7 @@ final class ConsentService
 
     public function record(User $actor, ?int $contactId, ?int $conversationId, string $channel, string $purpose, string $state, ?string $source, ?string $evidence, string $policyVersion = '2.0'): CommunicationConsent
     {
-        abort_unless($actor->canManageSettings(), 403);
+        abort_unless($actor->isActive() && $actor->canManageSettings() && (int) $actor->institution_id === app(\Modules\Core\Tenancy\CurrentInstitution::class)->idOrFail(), 403);
         if (! in_array($state, CommunicationConsent::STATES, true)) {
             throw ValidationException::withMessages(['state' => 'Estado de consentimiento inválido.']);
         }

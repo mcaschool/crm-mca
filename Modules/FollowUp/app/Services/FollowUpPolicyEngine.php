@@ -62,7 +62,7 @@ final class FollowUpPolicyEngine
         if (! in_array($settings->mode, ['manual', 'supervised', 'controlled_auto'], true)) {
             return $this->decision('unknown', 'operating_mode_unknown', 'El modo operativo no tiene una política reconocida.', $settings, $request);
         }
-        if ($request->actor !== null && ((int) $request->actor->institution_id !== (int) $request->opportunity->institution_id || ! $request->actor->canManageSettings())) {
+        if ($request->actor !== null && ((int) $request->actor->institution_id !== (int) $request->opportunity->institution_id || ! $request->actor->isActive() || ! $request->actor->canManageSettings())) {
             return $this->decision('denied', 'actor_not_authorized', 'La persona no está autorizada para esta institución.', $settings, $request);
         }
         if ($request->opportunity->status !== 'open') {
@@ -136,6 +136,9 @@ final class FollowUpPolicyEngine
         }
         if ($consent->state !== 'granted') {
             return $this->decision('denied', 'consent_'.$consent->state, 'El consentimiento vigente bloquea esta acción.', $settings, $request);
+        }
+        if (trim((string) $consent->source) === '' || trim((string) $consent->evidence) === '' || $consent->granted_at === null || $consent->granted_at->isFuture()) {
+            return $this->decision('unknown', 'consent_evidence_missing', 'El consentimiento carece de origen, evidencia o fecha verificables.', $settings, $request);
         }
 
         if ($request->stage === 'send') {

@@ -67,9 +67,10 @@ final class SocialOutboundService
     /** Prepare inside the coordinator's final transaction; no network or human takeover. */
     public function prepareFollowUp(SocialConversation $conversation, string $text, int $botId, int $actionId, ?SocialWhatsAppTemplate $template = null): SocialMessage
     {
+        $contentHash = app(\Modules\FollowUp\Services\FollowUpGatewayGuard::class)->prepare($conversation, $text, $botId, $actionId, $template);
         $message = $this->newOutbound($conversation, $template === null ? 'text' : 'template', $text, $template === null ? null : [['type' => 'template', 'template_id' => $template->meta_template_id, 'template_name' => $template->name, 'template_language' => $template->language]], null, 'bot');
         $message->ai_bot_id = $botId;
-        $message->ai_meta = ['follow_up_action_id' => $actionId];
+        $message->ai_meta = ['follow_up_action_id' => $actionId, 'follow_up_content_hash' => $contentHash];
         $message->save();
 
         return $message;
@@ -83,6 +84,11 @@ final class SocialOutboundService
      */
     public function dispatchFollowUp(SocialMessage $message, ?SocialWhatsAppTemplate $template = null, array $parameters = []): SocialMessage
     {
+        $message = SocialMessage::query()->findOrFail($message->id);
+        if ($message->status !== 'pending') {
+            return $message;
+        }
+        app(\Modules\FollowUp\Services\FollowUpGatewayGuard::class)->dispatch($message, $template, $parameters);
         if (! SocialMessage::query()->whereKey($message->id)->where('status', 'pending')->update(['status' => 'sending'])) {
             return $message->refresh();
         }

@@ -39,6 +39,13 @@ final class FollowUpExecutor
             if (! $decision->allows()) {
                 throw ValidationException::withMessages(['execution' => $decision->reasonCode]);
             }
+            // A retried approval must not extend its lifetime or duplicate its audit
+            // event. Revalidation above still applies to every request.
+            if ($action->status === 'scheduled' && $action->approved_by_user_id === $actor->id
+                && $action->approved_draft_version === $version && $action->approved_content_hash === $content['hash']
+                && $action->approved_at !== null && $action->approval_expires_at?->isFuture()) {
+                return true;
+            }
             $action->forceFill(['status' => 'scheduled', 'approved_by_user_id' => $actor->id, 'approved_at' => now(), 'approved_draft_version' => $version,
                 'approved_content_hash' => $content['hash'], 'approval_expires_at' => now()->addHours(24)->min($action->draft_expires_at), 'execution_error' => null])->save();
             $this->events->record('execution.approved', action: $action, safeData: ['draft_version' => $version, 'content_hash' => $content['hash'], 'approver_id' => (int) $actor->id]);

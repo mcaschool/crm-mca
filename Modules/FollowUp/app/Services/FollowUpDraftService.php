@@ -229,7 +229,7 @@ final class FollowUpDraftService
 
     private function authorize(User $actor): void
     {
-        abort_unless($actor->canManageSettings() && (int) $actor->institution_id === app(CurrentInstitution::class)->idOrFail(), 403);
+        abort_unless($actor->isActive() && $actor->canManageSettings() && (int) $actor->institution_id === app(CurrentInstitution::class)->idOrFail(), 403);
     }
 
     private function version(FollowUpAction $action, int $version): void

@@ -108,7 +108,7 @@ class Opportunities extends Component
 
     public function confirmExecution(\Modules\FollowUp\Services\FollowUpExecutor $executor): void
     {
-        $this->validate(['approvalConfirmed' => 'accepted']);
+        $this->validate(['approvalConfirmed' => 'accepted'], ['approvalConfirmed.accepted' => __('Confirma la revisión antes de aprobar.')]);
         $this->approveExecution($this->approvalId, $this->approvalVersion, $this->approvalHash, $executor);
         $this->closeApproval();
         session()->flash('followup_action', 'Contenido aprobado y registrado. No se ha enviado ningún mensaje.');

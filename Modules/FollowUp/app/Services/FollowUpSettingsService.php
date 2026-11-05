@@ -141,6 +141,6 @@ final class FollowUpSettingsService
 
     private function authorize(User $actor): void
     {
-        abort_unless($actor->canManageSettings(), 403);
+        abort_unless($actor->isActive() && $actor->canManageSettings() && (int) $actor->institution_id === app(\Modules\Core\Tenancy\CurrentInstitution::class)->idOrFail(), 403);
     }
 }
