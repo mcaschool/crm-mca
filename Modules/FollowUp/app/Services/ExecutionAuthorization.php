@@ -51,7 +51,7 @@ final class ExecutionAuthorization
         if ((clone $related)->whereNotNull('dispatch_at')->count() >= $settings->maximumAttempts) {
             return 'recipient_attempt_limit';
         }
-        if ((clone $related)->where('dispatch_at', '>', now()->subHours($settings->minimumIntervalHours))->exists()) {
+        if ((clone $related)->where('dispatch_at', '>', now()->subHours(($settings->cadence['enabled'] ?? false) ? (int) $settings->cadence['minimum'] : $settings->minimumIntervalHours))->exists()) {
             return 'recipient_cooldown';
         }
         if (! app(FollowUpDraftService::class)->refreshValidity($action)) {

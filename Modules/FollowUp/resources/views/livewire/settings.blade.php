@@ -21,7 +21,7 @@
                 @if($selectedBot->avatarUrl())<img src="{{ $selectedBot->avatarUrl() }}" alt="" width="48" height="48">@else<span class="fu-avatar" aria-hidden="true">{{ mb_substr($selectedBot->assistant_name ?: $selectedBot->name,0,1) }}</span>@endif
                 <div><h3>{{ $selectedBot->assistant_name ?: $selectedBot->name }}</h3><p class="fu-muted">{{ $selectedBot->status === 'active' ? 'Asesor activo' : 'Asesor inactivo · no puede ejecutar seguimientos' }} · {{ $channels->where('advisor_bot_id',$selectedBot->id)->count() }} canales asignados</p></div>
             </div>
-            <div class="fu-notice" role="status"><strong>Configuración guardada:</strong> {{ $effective->advisorEnabled ? 'Seguimiento del asesor habilitado' : 'Seguimiento del asesor deshabilitado' }} · Modo efectivo: {{ $modes[$effective->mode] ?? 'No reconocido' }} · {{ $effective->firstFollowUpHours }} h hasta el primer seguimiento · {{ $effective->maximumAttempts }} intentos como máximo. @if(!$effective->institutionEnabled) La institución mantiene el seguimiento deshabilitado. @endif Los envíos dependen de los controles de ejecución.</div>
+            <div class="fu-notice" role="status"><strong>Configuración guardada:</strong> {{ $effective->advisorEnabled ? 'Seguimiento del asesor habilitado' : 'Seguimiento del asesor deshabilitado' }} · Modo efectivo: {{ $modes[$effective->mode] ?? 'No reconocido' }} · Intervalo general inicial: {{ $effective->firstFollowUpHours }} h · {{ $effective->maximumAttempts }} intentos acumulados como máximo. @if($effective->cadence['enabled'] ?? false) WhatsApp con texto libre: primer momento a las {{ $effective->cadence['first'] }} h desde el prospecto; hasta {{ $effective->cadence['maximum'] }} seguimientos por ventana. @endif @if(!$effective->institutionEnabled) La institución mantiene el seguimiento deshabilitado. @endif Los envíos dependen de los controles de ejecución.</div>
             <form wire:submit="saveAdvisor">
                 <p wire:dirty class="fu-muted" role="status">Hay cambios sin guardar. El resumen superior muestra la configuración guardada.</p>
                 @if($effective->allowedChannelIds === [])<p class="fu-notice">No hay canales autorizados en la configuración guardada. Este asesor no podrá realizar seguimientos.</p>@endif
@@ -39,6 +39,7 @@
                     </div>
                 @empty<div class="fu-empty">No hay canales conectados en esta institución. No se crearán conexiones desde esta pantalla.</div>@endforelse
                 </div>
+                @include('followup::partials.cadence-settings', ['model'=>'advisorCadence','scope'=>'asesor'])
                 <h3>Frecuencia y límites del asesor</h3><p class="fu-muted">Los campos vacíos heredan la institución. Los valores personalizados solo pueden ser más restrictivos.</p>
                 <div class="ui-grid ui-grid--3">
                     <label>Primer seguimiento del asesor (h)<input class="ui-input" type="number" min="{{ $institutionSetting->first_follow_up_hours }}" max="2160" placeholder="Heredar: {{ $institutionSetting->first_follow_up_hours }}" wire:model="advisorFirstHours"></label>
@@ -55,6 +56,7 @@
     <section class="ui-card" id="institution-rules" aria-labelledby="institution-heading">
         <h2 id="institution-heading">Límites institucionales</h2><p class="fu-muted">Se aplican a todos los asesores. Cambiarlos invalida las acciones pendientes incompatibles.</p>
         <form wire:submit="saveInstitution">
+            @include('followup::partials.cadence-settings', ['model'=>'cadence','scope'=>'institución'])
             <div class="fu-rule-grid"><label class="fu-check"><input type="checkbox" wire:model="enabled"> Seguimiento habilitado en la institución</label><label>Modo institucional<select class="ui-input" aria-label="Modo institucional" wire:model="mode">@foreach($modes as $value=>$label)<option value="{{ $value }}">{{ $label }}</option>@endforeach</select></label></div>
             <div class="ui-grid ui-grid--3"><label>Primer seguimiento institucional (h)<input class="ui-input" type="number" min="1" max="2160" wire:model="firstFollowUpHours"></label><label>Intervalo mínimo institucional (h)<input class="ui-input" type="number" min="1" max="2160" wire:model="minimumIntervalHours"></label><label>Máximo de intentos institucional<input class="ui-input" type="number" min="1" max="20" wire:model="maximumAttempts"></label></div>
             <div class="ui-grid ui-grid--3"><label>Desde · institución<input class="ui-input" type="time" wire:model="businessHoursStart"></label><label>Hasta · institución<input class="ui-input" type="time" wire:model="businessHoursEnd"></label><label>Zona horaria · institución<input class="ui-input" placeholder="America/New_York" wire:model="timezone"></label></div>

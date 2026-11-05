@@ -31,6 +31,15 @@ final class OpportunityDetector
         $result['cancelled'] = $this->reconcileProspectResponses($batch);
 
         foreach ($this->candidateIds($at, $batch) as $conversationId) {
+            $candidate = SocialConversation::query()->with('channel')->find($conversationId);
+            if ($candidate?->channel !== null) {
+                $settings = app(FollowUpSettingsResolver::class)->effective((int) $candidate->institution_id, (int) $candidate->channel->advisor_bot_id);
+                if (! ($candidate->provider === 'whatsapp' && ($settings->cadence['enabled'] ?? false)) && $candidate->last_message_at?->gt($at->copy()->subHours(max(1, (int) config('followup.silence_hours', 24))))) {
+                    $result['skipped']++;
+
+                    continue;
+                }
+            }
             $outcome = $this->detectConversation((int) $conversationId, $at);
             $result[$outcome]++;
         }
@@ -41,7 +50,8 @@ final class OpportunityDetector
     /** @return array<int,int> */
     private function candidateIds(CarbonInterface $at, int $batch): array
     {
-        $cutoff = $at->copy()->subHours(max(1, (int) config('followup.silence_hours', 24)));
+        $cadence = app(FollowUpSettingsResolver::class)->institution(app(\Modules\Core\Tenancy\CurrentInstitution::class)->idOrFail())->whatsapp_cadence;
+        $cutoff = $at->copy()->subHours(($cadence['enabled'] ?? false) ? 1 : max(1, (int) config('followup.silence_hours', 24)));
         $floor = $at->copy()->subDays(max(1, (int) config('followup.lookback_days', 90)));
         $latestId = $this->latestMessageSubquery('sm_latest.id');
         $latestDirection = $this->latestMessageSubquery('sm_latest.direction');
@@ -56,12 +66,18 @@ final class OpportunityDetector
             ->where('social_conversations.automation_state', 'bot')
             ->whereNull('social_conversations.assigned_to')
             ->whereBetween('social_conversations.last_message_at', [$floor, $cutoff])
+            ->where(function ($q) use ($at, $cadence): void {
+                $q->where('social_conversations.last_message_at', '<=', $at->copy()->subHours(max(1, (int) config('followup.silence_hours', 24))));
+                if ($cadence['enabled'] ?? false) {
+                    $q->orWhere(fn ($early) => $early->where('social_conversations.provider', 'whatsapp')->whereHas('channel', fn ($channels) => $channels->whereIn('advisor_bot_id', \Modules\FollowUp\Models\FollowUpAdvisorSetting::query()->select('bot_id')->where('enabled', true)->where(fn ($advisors) => $advisors->whereNull('whatsapp_cadence')->orWhere('whatsapp_cadence->enabled', true)))));
+                }
+            })
             ->whereHas('channel', fn ($q) => $q->whereNotNull('advisor_bot_id')->where('is_active', true))
             ->whereExists(fn ($q) => $q->selectRaw('1')->from('social_messages as sm_in')
                 ->whereColumn('sm_in.social_conversation_id', 'social_conversations.id')
                 ->where('sm_in.direction', 'inbound'))
             ->whereRaw("{$latestDirection} = 'outbound'")
-            ->where(fn ($q) => $q->whereNull('fu.id')->orWhereRaw("fu.source_last_message_id < {$latestId}"))
+            ->where(fn ($q) => $q->whereNull('fu.id')->orWhereRaw("fu.source_last_message_id < {$latestId}")->orWhere('fu.next_evaluation_at', '<=', $at))
             ->orderBy('social_conversations.last_message_at')
             ->limit($batch)
             ->pluck('social_conversations.id')
@@ -95,6 +111,16 @@ final class OpportunityDetector
 
             if ($latest === null || $latest->direction !== 'outbound' || $inbound->isEmpty() || $outbound->isEmpty()) {
                 return 'skipped';
+            }
+
+            $effective = app(FollowUpSettingsResolver::class)->effective((int) $conversation->institution_id, (int) $channel->advisor_bot_id);
+            if ($conversation->provider === 'whatsapp' && ($effective->cadence['enabled'] ?? false)) {
+                $window = app(WhatsAppWindow::class)->inspect((int) $conversation->id, (int) $effective->cadence['margin']);
+                if ($window['state'] !== 'open' || $window['last_customer_message_at'] === null
+                    || $at->lt($window['last_customer_message_at']->addHours((int) $effective->cadence['first']))
+                    || $at->lt($this->messageTime($latest)->copy()->addHours((int) $effective->cadence['minimum']))) {
+                    return 'skipped';
+                }
             }
 
             $link = ConversationContactLink::resolve($conversation);
@@ -144,6 +170,15 @@ final class OpportunityDetector
             $opportunity->detected_at ??= $at;
             $opportunity->last_evaluated_at = $at;
             $opportunity->next_evaluation_at = null;
+            if ($conversation->provider === 'whatsapp' && ($effective->cadence['enabled'] ?? false) && isset($window)) {
+                foreach (['first', 'second', 'third'] as $moment) {
+                    $next = $window['last_customer_message_at']->addHours((int) $effective->cadence[$moment]);
+                    if ($next->gt($at)) {
+                        $opportunity->next_evaluation_at = $next;
+                        break;
+                    }
+                }
+            }
             $opportunity->cancelled_at = $classification['status'] === 'suppressed' ? $at : null;
             $opportunity->cancellation_reason = $classification['status'] === 'suppressed'
                 ? $classification['reasons'][0]
@@ -196,7 +231,9 @@ final class OpportunityDetector
 
             $opportunity->source_last_message_id = $message->id;
             $opportunity->source_last_message_at = $this->messageTime($message);
-            $opportunity->last_inbound_at = $this->messageTime($message);
+            if ($opportunity->last_inbound_at === null || $this->messageTime($message)->gt($opportunity->last_inbound_at)) {
+                $opportunity->last_inbound_at = $this->messageTime($message);
+            }
             $opportunity->last_evaluated_at = now();
             $opportunity->next_evaluation_at = null;
             $opportunity->status = $opportunity->commercial_hold ? $opportunity->status : 'cancelled';

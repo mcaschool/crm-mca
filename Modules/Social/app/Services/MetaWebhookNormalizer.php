@@ -376,7 +376,9 @@ final class MetaWebhookNormalizer
 
     private function tsFromSeconds(mixed $ts): ?CarbonImmutable
     {
-        return is_numeric($ts) ? CarbonImmutable::createFromTimestamp((int) $ts) : null;
+        $seconds = filter_var($ts, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => CarbonImmutable::now()->getTimestamp()]]);
+
+        return $seconds === false ? null : CarbonImmutable::createFromTimestamp($seconds);
     }
 
     private function tsFromMillis(mixed $ts): ?CarbonImmutable

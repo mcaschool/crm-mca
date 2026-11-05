@@ -72,6 +72,17 @@
     @endif
 
     @if ($selected)
+        @if($whatsappWindow)
+        <section class="ui-card" aria-label="Ventana de WhatsApp">
+            <h2>Ventana de WhatsApp · {{ ['open'=>'Activa','closing'=>'Margen de seguridad','expired'=>'Vencida','unknown'=>'No verificable'][$whatsappWindow['state']] }}</h2>
+            <p>Último mensaje del prospecto ({{ $whatsappWindow['timezone'] }}): {{ $whatsappWindow['last_customer_message_at']?->setTimezone($whatsappWindow['timezone'])->format('d/m/Y H:i') ?? 'Sin evidencia temporal válida' }} · Tiempo restante: {{ $whatsappWindow['remaining_minutes'] }} minutos.</p>
+            <p>Seguimientos confirmados acumulados: {{ $whatsappWindow['sent'] }} de {{ $whatsappWindow['maximum'] }} · Pendientes: {{ $whatsappWindow['reserved'] }} · Resultado desconocido: {{ $whatsappWindow['unknown'] }}.</p>
+            <p class="fu-muted">Historial de esta conversación: {{ $whatsappWindow['message_counts']['customer'] }} mensajes del prospecto · {{ $whatsappWindow['message_counts']['reactive'] }} respuestas reactivas del asesor · {{ $whatsappWindow['message_counts']['human'] }} mensajes humanos del CRM · {{ $whatsappWindow['message_counts']['app'] }} mensajes desde WhatsApp Business App.</p>
+            <p>Próximo momento orientativo: {{ $whatsappWindow['next']?->setTimezone($whatsappWindow['timezone'])->format('d/m/Y H:i') ?? 'Pendiente de evaluación o sin otro momento disponible' }}. No supone una autorización ni una programación.</p>
+            @if($whatsappWindow['state'] !== 'open')<p class="fu-notice">Texto libre bloqueado. Fuera de ventana se requiere una plantilla aprobada y una evaluación independiente; un borrador no se convierte automáticamente en plantilla.</p>@endif
+            <p class="fu-muted">Evaluado {{ $whatsappWindow['evaluated_at']->setTimezone($whatsappWindow['timezone'])->format('d/m/Y H:i:s') }}. Se actualiza al consultar; no es un contador en tiempo real. Margen de seguridad: {{ $whatsappWindow['margin'] }} min.</p>
+        </section>
+        @endif
         <p><a class="ui-link" href="{{ route('followup.settings', ['asesor'=>$selected->bot_id]) }}">Revisar configuración del asesor y restricciones del canal</a></p>
         <div class="fu-actions"><a class="ui-link" href="{{ route('followup.opportunities') }}">← Volver a oportunidades</a><a class="ui-link" href="{{ route('social.inbox',['conversacion'=>$selected->social_conversation_id]) }}">Abrir conversación completa</a><a class="ui-link" href="{{ route('followup.dashboard',['vista'=>'history','oportunidad'=>$selected->id]) }}">Ver historial completo</a></div>
         <section class="ui-card">

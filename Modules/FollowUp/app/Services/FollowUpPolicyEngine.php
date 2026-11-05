@@ -99,7 +99,8 @@ final class FollowUpPolicyEngine
             return $this->decision('denied', 'lead_closed', 'El estado comercial del Lead impide seguimiento.', $settings, $request);
         }
 
-        $newer = SocialMessage::query()->where('social_conversation_id', $request->opportunity->social_conversation_id)->where('id', '>', (int) $request->opportunity->source_last_message_id)->orderByDesc('id')->first();
+        $newer = SocialMessage::query()->where('social_conversation_id', $request->opportunity->social_conversation_id)->where('id', '>', (int) $request->opportunity->source_last_message_id)
+            ->where(fn ($q) => $q->where('direction', 'inbound')->orWhere('sender_type', '!=', 'bot'))->orderByDesc('id')->first();
         if ($newer?->direction === 'inbound') {
             return $this->decision('denied', 'new_inbound_message', 'Existe una respuesta posterior del prospecto.', $settings, $request);
         }
@@ -114,9 +115,14 @@ final class FollowUpPolicyEngine
         if ($request->scheduledAt === null || $request->expiresAt === null || $request->expiresAt->lte($request->scheduledAt) || $request->expiresAt->isPast()) {
             return $this->decision('denied', 'invalid_action_validity', 'La programación y caducidad no son válidas.', $settings, $request);
         }
+        $cadenceEnabled = $request->channel === 'whatsapp' && ($settings->cadence['enabled'] ?? false) && $request->whatsappTemplateId === null;
+        $cadenceReason = app(WhatsAppCadence::class)->reason($request, $settings);
+        if ($cadenceReason !== null) {
+            return $this->decision('denied', $cadenceReason, 'La cadencia no permite este contacto. Revisa la ventana, los límites y el historial.', $settings, $request);
+        }
         $attempts = FollowUpAction::query()->where('follow_up_opportunity_id', $request->opportunity->id)->whereNotIn('status', ['cancelled', 'suppressed'])->when($request->action, fn ($q) => $q->whereKeyNot($request->action->id))->count();
         $firstAllowed = $request->opportunity->source_last_message_at->copy()->addHours($settings->firstFollowUpHours);
-        if ($attempts === 0 && $request->scheduledAt->lt($firstAllowed)) {
+        if (! $cadenceEnabled && $attempts === 0 && $request->scheduledAt->lt($firstAllowed)) {
             return $this->decision('denied', 'first_follow_up_not_due', 'Aún no se ha cumplido la espera configurada para el primer seguimiento.', $settings, $request, CarbonImmutable::instance($firstAllowed));
         }
         $local = CarbonImmutable::instance($request->scheduledAt)->setTimezone($settings->timezone);
@@ -127,10 +133,10 @@ final class FollowUpPolicyEngine
             return $this->decision('denied', 'outside_business_hours', 'La fecha queda fuera del horario comercial efectivo.', $settings, $request, $this->nextBusinessTime($local, $settings));
         }
         $minimum = $request->opportunity->last_outbound_at?->copy()->addHours($settings->minimumIntervalHours);
-        if ($minimum !== null && $request->scheduledAt->lt($minimum)) {
+        if (! $cadenceEnabled && $minimum !== null && $request->scheduledAt->lt($minimum)) {
             return $this->decision('denied', 'minimum_interval_not_met', 'No se ha cumplido el intervalo mínimo desde el último contacto.', $settings, $request, CarbonImmutable::instance($minimum));
         }
-        if ($attempts >= $settings->maximumAttempts) {
+        if (! $cadenceEnabled && $attempts >= $settings->maximumAttempts) {
             return $this->decision('denied', 'maximum_attempts_reached', 'Se alcanzó el límite acumulado de intentos.', $settings, $request);
         }
         $duplicate = FollowUpAction::query()->where('follow_up_opportunity_id', $request->opportunity->id)->where('channel', $request->channel)->where('purpose', $request->purpose)->whereIn('status', FollowUpAction::ACTIVE_STATUSES)->when($request->action, fn ($q) => $q->whereKeyNot($request->action->id))->exists();

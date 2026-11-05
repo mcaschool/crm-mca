@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
 
 /**
+ * @property string|null $cadence_key
+ * @property int|null $cadence_slot
+ * @property int|null $cadence_anchor_id
  * @property int $institution_id
  * @property int $follow_up_opportunity_id
  * @property int $follow_up_cycle_id
@@ -66,11 +69,11 @@ class FollowUpAction extends Model
 
     protected $hidden = ['draft_payload', 'draft_reservation'];
 
-    protected $fillable = ['institution_id', 'follow_up_opportunity_id', 'follow_up_cycle_id', 'type', 'channel', 'purpose', 'status', 'scheduled_at', 'expires_at', 'policy_status', 'policy_reason_code', 'policy_version', 'eligibility_version', 'idempotency_key', 'approval_required', 'approved_by_user_id', 'approved_at', 'cancelled_by_user_id', 'cancelled_at', 'paused_at', 'block_reason', 'social_whatsapp_template_id', 'attempt_number', 'cycle_attempt_number'];
+    protected $fillable = ['cadence_key', 'cadence_slot', 'cadence_anchor_id', 'institution_id', 'follow_up_opportunity_id', 'follow_up_cycle_id', 'type', 'channel', 'purpose', 'status', 'scheduled_at', 'expires_at', 'policy_status', 'policy_reason_code', 'policy_version', 'eligibility_version', 'idempotency_key', 'approval_required', 'approved_by_user_id', 'approved_at', 'cancelled_by_user_id', 'cancelled_at', 'paused_at', 'block_reason', 'social_whatsapp_template_id', 'attempt_number', 'cycle_attempt_number'];
 
     protected function casts(): array
     {
-        return array_merge($this->baseCasts(), ['execution_parameters' => 'encrypted:array', 'approved_draft_version' => 'integer', 'approval_expires_at' => 'datetime', 'claimed_at' => 'datetime', 'dispatch_at' => 'datetime', 'execution_queued_at' => 'datetime']);
+        return array_merge($this->baseCasts(), ['cadence_slot' => 'integer', 'cadence_anchor_id' => 'integer', 'execution_parameters' => 'encrypted:array', 'approved_draft_version' => 'integer', 'approval_expires_at' => 'datetime', 'claimed_at' => 'datetime', 'dispatch_at' => 'datetime', 'execution_queued_at' => 'datetime']);
     }
 
     /** @return array<string,string> */

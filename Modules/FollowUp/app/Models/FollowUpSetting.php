@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
 
 /**
+ * @property array<string,mixed>|null $whatsapp_cadence
  * @property int $institution_id
  * @property bool $enabled
  * @property string $mode
@@ -30,12 +31,12 @@ class FollowUpSetting extends Model
 
     public const MODES = ['manual', 'supervised', 'controlled_auto'];
 
-    protected $fillable = ['institution_id', 'enabled', 'mode', 'first_follow_up_hours', 'minimum_interval_hours', 'maximum_attempts', 'allowed_days', 'business_hours_start', 'business_hours_end', 'timezone', 'allowed_channels', 'policy_version', 'lock_version', 'created_by_user_id', 'updated_by_user_id'];
+    protected $fillable = ['whatsapp_cadence', 'institution_id', 'enabled', 'mode', 'first_follow_up_hours', 'minimum_interval_hours', 'maximum_attempts', 'allowed_days', 'business_hours_start', 'business_hours_end', 'timezone', 'allowed_channels', 'policy_version', 'lock_version', 'created_by_user_id', 'updated_by_user_id'];
 
     protected $attributes = ['enabled' => false, 'mode' => 'manual', 'first_follow_up_hours' => 24, 'minimum_interval_hours' => 24, 'maximum_attempts' => 3, 'business_hours_start' => '09:00:00', 'business_hours_end' => '18:00:00', 'timezone' => 'UTC', 'policy_version' => '2.0', 'lock_version' => 1];
 
     protected function casts(): array
     {
-        return ['enabled' => 'boolean', 'allowed_days' => 'array', 'allowed_channels' => 'array', 'first_follow_up_hours' => 'integer', 'minimum_interval_hours' => 'integer', 'maximum_attempts' => 'integer', 'lock_version' => 'integer'];
+        return ['whatsapp_cadence' => 'array', 'enabled' => 'boolean', 'allowed_days' => 'array', 'allowed_channels' => 'array', 'first_follow_up_hours' => 'integer', 'minimum_interval_hours' => 'integer', 'maximum_attempts' => 'integer', 'lock_version' => 'integer'];
     }
 }

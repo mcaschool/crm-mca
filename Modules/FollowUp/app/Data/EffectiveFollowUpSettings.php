@@ -7,6 +7,7 @@ namespace Modules\FollowUp\Data;
 final readonly class EffectiveFollowUpSettings
 {
     /**
+     * @param  array<string,mixed>  $cadence
      * @param  array<int,int>  $allowedDays
      * @param  array<int,string>  $allowedChannels
      * @param  array<int,int>|null  $allowedChannelIds
@@ -27,5 +28,6 @@ final readonly class EffectiveFollowUpSettings
         public string $policyVersion,
         public int $eligibilityVersion,
         public ?array $allowedChannelIds = null,
+        public array $cadence = [],
     ) {}
 }

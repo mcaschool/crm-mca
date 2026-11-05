@@ -47,6 +47,15 @@ final class FollowUpGatewayGuard
             || $action->opportunity->social_conversation_id !== $message->social_conversation_id || $action->opportunity->bot_id !== $message->ai_bot_id) {
             $this->reject();
         }
+        $decision = app(FollowUpPolicyEngine::class)->evaluate(new PolicyRequest($action->opportunity, 'schedule', $action->channel, $action->purpose, now(), $action->expires_at, $action->social_whatsapp_template_id, action: $action), false);
+        if (! $decision->allows() || app(ExecutionSwitches::class)->reason($action) !== null) {
+            $reason = $decision->allows() ? 'execution_switch_disabled' : $decision->reasonCode;
+            $message->forceFill(['status' => 'failed', 'ai_meta' => array_merge($message->ai_meta ?? [], ['send_error_code' => $reason])])->save();
+            $action->forceFill(['status' => 'suppressed', 'block_reason' => $reason, 'execution_error' => $reason])->save();
+            app(FollowUpEventRecorder::class)->record('execution.blocked', action: $action, reason: $reason);
+
+            return;
+        }
         // Dispatch is already committed. Validate that the exact reserved content is
         // used, without treating a later retry as a new policy authorization.
         $content = app(ExecutionContent::class)->build($action);

@@ -25,6 +25,16 @@ final class DispatchActionsCommand extends TenantAwareCommand
             ->chunkById(100, function ($actions) use ($institutionId): void {
                 foreach ($actions as $action) {
                     DB::transaction(function () use ($institutionId, $action): void {
+                        $current = FollowUpAction::query()->lockForUpdate()->find($action->id);
+                        if ($current === null || $current->status !== 'scheduled') {
+                            return;
+                        }
+                        $decision = app(\Modules\FollowUp\Services\FollowUpPolicyEngine::class)->evaluate(new \Modules\FollowUp\Data\PolicyRequest($current->opportunity, 'schedule', $current->channel, $current->purpose, now(), $current->expires_at, $current->social_whatsapp_template_id, action: $current));
+                        if (! $decision->allows()) {
+                            $current->forceFill(['status' => 'suppressed', 'block_reason' => $decision->reasonCode])->save();
+
+                            return;
+                        }
                         $updated = FollowUpAction::query()->whereKey($action->id)->where('status', 'scheduled')
                             ->where(fn ($q) => $q->whereNull('execution_queued_at')->orWhere('execution_queued_at', '<', now()->subMinutes(5)))
                             ->update(['execution_queued_at' => now()]);

@@ -42,7 +42,7 @@ beforeEach(function () {
     $this->bot = Bot::factory()->create();
     $this->channel = SocialChannel::factory()->create(['provider' => 'whatsapp', 'advisor_bot_id' => $this->bot->id, 'advisor_enabled' => true, 'is_active' => true, 'connection_status' => 'connected_cloud_api']);
     $this->conversation = SocialConversation::factory()->create(['social_channel_id' => $this->channel->id, 'provider' => 'whatsapp', 'contact_name' => 'Ana', 'automation_state' => 'bot', 'assigned_to' => null, 'status' => 'open']);
-    SocialMessage::factory()->create(['social_conversation_id' => $this->conversation->id, 'direction' => 'inbound', 'sender_type' => 'contact', 'provider_timestamp' => now()->subHours(3)]);
+    SocialMessage::factory()->create(['social_conversation_id' => $this->conversation->id, 'direction' => 'inbound', 'sender_type' => 'contact', 'body' => '¿Qué información tiene el programa?', 'provider_timestamp' => now()->subHours(3)]);
     $last = SocialMessage::factory()->create(['social_conversation_id' => $this->conversation->id, 'direction' => 'outbound', 'sender_type' => 'bot', 'provider_timestamp' => now()->subHours(2)]);
     $this->opportunity = FollowUpOpportunity::factory()->create(['bot_id' => $this->bot->id, 'social_channel_id' => $this->channel->id, 'social_conversation_id' => $this->conversation->id, 'provider' => 'whatsapp', 'source_last_message_id' => $last->id, 'source_last_message_at' => now()->subHours(2), 'last_inbound_at' => now()->subHours(3), 'last_outbound_at' => now()->subHours(2), 'status' => 'open', 'contact_id' => null, 'lead_id' => null]);
     $cycle = FollowUpCycle::query()->create(['follow_up_opportunity_id' => $this->opportunity->id, 'sequence' => 1, 'classification' => 'general', 'reason_codes' => [], 'started_at' => now(), 'detected_at' => now()]);
@@ -66,6 +66,22 @@ function executionDraft(FollowUpAction $action): void
     ]])->save();
     $action->forceFill(['context_fingerprint' => app(FollowUpDraftContext::class)->build($action)['fingerprint']])->save();
 }
+
+it('rechecks the WhatsApp window and new interventions at the gateway boundary', function (string $change) {
+    $this->action->refresh()->forceFill(['status' => 'claimed', 'execution_token' => (string) \Illuminate\Support\Str::uuid()])->save();
+    $outbound = app(\Modules\Social\Services\SocialOutboundService::class);
+    $content = app(\Modules\FollowUp\Services\ExecutionContent::class)->build($this->action->fresh());
+    $message = $outbound->prepareFollowUp($this->conversation, $content['text'], $this->bot->id, $this->action->id, null);
+    $this->action->forceFill(['status' => 'sending', 'dispatch_at' => now(), 'social_message_id' => $message->id])->save();
+    if ($change === 'closing') {
+        $this->travel(20)->hours();
+    } else {
+        SocialMessage::factory()->create(['social_conversation_id' => $this->conversation->id, 'direction' => $change === 'inbound' ? 'inbound' : 'outbound', 'sender_type' => $change === 'inbound' ? 'contact' : 'app', 'provider_timestamp' => now()]);
+    }
+    $outbound->dispatchFollowUp($message);
+    expect($message->fresh()->status)->toBe('failed')->and($this->action->fresh()->status)->toBe('suppressed');
+    Http::assertNothingSent();
+})->with(['closing', 'inbound', 'app']);
 
 it('stage8 exige evidencia vigente aunque el consentimiento figure concedido', function () {
     \Modules\FollowUp\Models\CommunicationConsent::query()->update(['source' => null, 'evidence' => null]);

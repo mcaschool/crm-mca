@@ -26,11 +26,12 @@ final class WhatsAppPolicy implements ChannelPolicy
             return null;
         }
 
-        $lastInbound = $request->stage === 'send'
-            ? \Modules\Social\Models\SocialMessage::query()->where('social_conversation_id', $opportunity->social_conversation_id)->where('direction', 'inbound')->latest('provider_timestamp')->first()?->provider_timestamp
-            : $opportunity->last_inbound_at;
-        $withinWindow = $lastInbound !== null && $lastInbound->gt(now()->subHours(24)) && $lastInbound->lte(now());
-        if ($withinWindow) {
+        $margin = (int) ($settings->cadence['margin'] ?? 60);
+        $window = app(\Modules\FollowUp\Services\WhatsAppWindow::class)->inspect((int) $opportunity->social_conversation_id, $margin);
+        $at = $request->stage === 'send' ? now() : $request->scheduledAt;
+        $withinWindow = $window['state'] === 'open' && $at !== null && $window['expires_at'] !== null
+            && $at->lt($window['expires_at']->subMinutes($margin));
+        if ($withinWindow && $request->whatsappTemplateId === null) {
             return null;
         }
         if ($request->whatsappTemplateId === null) {

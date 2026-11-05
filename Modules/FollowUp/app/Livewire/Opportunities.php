@@ -372,6 +372,7 @@ class Opportunities extends Component
             'summary' => $summary,
             'bots' => Bot::query()->whereIn('id', $botIds)->orderBy('assistant_name')->get(['id', 'assistant_name', 'name']),
             'selected' => $selected,
+            'whatsappWindow' => $selected?->provider === 'whatsapp' ? app(\Modules\FollowUp\Services\WhatsAppCadence::class)->summary($selected) : null,
             'commercialActivities' => $selected ? \Modules\Crm\Models\Activity::query()->where(fn ($q) => $q->where('idempotency_key', 'like', 'followup:'.$selected->id.':%')->orWhere('id', $selected->commercial_activity_id))->latest()->limit(10)->get()->filter(fn ($activity) => auth()->user()->can('view', $activity)) : collect(),
             'commercialOwners' => \App\Models\User::query()->where('institution_id', auth()->user()->institution_id)->get()->filter(fn ($user) => $user->isActive() && $user->canWorkCrm() && ! $user->crmReadOnly()),
             'actions' => $actions,

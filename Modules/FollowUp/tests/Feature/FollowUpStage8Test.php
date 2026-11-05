@@ -204,7 +204,7 @@ it('stage8 serializa detección planificación ejecución y reconciliación en c
             $at = (string) (microtime(true) + 2);
             $now = now()->toDateTimeString();
             for ($i = 0; $i < 2; $i++) {
-                $worker = new \Symfony\Component\Process\Process([PHP_BINARY, base_path('Modules/FollowUp/tests/Support/stage8-worker.php'), (string) $this->admin->institution_id, (string) $this->admin->id, (string) $id, $mode, $at, $now], base_path(), $env);
+                $worker = new \Symfony\Component\Process\Process([PHP_BINARY, '-d', 'opcache.enable_cli=0', base_path('Modules/FollowUp/tests/Support/stage8-worker.php'), (string) $this->admin->institution_id, (string) $this->admin->id, (string) $id, $mode, $at, $now], base_path(), $env);
                 $worker->start();
                 $workers[] = $worker;
             }

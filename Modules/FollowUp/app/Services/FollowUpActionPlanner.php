@@ -26,6 +26,12 @@ final class FollowUpActionPlanner
         return DB::transaction(function () use ($actor, $opportunityId, $channel, $purpose, $scheduledAt, $expiresAt, $templateId, $key): FollowUpAction {
             $opportunity = FollowUpOpportunity::query()->lockForUpdate()->findOrFail($opportunityId);
             abort_unless((int) $opportunity->institution_id === (int) $actor->institution_id, 404);
+            // Serialize recipient reservations across opportunities and advisors.
+            if ($opportunity->contact_id !== null) {
+                \Modules\Crm\Models\Contact::query()->whereKey($opportunity->contact_id)->lockForUpdate()->firstOrFail();
+            } else {
+                \Modules\Social\Models\SocialConversation::query()->whereKey($opportunity->social_conversation_id)->lockForUpdate()->firstOrFail();
+            }
             $existing = FollowUpAction::query()->where('idempotency_key', $key)->first();
             if ($existing !== null) {
                 return $existing;
@@ -44,7 +50,13 @@ final class FollowUpActionPlanner
             $cycleAttempts = FollowUpAction::query()->where('follow_up_cycle_id', $cycle->id)->count() + 1;
             $status = $schedule->status === 'denied' ? 'suppressed' : ($schedule->status === 'unknown' ? 'draft' : ($effective->mode === 'controlled_auto' ? 'scheduled' : 'pending_approval'));
 
-            $action = FollowUpAction::query()->create([
+            $cadenceData = [];
+            if ($schedule->allows() && $channel === 'whatsapp' && $templateId === null && ($effective->cadence['enabled'] ?? false)) {
+                $window = app(WhatsAppWindow::class)->inspect((int) $opportunity->social_conversation_id, (int) $effective->cadence['margin']);
+                $slot = app(WhatsAppCadence::class)->slot($window['last_customer_message_at'], $scheduledAt, $effective->cadence);
+                $cadenceData = ['cadence_key' => app(WhatsAppCadence::class)->key($opportunity, (int) $window['message_id'], $slot), 'cadence_slot' => $slot, 'cadence_anchor_id' => $window['message_id']];
+            }
+            $action = FollowUpAction::query()->create([...$cadenceData,
                 'institution_id' => $actor->institution_id, 'follow_up_opportunity_id' => $opportunity->id, 'follow_up_cycle_id' => $cycle->id,
                 'channel' => $channel, 'purpose' => $purpose, 'status' => $status, 'scheduled_at' => $scheduledAt, 'expires_at' => $expiresAt,
                 'policy_status' => $schedule->status, 'policy_reason_code' => $schedule->reasonCode, 'policy_version' => $schedule->version,

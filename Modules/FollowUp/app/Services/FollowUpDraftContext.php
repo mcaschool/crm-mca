@@ -48,6 +48,11 @@ final class FollowUpDraftContext
             'name' => $opportunity->contact->first_name ?? $opportunity->socialConversation?->contact_name,
             'interest_level' => $opportunity->lead?->interest_level->value,
             'program_id' => $opportunity->lead?->program_id,
+            'whatsapp_cadence' => $opportunity->provider === 'whatsapp' ? [
+                'slot' => $action->cadence_slot,
+                'window_expires_at' => app(WhatsAppWindow::class)->inspect((int) $opportunity->social_conversation_id)['expires_at']?->toIso8601String(),
+                'instruction' => 'Cada seguimiento debe aportar valor nuevo y verificable. No insistir por cumplir una cuota. Recomendar no contactar o intervención humana si no existe valor adicional.',
+            ] : null,
             'classification' => $opportunity->classification,
             'priority' => $opportunity->priority,
             'reason_codes' => $opportunity->reason_codes,

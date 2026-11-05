@@ -296,6 +296,9 @@ final class SocialIngestService
         $message->sender_type = $m->senderType;
         $message->sent_by = null;
         $message->provider_timestamp = $timestamp;
+        if ($m->provider === 'whatsapp') {
+            $message->ai_meta = ['provider_timestamp_verified' => $m->providerTimestamp !== null && ! $timestamp->isFuture()];
+        }
         $message->save();
 
         // Solo lo ENTRANTE incrementa no leídos; un saliente (agente o app del teléfono) no.

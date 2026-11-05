@@ -53,4 +53,7 @@ if (! Schema::hasColumn('follow_up_actions', 'approved_content_hash') || ! Schem
 if (DB::table('follow_up_execution_switches')->count() !== 0) {
     throw new RuntimeException('Unsafe enabled switches');
 }
+if (! Schema::hasColumn('follow_up_settings', 'whatsapp_cadence') || ! Schema::hasColumn('follow_up_advisor_settings', 'whatsapp_cadence') || ! Schema::hasColumn('follow_up_actions', 'cadence_key')) {
+    throw new RuntimeException('Incomplete WhatsApp cadence schema');
+}
 echo "Clean install, reverse rollback, incremental reinstall and existing CRM preservation: PASS\n";

@@ -19,12 +19,16 @@ final class FollowUpSettingsService
 {
     public function __construct(private readonly AuditService $audit, private readonly ActionInvalidator $invalidator, private readonly FollowUpEventRecorder $events) {}
 
-    /** @param array<string,mixed> $input */
+    /**
+     * @param  array<string,mixed>  $input
+     */
     public function saveInstitution(User $actor, array $input): FollowUpSetting
     {
         $this->authorize($actor);
         $data = Validator::make($input, $this->rules(false))->validate();
+        $data = $this->normalizeCadence($data);
         $this->validateWindow($data);
+        $this->validateCadence($data);
 
         return DB::transaction(function () use ($actor, $data): FollowUpSetting {
             $setting = FollowUpSetting::query()->where('institution_id', $actor->institution_id)->lockForUpdate()->first() ?? new FollowUpSetting;
@@ -43,15 +47,19 @@ final class FollowUpSettingsService
         }, 3);
     }
 
-    /** @param array<string,mixed> $input */
+    /**
+     * @param  array<string,mixed>  $input
+     */
     public function saveAdvisor(User $actor, Bot $bot, array $input): FollowUpAdvisorSetting
     {
         $this->authorize($actor);
         abort_unless((int) $bot->institution_id === (int) $actor->institution_id, 404);
         $data = Validator::make($input, $this->rules(true))->validate();
+        $data = $this->normalizeCadence($data);
         $this->validateWindow($data, true);
         $institution = app(FollowUpSettingsResolver::class)->institution((int) $actor->institution_id);
         $this->validateTightening($data, $institution);
+        $this->validateCadence($data, $institution->whatsapp_cadence);
         if ($data['enabled'] && $bot->status !== 'active') {
             throw ValidationException::withMessages(['enabled' => 'No se puede habilitar el seguimiento de un asesor inactivo.']);
         }
@@ -81,7 +89,9 @@ final class FollowUpSettingsService
         }, 3);
     }
 
-    /** @return array<string,mixed> */
+    /**
+     * @return array<string,mixed>
+     */
     private function rules(bool $advisor): array
     {
         $number = fn (string $type, int $max): array => [$advisor ? 'nullable' : 'required', $type, 'min:1', 'max:'.$max];
@@ -89,6 +99,14 @@ final class FollowUpSettingsService
         $text = [$advisor ? 'nullable' : 'required', 'string'];
 
         return [
+            'whatsapp_cadence' => ['sometimes', 'nullable', 'array:enabled,first,second,third,minimum,margin,maximum'],
+            'whatsapp_cadence.enabled' => ['required_with:whatsapp_cadence', 'boolean'],
+            'whatsapp_cadence.first' => ['required_with:whatsapp_cadence', 'integer', 'between:1,22'],
+            'whatsapp_cadence.second' => ['required_with:whatsapp_cadence', 'integer', 'between:2,22'],
+            'whatsapp_cadence.third' => ['required_with:whatsapp_cadence', 'integer', 'between:3,23'],
+            'whatsapp_cadence.minimum' => ['required_with:whatsapp_cadence', 'integer', 'between:2,12'],
+            'whatsapp_cadence.margin' => ['required_with:whatsapp_cadence', 'integer', 'between:30,180'],
+            'whatsapp_cadence.maximum' => ['required_with:whatsapp_cadence', 'integer', 'between:1,3'],
             'enabled' => ['required', 'boolean'],
             'mode' => [$advisor ? 'nullable' : 'required', Rule::in(FollowUpSetting::MODES)],
             'allowed_channel_ids' => $advisor ? ['nullable', 'array'] : ['prohibited'],
@@ -108,7 +126,9 @@ final class FollowUpSettingsService
         ];
     }
 
-    /** @param array<string,mixed> $data */
+    /**
+     * @param  array<string,mixed>  $data
+     */
     private function validateWindow(array $data, bool $nullable = false): void
     {
         $start = $data['business_hours_start'] ?? null;
@@ -121,7 +141,9 @@ final class FollowUpSettingsService
         }
     }
 
-    /** @param array<string,mixed> $data */
+    /**
+     * @param  array<string,mixed>  $data
+     */
     private function validateTightening(array $data, FollowUpSetting $institution): void
     {
         $errors = [];
@@ -155,6 +177,44 @@ final class FollowUpSettingsService
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
+    }
+
+    /**
+     * @param  array<string,mixed>  $data
+     * @param  array<string,mixed>|null  $institution
+     */
+    private function validateCadence(array $data, ?array $institution = null): void
+    {
+        $c = $data['whatsapp_cadence'] ?? null;
+        if ($c === null) {
+            return;
+        }
+        if ($c['minimum'] > $c['second'] - $c['first'] || $c['minimum'] > $c['third'] - $c['second'] || $c['third'] * 60 + $c['margin'] >= 1440) {
+            throw ValidationException::withMessages(['whatsapp_cadence' => 'Separa los contactos por el mínimo absoluto y conserva el margen antes de 24 horas.']);
+        }
+        if ($institution !== null) {
+            $effective = WhatsAppCadence::effective($institution, $c);
+            foreach ($c as $key => $value) {
+                if ($effective[$key] !== $value) {
+                    throw ValidationException::withMessages(['whatsapp_cadence' => 'El asesor no puede relajar la cadencia institucional.']);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param  array<string,mixed>  $data
+     * @return array<string,mixed>
+     */
+    private function normalizeCadence(array $data): array
+    {
+        if (isset($data['whatsapp_cadence'])) {
+            foreach ($data['whatsapp_cadence'] as $key => $value) {
+                $data['whatsapp_cadence'][$key] = $key === 'enabled' ? (bool) $value : (int) $value;
+            }
+        }
+
+        return $data;
     }
 
     private function authorize(User $actor): void

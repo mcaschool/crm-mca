@@ -26,6 +26,12 @@ class Settings extends Component
         session()->flash('followup_saved', 'Se detuvieron los nuevos envíos de la institución. Los ya despachados conservan su conciliación.');
     }
 
+    /** @var array<string,mixed> */
+    public array $cadence = \Modules\FollowUp\Services\WhatsAppCadence::DEFAULTS;
+
+    /** @var array<string,mixed> */
+    public array $advisorCadence = \Modules\FollowUp\Services\WhatsAppCadence::DEFAULTS;
+
     public bool $enabled = false;
 
     public string $mode = 'manual';
@@ -84,6 +90,7 @@ class Settings extends Component
     {
         abort_unless(auth()->user()?->canManageSettings(), 403);
         $setting = $resolver->institution((int) auth()->user()->institution_id);
+        $this->cadence = array_replace(\Modules\FollowUp\Services\WhatsAppCadence::DEFAULTS, $setting->whatsapp_cadence ?? []);
         $this->enabled = (bool) $setting->enabled;
         $this->mode = $setting->mode;
         $this->firstFollowUpHours = (int) $setting->first_follow_up_hours;
@@ -103,7 +110,7 @@ class Settings extends Component
     public function saveInstitution(FollowUpSettingsService $service): void
     {
         $service->saveInstitution(auth()->user(), [
-            'enabled' => $this->enabled, 'mode' => $this->mode, 'first_follow_up_hours' => $this->firstFollowUpHours,
+            'whatsapp_cadence' => $this->cadence, 'enabled' => $this->enabled, 'mode' => $this->mode, 'first_follow_up_hours' => $this->firstFollowUpHours,
             'minimum_interval_hours' => $this->minimumIntervalHours, 'maximum_attempts' => $this->maximumAttempts,
             'allowed_days' => array_map('intval', $this->allowedDays), 'business_hours_start' => $this->businessHoursStart,
             'business_hours_end' => $this->businessHoursEnd, 'timezone' => $this->timezone,
@@ -122,6 +129,7 @@ class Settings extends Component
         $setting = ctype_digit($this->botId) ? FollowUpAdvisorSetting::query()->where('bot_id', (int) $this->botId)->first() : null;
         $institutionChannels = app(FollowUpSettingsResolver::class)->institution((int) auth()->user()->institution_id)->allowed_channels;
         $inheritedChannels = array_intersect($institutionChannels, $setting->allowed_channels ?? $institutionChannels);
+        $this->advisorCadence = array_replace(\Modules\FollowUp\Services\WhatsAppCadence::DEFAULTS, $setting->whatsapp_cadence ?? app(FollowUpSettingsResolver::class)->institution((int) auth()->user()->institution_id)->whatsapp_cadence ?? []);
         $this->advisorMode = $setting?->mode;
         $this->advisorChannelIds = $setting->allowed_channel_ids ?? \Modules\Social\Models\SocialChannel::query()
             ->where('advisor_bot_id', (int) $this->botId)->where('provider', 'whatsapp')->get()
@@ -160,7 +168,7 @@ class Settings extends Component
         abort_unless(ctype_digit($this->botId), 422);
         $bot = Bot::query()->findOrFail((int) $this->botId);
         $service->saveAdvisor(auth()->user(), $bot, [
-            'enabled' => $this->advisorEnabled, 'mode' => $this->advisorMode ?: null,
+            'whatsapp_cadence' => $this->advisorCadence, 'enabled' => $this->advisorEnabled, 'mode' => $this->advisorMode ?: null,
             'allowed_channel_ids' => array_map('intval', $this->advisorChannelIds), 'first_follow_up_hours' => $this->advisorFirstHours,
             'minimum_interval_hours' => $this->advisorMinimumHours, 'maximum_attempts' => $this->advisorMaximumAttempts,
             'allowed_days' => $this->advisorAllowedDays === [] ? null : array_map('intval', $this->advisorAllowedDays),

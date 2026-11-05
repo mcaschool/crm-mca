@@ -24,6 +24,18 @@ final class Presentation
     public static function label(?string $value): string
     {
         return match ($value) {
+            'cadence_reservation_required' => 'Se requiere una propuesta nueva vinculada a la cadencia vigente',
+            'cadence_window_unknown' => 'No se puede verificar la ventana del prospecto',
+            'cadence_window_closing' => 'Ventana cerrada o dentro del margen de seguridad',
+            'cadence_not_due' => 'Aún no corresponde un seguimiento de la cadencia',
+            'cadence_anchor_changed' => 'El prospecto respondió; revisar el nuevo contexto',
+            'cadence_slot_missed' => 'El momento previsto ya pasó; no se recuperan envíos atrasados',
+            'cadence_slot_used' => 'Este momento ya se evaluó o reservó',
+            'cadence_maximum_reached' => 'Máximo de seguimientos de la ventana alcanzado',
+            'cadence_minimum_interval' => 'Esperando la separación mínima entre contactos',
+            'recipient_attempt_limit' => 'Límite acumulado del prospecto alcanzado',
+            'recipient_execution_unresolved' => 'Hay un envío pendiente de conciliación',
+            'whatsapp_template_required' => 'Se requiere una plantilla aprobada fuera de la ventana segura',
             'advisor_channel_changed' => 'El canal ya no está asignado a este asesor',
             'channel_not_selected' => 'Canal no seleccionado para seguimiento',
             'advisor_inactive' => 'Asesor inactivo',

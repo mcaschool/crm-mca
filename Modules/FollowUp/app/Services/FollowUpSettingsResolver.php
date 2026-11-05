@@ -64,6 +64,7 @@ final class FollowUpSettingsResolver
             policyVersion: $institution->policy_version,
             eligibilityVersion: $institution->lock_version + $advisor->lock_version,
             allowedChannelIds: $advisor->allowed_channel_ids,
+            cadence: WhatsAppCadence::effective($institution->whatsapp_cadence, $advisor->whatsapp_cadence),
         );
     }
 

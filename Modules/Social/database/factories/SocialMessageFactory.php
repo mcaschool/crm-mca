@@ -28,6 +28,8 @@ class SocialMessageFactory extends Factory
             'sender_type' => 'contact',
             'sent_by' => null,
             'provider_timestamp' => now(),
+            // Synthetic provider evidence; absent metadata deliberately tests legacy uncertainty.
+            'ai_meta' => ['provider_timestamp_verified' => true],
         ];
     }
 }
