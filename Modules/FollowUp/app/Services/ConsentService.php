@@ -67,6 +67,7 @@ final class ConsentService
                 'policy_version' => $policyVersion, 'occurred_at' => now(),
             ]);
             $this->invalidator->forSubject($subjectKey, $channel, $purpose, 'consent_changed');
+            event(new \Modules\FollowUp\Events\CommercialSyncRequested((int) $actor->institution_id, $contactId !== null ? 'contact' : 'social', $contactId ?? (int) $conversationId));
             $this->events->record('consent.changed', reason: 'consent_changed', safeData: ['consent_id' => (int) $consent->id, 'state' => $state, 'channel' => $channel, 'purpose' => $purpose, 'lock_version' => $consent->lock_version]);
             $this->audit->log('follow_up.consent_changed', $consent, ['from' => $from, 'to' => $state, 'channel' => $channel, 'purpose' => $purpose, 'has_evidence' => trim((string) $evidence) !== '']);
 

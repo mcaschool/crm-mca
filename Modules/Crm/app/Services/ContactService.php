@@ -113,6 +113,7 @@ class ContactService
         }
 
         $contact->save();
+        event(new \Modules\Crm\Events\CommercialRecordChanged((int) $contact->institution_id, 'contact', (int) $contact->id));
 
         return $contact;
     }

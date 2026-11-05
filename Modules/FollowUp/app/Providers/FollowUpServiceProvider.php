@@ -26,6 +26,7 @@ class FollowUpServiceProvider extends ModuleServiceProvider
         MaintainActionsCommand::class,
         \Modules\FollowUp\Console\DispatchActionsCommand::class,
         \Modules\FollowUp\Console\StopExecutionCommand::class,
+        \Modules\FollowUp\Console\SyncCommercialCommand::class,
     ];
 
     protected array $providers = [

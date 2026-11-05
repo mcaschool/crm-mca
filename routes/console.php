@@ -81,3 +81,5 @@ Schedule::command('followup:maintain --all-institutions')
 
 // Disabled by default; dedicated queue keeps proactive work away from reactive replies.
 Schedule::command('followup:dispatch --all-institutions')->everyMinute()->withoutOverlapping(5);
+
+Schedule::command('followup:commercial-sync --all-institutions')->everyFiveMinutes()->withoutOverlapping(10);

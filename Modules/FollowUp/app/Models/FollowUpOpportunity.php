@@ -41,6 +41,19 @@ use Modules\Social\Models\SocialMessage;
  * @property \Carbon\CarbonInterface|null $next_evaluation_at
  * @property \Carbon\CarbonInterface|null $cancelled_at
  * @property string|null $cancellation_reason
+ * @property int|null $commercial_owner_id
+ * @property int|null $commercial_activity_id
+ * @property int|null $commercial_reviewed_message_id
+ * @property int|null $commercial_program_id
+ * @property int|null $crm_conversation_id
+ * @property int $commercial_version
+ * @property bool $commercial_hold
+ * @property string|null $commercial_link_source
+ * @property string|null $commercial_fingerprint
+ * @property string|null $commercial_close_reason
+ * @property array<string,mixed>|null $commercial_recommendation
+ * @property array<string,mixed>|null $commercial_result
+ * @property \Carbon\CarbonInterface|null $commercial_updated_at
  */
 class FollowUpOpportunity extends Model
 {
@@ -49,7 +62,9 @@ class FollowUpOpportunity extends Model
     /** @use HasFactory<FollowUpOpportunityFactory> */
     use HasFactory;
 
-    public const STATUSES = ['open', 'cancelled', 'suppressed'];
+    public const STATUSES = ['open', 'cancelled', 'suppressed', 'paused', 'closed'];
+
+    protected $hidden = ['commercial_link_evidence'];
 
     public const PRIORITIES = ['low', 'medium', 'high'];
 
@@ -65,6 +80,10 @@ class FollowUpOpportunity extends Model
     protected function casts(): array
     {
         return [
+            'commercial_version' => 'integer', 'commercial_hold' => 'boolean',
+            'commercial_recommendation' => 'array', 'commercial_result' => 'array',
+            'commercial_updated_at' => 'datetime', 'commercial_linked_at' => 'datetime',
+            'commercial_link_evidence' => 'encrypted',
             'reason_codes' => 'array',
             'context_snapshot' => 'array',
             'score' => 'integer',

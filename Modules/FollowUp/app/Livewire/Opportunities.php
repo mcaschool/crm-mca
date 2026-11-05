@@ -59,6 +59,48 @@ class Opportunities extends Component
 
     public int $draftVersion = 0;
 
+    public string $commercialContact = '';
+
+    public string $commercialLead = '';
+
+    public string $commercialConversation = '';
+
+    public string $commercialEvidence = '';
+
+    public string $commercialOwner = '';
+
+    public string $commercialKind = 'task';
+
+    public string $commercialStarts = '';
+
+    public function evaluateCommercial(\Modules\FollowUp\Services\FollowUpCommercialCoordinator $service): void
+    {
+        $service->sync((int) $this->selected()->id);
+    }
+
+    public function linkCommercial(int $version, \Modules\FollowUp\Services\FollowUpCommercialCoordinator $service): void
+    {
+        $this->validate(['commercialContact' => 'required|integer|min:1', 'commercialLead' => 'nullable|integer|min:1', 'commercialConversation' => 'nullable|integer|min:1', 'commercialEvidence' => 'required|string|max:500']);
+        $service->link(auth()->user(), (int) $this->selected()->id, $version, (int) $this->commercialContact, $this->commercialLead === '' ? null : (int) $this->commercialLead, $this->commercialConversation === '' ? null : (int) $this->commercialConversation, $this->commercialEvidence);
+        $this->reset('commercialEvidence');
+    }
+
+    public function createCommercialTask(int $version, \Modules\FollowUp\Services\FollowUpCommercialCoordinator $service): void
+    {
+        $this->validate(['commercialOwner' => 'required|integer|min:1', 'commercialStarts' => 'required|date']);
+        try {
+            $service->createTask(auth()->user(), (int) $this->selected()->id, $version, (int) $this->commercialOwner, $this->commercialKind, $this->commercialStarts);
+        } catch (\Modules\Crm\Services\Agenda\ScheduleConflictException $exception) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['commercialStarts' => implode(' ', $exception->check->messages())]);
+        }
+        session()->flash('followup_action', __('Tarea interna registrada en Agenda, sin comunicaciones.'));
+    }
+
+    public function holdCommercial(int $version, bool $hold, \Modules\FollowUp\Services\FollowUpCommercialCoordinator $service): void
+    {
+        $service->setHold(auth()->user(), (int) $this->selected()->id, $version, $hold);
+    }
+
     public function approveExecution(int $id, int $version, string $contentHash, \Modules\FollowUp\Services\FollowUpExecutor $executor): void
     {
         $executor->approve(auth()->user(), $id, $version, expectedContentHash: $contentHash);
@@ -219,6 +261,8 @@ class Opportunities extends Component
             'summary' => $summary,
             'bots' => Bot::query()->whereIn('id', $botIds)->orderBy('assistant_name')->get(['id', 'assistant_name', 'name']),
             'selected' => $selected,
+            'commercialActivities' => $selected ? \Modules\Crm\Models\Activity::query()->where(fn ($q) => $q->where('idempotency_key', 'like', 'followup:'.$selected->id.':%')->orWhere('id', $selected->commercial_activity_id))->latest()->get()->filter(fn ($activity) => auth()->user()->can('view', $activity)) : collect(),
+            'commercialOwners' => \App\Models\User::query()->where('institution_id', auth()->user()->institution_id)->get()->filter(fn ($user) => $user->isActive() && $user->canWorkCrm() && ! $user->crmReadOnly()),
             'actions' => $actions,
             'draftEvents' => $selected ? \Modules\FollowUp\Models\FollowUpEvent::query()->where('follow_up_opportunity_id', $selected->id)->latest('id')->limit(50)->get() : collect(),
             'consents' => $selected ? CommunicationConsent::query()->where($selected->contact_id ? 'contact_id' : 'social_conversation_id', $selected->contact_id ?: $selected->social_conversation_id)->latest()->get() : collect(),

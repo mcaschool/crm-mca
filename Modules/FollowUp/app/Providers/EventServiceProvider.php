@@ -16,9 +16,13 @@ class EventServiceProvider extends ServiceProvider
     protected $listen = [
         SocialMessageStored::class => [
             UpdateOpportunityFromSocialMessage::class,
+            \Modules\FollowUp\Listeners\SyncCommercialContext::class,
         ],
         SocialConversationStateChanged::class => [
             InvalidateActionsFromConversationState::class,
+            \Modules\FollowUp\Listeners\SyncCommercialContext::class,
         ],
+        \Modules\Crm\Events\CommercialRecordChanged::class => [\Modules\FollowUp\Listeners\SyncCommercialContext::class],
+        \Modules\FollowUp\Events\CommercialSyncRequested::class => [\Modules\FollowUp\Listeners\SyncCommercialContext::class],
     ];
 }

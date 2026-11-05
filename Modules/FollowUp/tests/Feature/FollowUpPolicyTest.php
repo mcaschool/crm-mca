@@ -52,7 +52,10 @@ function stageTwoFixture(string $provider = 'whatsapp'): array
         $conversation = SocialConversation::factory()->create(['social_channel_id' => $channel->id, 'provider' => $provider, 'automation_state' => 'bot', 'assigned_to' => null, 'status' => 'open', 'last_message_at' => now()->subHours(26)]);
         $inbound = SocialMessage::factory()->create(['social_conversation_id' => $conversation->id, 'direction' => 'inbound', 'sender_type' => 'contact', 'provider_timestamp' => now()->subHours(30), 'created_at' => now()->subHours(30)]);
         $outbound = SocialMessage::factory()->create(['social_conversation_id' => $conversation->id, 'direction' => 'outbound', 'sender_type' => 'bot', 'provider_timestamp' => now()->subHours(26), 'created_at' => now()->subHours(26)]);
-        $contact = Contact::factory()->create();
+        $contact = Contact::factory()->phoneOnly('+57 300 111 2233')->create();
+        if ($provider === 'whatsapp') {
+            $conversation->update(['contact_external_id' => '573001112233']);
+        }
         $opportunity = FollowUpOpportunity::factory()->create([
             'bot_id' => $bot->id, 'social_channel_id' => $channel->id, 'social_conversation_id' => $conversation->id,
             'contact_id' => $contact->id, 'source_last_message_id' => $outbound->id, 'provider' => $provider,

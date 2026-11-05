@@ -49,6 +49,7 @@ class LeadService
         if ($current !== null && $current->updated_at->greaterThan(now()->subDays($reopenDays))) {
             $this->applyAttrs($current, $attrs);
             $current->save();
+            event(new \Modules\Crm\Events\CommercialRecordChanged((int) $current->institution_id, 'lead', (int) $current->id));
 
             return $current;
         }
@@ -60,6 +61,8 @@ class LeadService
         $lead->bot_id = (int) ($attrs['bot_id'] ?? throw new InvalidArgumentException('bot_id es requerido para crear un lead.'));
         $this->applyAttrs($lead, $attrs);
         $lead->save();
+
+        event(new \Modules\Crm\Events\CommercialRecordChanged((int) $lead->institution_id, 'lead', (int) $lead->id));
 
         return $lead;
     }
@@ -91,6 +94,7 @@ class LeadService
 
             $fresh->status = $status;
             $fresh->save();
+            event(new \Modules\Crm\Events\CommercialRecordChanged((int) $fresh->institution_id, 'lead', (int) $fresh->id));
             $this->events->record('lead_status_changed', [
                 'contact_id' => $fresh->contact_id,
                 'bot_id' => $fresh->bot_id,
@@ -110,6 +114,7 @@ class LeadService
     {
         $lead->interest_level = $level;
         $lead->save();
+        event(new \Modules\Crm\Events\CommercialRecordChanged((int) $lead->institution_id, 'lead', (int) $lead->id));
 
         return $lead;
     }
@@ -159,6 +164,7 @@ class LeadService
                 'by_dept' => $byDept,
             ], fn ($v) => $v !== null),
         ]);
+        event(new \Modules\Crm\Events\CommercialRecordChanged((int) $lead->institution_id, 'lead', (int) $lead->id));
 
         return $lead;
     }

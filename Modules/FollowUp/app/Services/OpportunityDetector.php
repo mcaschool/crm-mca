@@ -99,7 +99,8 @@ final class OpportunityDetector
 
             $link = ConversationContactLink::resolve($conversation);
             $contact = $link['contact'];
-            $lead = $contact === null ? null : Lead::query()->where('contact_id', $contact->id)->latest('updated_at')->first();
+            $candidates = $contact === null ? collect() : Lead::query()->where('contact_id', $contact->id)->limit(2)->get();
+            $lead = $candidates->count() === 1 ? $candidates->first() : null;
             $classification = $this->classifier->classify($messages, $contact, $lead);
             $opportunity = FollowUpOpportunity::query()
                 ->where('social_conversation_id', $conversation->id)
@@ -107,6 +108,14 @@ final class OpportunityDetector
                 ->first();
             $created = $opportunity === null;
             $opportunity ??= new FollowUpOpportunity;
+            if ($opportunity->commercial_hold) {
+                return 'skipped';
+            }
+            if ($opportunity->commercial_link_source === 'manual') {
+                $contact = $opportunity->contact;
+                $lead = $opportunity->lead;
+                $classification = $this->classifier->classify($messages, $contact, $lead);
+            }
 
             $newCycle = $created || ($opportunity->status !== 'open' && (int) $opportunity->source_last_message_id !== (int) $latest->id);
             if ($newCycle && ! $created) {
@@ -190,9 +199,9 @@ final class OpportunityDetector
             $opportunity->last_inbound_at = $this->messageTime($message);
             $opportunity->last_evaluated_at = now();
             $opportunity->next_evaluation_at = null;
-            $opportunity->status = 'cancelled';
+            $opportunity->status = $opportunity->commercial_hold ? $opportunity->status : 'cancelled';
             $opportunity->cancelled_at = now();
-            $opportunity->cancellation_reason = 'prospect_replied';
+            $opportunity->cancellation_reason = $opportunity->commercial_close_reason ?? 'prospect_replied';
             $opportunity->reason_codes = array_values(array_unique([
                 ...((array) $opportunity->reason_codes),
                 'prospect_replied',

@@ -50,7 +50,7 @@ class ActivityService
      * @param  array<string,mixed>  $data  title, type, medium, starts_at, ends_at, timezone, assigned_to_user_id,
      *                                     lead_id?, contact_id?, priority?, description?, location?, reminders?, idempotency_key?
      */
-    public function create(array $data, User $actor, bool $confirmException = false, ?string $exceptionReason = null): Activity
+    public function create(array $data, User $actor, bool $confirmException = false, ?string $exceptionReason = null, bool $notifyAssignment = true): Activity
     {
         $assignee = $this->guardAssignee($actor, (int) $data['assigned_to_user_id']);
         [$leadId, $contactId] = $this->resolveLinks($data['lead_id'] ?? null, $data['contact_id'] ?? null);
@@ -113,7 +113,7 @@ class ActivityService
 
         if ($created) {
             $this->recordEvent(EventType::ActivityScheduled, $activity);
-            if ($assignee->id !== $actor->id) {
+            if ($notifyAssignment && $assignee->id !== $actor->id) {
                 $assignee->notify(AgendaNotification::for('assigned', $activity));
                 $this->mailer->toAdvisor($activity, $assignee, 'assigned');
             }
@@ -220,6 +220,7 @@ class ActivityService
             $this->notifyGuests($fresh, 'update');
         }
         $activity->setRawAttributes($fresh->getAttributes(), true);
+        event(new \Modules\Crm\Events\CommercialRecordChanged((int) $activity->institution_id, 'activity', (int) $activity->id));
 
         return $activity;
     }
@@ -248,6 +249,7 @@ class ActivityService
     {
         $activity->outcome = $this->nullable($outcome);
         $activity->save();
+        event(new \Modules\Crm\Events\CommercialRecordChanged((int) $activity->institution_id, 'activity', (int) $activity->id));
 
         return $activity;
     }
@@ -637,6 +639,7 @@ class ActivityService
     /** @param  array<string,mixed>  $extra */
     private function recordEvent(EventType $type, Activity $activity, array $extra = []): void
     {
+        event(new \Modules\Crm\Events\CommercialRecordChanged((int) $activity->institution_id, 'activity', (int) $activity->id));
         $contactId = $activity->contact_id ?? $activity->lead?->contact_id;
         if ($contactId === null) {
             return;

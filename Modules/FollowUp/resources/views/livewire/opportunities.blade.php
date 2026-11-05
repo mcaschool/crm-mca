@@ -1,11 +1,11 @@
 @php
     $activeFilters = collect([$status, $priority, $provider, $bot])->filter(fn ($value) => $value !== '')->count();
-    $statusLabels = ['open' => __('Abierta'), 'cancelled' => __('Cancelada'), 'suppressed' => __('Excluida')];
+    $statusLabels = ['open' => __('Abierta'), 'cancelled' => __('Cancelada'), 'suppressed' => __('Excluida'), 'paused' => __('Pausada'), 'closed' => __('Cerrada')];
     $priorityLabels = ['high' => __('Alta'), 'medium' => __('Media'), 'low' => __('Baja')];
     $priorityTones = ['high' => 'danger', 'medium' => 'warning', 'low' => 'neutral'];
 @endphp
 <div class="mca-page">
-    <x-ui.page-header :title="__('Seguimiento inteligente')" :count="$opportunities->total()" :subtitle="__('Decisiones deterministas y acciones locales. Este módulo no genera ni envía mensajes.')" />
+    <x-ui.page-header :title="__('Seguimiento inteligente')" :count="$opportunities->total()" :subtitle="__('Oportunidades, borradores y continuidad comercial. Los envíos requieren autorización y activación independientes.')" />
     <p><a class="ui-link" href="{{ route('followup.settings') }}">{{ __('Configurar políticas institucionales y por asesor') }}</a></p>
     @if (session('followup_action')) <div class="ui-card" role="status">{{ session('followup_action') }}</div> @endif
 
@@ -62,6 +62,44 @@
     </div>
 
     @if ($selected)
+        <section class="ui-card" data-testid="commercial-context">
+            <h2>{{ __('Continuidad comercial') }}</h2>
+            <p>{{ __('Estado') }}: {{ $statusLabels[$selected->status] ?? $selected->status }} · {{ $selected->commercial_close_reason }}</p>
+            @if ($selected->contact) @can('view', $selected->contact)<a class="ui-link" href="{{ route('crm.contacts.show', $selected->contact_id) }}">{{ __('Abrir contacto') }} #{{ $selected->contact_id }}</a>@endcan @endif
+            @if ($selected->lead) @can('view', $selected->lead)<a class="ui-link" href="{{ route('crm.leads.show', $selected->lead_id) }}">{{ __('Abrir Lead') }} #{{ $selected->lead_id }} · {{ $selected->lead->status->value }}</a>@endcan @endif
+            <p>{{ __('Responsable') }}: {{ $commercialOwners->firstWhere('id', $selected->commercial_owner_id)?->name ?? __('Pendiente de asignación') }}</p>
+            <p>{{ __('Recomendación') }}: {{ $selected->commercial_recommendation['action'] ?? '—' }} · {{ $selected->commercial_recommendation['stage'] ?? 'keep' }} · {{ $selected->commercial_recommendation['reason'] ?? '' }}</p>
+            <p>{{ __('Resultado') }}: {{ $selected->commercial_result['kind'] ?? '—' }} · {{ $selected->commercial_result['code'] ?? '' }}</p>
+            <p>{{ __('Actualización comercial') }}: {{ $selected->commercial_updated_at?->userTz()->toDateTimeString() }}</p>
+            <p>{{ __('Origen de la asociación') }}: {{ $selected->commercial_link_source ?? __('Pendiente') }} · {{ $selected->commercial_linked_at?->userTz()->toDateTimeString() }}</p>
+            <x-ui.button wire:click="evaluateCommercial">{{ __('Actualizar contexto comercial') }}</x-ui.button>
+            @if (!$selected->commercial_close_reason)
+                <x-ui.button wire:click="holdCommercial({{ $selected->commercial_version }}, {{ $selected->commercial_hold ? 'false' : 'true' }})">{{ $selected->commercial_hold ? __('Reanudar tras revisión humana') : __('Pausar seguimiento') }}</x-ui.button>
+            @endif
+            @foreach ($commercialActivities as $activity)
+                <p><a class="ui-link" href="{{ route('crm.agenda.show', $activity->id) }}">{{ $activity->title }}</a> · {{ $activity->status->value }} · {{ $activity->starts_at?->userTz()->toDateTimeString() }}</p>
+            @endforeach
+            <details><summary>{{ __('Asociar un contacto verificado') }}</summary>
+                <form wire:submit="linkCommercial({{ $selected->commercial_version }})">
+                    <label>{{ __('ID del contacto') }}<input class="ui-input" type="number" min="1" wire:model="commercialContact" required></label>
+                    <label>{{ __('ID del Lead (opcional)') }}<input class="ui-input" type="number" min="1" wire:model="commercialLead"></label>
+                    <label>{{ __('ID de conversación CRM (opcional)') }}<input class="ui-input" type="number" min="1" wire:model="commercialConversation"></label>
+                    <label>{{ __('Evidencia verificable de la relación') }}<textarea class="ui-input" wire:model="commercialEvidence" maxlength="500" required></textarea></label>
+                    <x-ui.button type="submit">{{ __('Guardar asociación auditada') }}</x-ui.button>
+                </form>
+            </details>
+            @if (!$selected->commercial_close_reason)
+                <form wire:submit="createCommercialTask({{ $selected->commercial_version }})">
+                    <h3>{{ __('Crear tarea interna en Agenda') }}</h3>
+                    <label>{{ __('Responsable') }}<select class="ui-input" wire:model="commercialOwner" required><option value="">{{ __('Seleccionar') }}</option>@foreach ($commercialOwners as $owner)<option value="{{ $owner->id }}">{{ $owner->name }}</option>@endforeach</select></label>
+                    <label>{{ __('Acción') }}<select class="ui-input" wire:model="commercialKind"><option value="task">{{ __('Seguimiento') }}</option><option value="admissions_task">{{ __('Revisar inscripción') }}</option><option value="call_proposal">{{ __('Coordinar llamada') }}</option><option value="meeting_proposal">{{ __('Proponer reunión') }}</option><option value="human_review">{{ __('Revisión comercial') }}</option></select></label>
+                    <label>{{ __('Fecha y hora (UTC)') }}<input class="ui-input" type="datetime-local" wire:model="commercialStarts" required></label>
+                    <p class="t-3">{{ __('Crea una tarea interna. No confirma citas, envía invitaciones ni modifica el Lead.') }}</p>
+                    <x-ui.button type="submit">{{ __('Registrar tarea') }}</x-ui.button>
+                </form>
+            @endif
+            @error('*') <p role="alert">{{ $message }}</p> @enderror
+        </section>
         <section class="ui-card" wire:poll.10s>
             <h2>{{ __('Borradores de seguimiento') }}</h2>
             <x-ui.button wire:click="stopExecution">{{ __('Detener nuevos seguimientos de la institución') }}</x-ui.button>
