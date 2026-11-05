@@ -120,6 +120,27 @@ final class FollowUpActionPlanner
         return $this->transition($actor, $actionId, FollowUpAction::ACTIVE_STATUSES, 'cancelled', 'cancelled_by_admin');
     }
 
+    public function reschedule(User $actor, int $id, int $version, CarbonInterface $date): void
+    {
+        abort_unless($actor->isActive() && $actor->canManageSettings() && (int) $actor->institution_id === app(\Modules\Core\Tenancy\CurrentInstitution::class)->idOrFail(), 403);
+        $candidate = FollowUpAction::query()->findOrFail($id);
+        DB::transaction(function () use ($actor, $candidate, $id, $version, $date): void {
+            $opportunity = FollowUpOpportunity::query()->lockForUpdate()->findOrFail($candidate->follow_up_opportunity_id);
+            $action = FollowUpAction::query()->lockForUpdate()->findOrFail($id);
+            if ($action->eligibility_version !== $version || ! in_array($action->status, ['pending_approval', 'approved', 'scheduled', 'paused'], true) || $action->dispatch_at !== null || $date->isPast()) {
+                throw ValidationException::withMessages(['postponeAt' => 'La acción cambió o ya no permite posponer. Actualiza y revisa su estado.']);
+            }
+            $decision = $this->policy->evaluate(new PolicyRequest($opportunity, 'schedule', $action->channel, $action->purpose, $date, $action->expires_at, $action->social_whatsapp_template_id, $actor, $action));
+            if (! $decision->allows()) {
+                throw ValidationException::withMessages(['postponeAt' => $decision->explanation]);
+            }
+            app(FollowUpDraftService::class)->invalidate($action, 'schedule_changed');
+            $action->refresh()->forceFill(['scheduled_at' => $date, 'status' => 'pending_approval', 'eligibility_version' => $version + 1, 'approved_at' => null, 'approved_by_user_id' => null, 'approved_draft_version' => null, 'approved_content_hash' => null, 'approval_expires_at' => null, 'block_reason' => null, 'policy_status' => $decision->status, 'policy_reason_code' => $decision->reasonCode])->save();
+            $this->events->record('action.rescheduled', $opportunity, $action, 'schedule_changed');
+            $this->audit->log('follow_up.action_rescheduled', $action, ['scheduled_at' => $date->toIso8601String()]);
+        }, 3);
+    }
+
     /** @param array<int,string> $from */
     private function transition(User $actor, int $actionId, array $from, string $to, string $reason): FollowUpAction
     {

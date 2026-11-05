@@ -15,6 +15,17 @@ use Modules\Institutions\Models\Bot;
 #[Layout('layouts.app')]
 class Settings extends Component
 {
+    public function boot(): void
+    {
+        abort_unless(auth()->user()?->isActive() && auth()->user()->canManageSettings(), 403);
+    }
+
+    public function stopExecution(\Modules\FollowUp\Services\ExecutionSwitches $switches): void
+    {
+        $switches->set(auth()->user(), 'institution', (int) auth()->user()->institution_id, false);
+        session()->flash('followup_saved', 'Se detuvieron los nuevos envíos de la institución. Los ya despachados conservan su conciliación.');
+    }
+
     public bool $enabled = false;
 
     public string $mode = 'manual';
@@ -138,6 +149,11 @@ class Settings extends Component
 
     public function render(): View
     {
-        return view('followup::livewire.settings', ['bots' => Bot::query()->orderBy('assistant_name')->get(['id', 'assistant_name', 'name'])]);
+        return view('followup::livewire.settings', [
+            'bots' => Bot::query()->orderBy('assistant_name')->get(['id', 'assistant_name', 'name']),
+            'switches' => \Illuminate\Support\Facades\DB::table('follow_up_execution_switches')->where(fn ($q) => $q->where('institution_id', auth()->user()->institution_id)->orWhere(fn ($q) => $q->where('scope', 'global')->where('subject_id', 0)))->orderBy('scope')->get(['scope', 'subject_id', 'enabled', 'verified_until', 'daily_limit']),
+            'queuedCount' => \Modules\FollowUp\Models\FollowUpAction::query()->whereIn('draft_state', ['queued', 'generating'])->count(),
+            'errorCount' => \Modules\FollowUp\Models\FollowUpAction::query()->where(fn ($q) => $q->where('draft_state', 'error')->orWhereIn('status', ['failed', 'delivery_unknown']))->count(),
+        ]);
     }
 }

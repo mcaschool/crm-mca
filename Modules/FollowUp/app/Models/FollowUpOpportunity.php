@@ -122,6 +122,18 @@ class FollowUpOpportunity extends Model
         return $this->belongsTo(Contact::class);
     }
 
+    /** @return BelongsTo<\App\Models\User, $this> */
+    public function commercialOwner(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'commercial_owner_id')->where('users.institution_id', app(\Modules\Core\Tenancy\CurrentInstitution::class)->idOrFail());
+    }
+
+    /** @return BelongsTo<\Modules\Crm\Models\Activity, $this> */
+    public function commercialActivity(): BelongsTo
+    {
+        return $this->belongsTo(\Modules\Crm\Models\Activity::class, 'commercial_activity_id');
+    }
+
     /** @return BelongsTo<Lead, $this> */
     public function lead(): BelongsTo
     {

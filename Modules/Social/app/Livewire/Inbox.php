@@ -30,6 +30,7 @@ class Inbox extends Component
 {
     use WithFileUploads;
 
+    #[\Livewire\Attributes\Url(as: 'conversacion')]
     public ?int $selectedId = null;
 
     // ── Búsqueda y filtros de la lista (solo consultas locales: no marcan leído ni llaman a Meta) ──
@@ -56,6 +57,9 @@ class Inbox extends Component
     public function mount(): void
     {
         abort_unless(auth()->user()?->canWorkCrm() ?? false, 403);
+        if ($this->selectedId !== null) {
+            SocialConversation::query()->findOrFail($this->selectedId);
+        }
     }
 
     public function clearFilters(): void

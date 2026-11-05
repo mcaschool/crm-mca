@@ -41,6 +41,7 @@ use Modules\Core\Tenancy\Concerns\BelongsToInstitution;
  * @property string|null $draft_reservation
  * @property \Carbon\CarbonInterface|null $draft_reserved_at
  * @property \Carbon\CarbonInterface|null $draft_generated_at
+ * @property \Carbon\CarbonInterface|null $draft_edited_at
  * @property \Carbon\CarbonInterface|null $draft_expires_at
  * @property string|null $draft_error
  * @property int|null $social_message_id

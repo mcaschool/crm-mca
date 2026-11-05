@@ -24,7 +24,7 @@ final class Breadcrumbs
         ['dashboard', 'home', 'Inicio', 'dashboard'],
         ['crm.leads.*', 'users', 'Leads', 'crm.leads.index'],
         ['crm.pipeline', 'funnel', 'Pipeline Comercial', 'crm.pipeline'],
-        ['followup.*', 'funnel', 'Seguimiento inteligente', 'followup.opportunities'],
+        ['followup.*', 'funnel', 'Seguimiento inteligente', 'followup.dashboard'],
         [['crm.contacts.*', 'crm.conversations.*'], 'contact', 'Contactos', 'crm.contacts.index'],
         ['crm.calendar-templates', 'calendar', 'Plantillas de Calendario', 'crm.calendar-templates'],
         ['crm.agenda.*', 'calendar', 'Calendario', 'crm.agenda.index'],
@@ -46,6 +46,8 @@ final class Breadcrumbs
 
     /** Páginas interiores: ruta => etiqueta (las rutas que no aparecen son el propio listado). */
     private const PAGES = [
+        'followup.opportunities' => 'Oportunidades',
+        'followup.settings' => 'Configuración',
         'crm.leads.create' => 'Nuevo lead',
         'crm.leads.show' => 'Ficha del lead',
         'crm.contacts.show' => 'Ficha del contacto',

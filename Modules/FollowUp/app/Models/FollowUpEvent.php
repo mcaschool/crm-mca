@@ -13,6 +13,12 @@ class FollowUpEvent extends Model
 
     public const UPDATED_AT = null;
 
+    /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this> */
+    public function actor(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'actor_user_id')->where('users.institution_id', app(\Modules\Core\Tenancy\CurrentInstitution::class)->idOrFail());
+    }
+
     protected $fillable = ['institution_id', 'follow_up_opportunity_id', 'follow_up_cycle_id', 'follow_up_action_id', 'actor_user_id', 'event_type', 'actor_type', 'reason_code', 'policy_status', 'policy_version', 'safe_data', 'dedupe_key', 'occurred_at'];
 
     protected function casts(): array

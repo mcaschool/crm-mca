@@ -53,7 +53,7 @@
                     <x-ui.icon name="funnel" /> {{ __('Pipeline Comercial') }}
                 </a>
                 @can('viewAny', \Modules\FollowUp\Models\FollowUpOpportunity::class)
-                    <a href="{{ route('followup.opportunities') }}" class="mca-nav-item {{ request()->routeIs('followup.*') ? 'on' : '' }}">
+                    <a href="{{ route('followup.dashboard') }}" class="mca-nav-item {{ request()->routeIs('followup.*') ? 'on' : '' }}">
                         <x-ui.icon name="funnel" /> {{ __('Seguimiento inteligente') }}
                     </a>
                 @endcan
