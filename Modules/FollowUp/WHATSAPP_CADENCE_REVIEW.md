@@ -195,6 +195,168 @@ no hubo despliegue, cambios de credenciales, migraciones operativas ni comunicac
 reales. La aceptación comercial y cualquier activación productiva requieren una
 decisión posterior del usuario.
 
+## Verificación global final previa a publicación
+
+Verificación del 5 de noviembre de 2026 sobre `cb2fa21afc92703d5526c5f67f2719c99d2ba661`.
+No se han modificado funcionalidades durante este cierre. La comprobación SQL de
+`SELECT DATABASE()` confirmó `crm_mca_test` y `APP_ENV=testing` antes de arrancar
+`vendor/bin/pest --compact --log-junit storage/logs/final-global.xml`, sin filtros.
+Se deshabilitó OPcache únicamente para los procesos PHP CLI de validación.
+
+**Resultado global satisfactorio:** 1761 pruebas aprobadas, 11202 aserciones,
+0 fallos, 0 errores y 0 omitidas. Duración de Pest: 1354,16 s (22 min 34,16 s);
+JUnit acumula 1342,365674 s de casos. JUnit contiene exactamente 1761 `testcase`,
+sin nodos `failure`, `error` o `skipped`. No se reportaron advertencias, deprecaciones
+ni pruebas arriesgadas en la salida de esta ejecución.
+
+| Área | Pruebas | Aserciones |
+|---|---:|---:|
+| Ai | 306 | 2052 |
+| Audit | 24 | 150 |
+| Catalog | 43 | 209 |
+| Chat | 22 | 105 |
+| Core | 17 | 33 |
+| Crm | 270 | 1606 |
+| FollowUp | 291 | 1217 |
+| Identity | 29 | 97 |
+| Institutions | 8 | 20 |
+| Integrations | 29 | 69 |
+| Mcp | 67 | 917 |
+| Notifications | 59 | 295 |
+| Social | 480 | 2886 |
+| Pruebas transversales `tests/` | 116 | 1546 |
+
+Incluye `WhatsAppCadenceTest` (41/120), `FollowUpWorkspaceTest` (43/207),
+`CalendarScreensTest` (9/94) y `EmailSenderTest` (8/39). Todos pasaron, incluidos
+los casos funcionales relacionados con las dos incidencias históricas de PHPStan.
+Estas cifras son subconjuntos, no ejecuciones que deban sumarse al total.
+
+Calidad comprobada en este cierre:
+
+- PHPStan/Larastan de FollowUp y los servicios compartidos modificados de Social y
+  CRM: sin errores. PHPStan global conserva dos incidencias históricas en
+  `Crm/Support/Agenda/CalendarGrid.php:112` (`foreach.emptyArray`) y
+  `Notifications/Livewire/EmailSenders/Manage.php:49` (`missingType.iterableValue`).
+  Sus blobs son idénticos al padre de la Etapa 1: respectivamente
+  `acd0ab735d1ad60e740b5542c8ae78ad1c0c0ea0` y
+  `9ec04bbb78911a14fece815381269e24bec64757`. No se añadieron ignores ni baseline.
+- Pint global en modo comprobación: 871 archivos, cuatro incidencias históricas en
+  `PreciseKnowledgeRanker.php`, `KnowledgeText.php`, `Contacts/Index.php` y
+  `McpOpsTest.php`. Sin cambios frente al padre de la Etapa 1. Se conservaron intactos.
+  Pint del alcance FollowUp/servicios compartidos: 97 archivos correctos.
+- `npm run build`: correcto, 47,28 s. La variabilidad histórica del CSS por la caché
+  Blade sigue documentada; los assets incidentales de esta ejecución se restauraron.
+- `route:list`: cuatro rutas FollowUp con autenticación, contexto institucional,
+  autorización de panel y segundo factor. Los permisos por operación se validan en
+  los componentes/servicios y pruebas, no solamente en el menú.
+- `module:list`: trece módulos habilitados, incluido FollowUp. `schedule:list`:
+  detección, mantenimiento y sincronización comercial cada cinco minutos; despacho
+  cada minuto. Se inspeccionó el registro, sin ejecutar `schedule:run`.
+- El Centro de Comando se comprueba en la suite mediante Livewire: persistencia,
+  cadencia, selección/canales, aislamiento entre asesores, permisos e invalidación.
+  No se repitió la auditoría visual extensa: las capturas de este mismo commit se
+  documentan arriba y no hay modificaciones visuales posteriores.
+
+### Estado del remoto y alcance de publicación
+
+`git fetch origin` terminó correctamente. Rama local: `main`. `origin/main`:
+`173bbed19d8f31caae9c1122fd8387cbf4e9c2fb`. No hay commits en `HEAD..origin/main`;
+`merge-base --is-ancestor origin/main HEAD` devuelve éxito. La publicación sería
+fast-forward respecto de la referencia verificada, sujeta a que el remoto no cambie.
+
+Los once commits pendientes al comenzar el cierre, en orden, son:
+
+| Commit | Alcance |
+|---|---|
+| df81ac56907bd137a4771f4fbdef797837c92424 | Etapa 1: detección |
+| 192f3a9c527cf0c15804007ec4615ef9dbd1d238 | Etapa 2: políticas y consentimiento |
+| a9556124db355af01c6646ff7014033baae56d01 | Etapa 3: borradores cifrados |
+| 316d6731e85e64dc2b0a59ce5be1d4133eeab4f7 | Etapa 4: ejecución controlada |
+| c4a575ac80233516d62b92d815bef2ac1d2ff320 | Etapa 5: integración comercial |
+| 054bfbd09de9065d34a43dcbbe6b42fbd27c49e5 | Etapa 6: interfaz administrativa |
+| ee3973267e4e496a67b423c9e9a71a97d53bfbe9 | Etapa 7: analítica |
+| 487d1b46b1270eaac168ce0b40a25a6a5403c054 | Etapa 8: endurecimiento |
+| e928b2f3a1b4d205a64573866abf37bcac9472e9 | Cierre técnico anterior |
+| 4f8ddd07b82380cb9e31bd24f47a38c5c6b0eb5a | Centro de Comando |
+| cb2fa21afc92703d5526c5f67f2719c99d2ba661 | Cadencia WhatsApp |
+
+Este cierre añade únicamente el commit documental que contiene este apartado;
+su hash se entrega en el mensaje final y es el nuevo HEAD local. Son doce commits
+pendientes contando ese cierre. El segundo `fetch`, al finalizar la suite, confirmó
+la misma referencia remota y ausencia de divergencia.
+No se identificaron commits remotos inesperados ni cambios locales ajenos al alcance
+en esa relación. Los dos elementos no rastreados preexistentes siguen excluidos.
+
+### Condiciones para operación futura, no ejecutadas
+
+Las ocho migraciones reales pasaron nuevamente instalación desde cero, reversión
+en orden inverso y actualización incremental sobre las tablas existentes, conservando
+un contacto ficticio del CRM. Repetir `migrate --force` no añadió migraciones ni
+alteró el registro aplicado. Se inventariaron columnas, valores predeterminados,
+índices y claves foráneas de las once tablas del módulo, incluidos consentimiento,
+auditoría y analítica. Se comprobaron las restricciones únicas de idempotencia,
+reserva de cadencia, mensaje despachado y token de ejecución. No se ejecuta backfill
+temporal: campos nuevos anulables y límites conservadores preservan datos previos.
+El aislamiento institucional y los intentos manipulados se cubren en la suite global.
+
+El ensayo adicional de seguridad eliminó las tres variables `FOLLOW_UP_*_ENABLED`
+del entorno del proceso y comprobó que las tres resolvían a `false` por defecto.
+Se serializó y reejecutó un job `ExecuteFollowUp` pendiente, con una acción ficticia
+programada y configuración de ejecución ausente: quedó bloqueado por
+`execution_global_disabled`, sin crear mensajes ni realizar peticiones HTTP.
+También se probó ausencia de interruptor persistente con flag de proceso verdadero:
+denegación correcta. Sin configuración institucional/de asesor, ambos quedan
+deshabilitados en modo manual. Estado final del ensayo: 0 interruptores habilitados,
+0 acciones despachadas y 0 jobs. Ninguna variable ni credencial de archivos `.env`
+fue modificada. El ajuste del ensayo para retirar variables heredadas no cambió
+código funcional del CRM.
+
+La publicación en GitHub no activa el módulo ni autoriza un despliegue. Se mantienen
+los valores predeterminados `false` de detección, política y ejecución; institución y
+asesor deshabilitados, modo manual y cadencia deshabilitada. La configuración de
+reglas y los interruptores de ejecución son permisos distintos.
+
+La infraestructura deberá comprobarse en el hosting real antes de operar: cron único
+por minuto para `php artisan schedule:run`, colas MySQL persistentes, caché/bloqueos,
+retención de logs y supervisión de jobs fallidos. Comandos de consumidores derivados
+del código, **solo para una futura activación autorizada**:
+
+```text
+php artisan queue:work database --queue=followup-drafts --tries=1 --timeout=75 --sleep=3
+php artisan queue:work database --queue=followup-execution --tries=1 --timeout=60 --sleep=3
+```
+
+`retry_after` debe superar el timeout (90 s predeterminado). `social-advisor` no
+consume estas colas. Conservar `social:reconcile-deliveries`; los resultados desconocidos
+no se reenvían automáticamente. La analítica se reconstruye con
+`followup:analytics-reconcile --all-institutions` por decisión explícita. No se
+ejecutó ninguno de estos consumidores ni tareas operativas en este cierre. No se
+verificaron capacidades de Hostinger por SSH. Sigue vigente `DEPLOYMENT.md` de este CRM.
+
+Cloud API y Coexistence comparten protecciones. Instagram/Messenger no permiten esta
+ejecución proactiva; Email no tiene ejecutor proactivo. Se conservan los límites sobre
+evidencia temporal histórica, contactos no vinculados, aprobación y aceptación real
+del canal. No hay aprobación implícita de envíos por superar pruebas locales.
+
+### Dictamen de este cierre
+
+**APTO CON CONDICIONES para publicación controlada en GitHub.** No se detectaron
+defectos críticos o altos ni regresiones funcionales pendientes. La suite global
+final está completamente satisfactoria. Las condiciones documentadas son conservar
+explícitamente las dos incidencias estáticas y cuatro de formato históricas fuera
+del alcance, sin presentar calidad global como cero incidencias, y obtener la
+autorización expresa del usuario antes de publicar. La infraestructura real, assets
+reproducibles, aceptación comercial y activación son condiciones posteriores de
+despliegue/operación; no quedan autorizadas por este dictamen.
+
+Evidencia local de este cierre: `storage/logs/final-global.log`, `final-global.xml`,
+`final-phpstan-global.log`, `final-phpstan-scope.log`, `final-pint.log`,
+`final-pint-scope.log`, `final-build.log`, `final-routes.json`, `final-modules.log`,
+`final-scheduler.log`, `final-migrations.log`, `final-schema.json` y
+`final-safety.log`. Los scripts efímeros de ensayo bajo `storage/logs/` no forman
+parte del desarrollo ni del commit. No hubo push, PR, merge, rebase, reset, despliegue,
+SSH, cambios productivos, activación de envíos ni comunicaciones reales.
+
 ## Archivos modificados
 
 - `Modules/FollowUp/app/Console/DispatchActionsCommand.php`
