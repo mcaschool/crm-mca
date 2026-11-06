@@ -122,6 +122,69 @@ final class KnowledgeText
     }
 
     /**
+     * Texto de INTERÉS ACADÉMICO de un mensaje: cuando es un FORMULARIO (campos «etiqueta: valor»,
+     * con o sin saltos de línea), elimina las RESPUESTAS a los campos de PERFIL (config
+     * profile_field_labels: nombre, país, cargo, último nivel de estudios, contacto…) para que sus
+     * valores no compitan en la selección de línea/programa; por ejemplo, «último nivel de estudios:
+     * Maestría» no debe interpretarse como interés en la línea Maestrías. Conserva el saludo y los
+     * campos de interés académico (categoría/línea/programa). Si no hay campos de perfil, devuelve el
+     * texto sin cambios. El resultado es para la DETECCIÓN (línea/programa/términos); nunca cambia lo
+     * que ve el modelo.
+     */
+    public static function formAcademicText(string $text): string
+    {
+        $labels = array_values(array_filter(array_map(
+            fn ($l): string => self::normalize((string) $l),
+            (array) config('crm.knowledge.retrieval.profile_field_labels', [])
+        )));
+        if ($labels === [] || mb_strpos($text, ':') === false) {
+            return $text;
+        }
+
+        // Cada campo en su propia línea: se inserta un salto antes de cada pregunta («¿»/«¡») y antes
+        // de cada etiqueta de perfil (comparación sin acentos). Así vale con y sin saltos de línea.
+        $alt = implode('|', array_map([self::class, 'accentInsensitivePattern'], $labels));
+        $segmented = (string) preg_replace('/(?<!^)(?<!\n)(?=[¿¡])/u', "\n", $text);
+        $segmented = (string) preg_replace('/(?<!^)(?<!\n)(?=(?:'.$alt.')\b)/iu', "\n", $segmented);
+
+        $kept = [];
+        $removed = false;
+        foreach (preg_split('/\r\n|\r|\n/', $segmented) ?: [] as $line) {
+            $pos = mb_strpos($line, ':');
+            if ($pos !== false) {
+                $label = self::normalize(mb_substr($line, 0, $pos));
+                foreach ($labels as $needle) {
+                    if (str_contains($label, $needle)) {
+                        $removed = true;
+
+                        continue 2;   // línea de perfil: su valor no cuenta para la línea/programa
+                    }
+                }
+            }
+            $kept[] = $line;
+        }
+
+        if (! $removed) {
+            return $text;   // no había campos de perfil: no es un formulario que debamos limpiar
+        }
+        $out = trim(implode("\n", $kept));
+
+        return $out !== '' ? $out : $text;
+    }
+
+    /** Patrón regex que casa una frase normalizada ignorando acentos (para localizar etiquetas en el texto original). */
+    private static function accentInsensitivePattern(string $normalized): string
+    {
+        $map = ['a' => '[aáàä]', 'e' => '[eéèë]', 'i' => '[iíìï]', 'o' => '[oóòö]', 'u' => '[uúùü]', 'n' => '[nñ]', ' ' => '\s+'];
+        $out = '';
+        foreach (preg_split('//u', $normalized, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $ch) {
+            $out .= $map[$ch] ?? preg_quote($ch, '/');
+        }
+
+        return $out;
+    }
+
+    /**
      * Líneas de programas que el texto nombra EXPLÍCITAMENTE (config line_terms: frases sin acentos;
      * las siglas de 2 letras solo en mayúsculas).
      *

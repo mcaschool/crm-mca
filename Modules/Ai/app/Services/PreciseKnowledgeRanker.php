@@ -41,18 +41,29 @@ final class PreciseKnowledgeRanker
     {
         $cfg = (array) config('crm.knowledge.retrieval', []);
         $sections = $this->sections($sources);
-        $terms = KnowledgeText::queryTerms($question);
+
+        // INTERÉS ACADÉMICO: si el mensaje es un formulario, se descartan los campos de PERFIL (nombre,
+        // país, cargo, último nivel de estudios…) para elegir línea/programa — nunca para el modelo. El
+        // historial se limpia igual (un formulario anterior no debe arrastrar su perfil).
+        $detect = KnowledgeText::formAcademicText($question);
+        $detectHistory = array_map([KnowledgeText::class, 'formAcademicText'], $history);
+        $terms = KnowledgeText::queryTerms($detect);
 
         // Línea: la nombrada en la pregunta; si no nombra ninguna, la del tema activo.
-        ['line' => $line, 'source' => $lineSource] = $this->topic($question, $history);
+        ['line' => $line, 'source' => $lineSource] = $this->topic($detect, $detectHistory);
 
         // Programa en foco: el que nombra la pregunta o, en un seguimiento breve («requisitos»,
         // «precio», «cómo me inscribo»), el último elegido/nombrado en la conversación. Si fija el
         // foco y aún no hay línea, su línea pasa a ser la línea en curso (para el filtro).
-        $focus = $this->focusProgram($sources, $question, $history);
+        $focus = $this->focusProgram($sources, $detect, $detectHistory);
         if ($line === null && $focus !== null && $focus['category'] !== null) {
             $line = $focus['category'];
             $lineSource = 'program';
+        }
+        // El perfil (o una coincidencia temática suelta) NUNCA arrastra un programa de OTRA línea: si ya
+        // hay línea y el foco es de una línea distinta, se descarta el foco.
+        if ($line !== null && $focus !== null && $focus['category'] !== null && $focus['category'] !== $line) {
+            $focus = null;
         }
 
         $named = $this->namedPrograms($sources, $terms, $line);
@@ -90,7 +101,7 @@ final class PreciseKnowledgeRanker
         $namedBonus = (float) ($cfg['named_program_bonus'] ?? 0.6);
         $generalBonus = (float) ($cfg['general_document_bonus'] ?? 0.15);
         // Pregunta de DEFINICIÓN («qué es…», «información de…»): priman las secciones que definen.
-        $definition = KnowledgeText::asksDefinition($question);
+        $definition = KnowledgeText::asksDefinition($detect);
         $definitionBonus = (float) ($cfg['definition_bonus'] ?? 0.3);
 
         // La normalización 0..1 se mide solo sobre las secciones elegibles (las de la línea cuando se

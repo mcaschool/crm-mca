@@ -400,6 +400,17 @@ return [
             // sus datos, estas palabras no deben contar como términos de búsqueda ni fijar programa o
             // línea. Los números de teléfono (cualquier token solo de dígitos) se descartan siempre.
             'form_words' => ['full', 'name', 'country', 'whatsapp', 'number', 'email', 'gmail', 'cargo', 'nivel', 'estudios', 'categoria'],
+            // Etiquetas de los campos de PERFIL de un formulario (Lead Ad de Meta): nombre, país, cargo,
+            // último nivel de estudios, contacto… Cuando el mensaje es un formulario, las RESPUESTAS a
+            // estos campos NO deben competir con el interés académico al elegir la línea/programa (p. ej.
+            // «último nivel de estudios: Maestría» no es interés en la línea Maestrías). Se comparan contra
+            // la etiqueta (lo anterior a los dos puntos) de cada campo. Las etiquetas del interés académico
+            // (categoría/línea/programa) NO van aquí: su respuesta sí decide la línea.
+            'profile_field_labels' => [
+                'full name', 'nombre', 'apellido', 'apellidos', 'country', 'pais', 'ciudad', 'city',
+                'cargo', 'puesto', 'ocupas', 'nivel de estudios', 'edad',
+                'whatsapp', 'telefono', 'celular', 'movil', 'email', 'correo', 'gmail', 'numero', 'direccion',
+            ],
             // La línea detectada (en la pregunta o en el tema activo) ACOTA la recuperación a esa línea
             // más «General institucional». Si la línea no aporta ninguna sección por encima del umbral,
             // la recuperación se amplía SOLO a «General institucional»; NUNCA se reabren otras líneas de

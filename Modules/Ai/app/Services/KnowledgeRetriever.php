@@ -7,6 +7,7 @@ namespace Modules\Ai\Services;
 use Illuminate\Support\Str;
 use Modules\Ai\Models\KnowledgeSource;
 use Modules\Ai\Support\KnowledgeTaxonomy;
+use Modules\Ai\Support\KnowledgeText;
 use Modules\Institutions\Models\Bot;
 
 /**
@@ -66,11 +67,16 @@ class KnowledgeRetriever
             return ['text' => '', 'sources' => []];
         }
 
+        // Interés académico: si el mensaje es un formulario, los campos de perfil no cuentan para
+        // identificar el programa ni para puntuar (igual criterio que la búsqueda precisa).
+        $detect = KnowledgeText::formAcademicText($question);
+        $detectHistory = array_map([KnowledgeText::class, 'formAcademicText'], $history);
+
         // Fichas de programa: solo la del programa identificado (pregunta o contexto), o ninguna.
         $programs = $sources->filter(fn (KnowledgeSource $s): bool => $s->type === KnowledgeTaxonomy::TYPE_PROGRAM)
             ->map(fn (KnowledgeSource $s): array => ['code' => (string) $s->code, 'type' => $s->type, 'category' => $s->category, 'content' => (string) $s->translate('content', $locale)])
             ->values()->all();
-        $allowed = $programs === [] ? null : app(ProgramMentions::class)->scope($programs, $question, $history)['code'];
+        $allowed = $programs === [] ? null : app(ProgramMentions::class)->scope($programs, $detect, $detectHistory)['code'];
 
         /** @var array<int, array{title: string, body: string, priority: int, code: string}> $sections */
         $sections = [];
@@ -88,7 +94,7 @@ class KnowledgeRetriever
             return ['text' => '', 'sources' => []];
         }
 
-        $tokens = $this->tokenize($question);
+        $tokens = $this->tokenize($detect);
 
         // Puntua cada seccion por solape de palabras con la pregunta; desempata por prioridad. Las
         // secciones de la ficha del programa identificado suman 1 (como la ficha nombrada en la
