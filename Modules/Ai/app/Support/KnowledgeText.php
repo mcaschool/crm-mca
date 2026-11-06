@@ -140,6 +140,10 @@ final class KnowledgeText
         if ($labels === [] || mb_strpos($text, ':') === false) {
             return $text;
         }
+        $markers = array_values(array_filter(array_map(
+            fn ($m): string => self::normalize((string) $m),
+            (array) config('crm.knowledge.retrieval.academic_interest_markers', [])
+        )));
 
         // Cada campo en su propia línea: se inserta un salto antes de cada pregunta («¿»/«¡») y antes
         // de cada etiqueta de perfil (comparación sin acentos). Así vale con y sin saltos de línea.
@@ -153,12 +157,13 @@ final class KnowledgeText
             $pos = mb_strpos($line, ':');
             if ($pos !== false) {
                 $label = self::normalize(mb_substr($line, 0, $pos));
-                foreach ($labels as $needle) {
-                    if (str_contains($label, $needle)) {
-                        $removed = true;
+                // Si la etiqueta DECLARA interés académico, no es un campo de perfil (aunque incluya una
+                // palabra personal como «nombre»). Solo si NO lo declara se mira si es dato de perfil, y
+                // la etiqueta de perfil debe coincidir como PALABRA COMPLETA (no como parte de otra).
+                if (! self::labelDeclaresInterest($label, $markers) && self::labelIsProfileField($label, $labels)) {
+                    $removed = true;
 
-                        continue 2;   // línea de perfil: su valor no cuenta para la línea/programa
-                    }
+                    continue;   // línea de perfil: su valor no cuenta para la línea/programa
                 }
             }
             $kept[] = $line;
@@ -170,6 +175,41 @@ final class KnowledgeText
         $out = trim(implode("\n", $kept));
 
         return $out !== '' ? $out : $text;
+    }
+
+    /**
+     * ¿La etiqueta (ya normalizada) DECLARA interés académico? (contiene algún marcador: microcredencial,
+     * diploma, categoría, interés, programa…). Coincidencia por subcadena: es protectora, nunca descarta.
+     *
+     * @param  list<string>  $markers
+     */
+    private static function labelDeclaresInterest(string $label, array $markers): bool
+    {
+        foreach ($markers as $marker) {
+            if (str_contains($label, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * ¿La etiqueta (ya normalizada) es un campo de PERFIL? La etiqueta de perfil debe aparecer como
+     * PALABRA/FRASE COMPLETA, no como parte de otra palabra (p. ej. «nombre» no casa dentro de
+     * «renombre», ni «pais» dentro de «paisaje»).
+     *
+     * @param  list<string>  $labels
+     */
+    private static function labelIsProfileField(string $label, array $labels): bool
+    {
+        foreach ($labels as $needle) {
+            if (preg_match('/(?<![\p{L}\p{N}])'.preg_quote($needle, '/').'(?![\p{L}\p{N}])/u', $label) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Patrón regex que casa una frase normalizada ignorando acentos (para localizar etiquetas en el texto original). */

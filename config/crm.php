@@ -411,6 +411,13 @@ return [
                 'cargo', 'puesto', 'ocupas', 'nivel de estudios', 'edad',
                 'whatsapp', 'telefono', 'celular', 'movil', 'email', 'correo', 'gmail', 'numero', 'direccion',
             ],
+            // Marcadores de INTERÉS ACADÉMICO: si la ETIQUETA de un campo los contiene, NUNCA se trata
+            // como dato de perfil, aunque también incluya una palabra personal (p. ej. «¿Cuál es el
+            // NOMBRE de la microcredencial que te interesa?» es interés, no el nombre de la persona).
+            'academic_interest_markers' => [
+                'microcredencial', 'diploma', 'maestria', 'doctorado', 'mba', 'programa', 'curso',
+                'certificacion', 'categoria', 'interes', 'linea', 'area', 'especialidad', 'credito', 'modulo',
+            ],
             // La línea detectada (en la pregunta o en el tema activo) ACOTA la recuperación a esa línea
             // más «General institucional». Si la línea no aporta ninguna sección por encima del umbral,
             // la recuperación se amplía SOLO a «General institucional»; NUNCA se reabren otras líneas de

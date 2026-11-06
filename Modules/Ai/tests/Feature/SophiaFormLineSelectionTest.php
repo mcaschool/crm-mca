@@ -140,3 +140,40 @@ it('end-to-end: Sophia responde con conocimiento de Microcredenciales y NINGUNA 
     expect($meta['knowledge_sources'] ?? [])->not->toContain('DA-ECONOMIA-FINANZAS-CORPORATIVAS')
         ->and($meta['retrieval']['line'] ?? null)->toBe('microcredenciales');
 });
+
+// ── Etiquetas de INTERÉS con palabras ambiguas («nombre», «país», «número») no deben descartarse
+
+it('formAcademicText conserva la pregunta de interés con «nombre» y descarta solo los campos de perfil', function () {
+    $form = "¡Hola! Completé el formulario.\n"
+        ."Full name: María López\n"
+        ."¿Cuál es el nombre de la microcredencial que te interesa?: Finanzas Corporativas\n"
+        ."Country: ES\n"
+        ."¿Cuál es tu último nivel de estudios?: Maestría o posgrado";
+    $clean = KnowledgeText::formAcademicText($form);
+
+    expect($clean)->toContain('microcredencial')->toContain('Finanzas Corporativas')   // interés conservado
+        ->not->toContain('María López')                                                 // nombre personal fuera
+        ->not->toContain('Maestría')                                                    // nivel de estudios fuera
+        ->not->toContain('ES');                                                         // país fuera (país: ES)
+});
+
+it('interés «nombre de la microcredencial»: línea microcredenciales, nunca Diplomas Avanzados (con y sin saltos)', function () {
+    $form = "¡Hola! Completé el formulario.\nFull name: María López\n¿Cuál es el nombre de la microcredencial que te interesa?: Finanzas Corporativas\n¿Cuál es tu último nivel de estudios?: Maestría o posgrado";
+
+    foreach ([$form, str_replace("\n", ' ', $form)] as $variant) {
+        $r = app(PreciseKnowledgeRanker::class)->rank(sflSources(), $variant, [], 3);
+        expect($r['diagnostics']['line'])->toBe('microcredenciales')
+            ->and(array_column($r['sections'], 'code'))->not->toContain('DA-ECONOMIA-FINANZAS-CORPORATIVAS');
+    }
+});
+
+it('interés legítimo en otra línea con «nombre»: «nombre del diploma avanzado» mantiene Diplomas Avanzados', function () {
+    $form = "¡Hola!\nFull name: Pedro G\n¿Cuál es el nombre del diploma avanzado que te interesa?: Economía y Finanzas\n¿Cuál es tu último nivel de estudios?: Universitario completo";
+    expect(sflLine($form)['line'])->toBe('diplomas_avanzados');
+});
+
+it('el caso original de Carlos Martínez sigue intacto tras el ajuste', function () {
+    $r = app(PreciseKnowledgeRanker::class)->rank(sflSources(), sflForm(), [], 3);
+    expect($r['diagnostics']['line'])->toBe('microcredenciales')
+        ->and(array_column($r['sections'], 'code'))->not->toContain('DA-ECONOMIA-FINANZAS-CORPORATIVAS');
+});
