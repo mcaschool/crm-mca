@@ -34,6 +34,15 @@ class Form extends Component
 {
     use WithFileUploads;
 
+    /**
+     * Límites de ALMACENAMIENTO de los textos largos (caracteres). Amplios y documentados; visibles
+     * en el editor con un contador. No son el límite de contexto enviado a la IA (eso no cambia aquí).
+     * La columna es MEDIUMTEXT, que holgadamente admite estos tamaños en utf8mb4 sin truncar.
+     */
+    public const MAX_INSTRUCTIONS = 50000;
+
+    public const MAX_LONG_FIELD = 20000;
+
     public ?int $botId = null;
 
     public string $name = '';
@@ -149,13 +158,14 @@ class Form extends Component
             'knowledgeRetrieval' => ['required', 'in:'.Bot::RETRIEVAL_CLASSIC.','.Bot::RETRIEVAL_PRECISE],
             'messageLimit' => ['nullable', 'integer', 'min:1', 'max:200'],
             'typingDelay' => ['required', 'integer', 'min:0', 'max:'.Bot::TYPING_DELAY_MAX],
-            // Identidad e instrucciones (texto libre, con límites razonables).
+            // Identidad e instrucciones (texto libre). Límites AMPLIOS, documentados y visibles en el
+            // editor (contador). Son límites de ALMACENAMIENTO; no afectan el contexto enviado a la IA.
             'roleDescription' => ['nullable', 'string', 'max:255'],
-            'instructions' => ['nullable', 'string', 'max:6000'],
+            'instructions' => ['nullable', 'string', 'max:'.self::MAX_INSTRUCTIONS],
             'tone' => ['nullable', 'string', 'max:255'],
-            'restrictions' => ['nullable', 'string', 'max:2000'],
+            'restrictions' => ['nullable', 'string', 'max:'.self::MAX_LONG_FIELD],
             'notFoundMessage' => ['nullable', 'string', 'max:500'],
-            'handoffRules' => ['nullable', 'string', 'max:2000'],
+            'handoffRules' => ['nullable', 'string', 'max:'.self::MAX_LONG_FIELD],
             // Presentación del widget: texto plano (Unicode y emojis sí; HTML/scripts no).
             'welcomeEs' => ['nullable', 'string', 'max:200', 'not_regex:/<[^>]*>/'],
             'welcomeEn' => ['nullable', 'string', 'max:200', 'not_regex:/<[^>]*>/'],
@@ -174,6 +184,12 @@ class Form extends Component
             'welcomeEn.max' => __('Máximo :max caracteres.'),
             'buttonEs.max' => __('Máximo :max caracteres.'),
             'buttonEn.max' => __('Máximo :max caracteres.'),
+            'instructions.max' => __('Máximo :max caracteres.'),
+            'restrictions.max' => __('Máximo :max caracteres.'),
+            'handoffRules.max' => __('Máximo :max caracteres.'),
+            'roleDescription.max' => __('Máximo :max caracteres.'),
+            'tone.max' => __('Máximo :max caracteres.'),
+            'notFoundMessage.max' => __('Máximo :max caracteres.'),
             'messageLimit.integer' => __('Escribe un número entero.'),
             'messageLimit.min' => __('Mínimo :min.'),
             'messageLimit.max' => __('Máximo :max.'),
@@ -198,11 +214,11 @@ class Form extends Component
         // Identidad e instrucciones del asesor (un asesor NUEVO nunca hereda el prompt de Celia:
         // uses_legacy_prompt queda en false; los existentes lo conservan mientras esto esté vacío).
         $bot->role_description = $this->plainText($this->roleDescription);
-        $bot->instructions = $this->multilineText($this->instructions);
+        $bot->instructions = $this->longText($this->instructions);
         $bot->tone = $this->plainText($this->tone);
-        $bot->restrictions = $this->multilineText($this->restrictions);
+        $bot->restrictions = $this->longText($this->restrictions);
         $bot->not_found_message = $this->plainText($this->notFoundMessage);
-        $bot->handoff_rules = $this->multilineText($this->handoffRules);
+        $bot->handoff_rules = $this->longText($this->handoffRules);
         $bot->knowledge_retrieval = $this->knowledgeRetrieval;
         $bot->ai_message_limit = trim($this->messageLimit) !== '' ? (int) $this->messageLimit : null;
         $bot->typing_delay = (int) $this->typingDelay;
@@ -216,6 +232,8 @@ class Form extends Component
         $bot->save();
 
         $this->botId = $bot->getKey();
+        // Guardado correcto: el editor limpia su marca de «cambios sin guardar» (aviso al salir).
+        $this->dispatch('advisor-saved');
 
         // Proceso de IA (solo IA): referencia a una integracion existente. No se
         // gestionan credenciales aqui (viven en el almacen cifrado de integraciones).
@@ -537,6 +555,18 @@ class Form extends Component
     private function multilineText(string $value): ?string
     {
         $value = trim((string) preg_replace("/[ \t]+/u", ' ', str_replace("\r\n", "\n", $value)));
+
+        return $value === '' ? null : $value;
+    }
+
+    /**
+     * Texto largo estructurado (instrucciones, límites, reglas de transferencia): se CONSERVA tal
+     * cual, sin colapsar espacios. Única normalización técnica: fin de línea a «\n» y recorte de los
+     * extremos del texto completo; así se mantienen exactamente párrafos, numeración e indentación.
+     */
+    private function longText(string $value): ?string
+    {
+        $value = trim(str_replace(["\r\n", "\r"], "\n", $value));
 
         return $value === '' ? null : $value;
     }

@@ -145,7 +145,12 @@
             </section>
 
             {{-- Identidad e instrucciones: cómo es y cómo responde ESTE asesor --}}
-            <section class="ui-card" id="adv-prompt" aria-labelledby="adv-prompt-t">
+            <section class="ui-card" id="adv-prompt" aria-labelledby="adv-prompt-t"
+                     x-data="{ dirty: false }"
+                     x-init="window.addEventListener('beforeunload', (e) => { if (this.dirty) { e.preventDefault(); e.returnValue = ''; } })"
+                     @input="dirty = true"
+                     x-on:identity-saving.window="dirty = false"
+                     x-on:advisor-saved.window="dirty = false">
                 <div class="ui-card-h"><x-ui.icon name="user-cog" class="ui-card-ic" /><h2 id="adv-prompt-t">{{ __('Identidad e instrucciones') }}</h2></div>
                 <div class="ui-card-p">
                     <p class="ui-card-desc">{{ __('Cómo se presenta y cómo responde este asesor. Se combina siempre con las reglas de la institución (es un asistente virtual, no inventa datos y responde solo con su conocimiento), que no se pueden desactivar desde aquí.') }}</p>
@@ -156,21 +161,33 @@
                         <x-ui.field class="ui-span-full" :label="__('Función o presentación')" for="adv-role" :error="$errors->first('roleDescription')" :help="__('El nombre público es el «Nombre del asesor» de arriba.')">
                             <input id="adv-role" type="text" wire:model="roleDescription" maxlength="255" placeholder="{{ __('Ej.: asesora de Diplomas Avanzados de la escuela') }}" @class(['ui-input', 'is-invalid' => $errors->has('roleDescription')])>
                         </x-ui.field>
-                        <x-ui.field class="ui-span-full" :label="__('Instrucciones del asesor')" for="adv-instructions" :error="$errors->first('instructions')">
-                            <textarea id="adv-instructions" wire:model="instructions" rows="7" maxlength="6000" placeholder="{{ __('Qué hace, a quién atiende, qué debe priorizar y cómo debe orientar a cada persona…') }}" @class(['ui-input ui-textarea', 'is-invalid' => $errors->has('instructions')])></textarea>
-                        </x-ui.field>
+                        @include('ai::livewire.advisor.partials.prompt-field', [
+                            'model' => 'instructions', 'id' => 'adv-instructions', 'span' => true, 'size' => 'xl', 'rows' => 14,
+                            'max' => \Modules\Ai\Livewire\Advisor\Form::MAX_INSTRUCTIONS,
+                            'label' => __('Instrucciones del asesor'),
+                            'placeholder' => __('Qué hace, a quién atiende, qué debe priorizar y cómo debe orientar a cada persona…'),
+                            'error' => $errors->first('instructions'),
+                        ])
                         <x-ui.field :label="__('Tono de comunicación')" for="adv-tone" :error="$errors->first('tone')">
                             <input id="adv-tone" type="text" wire:model="tone" maxlength="255" placeholder="{{ __('Ej.: cercano y profesional, frases breves') }}" @class(['ui-input', 'is-invalid' => $errors->has('tone')])>
                         </x-ui.field>
                         <x-ui.field :label="__('Mensaje para información no encontrada')" for="adv-notfound" :error="$errors->first('notFoundMessage')">
                             <input id="adv-notfound" type="text" wire:model="notFoundMessage" maxlength="500" placeholder="{{ __('Ej.: No tengo ese dato; te recomiendo revisar la ficha del programa.') }}" @class(['ui-input', 'is-invalid' => $errors->has('notFoundMessage')])>
                         </x-ui.field>
-                        <x-ui.field :label="__('Límites: asuntos que no debe responder')" for="adv-limits" :error="$errors->first('restrictions')">
-                            <textarea id="adv-limits" wire:model="restrictions" rows="3" maxlength="2000" placeholder="{{ __('Ej.: precios concretos, temas médicos o legales, otras instituciones…') }}" @class(['ui-input ui-textarea', 'is-invalid' => $errors->has('restrictions')])></textarea>
-                        </x-ui.field>
-                        <x-ui.field :label="__('Cuándo transferir a una persona')" for="adv-handoff" :error="$errors->first('handoffRules')">
-                            <textarea id="adv-handoff" wire:model="handoffRules" rows="3" maxlength="2000" placeholder="{{ __('Ej.: si pide hablar con alguien, si quiere una beca especial o si está molesto.') }}" @class(['ui-input ui-textarea', 'is-invalid' => $errors->has('handoffRules')])></textarea>
-                        </x-ui.field>
+                        @include('ai::livewire.advisor.partials.prompt-field', [
+                            'model' => 'restrictions', 'id' => 'adv-limits', 'size' => 'lg', 'rows' => 6,
+                            'max' => \Modules\Ai\Livewire\Advisor\Form::MAX_LONG_FIELD,
+                            'label' => __('Límites: asuntos que no debe responder'),
+                            'placeholder' => __('Ej.: precios concretos, temas médicos o legales, otras instituciones…'),
+                            'error' => $errors->first('restrictions'),
+                        ])
+                        @include('ai::livewire.advisor.partials.prompt-field', [
+                            'model' => 'handoffRules', 'id' => 'adv-handoff', 'size' => 'lg', 'rows' => 6,
+                            'max' => \Modules\Ai\Livewire\Advisor\Form::MAX_LONG_FIELD,
+                            'label' => __('Cuándo transferir a una persona'),
+                            'placeholder' => __('Ej.: si pide hablar con alguien, si quiere una beca especial o si está molesto.'),
+                            'error' => $errors->first('handoffRules'),
+                        ])
                     </div>
                 </div>
             </section>
@@ -212,7 +229,8 @@
         <div class="ui-savebar">
             <p class="ui-savebar-note ui-hide-sm">{{ $type === 'ia' ? __('Guarda la identidad, la configuración de IA, las instrucciones y el widget.') : __('Guarda la identidad del asesor.') }}</p>
             <x-ui.button :href="route('advisors.index')" variant="ghost">{{ __('Cancelar') }}</x-ui.button>
-            <button type="button" wire:click="save" wire:loading.attr="disabled" wire:target="save" class="ui-btn ui-btn--primary">
+            <button type="button" wire:click="save" wire:loading.attr="disabled" wire:target="save" class="ui-btn ui-btn--primary"
+                    onclick="window.dispatchEvent(new Event('identity-saving'))">
                 <span wire:loading.remove wire:target="save" class="ui-btn-label"><x-ui.icon name="check" /> {{ $editing ? __('Guardar cambios') : __('Crear asesor') }}</span>
                 <span wire:loading.inline-flex wire:target="save" class="ui-btn-label"><span class="ui-spin"></span> {{ __('Guardando…') }}</span>
             </button>
