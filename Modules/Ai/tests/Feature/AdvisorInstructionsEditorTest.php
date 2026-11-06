@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Modules\Ai\Livewire\Advisor\Form;
 use Modules\Core\Tenancy\CurrentInstitution;
@@ -78,4 +79,68 @@ it('solo un administrador puede abrir la configuración del asesor', function ()
     $marketing = User::factory()->create(['institution_id' => $inst->id, 'role' => 'marketing']);
 
     Livewire::actingAs($marketing)->test(Form::class, ['bot' => $bot])->assertForbidden();
+});
+
+// ── Fix 1: el aviso de «cambios sin guardar» solo se limpia tras un guardado EXITOSO
+
+it('emite «advisor-saved» al guardar con éxito, pero NO cuando la validación falla', function () {
+    [$bot, $admin] = aieSetup();
+
+    Livewire::actingAs($admin)->test(Form::class, ['bot' => $bot])
+        ->set('instructions', 'Instrucciones válidas.')
+        ->call('save')->assertHasNoErrors()->assertDispatched('advisor-saved');
+
+    Livewire::actingAs($admin)->test(Form::class, ['bot' => $bot])
+        ->set('name', '')                                   // nombre requerido → falla la validación
+        ->set('instructions', 'Texto que no debe perderse.')
+        ->call('save')->assertHasErrors(['name'])
+        ->assertNotDispatched('advisor-saved')              // el aviso permanece activo
+        ->assertSet('instructions', 'Texto que no debe perderse.');
+});
+
+// ── Fix 2: coherencia contador (puntos de código) ↔ validación Laravel (mb_strlen), con emojis/acentos/saltos
+
+it('el límite se cuenta por puntos de código (como mb_strlen): emojis y acentos al límite pasan, +1 falla, y se conservan', function () {
+    [$bot, $admin] = aieSetup();
+
+    $emojis = str_repeat('😀', 50000);                       // 50.000 puntos de código (mb_strlen) = 50.000
+    expect(mb_strlen($emojis))->toBe(50000);
+    Livewire::actingAs($admin)->test(Form::class, ['bot' => $bot])
+        ->set('instructions', $emojis)->call('save')->assertHasNoErrors();
+    expect(mb_strlen((string) $bot->fresh()->instructions))->toBe(50000)
+        ->and($bot->fresh()->instructions)->toBe($emojis);  // se conservan íntegros
+
+    Livewire::actingAs($admin)->test(Form::class, ['bot' => $bot])
+        ->set('instructions', str_repeat('😀', 50001))->call('save')->assertHasErrors(['instructions']);
+
+    // Acentos y saltos de línea también cuentan por punto de código (1 cada uno).
+    $acentos = str_repeat('é', 20000);
+    Livewire::actingAs($admin)->test(Form::class, ['bot' => $bot])
+        ->set('restrictions', $acentos)->call('save')->assertHasNoErrors();
+    expect(mb_strlen((string) $bot->fresh()->restrictions))->toBe(20000);
+});
+
+// ── Fix 3: la reversión de la migración no trunca datos existentes mayores que TEXT
+
+it('el down() de la migración ABORTA (no trunca) si hay textos mayores que la capacidad de TEXT', function () {
+    [$bot] = aieSetup();
+    $big = str_repeat('á', 40000);                           // 40.000 × 2 bytes = 80.000 > 65.535 (TEXT)
+    DB::table('bots')->where('id', $bot->id)->update(['instructions' => $big]);
+
+    $migration = require base_path('Modules/Institutions/database/migrations/2026_11_06_100000_widen_bot_instruction_fields.php');
+    expect(fn () => $migration->down())->toThrow(RuntimeException::class);
+
+    // No se tocó la columna ni el dato: sigue íntegro (sin truncar).
+    expect(DB::table('bots')->where('id', $bot->id)->value('instructions'))->toBe($big);
+});
+
+// ── Fix 4: el formulario real renderiza el editor ampliado y el contador; el textarea no fija maxlength
+
+it('el formulario real renderiza «Ampliar editor», el contador del límite y el textarea sin maxlength', function () {
+    [$bot, $admin] = aieSetup();
+    $html = Livewire::actingAs($admin)->test(Form::class, ['bot' => $bot])->html();
+
+    expect($html)->toContain('Ampliar editor')->toContain('50,000')->toContain('ui-editor-modal');
+    preg_match('/<textarea[^>]*id="adv-instructions"[^>]*>/', $html, $m);
+    expect($m[0] ?? 'sin-match')->not->toContain('maxlength');
 });

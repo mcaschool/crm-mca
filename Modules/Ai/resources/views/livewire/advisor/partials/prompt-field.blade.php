@@ -29,7 +29,7 @@
             open: false,
             draft: '',
             baseline: '',
-            count() { this.len = (this.$refs.field.value || '').length },
+            count() { this.len = [...(this.$refs.field.value || '')].length },   // puntos de código (como mb_strlen)
             openModal() {
                 this.draft = this.$refs.field.value;
                 this.baseline = this.draft;
@@ -55,8 +55,10 @@
             },
          }"
          x-init="count()">
+        {{-- Sin `maxlength` (cuenta unidades UTF-16 y divergería con emojis del contador y de mb_strlen):
+             el límite lo marcan el contador (puntos de código) y la validación de Laravel; MEDIUMTEXT no trunca. --}}
         <textarea id="{{ $id }}" wire:model="{{ $model }}" x-ref="field" @input="count()"
-                  rows="{{ (int) $rows }}" maxlength="{{ (int) $max }}" spellcheck="true"
+                  rows="{{ (int) $rows }}" spellcheck="true"
                   placeholder="{{ $placeholder }}"
                   @class(['ui-input ui-textarea', 'ui-textarea--xl' => $size === 'xl', 'ui-textarea--lg' => $size === 'lg', 'is-invalid' => (bool) $error])></textarea>
 
@@ -67,28 +69,29 @@
             </span>
         </div>
 
-        {{-- Editor ampliado (posición fija: cubre la ventana; sin teleport para no romper el morph de Livewire) --}}
-        <div x-show="open" x-cloak class="ui-editor-ovl" @click.self="requestClose()" @keydown.escape.window="open && requestClose()">
+        {{-- Editor ampliado (posición fija: cubre la ventana). La visibilidad se controla con una clase
+             (:class), no con x-show, por un problema de registro de x-show en este montaje Livewire+Alpine. --}}
+        <div :class="{ 'is-open': open }" class="ui-editor-ovl" @click.self="requestClose()" @keydown.escape.window="open && requestClose()">
             <div class="ui-editor-modal" role="dialog" aria-modal="true" aria-label="{{ $label }}">
-                <div class="ui-editor-h">
-                    <x-ui.icon name="user-cog" />
-                    <h3>{{ $label }}</h3>
-                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon" @click="requestClose()" aria-label="{{ __('Cerrar') }}"><x-ui.icon name="x" /></button>
-                </div>
-                <div class="ui-editor-body">
-                    <textarea x-ref="modalField" x-model="draft" maxlength="{{ (int) $max }}" spellcheck="true"
-                              class="ui-editor-area" placeholder="{{ $placeholder }}" aria-label="{{ $label }}"></textarea>
-                </div>
-                <div class="ui-editor-f">
-                    <span class="ui-prompt-count" :class="{ 'is-max': (draft ? draft.length : 0) >= max }">
-                        <span x-text="(draft ? draft.length : 0).toLocaleString()">0</span> / {{ number_format((int) $max) }}
-                    </span>
-                    <span class="sp"></span>
-                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" @click="copyAll()"><x-ui.icon name="file-text" /> {{ __('Copiar todo') }}</button>
-                    <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" @click="requestClose()">{{ __('Cancelar') }}</button>
-                    <button type="button" class="ui-btn ui-btn--primary ui-btn--sm" @click="apply()">{{ __('Aplicar') }}</button>
+                    <div class="ui-editor-h">
+                        <x-ui.icon name="user-cog" />
+                        <h3>{{ $label }}</h3>
+                        <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon" @click="requestClose()" aria-label="{{ __('Cerrar') }}"><x-ui.icon name="x" /></button>
+                    </div>
+                    <div class="ui-editor-body">
+                        <textarea x-ref="modalField" x-model="draft" spellcheck="true"
+                                  class="ui-editor-area" placeholder="{{ $placeholder }}" aria-label="{{ $label }}"></textarea>
+                    </div>
+                    <div class="ui-editor-f">
+                        <span class="ui-prompt-count" :class="{ 'is-max': (draft ? [...draft].length : 0) >= max }">
+                            <span x-text="(draft ? [...draft].length : 0).toLocaleString()">0</span> / {{ number_format((int) $max) }}
+                        </span>
+                        <span class="sp"></span>
+                        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" @click="copyAll()"><x-ui.icon name="file-text" /> {{ __('Copiar todo') }}</button>
+                        <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" @click="requestClose()">{{ __('Cancelar') }}</button>
+                        <button type="button" class="ui-btn ui-btn--primary ui-btn--sm" @click="apply()">{{ __('Aplicar') }}</button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 </x-ui.field>

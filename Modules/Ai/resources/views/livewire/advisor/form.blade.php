@@ -149,7 +149,6 @@
                      x-data="{ dirty: false }"
                      x-init="window.addEventListener('beforeunload', (e) => { if (this.dirty) { e.preventDefault(); e.returnValue = ''; } })"
                      @input="dirty = true"
-                     x-on:identity-saving.window="dirty = false"
                      x-on:advisor-saved.window="dirty = false">
                 <div class="ui-card-h"><x-ui.icon name="user-cog" class="ui-card-ic" /><h2 id="adv-prompt-t">{{ __('Identidad e instrucciones') }}</h2></div>
                 <div class="ui-card-p">
@@ -229,8 +228,7 @@
         <div class="ui-savebar">
             <p class="ui-savebar-note ui-hide-sm">{{ $type === 'ia' ? __('Guarda la identidad, la configuración de IA, las instrucciones y el widget.') : __('Guarda la identidad del asesor.') }}</p>
             <x-ui.button :href="route('advisors.index')" variant="ghost">{{ __('Cancelar') }}</x-ui.button>
-            <button type="button" wire:click="save" wire:loading.attr="disabled" wire:target="save" class="ui-btn ui-btn--primary"
-                    onclick="window.dispatchEvent(new Event('identity-saving'))">
+            <button type="button" wire:click="save" wire:loading.attr="disabled" wire:target="save" class="ui-btn ui-btn--primary">
                 <span wire:loading.remove wire:target="save" class="ui-btn-label"><x-ui.icon name="check" /> {{ $editing ? __('Guardar cambios') : __('Crear asesor') }}</span>
                 <span wire:loading.inline-flex wire:target="save" class="ui-btn-label"><span class="ui-spin"></span> {{ __('Guardando…') }}</span>
             </button>

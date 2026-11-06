@@ -416,7 +416,8 @@ a.ui-list-item:focus-visible,button.ui-list-item:focus-visible{outline:none;box-
 .ui-prompt-count.is-max{color:var(--mca-danger);font-weight:600}
 /* editor ampliado: modal de TEXTO PLANO (no editor enriquecido) */
 [x-cloak]{display:none!important}
-.ui-editor-ovl{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(17,31,53,.45)}
+.ui-editor-ovl{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(17,31,53,.45)}
+.ui-editor-ovl.is-open{display:flex}
 .ui-editor-modal{display:flex;flex-direction:column;width:min(920px,100%);max-height:88vh;background:var(--mca-surface);border:1px solid var(--mca-line);border-radius:var(--mca-r-card);box-shadow:0 20px 50px rgba(17,31,53,.25);overflow:hidden}
 .ui-editor-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--mca-line)}
 .ui-editor-h h3{margin:0;font-size:15px;font-weight:700;color:var(--mca-text);flex:1;min-width:0}
