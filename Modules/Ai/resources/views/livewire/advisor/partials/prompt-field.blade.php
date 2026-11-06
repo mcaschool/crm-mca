@@ -54,7 +54,7 @@
                 else { this.$refs.modalField.select(); document.execCommand('copy'); }
             },
          }"
-         x-init="count()">
+         x-init="$nextTick(() => count())">
         {{-- Sin `maxlength` (cuenta unidades UTF-16 y divergería con emojis del contador y de mb_strlen):
              el límite lo marcan el contador (puntos de código) y la validación de Laravel; MEDIUMTEXT no trunca. --}}
         <textarea id="{{ $id }}" wire:model="{{ $model }}" x-ref="field" @input="count()"
