@@ -342,6 +342,36 @@ it('cola persistente: el worker programado procesa, deja su latido y la respuest
     expect(sadvPending())->toBe(0)->and($fake->calls)->toHaveCount(1)->and(sadvBotMessages($inst))->toHaveCount(1);
 });
 
+it('con la cola vacía el worker bajo demanda no arranca ni deja latido', function () {
+    sadvCtx();
+    sadvPersistentQueue();
+
+    Artisan::call('social:advisor-worker', ['--memory' => 0]);
+
+    expect(Artisan::output())->toContain('no arranca')
+        ->and(AdvisorDispatcher::workerRunning())->toBeFalse()
+        ->and(sadvPending())->toBe(0);
+});
+
+it('un trabajo retrasado dentro de la ventana se atiende en la misma ejecución bajo demanda', function () {
+    [$inst, , $fake] = sadvCtx(['advisor_enabled' => true, 'advisor_reply_delay' => 2]);
+    sadvPersistentQueue();
+
+    sadvPost('whatsapp', sadvFixture('whatsapp'));
+    expect(sadvPending())->toBe(1)->and($fake->calls)->toHaveCount(0);
+
+    $t0 = microtime(true);
+    Artisan::call('social:advisor-worker', ['--memory' => 0]);   // sin --stop-when-empty: decide por la radiografía
+    $elapsed = microtime(true) - $t0;
+
+    expect(Artisan::output())->toContain('1 retrasados')
+        ->and(sadvPending())->toBe(0)
+        ->and($fake->calls)->toHaveCount(1)
+        ->and(sadvBotMessages($inst))->toHaveCount(1)
+        ->and(AdvisorDispatcher::workerRunning())->toBeTrue()
+        ->and($elapsed)->toBeLessThan(12.0); // escucha ≈ retraso + margen (2 + 5 s), no los 50 s fijos
+});
+
 it('si la IA falla de forma pasajera se reintenta sin duplicar mensajes y responde una sola vez', function () {
     [$inst, , $fake] = sadvCtx();
     sadvPersistentQueue();

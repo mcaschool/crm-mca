@@ -83,6 +83,8 @@ final class AdvisorChannels extends Component
                 ->map(fn (string $label, string $provider): array => ['label' => $label, 'channels' => $channels->where('provider', $provider)->values()]),
             'ready' => AdvisorDispatcher::ready(),
             'pendingReason' => AdvisorDispatcher::pendingReason(),
+            // Estado del servicio con sus planos separados (planificador · worker · interruptor · cola).
+            'status' => \Modules\Social\Support\AdvisorServiceStatus::snapshot(),
         ]);
     }
 

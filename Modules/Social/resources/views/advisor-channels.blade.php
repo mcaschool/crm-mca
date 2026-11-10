@@ -14,6 +14,57 @@
         @endif
     </div>
 
+    {{-- Estado del procesamiento automático, con sus planos separados: planificador (quien garantiza
+         el despacho), worker (última ejecución real; arranca solo con trabajos), interruptor general
+         de la instalación y trabajos de la cola. --}}
+    <p class="ui-card-kicker">{{ __('Estado del servicio') }}</p>
+    <ul class="ui-list" data-testid="advisor-service-status">
+        <li>
+            <div class="ui-list-item ui-list-item--wrap" data-testid="status-scheduler">
+                <span class="ui-list-main">
+                    <span class="ui-list-title">{{ __('Planificador del servidor') }}</span>
+                    <span class="ui-list-meta">{{ $status['scheduler']['last_seen'] ? __('Última pasada :when', ['when' => $status['scheduler']['last_seen']->diffForHumans()]) : __('Todavía sin pasadas registradas') }}</span>
+                </span>
+                <span class="ui-list-aside">
+                    <x-ui.badge :tone="$status['scheduler']['running'] ? 'success' : 'danger'" dot>{{ $status['scheduler']['running'] ? __('En marcha') : __('Detenido') }}</x-ui.badge>
+                </span>
+            </div>
+        </li>
+        <li>
+            <div class="ui-list-item ui-list-item--wrap" data-testid="status-worker">
+                <span class="ui-list-main">
+                    <span class="ui-list-title">{{ __('Worker del asesor') }}</span>
+                    <span class="ui-list-meta">{{ $status['worker']['last_seen'] ? __('Última ejecución :when', ['when' => $status['worker']['last_seen']->diffForHumans()]) : __('Arranca solo cuando hay trabajos en la cola.') }}</span>
+                </span>
+                <span class="ui-list-aside">
+                    <x-ui.badge :tone="$status['worker']['recent'] ? 'success' : 'neutral'" dot>{{ $status['worker']['recent'] ? __('Reciente') : __('En espera') }}</x-ui.badge>
+                </span>
+            </div>
+        </li>
+        <li>
+            <div class="ui-list-item ui-list-item--wrap" data-testid="status-autoreply">
+                <span class="ui-list-main">
+                    <span class="ui-list-title">{{ __('Asesor automático de la instalación') }}</span>
+                    <span class="ui-list-meta">{{ __('Interruptor general del servidor; cada cuenta se activa además aquí abajo.') }}</span>
+                </span>
+                <span class="ui-list-aside">
+                    <x-ui.badge :tone="$status['autoreply_enabled'] ? 'success' : 'neutral'" dot>{{ $status['autoreply_enabled'] ? __('Habilitado') : __('Deshabilitado') }}</x-ui.badge>
+                </span>
+            </div>
+        </li>
+        <li>
+            <div class="ui-list-item ui-list-item--wrap" data-testid="status-jobs">
+                <span class="ui-list-main">
+                    <span class="ui-list-title">{{ __('Trabajos en la cola del asesor') }}</span>
+                    <span class="ui-list-meta">{{ __(':ready listos · :delayed retrasados · :reserved en ejecución · :failed fallidos', $status['jobs']) }}</span>
+                </span>
+                <span class="ui-list-aside">
+                    <x-ui.badge :tone="$status['jobs']['failed'] > 0 ? 'warning' : 'neutral'">{{ $status['jobs']['total'] === 0 ? __('Ninguno') : trans_choice(':n en cola|:n en cola', $status['jobs']['total'], ['n' => $status['jobs']['total']]) }}</x-ui.badge>
+                </span>
+            </div>
+        </li>
+    </ul>
+
     {{-- Web Chat: sin cambios. Lo controla el estado del asesor y el widget incrustado. --}}
     <p class="ui-card-kicker">{{ __('Web Chat') }}</p>
     <ul class="ui-list">

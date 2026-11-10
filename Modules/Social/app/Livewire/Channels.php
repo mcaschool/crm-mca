@@ -265,7 +265,7 @@ class Channels extends Component
             return;
         }
 
-        // Activar exige el despacho persistente funcionando (interruptor general + latido del worker).
+        // Activar exige el despacho persistente funcionando (interruptor general + latido del planificador o del worker).
         if ($this->advisorEnabled && ! $channel->advisor_enabled && ! AdvisorDispatcher::ready()) {
             $this->addError('advisorEnabled', (string) AdvisorDispatcher::pendingReason());
 
@@ -338,7 +338,9 @@ class Channels extends Component
                 : collect(),
             'advisorChannel' => $this->advisorChannelId !== null ? $channels->firstWhere('id', $this->advisorChannelId) : null,
             'advisorPending' => AdvisorDispatcher::pendingReason(),
-            'advisorLastSeen' => AdvisorDispatcher::lastSeen(),
+            // Última comprobación del despacho: el latido del planificador (cada minuto) o, en su
+            // defecto, el del worker (que ahora arranca solo cuando hay trabajos).
+            'advisorLastSeen' => \Modules\Core\Scheduling\SchedulerHeartbeat::lastSeen() ?? AdvisorDispatcher::lastSeen(),
         ]);
     }
 }

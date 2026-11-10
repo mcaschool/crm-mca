@@ -171,10 +171,28 @@ Notas:
 - Los indicadores del menú (Leads, Contactos, Bandeja social) se sincronizan desde el navegador
   con `GET /panel/indicadores`: no requiere servicios ni procesos nuevos.
 
+### Planificador: un cron, un proceso por minuto, trabajo pesado bajo demanda (desde 2026-11-10)
+
+La misma entrada `schedule:run` cada minuto (Opción A) hace, **dentro de su propio proceso**, el
+tick del CRM (`Modules\Core\Scheduling\SchedulerTick`): latido del planificador, reconciliación de
+salientes sin confirmar y los pasos de FollowUp según sus interruptores. Los procesos propios
+(`social:advisor-worker`, `social:publish-scheduled`, `crm:agenda-reminders`,
+`social:meta-leads-poll`, `social:refresh-contact-profiles`) **solo arrancan cuando hay trabajo**
+(comprobación `when()` de 1–3 consultas antes de lanzar nada). En reposo: 1 proceso PHP y ~20
+consultas por minuto. Comprobaciones en el servidor:
+- `php artisan schedule:list` debe mostrar los dos ticks «CRM: …» y los comandos condicionados.
+- Tras el primer `schedule:run`, la caché tiene `crm.scheduler.seen_at` (latido del planificador);
+  el panel del asesor (ficha → «Canales de atención automática» → «Estado del servicio») muestra
+  «Planificador del servidor: En marcha». Si no, el cron no está ejecutando `schedule:run`.
+- `ps -eo pid,etimes,cmd | grep artisan` en un minuto sin trabajos: solo `schedule:run` (≈ 1 s).
+- Despliegue: sin migraciones; `php artisan optimize:clear` (rutas/consola y vistas). Los mutex
+  antiguos de los comandos (`cache_locks`) caducan solos (≤ 30 min).
+
 ### Publicaciones programadas del Publicador
 
 No necesita nada nuevo en el servidor: la misma entrada `schedule:run` cada minuto (Opción A)
-ejecuta `social:publish-scheduled`. El comando publica en el momento lo que ya venció (sin
+lanza `social:publish-scheduled` **solo si hay publicaciones vencidas, interrumpidas o videos de
+Instagram por reanudar**. El comando publica en el momento lo que ya venció (sin
 worker permanente ni cola externa), reanuda los videos de Instagram que Meta sigue procesando y
 marca como fallidas las ejecuciones interrumpidas (>15 min) sin reintentarlas solas.
 - Requisitos: el cron por minuto activo, `php artisan migrate` (migración
@@ -211,7 +229,9 @@ El hosting compartido tiene cuotas por cuenta. Vigilar tras desplegar:
   - **No** ejecutar tareas concurrentes pesadas contra la BD (evitar solapar cron y
     procesos manuales; el scheduler usa `withoutOverlapping()`).
   - Mantener **una sola** entrada de cron (§5), no varias que arranquen a la vez.
-  - No abrir workers/daemons permanentes (no los hay: el chatbot es petición-respuesta).
+  - No abrir workers/daemons permanentes. El worker del asesor (`social:advisor-worker`) arranca
+    **solo cuando la cola tiene trabajos ejecutables en el próximo minuto** y termina al vaciarla
+    (ver «Planificador» más abajo); el chatbot web es petición-respuesta.
 - Verificar en el server: hPanel → Bases de datos → uso; o `SHOW STATUS LIKE 'Threads_connected';`.
 
 ### Llamadas salientes (Qwen y otros proveedores)
