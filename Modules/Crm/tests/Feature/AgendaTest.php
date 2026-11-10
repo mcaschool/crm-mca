@@ -575,6 +575,30 @@ it('genera un .ics válido (UID, UTC, SEQUENCE, ORGANIZER, ATTENDEE, VALARM, CAN
 
 // 16 · Recordatorios idempotentes --------------------------------------------------------------
 
+it('el planificador solo lanza los recordatorios cuando hay alguno vencido o un envío atascado', function () {
+    Mail::fake();
+    $i = agInst();
+    agCtx($i);
+    $u = agUser($i);
+    agProfile($u);
+    $this->travelTo(Carbon::parse('2026-10-19 14:00:00', 'UTC'));
+    expect(\Modules\Crm\Support\AgendaPendingWork::reminders())->toBeFalse();
+
+    $a = agCreate($u, ['reminders' => [15]]); // 15:00 UTC → recordatorio a las 14:45
+    expect(\Modules\Crm\Support\AgendaPendingWork::reminders())->toBeFalse('todavía no vence: el proceso no se lanza');
+
+    $this->travelTo(Carbon::parse('2026-10-19 14:45:30', 'UTC'));
+    expect(\Modules\Crm\Support\AgendaPendingWork::reminders())->toBeTrue('vencido: el proceso debe lanzarse en este minuto');
+
+    $this->artisan('crm:agenda-reminders')->assertSuccessful();
+    expect(ActivityReminder::query()->where('activity_id', $a->id)->where('status', 'sent')->count())->toBe(2)
+        ->and(\Modules\Crm\Support\AgendaPendingWork::reminders())->toBeFalse('ya enviados: nada que lanzar');
+
+    // Envío atascado (proceso caído a mitad): vuelve a ser candidato pasados 10 minutos, como el propio comando.
+    ActivityReminder::query()->where('activity_id', $a->id)->limit(1)->update(['status' => 'sending', 'updated_at' => now()->subMinutes(11)]);
+    expect(\Modules\Crm\Support\AgendaPendingWork::reminders())->toBeTrue();
+});
+
 it('envía cada recordatorio una sola vez, nada si está cancelada y registra fallos y reintentos', function () {
     Mail::fake();
     $i = agInst();

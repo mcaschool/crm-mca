@@ -30,6 +30,7 @@ use Modules\Social\Models\SocialMessage;
 use Modules\Social\Services\SocialAdvisorResponder;
 use Modules\Social\Services\SocialOutboundService;
 use Modules\Social\Support\AdvisorDispatcher;
+use Modules\Social\Support\AdvisorQueuePlan;
 
 /**
  * Instagram, Messenger y WhatsApp con el asesor inteligente (mismo núcleo que la web):
@@ -370,6 +371,40 @@ it('un trabajo retrasado dentro de la ventana se atiende en la misma ejecución 
         ->and(sadvBotMessages($inst))->toHaveCount(1)
         ->and(AdvisorDispatcher::workerRunning())->toBeTrue()
         ->and($elapsed)->toBeLessThan(12.0); // escucha ≈ retraso + margen (2 + 5 s), no los 50 s fijos
+});
+
+it('con el asesor automático deshabilitado en la instalación el entrante se guarda, no se encola nada y el worker no arranca', function () {
+    [$inst, , $fake] = sadvCtx();
+    sadvPersistentQueue();
+    config(['social.advisor.autoreply_enabled' => false]);
+
+    sadvPost('whatsapp', sadvFixture('whatsapp'))->assertOk();
+
+    $inbound = app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialMessage::query()->where('direction', 'inbound')->count());
+    expect($inbound)->toBe(1)
+        ->and(sadvConversation($inst, 'whatsapp')->unread_count)->toBe(1)
+        ->and(sadvPending())->toBe(0)
+        ->and($fake->calls)->toHaveCount(0)
+        ->and(AdvisorQueuePlan::inspect()->needsWorker())->toBeFalse();
+
+    Artisan::call('social:advisor-worker', ['--memory' => 0]);
+    expect(Artisan::output())->toContain('no arranca')->and(sadvBotMessages($inst))->toHaveCount(0);
+});
+
+it('si la cuenta se desactiva después de encolar, el trabajo termina sin responder y sin fallos', function () {
+    [$inst, , $fake] = sadvCtx();
+    sadvPersistentQueue();
+
+    sadvPost('instagram', sadvFixture('instagram'));
+    expect(sadvPending())->toBe(1);
+
+    app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialChannel::query()->where('provider', 'instagram')->update(['advisor_enabled' => false]));
+    Artisan::call('social:advisor-worker', ['--memory' => 0]);
+
+    expect(sadvPending())->toBe(0)
+        ->and($fake->calls)->toHaveCount(0)
+        ->and(sadvBotMessages($inst))->toHaveCount(0)
+        ->and(DB::table('failed_jobs')->count())->toBe(0);
 });
 
 it('si la IA falla de forma pasajera se reintenta sin duplicar mensajes y responde una sola vez', function () {
