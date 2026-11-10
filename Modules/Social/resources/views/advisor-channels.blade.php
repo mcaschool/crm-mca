@@ -34,10 +34,19 @@
             <div class="ui-list-item ui-list-item--wrap" data-testid="status-worker">
                 <span class="ui-list-main">
                     <span class="ui-list-title">{{ __('Worker del asesor') }}</span>
-                    <span class="ui-list-meta">{{ $status['worker']['last_seen'] ? __('Última ejecución :when', ['when' => $status['worker']['last_seen']->diffForHumans()]) : __('Arranca solo cuando hay trabajos en la cola.') }}</span>
+                    <span class="ui-list-meta">
+                        {{ $status['worker']['listening'] ? __('Escucha continua cada minuto: hay cuentas con el asesor activo.') : __('Arranca solo cuando hay trabajos en la cola.') }}
+                        @if ($status['worker']['last_seen'])
+                            {{ __('Última ejecución :when', ['when' => $status['worker']['last_seen']->diffForHumans()]) }}
+                        @endif
+                    </span>
                 </span>
                 <span class="ui-list-aside">
-                    <x-ui.badge :tone="$status['worker']['recent'] ? 'success' : 'neutral'" dot>{{ $status['worker']['recent'] ? __('Reciente') : __('En espera') }}</x-ui.badge>
+                    @if ($status['worker']['stalled'])
+                        <x-ui.badge tone="warning" dot data-testid="status-worker-stalled">{{ __('Trabajos listos sin atender') }}</x-ui.badge>
+                    @else
+                        <x-ui.badge :tone="$status['worker']['recent'] ? 'success' : 'neutral'" dot>{{ $status['worker']['recent'] ? __('Reciente') : __('En espera') }}</x-ui.badge>
+                    @endif
                 </span>
             </div>
         </li>

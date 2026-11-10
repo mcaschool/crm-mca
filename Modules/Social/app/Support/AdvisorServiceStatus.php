@@ -18,7 +18,7 @@ final class AdvisorServiceStatus
     /**
      * @return array{
      *   scheduler: array{running: bool, last_seen: ?CarbonImmutable},
-     *   worker: array{recent: bool, last_seen: ?CarbonImmutable},
+     *   worker: array{recent: bool, last_seen: ?CarbonImmutable, listening: bool, stalled: bool},
      *   autoreply_enabled: bool,
      *   queue_persistent: bool,
      *   ready: bool,
@@ -32,7 +32,15 @@ final class AdvisorServiceStatus
 
         return [
             'scheduler' => ['running' => SchedulerHeartbeat::running(), 'last_seen' => SchedulerHeartbeat::lastSeen()],
-            'worker' => ['recent' => AdvisorDispatcher::workerRunning(), 'last_seen' => AdvisorDispatcher::lastSeen()],
+            'worker' => [
+                'recent' => AdvisorDispatcher::workerRunning(),
+                'last_seen' => AdvisorDispatcher::lastSeen(),
+                // Escucha continua (hay cuentas con el asesor activo) o bajo demanda (solo restos en cola).
+                'listening' => AdvisorDispatcher::listeningRequired(),
+                // Trabajos listos y ningún worker ejecutado en los últimos minutos: el despacho no está
+                // atendiendo (p. ej. el proceso de fondo no puede arrancar en el servidor).
+                'stalled' => $plan->ready > 0 && ! AdvisorDispatcher::workerRunning(),
+            ],
             'autoreply_enabled' => AdvisorDispatcher::autoreplyEnabled(),
             'queue_persistent' => AdvisorDispatcher::queueIsPersistent(),
             'ready' => AdvisorDispatcher::ready(),

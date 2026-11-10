@@ -343,18 +343,52 @@ it('cola persistente: el worker programado procesa, deja su latido y la respuest
     expect(sadvPending())->toBe(0)->and($fake->calls)->toHaveCount(1)->and(sadvBotMessages($inst))->toHaveCount(1);
 });
 
-it('con la cola vacía el worker bajo demanda no arranca ni deja latido', function () {
-    sadvCtx();
+it('con cuentas activas el worker escucha de forma continua aunque la cola esté vacía; sin cuentas activas no arranca', function () {
+    [$inst] = sadvCtx();
     sadvPersistentQueue();
 
-    Artisan::call('social:advisor-worker', ['--memory' => 0]);
-
-    expect(Artisan::output())->toContain('no arranca')
-        ->and(AdvisorDispatcher::workerRunning())->toBeFalse()
+    // Escucha continua: hay cuentas con el asesor habilitado → escucha hasta el tope aunque no haya nada.
+    $t0 = microtime(true);
+    Artisan::call('social:advisor-worker', ['--memory' => 0, '--max-time' => 5]);
+    expect(Artisan::output())->toContain('escucha continua')->toContain('hasta 5 s')
+        ->and(microtime(true) - $t0)->toBeGreaterThanOrEqual(4.5)
+        ->and(AdvisorDispatcher::workerRunning())->toBeTrue()
         ->and(sadvPending())->toBe(0);
+
+    // Sin cuentas activas (o con el asesor apagado en todas) y sin restos en cola: no arranca.
+    app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialChannel::query()->update(['advisor_enabled' => false]));
+    \Illuminate\Support\Facades\Cache::forget(AdvisorDispatcher::HEARTBEAT_KEY);
+    Artisan::call('social:advisor-worker', ['--memory' => 0]);
+    expect(Artisan::output())->toContain('no arranca')->and(AdvisorDispatcher::workerRunning())->toBeFalse();
 });
 
-it('un trabajo retrasado dentro de la ventana se atiende en la misma ejecución bajo demanda', function () {
+it('un mensaje que llega mientras el worker escucha se atiende al instante, sin esperar al minuto siguiente', function () {
+    [$inst, , $fake] = sadvCtx(['advisor_enabled' => true, 'advisor_reply_delay' => 0]);
+    sadvPersistentQueue();
+
+    // Se encola DESPUÉS de que el worker ya haya decidido escuchar (lo contrario del arranque bajo demanda).
+    $arrival = null;
+    \Illuminate\Support\Facades\Event::listen(\Illuminate\Queue\Events\Looping::class, function () use (&$arrival): void {
+        if ($arrival === null) {
+            $arrival = microtime(true);
+            sadvPost('whatsapp', sadvFixture('whatsapp')); // llega en mitad de la escucha
+        }
+    });
+    $processed = null;
+    \Illuminate\Support\Facades\Event::listen(\Illuminate\Queue\Events\JobProcessed::class, function () use (&$processed): void {
+        $processed ??= microtime(true);
+    });
+
+    Artisan::call('social:advisor-worker', ['--memory' => 0, '--max-time' => 6]);
+
+    expect($arrival)->not->toBeNull()->and($processed)->not->toBeNull()
+        ->and($processed - $arrival)->toBeLessThan(3.0) // ≈ 1 s de sondeo, no 60 s
+        ->and(sadvPending())->toBe(0)
+        ->and($fake->calls)->toHaveCount(1)
+        ->and(sadvBotMessages($inst))->toHaveCount(1);
+});
+
+it('un trabajo retrasado dentro de la ventana se atiende en la misma ejecución', function () {
     [$inst, , $fake] = sadvCtx(['advisor_enabled' => true, 'advisor_reply_delay' => 2]);
     sadvPersistentQueue();
 
@@ -362,7 +396,7 @@ it('un trabajo retrasado dentro de la ventana se atiende en la misma ejecución 
     expect(sadvPending())->toBe(1)->and($fake->calls)->toHaveCount(0);
 
     $t0 = microtime(true);
-    Artisan::call('social:advisor-worker', ['--memory' => 0]);   // sin --stop-when-empty: decide por la radiografía
+    Artisan::call('social:advisor-worker', ['--memory' => 0, '--max-time' => 8]);
     $elapsed = microtime(true) - $t0;
 
     expect(Artisan::output())->toContain('1 retrasados')
@@ -370,7 +404,23 @@ it('un trabajo retrasado dentro de la ventana se atiende en la misma ejecución 
         ->and($fake->calls)->toHaveCount(1)
         ->and(sadvBotMessages($inst))->toHaveCount(1)
         ->and(AdvisorDispatcher::workerRunning())->toBeTrue()
-        ->and($elapsed)->toBeLessThan(12.0); // escucha ≈ retraso + margen (2 + 5 s), no los 50 s fijos
+        ->and($elapsed)->toBeLessThan(12.0);
+});
+
+it('sin cuentas activas, un resto en cola se atiende bajo demanda: termina al vaciar la cola', function () {
+    [$inst, , $fake] = sadvCtx(['advisor_enabled' => true, 'advisor_reply_delay' => 0]);
+    sadvPersistentQueue();
+    sadvPost('instagram', sadvFixture('instagram'));
+    expect(sadvPending())->toBe(1);
+    // La cuenta se desactiva: el trabajo encolado se resuelve con las reglas del canal (sin responder).
+    app(CurrentInstitution::class)->runFor($inst->id, fn () => SocialChannel::query()->update(['advisor_enabled' => false]));
+
+    $t0 = microtime(true);
+    Artisan::call('social:advisor-worker', ['--memory' => 0]);
+
+    expect(Artisan::output())->toContain('bajo demanda')->toContain('hasta vaciar la cola')
+        ->and(microtime(true) - $t0)->toBeLessThan(5.0)
+        ->and(sadvPending())->toBe(0)->and($fake->calls)->toHaveCount(0);
 });
 
 it('con el asesor automático deshabilitado en la instalación el entrante se guarda, no se encola nada y el worker no arranca', function () {

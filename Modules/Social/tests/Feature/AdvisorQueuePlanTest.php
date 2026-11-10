@@ -121,9 +121,41 @@ it('el estado del servicio separa planificador, worker, interruptor y trabajos',
 
     expect($status['scheduler']['running'])->toBeTrue()
         ->and($status['worker']['recent'])->toBeFalse()
+        ->and($status['worker']['listening'])->toBeFalse()
+        ->and($status['worker']['stalled'])->toBeTrue('hay un trabajo listo y ningún worker reciente')
         ->and($status['autoreply_enabled'])->toBeFalse()
         ->and($status['ready'])->toBeFalse()
         ->and($status['jobs'])->toBe(['ready' => 1, 'delayed' => 1, 'reserved' => 0, 'failed' => 1, 'total' => 2]);
+
+    AdvisorDispatcher::touch();
+    expect(AdvisorServiceStatus::snapshot()['worker']['stalled'])->toBeFalse();
+});
+
+it('el worker escucha de forma continua solo con el interruptor general y alguna cuenta activa con el asesor', function () {
+    $inst = Institution::factory()->create();
+    app(CurrentInstitution::class)->set($inst->id);
+    config(['social.advisor.autoreply_enabled' => true]);
+    expect(AdvisorDispatcher::listeningRequired())->toBeFalse('sin cuentas');
+
+    $bot = Bot::factory()->create(['status' => 'active']);
+    $channel = \Modules\Social\Models\SocialChannel::factory()->create(['advisor_enabled' => true, 'advisor_bot_id' => $bot->id, 'is_active' => true]);
+    expect(AdvisorDispatcher::listeningRequired())->toBeTrue();
+
+    // El planificador lanza el worker cada minuto aunque la cola esté vacía…
+    $event = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())
+        ->first(fn ($e) => ! $e instanceof \Illuminate\Console\Scheduling\CallbackEvent && str_contains((string) $e->command, 'social:advisor-worker'));
+    expect($event->filtersPass(app()))->toBeTrue();
+
+    // …y deja de hacerlo si la cuenta se desactiva, se apaga su asesor o se apaga el interruptor general.
+    $channel->forceFill(['is_active' => false])->save();
+    expect(AdvisorDispatcher::listeningRequired())->toBeFalse()->and($event->filtersPass(app()))->toBeFalse();
+    $channel->forceFill(['is_active' => true, 'advisor_enabled' => false])->save();
+    expect(AdvisorDispatcher::listeningRequired())->toBeFalse();
+    $channel->forceFill(['advisor_enabled' => true])->save();
+    config(['social.advisor.autoreply_enabled' => false]);
+    expect(AdvisorDispatcher::listeningRequired())->toBeFalse()->and($event->filtersPass(app()))->toBeFalse();
+    config(['queue.default' => 'sync', 'social.advisor.autoreply_enabled' => true]);
+    expect(AdvisorDispatcher::listeningRequired())->toBeFalse('con cola sync no hay worker');
 });
 
 it('el panel de canales del asesor muestra el estado del servicio sin exigir un worker activo', function () {

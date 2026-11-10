@@ -140,6 +140,25 @@ it('mientras un worker sigue en marcha el planificador no lanza otro aunque haya
     expect($worker->filtersPass(app()))->toBeTrue();
 });
 
+it('una comprobación when() que lanza excepción no aborta la pasada: se reporta y el comando arranca por precaución', function () {
+    expect(\Modules\Core\Scheduling\SchedulerGuards::safe('prueba', fn () => throw new RuntimeException('BD caída')))->toBeTrue()
+        ->and(\Modules\Core\Scheduling\SchedulerGuards::safe('prueba', fn () => false))->toBeFalse()
+        ->and(\Modules\Core\Scheduling\SchedulerGuards::safe('prueba', fn () => 1))->toBeTrue();
+});
+
+it('los procesos bajo demanda se evalúan y lanzan antes que los ticks, para que un paso lento no los retrase', function () {
+    $events = collect(app(Schedule::class)->events())->values();
+    $firstTick = $events->search(fn (Event $e) => $e instanceof CallbackEvent);
+    foreach (['social:advisor-worker', 'social:publish-scheduled', 'crm:agenda-reminders', 'social:meta-leads-poll', 'social:refresh-contact-profiles'] as $command) {
+        $index = $events->search(fn (Event $e) => ! $e instanceof CallbackEvent && str_contains((string) $e->command, $command));
+        expect($index)->toBeLessThan($firstTick, "{$command} debe definirse antes que los ticks");
+    }
+    // El TTL del mutex del tick de 5 min cubre su cadencia; el del worker cubre 55 s + un trabajo.
+    $fiveMin = $events->first(fn (Event $e) => $e instanceof CallbackEvent && str_contains((string) $e->description, 'reconciliación comercial'));
+    $worker = sresEvent('social:advisor-worker');
+    expect($fiveMin->expiresAt)->toBeGreaterThanOrEqual(5)->and($worker->expiresAt)->toBe(3);
+});
+
 it('invariantes que impiden dos workers sobre el mismo trabajo: escucha ≤ 55 s y retry_after ≥ 90 s', function () {
     $definition = Artisan::all()['social:advisor-worker']->getDefinition();
 

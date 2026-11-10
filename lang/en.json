@@ -2752,6 +2752,8 @@
     "Worker del asesor": "Advisor worker",
     "Última ejecución :when": "Last execution :when",
     "Arranca solo cuando hay trabajos en la cola.": "Starts only when there are jobs in the queue.",
+    "Escucha continua cada minuto: hay cuentas con el asesor activo.": "Listening continuously every minute: there are accounts with the advisor enabled.",
+    "Trabajos listos sin atender": "Ready jobs not being processed",
     "Reciente": "Recent",
     "En espera": "Idle",
     "Asesor automático de la instalación": "Installation-wide automatic advisor",

@@ -10,28 +10,31 @@ use Modules\Social\Support\AdvisorQueuePlan;
 
 /**
  * Procesa la cola de respuestas del asesor en redes sociales y TERMINA (sin procesos permanentes):
- * lo lanza el scheduler (cron del hosting → schedule:run) SOLO cuando la cola tiene trabajos
- * ejecutables en el próximo minuto (ver routes/console.php y AdvisorQueuePlan).
+ * lo lanza el scheduler (cron del hosting → schedule:run) cada minuto, con tres modos:
  *
- * Al arrancar vuelve a radiografiar la cola y decide cuánto escuchar:
- *  - sin trabajos ejecutables en la ventana → no arranca queue:work (coste: una consulta);
- *  - todos ya disponibles → procesa y termina al vaciar la cola (--stop-when-empty);
- *  - alguno retrasado dentro de la ventana (espera «está escribiendo…» o la del canal) → escucha
- *    justo hasta que venza más un margen, nunca más de --max-time. Así un trabajo con retraso se
- *    atiende en la misma ejecución, sin esperar al minuto siguiente y sin los 50 s fijos de antes.
+ *  - ESCUCHA CONTINUA: mientras alguna cuenta activa tenga el asesor habilitado
+ *    (AdvisorDispatcher::listeningRequired), escucha la cola durante --max-time (55 s) consultándola
+ *    cada segundo. Un mensaje que llegue en cualquier segundo del minuto se atiende al instante,
+ *    igual que un trabajo retrasado que venza en la ventana; nunca espera al minuto siguiente.
+ *  - BAJO DEMANDA: sin cuentas habilitadas (solo restos en cola), arranca únicamente si hay
+ *    trabajos ejecutables en los próximos 60 s (AdvisorQueuePlan) y escucha lo justo: termina al
+ *    vaciar la cola o espera hasta el último retrasado de la ventana más un margen.
+ *  - Sin cuentas habilitadas ni trabajos ejecutables: no arranca queue:work (una consulta y sale).
  *
- * Deja un latido propio solo cuando realmente ejecuta; el latido que habilita el asesor en el
- * panel lo mantiene el planificador (SchedulerHeartbeat). --stop-when-empty explícito conserva el
- * comportamiento clásico (procesar lo disponible y salir), útil en pruebas.
+ * El planificador aplica la misma decisión ANTES de lanzar el proceso (routes/console.php), así que
+ * con el asesor completamente inactivo no se crea ningún proceso. Deja un latido propio solo cuando
+ * ejecuta; el latido que habilita el asesor en el panel lo mantiene el planificador
+ * (SchedulerHeartbeat). --stop-when-empty explícito conserva el comportamiento clásico (procesar lo
+ * disponible y salir), útil en pruebas.
  */
 class AdvisorWorkerCommand extends Command
 {
     protected $signature = 'social:advisor-worker
-        {--max-time=50 : Segundos máximos de escucha por ejecución (tope)}
-        {--stop-when-empty : Procesar lo disponible y terminar (ignora la radiografía de la cola)}
+        {--max-time=55 : Segundos máximos de escucha por ejecución (tope; el cron vuelve a lanzar al minuto)}
+        {--stop-when-empty : Procesar lo disponible y terminar (ignora el modo de escucha)}
         {--memory=128 : Límite de memoria del worker en MB (0 = sin límite; solo pruebas en proceso largo)}';
 
-    protected $description = 'Procesa las respuestas pendientes del asesor inteligente en redes sociales (cola persistente, bajo demanda).';
+    protected $description = 'Procesa las respuestas pendientes del asesor inteligente en redes sociales (cola persistente).';
 
     public function handle(): int
     {
@@ -43,20 +46,27 @@ class AdvisorWorkerCommand extends Command
 
         $cap = max(5, (int) $this->option('max-time'));
         $explicitStop = (bool) $this->option('stop-when-empty');
+        $listening = AdvisorDispatcher::listeningRequired();
         $plan = AdvisorQueuePlan::inspect();
 
-        if (! $explicitStop && ! $plan->needsWorker()) {
-            $this->line(sprintf('Cola «%s» sin trabajos ejecutables en los próximos %d s: el worker no arranca.', AdvisorDispatcher::queue(), $plan->window));
+        if (! $explicitStop && ! $listening && ! $plan->needsWorker()) {
+            $this->line(sprintf('Cola «%s» sin trabajos ejecutables en los próximos %d s y sin cuentas con el asesor activo: el worker no arranca.', AdvisorDispatcher::queue(), $plan->window));
 
             return self::SUCCESS;
         }
 
-        $stopWhenEmpty = $explicitStop || $plan->stopWhenEmpty();
-        $maxTime = $explicitStop ? $cap : $plan->maxTime($cap);
+        if ($explicitStop) {
+            [$stopWhenEmpty, $maxTime, $mode] = [true, $cap, 'clásico (procesar y salir)'];
+        } elseif ($listening) {
+            [$stopWhenEmpty, $maxTime, $mode] = [false, $cap, 'escucha continua'];
+        } else {
+            [$stopWhenEmpty, $maxTime, $mode] = [$plan->stopWhenEmpty(), $plan->maxTime($cap), 'bajo demanda'];
+        }
 
         AdvisorDispatcher::touch();
         $this->line(sprintf(
-            'Worker del asesor: %d listos · %d retrasados · %d reservados · escucha %s.',
+            'Worker del asesor [%s]: %d listos · %d retrasados · %d reservados · escucha %s.',
+            $mode,
             $plan->ready,
             $plan->delayed,
             $plan->reserved,

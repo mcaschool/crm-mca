@@ -7,6 +7,8 @@ namespace Modules\Social\Support;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Modules\Core\Scheduling\SchedulerHeartbeat;
+use Modules\Core\Tenancy\CurrentInstitution;
+use Modules\Social\Models\SocialChannel;
 use Throwable;
 
 /**
@@ -45,6 +47,25 @@ final class AdvisorDispatcher
     public static function queueIsPersistent(): bool
     {
         return config('queue.default') !== 'sync';
+    }
+
+    /**
+     * ¿Debe el worker escuchar de forma continua? Sí mientras el interruptor general esté activo y
+     * exista al menos una cuenta activa con el asesor habilitado: un mensaje puede llegar en
+     * cualquier segundo y debe atenderse sin esperar al siguiente minuto del cron. Sin cuentas
+     * habilitadas no entra trabajo nuevo y el worker solo arranca bajo demanda (restos en cola).
+     */
+    public static function listeningRequired(): bool
+    {
+        if (! self::autoreplyEnabled() || ! self::queueIsPersistent()) {
+            return false;
+        }
+
+        return (bool) app(CurrentInstitution::class)->runGlobally(fn (): bool => SocialChannel::query()
+            ->where('is_active', true)
+            ->where('advisor_enabled', true)
+            ->whereNotNull('advisor_bot_id')
+            ->exists());
     }
 
     public static function touch(): void
