@@ -178,8 +178,11 @@ tick del CRM (`Modules\Core\Scheduling\SchedulerTick`): latido del planificador,
 salientes sin confirmar y los pasos de FollowUp según sus interruptores. Los procesos propios
 (`social:advisor-worker`, `social:publish-scheduled`, `crm:agenda-reminders`,
 `social:meta-leads-poll`, `social:refresh-contact-profiles`) **solo arrancan cuando hay trabajo**
-(comprobación `when()` de 1–3 consultas antes de lanzar nada). En reposo: 1 proceso PHP y ~20
-consultas por minuto. Comprobaciones en el servidor:
+(comprobación `when()` de 1–3 consultas antes de lanzar nada; si la comprobación falla, el comando
+arranca igualmente). Excepción deliberada: con alguna cuenta activa con el asesor habilitado, el
+worker del asesor escucha 55 s cada minuto para no retrasar las respuestas. En reposo con el asesor
+inactivo: 1 proceso PHP y ~20 consultas por minuto; con el asesor activo: +1 worker y ~300 consultas
+por minuto (sondeo de la cola). Comprobaciones en el servidor:
 - `php artisan schedule:list` debe mostrar los dos ticks «CRM: …» y los comandos condicionados.
 - Tras el primer `schedule:run`, la caché tiene `crm.scheduler.seen_at` (latido del planificador);
   el panel del asesor (ficha → «Canales de atención automática» → «Estado del servicio») muestra
@@ -229,9 +232,11 @@ El hosting compartido tiene cuotas por cuenta. Vigilar tras desplegar:
   - **No** ejecutar tareas concurrentes pesadas contra la BD (evitar solapar cron y
     procesos manuales; el scheduler usa `withoutOverlapping()`).
   - Mantener **una sola** entrada de cron (§5), no varias que arranquen a la vez.
-  - No abrir workers/daemons permanentes. El worker del asesor (`social:advisor-worker`) arranca
-    **solo cuando la cola tiene trabajos ejecutables en el próximo minuto** y termina al vaciarla
-    (ver «Planificador» más abajo); el chatbot web es petición-respuesta.
+  - No abrir workers/daemons permanentes. El worker del asesor (`social:advisor-worker`) lo lanza el
+    cron cada minuto y **escucha 55 s mientras alguna cuenta activa tenga el asesor habilitado** (así
+    un mensaje se atiende en el segundo en que llega); sin cuentas habilitadas solo arranca si quedan
+    trabajos en cola, y con el asesor completamente inactivo no arranca (ver «Planificador» más
+    abajo); el chatbot web es petición-respuesta.
 - Verificar en el server: hPanel → Bases de datos → uso; o `SHOW STATUS LIKE 'Threads_connected';`.
 
 ### Llamadas salientes (Qwen y otros proveedores)
